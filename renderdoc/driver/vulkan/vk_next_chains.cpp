@@ -87,759 +87,782 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
 
 // define structs that just need to be copied with no unwrapping at all, or only unwrapping some
 // members - easily shared between GetNextPatchSize and UnwrapNextChain
-#define PROCESS_SIMPLE_STRUCTS()                                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,                         \
-              VkAccelerationStructureBuildSizesInfoKHR);                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR,                      \
-              VkAccelerationStructureGeometryAabbsDataKHR);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,                  \
-              VkAccelerationStructureGeometryInstancesDataKHR);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,                                 \
-              VkAccelerationStructureGeometryKHR);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,                  \
-              VkAccelerationStructureGeometryTrianglesDataKHR);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_VERSION_INFO_KHR,                             \
-              VkAccelerationStructureVersionInfoKHR);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ACQUIRE_PROFILING_LOCK_INFO_KHR, VkAcquireProfilingLockInfoKHR);     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_APPLICATION_INFO, VkApplicationInfo);                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2, VkAttachmentDescription2);                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_STENCIL_LAYOUT,                               \
-              VkAttachmentDescriptionStencilLayout);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2, VkAttachmentReference2);                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_STENCIL_LAYOUT,                                 \
-              VkAttachmentReferenceStencilLayout);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_DEVICE_GROUP_INFO,                                \
-              VkBindBufferMemoryDeviceGroupInfo);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_DEVICE_GROUP_INFO,                                 \
-              VkBindImageMemoryDeviceGroupInfo);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO, VkBindImagePlaneMemoryInfo);           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_COPY_2, VkBufferCopy2);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, VkBufferCreateInfo);                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_CREATE_INFO_EXT,                               \
-              VkBufferDeviceAddressCreateInfoEXT);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2, VkBufferImageCopy2);                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_OPAQUE_CAPTURE_ADDRESS_CREATE_INFO,                           \
-              VkBufferOpaqueCaptureAddressCreateInfo);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO, VkBufferUsageFlags2CreateInfo);    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, VkCalibratedTimestampInfoKHR);        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, VkCommandBufferBeginInfo);                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_CONDITIONAL_RENDERING_INFO_EXT,           \
-              VkCommandBufferInheritanceConditionalRenderingInfoEXT);                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, VkCommandPoolCreateInfo);                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, VkDebugMarkerMarkerInfoEXT);           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,                               \
-              VkDebugReportCallbackCreateInfoEXT);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, VkDebugUtilsLabelEXT);                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,                               \
-              VkDebugUtilsMessengerCreateInfoEXT);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_BUFFER_CREATE_INFO_NV,                          \
-              VkDedicatedAllocationBufferCreateInfoNV);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_IMAGE_CREATE_INFO_NV,                           \
-              VkDedicatedAllocationImageCreateInfoNV);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, VkDescriptorPoolCreateInfo);            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_INLINE_UNIFORM_BLOCK_CREATE_INFO,                    \
-              VkDescriptorPoolInlineUniformBlockCreateInfo);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,                     \
-              VkDescriptorSetLayoutBindingFlagsCreateInfo);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_SUPPORT, VkDescriptorSetLayoutSupport);        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,              \
-              VkDescriptorSetVariableDescriptorCountAllocateInfo);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT,             \
-              VkDescriptorSetVariableDescriptorCountLayoutSupport);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, VkDeviceCreateInfo);                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_BIND_SPARSE_INFO, VkDeviceGroupBindSparseInfo);         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_COMMAND_BUFFER_BEGIN_INFO,                              \
-              VkDeviceGroupCommandBufferBeginInfo);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_CAPABILITIES_KHR,                               \
-              VkDeviceGroupPresentCapabilitiesKHR);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR, VkDeviceGroupPresentInfoKHR);         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_RENDER_PASS_BEGIN_INFO,                                 \
-              VkDeviceGroupRenderPassBeginInfo);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_SUBMIT_INFO, VkDeviceGroupSubmitInfo);                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_SWAPCHAIN_CREATE_INFO_KHR,                              \
-              VkDeviceGroupSwapchainCreateInfoKHR);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_MEMORY_OVERALLOCATION_CREATE_INFO_AMD,                        \
-              VkDeviceMemoryOverallocationCreateInfoAMD);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_PRIVATE_DATA_CREATE_INFO, VkDevicePrivateDataCreateInfo);     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, VkDeviceQueueCreateInfo);                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO,                            \
-              VkDeviceQueueGlobalPriorityCreateInfo);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2, VkDeviceQueueInfo2);                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_MODE_PROPERTIES_2_KHR, VkDisplayModeProperties2KHR);         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_NATIVE_HDR_SURFACE_CAPABILITIES_AMD,                         \
-              VkDisplayNativeHdrSurfaceCapabilitiesAMD)                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PLANE_CAPABILITIES_2_KHR, VkDisplayPlaneCapabilities2KHR);   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PLANE_INFO_2_KHR, VkDisplayPlaneInfo2KHR);                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PLANE_PROPERTIES_2_KHR, VkDisplayPlaneProperties2KHR);       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PRESENT_INFO_KHR, VkDisplayPresentInfoKHR);                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PROPERTIES_2_KHR, VkDisplayProperties2KHR);                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_EVENT_CREATE_INFO, VkEventCreateInfo);                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_EXTERNAL_BUFFER_PROPERTIES, VkExternalBufferProperties);             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES, VkExternalImageFormatProperties);  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, VkFenceCreateInfo);                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_FILTER_CUBIC_IMAGE_VIEW_IMAGE_FORMAT_PROPERTIES_EXT,                 \
-              VkFilterCubicImageViewImageFormatPropertiesEXT);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR,                           \
-              VkFragmentShadingRateAttachmentInfoKHR);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, VkFormatProperties2);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3, VkFormatProperties3);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,                           \
-              VkGraphicsPipelineLibraryCreateInfoEXT);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_HDR_METADATA_EXT, VkHdrMetadataEXT)                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_BLIT_2, VkImageBlit2);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT, VkImageCompressionControlEXT);        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_PROPERTIES_EXT, VkImageCompressionPropertiesEXT);  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_COPY_2, VkImageCopy2);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, VkImageCreateInfo);                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, VkImageFormatListCreateInfo);         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, VkImageFormatProperties2);                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,                                \
-              VkImagePlaneMemoryRequirementsInfo);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2, VkImageResolve2);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_SUBRESOURCE_2, VkImageSubresource2);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_STENCIL_USAGE_CREATE_INFO, VkImageStencilUsageCreateInfo);     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_ASTC_DECODE_MODE_EXT, VkImageViewASTCDecodeModeEXT);      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT, VkImageViewMinLodCreateInfoEXT); \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO, VkImageViewUsageCreateInfo);           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, VkInstanceCreateInfo);                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO, VkMemoryAllocateFlagsInfo);              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, VkMemoryAllocateInfo);                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_BARRIER, VkMemoryBarrier);                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2, VkMemoryBarrier2);                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS, VkMemoryDedicatedRequirements);       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,                         \
-              VkMemoryOpaqueCaptureAddressAllocateInfo);                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_PRIORITY_ALLOCATE_INFO_EXT, VkMemoryPriorityAllocateInfoEXT); \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, VkMemoryRequirements2);                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MULTISAMPLE_PROPERTIES_EXT, VkMultisamplePropertiesEXT);             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT,                      \
-              VkMultisampledRenderToSingleSampledInfoEXT);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT,                             \
-              VkMutableDescriptorTypeCreateInfoEXT);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PERFORMANCE_COUNTER_DESCRIPTION_KHR,                                 \
-              VkPerformanceCounterDescriptionKHR);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PERFORMANCE_COUNTER_KHR, VkPerformanceCounterKHR);                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PERFORMANCE_QUERY_SUBMIT_INFO_KHR, VkPerformanceQuerySubmitInfoKHR); \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES,                              \
-              VkPhysicalDevice16BitStorageFeatures);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_4444_FORMATS_FEATURES_EXT,                           \
-              VkPhysicalDevice4444FormatsFeaturesEXT);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES,                               \
-              VkPhysicalDevice8BitStorageFeatures);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,                 \
-              VkPhysicalDeviceAccelerationStructureFeaturesKHR);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR,               \
-              VkPhysicalDeviceAccelerationStructurePropertiesKHR);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ASTC_DECODE_FEATURES_EXT,                            \
-              VkPhysicalDeviceASTCDecodeFeaturesEXT);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_DYNAMIC_STATE_FEATURES_EXT, \
-              VkPhysicalDeviceAttachmentFeedbackLoopDynamicStateFeaturesEXT);                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_FEATURES_EXT,        \
-              VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT);                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BORDER_COLOR_SWIZZLE_FEATURES_EXT,                   \
-              VkPhysicalDeviceBorderColorSwizzleFeaturesEXT);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT,                  \
-              VkPhysicalDeviceBufferDeviceAddressFeaturesEXT);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,                      \
-              VkPhysicalDeviceBufferDeviceAddressFeatures);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD,                        \
-              VkPhysicalDeviceCoherentMemoryFeaturesAMD);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COLOR_WRITE_ENABLE_FEATURES_EXT,                     \
-              VkPhysicalDeviceColorWriteEnableFeaturesEXT);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,             \
-              VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_PROPERTIES_KHR,           \
-              VkPhysicalDeviceComputeShaderDerivativesPropertiesKHR);                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT,                  \
-              VkPhysicalDeviceConditionalRenderingFeaturesEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT,           \
-              VkPhysicalDeviceConservativeRasterizationPropertiesEXT);                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT,                    \
-              VkPhysicalDeviceCustomBorderColorFeaturesEXT);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_PROPERTIES_EXT,                  \
-              VkPhysicalDeviceCustomBorderColorPropertiesEXT);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEDICATED_ALLOCATION_IMAGE_ALIASING_FEATURES_NV,     \
-              VkPhysicalDeviceDedicatedAllocationImageAliasingFeaturesNV);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLAMP_ZERO_ONE_FEATURES_KHR,                   \
-              VkPhysicalDeviceDepthClampZeroOneFeaturesKHR)                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT,                     \
-              VkPhysicalDeviceDepthClipControlFeaturesEXT)                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT,                      \
-              VkPhysicalDeviceDepthClipEnableFeaturesEXT)                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES,                    \
-              VkPhysicalDeviceDepthStencilResolveProperties);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,                        \
-              VkPhysicalDeviceDescriptorIndexingFeatures);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES,                      \
-              VkPhysicalDeviceDescriptorIndexingProperties);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISCARD_RECTANGLE_PROPERTIES_EXT,                    \
-              VkPhysicalDeviceDiscardRectanglePropertiesEXT);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,                                   \
-              VkPhysicalDeviceDriverProperties);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,                          \
-              VkPhysicalDeviceDynamicRenderingFeatures)                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES,               \
-              VkPhysicalDeviceDynamicRenderingLocalReadFeatures)                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT,   \
-              VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT)                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,                 \
-              VkPhysicalDeviceExtendedDynamicStateFeaturesEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,               \
-              VkPhysicalDeviceExtendedDynamicState2FeaturesEXT);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,               \
-              VkPhysicalDeviceExtendedDynamicState3FeaturesEXT);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_PROPERTIES_EXT,             \
-              VkPhysicalDeviceExtendedDynamicState3PropertiesEXT);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_BUFFER_INFO,                                \
-              VkPhysicalDeviceExternalBufferInfo);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,                          \
-              VkPhysicalDeviceExternalImageFormatInfo);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_SEMAPHORE_INFO,                             \
-              VkPhysicalDeviceExternalSemaphoreInfo);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, VkPhysicalDeviceFeatures2);              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES,                           \
-              VkPhysicalDeviceFloatControlsProperties);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR,            \
-              VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR)                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_PROPERTIES_KHR,          \
-              VkPhysicalDeviceFragmentShaderBarycentricPropertiesKHR)                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES,                      \
-              VkPhysicalDeviceGlobalPriorityQueryFeatures)                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,              \
-              VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT)                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT,            \
-              VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT)                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GROUP_PROPERTIES, VkPhysicalDeviceGroupProperties)   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT,                   \
-              VkPhysicalDeviceFragmentDensityMapFeaturesEXT);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_PROPERTIES_EXT,                 \
-              VkPhysicalDeviceFragmentDensityMapPropertiesEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_2_FEATURES_EXT,                 \
-              VkPhysicalDeviceFragmentDensityMap2FeaturesEXT);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_2_PROPERTIES_EXT,               \
-              VkPhysicalDeviceFragmentDensityMap2PropertiesEXT);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM,           \
-              VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM);                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_PROPERTIES_QCOM,         \
-              VkPhysicalDeviceFragmentDensityMapOffsetPropertiesQCOM);                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT,              \
-              VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,                  \
-              VkPhysicalDeviceFragmentShadingRateFeaturesKHR);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_KHR,                           \
-              VkPhysicalDeviceFragmentShadingRateKHR);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR,                \
-              VkPhysicalDeviceFragmentShadingRatePropertiesKHR);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES,                           \
-              VkPhysicalDeviceHostQueryResetFeatures);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES, VkPhysicalDeviceIDProperties);        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_2D_VIEW_OF_3D_FEATURES_EXT,                    \
-              VkPhysicalDeviceImage2DViewOf3DFeaturesEXT);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_FEATURES_EXT,              \
-              VkPhysicalDeviceImageCompressionControlFeaturesEXT);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT,    \
-              VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT);                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,                                 \
-              VkPhysicalDeviceImageFormatInfo2);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_VIEW_IMAGE_FORMAT_INFO_EXT,                    \
-              VkPhysicalDeviceImageViewImageFormatInfoEXT);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES,                      \
-              VkPhysicalDeviceImagelessFramebufferFeatures)                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ROBUSTNESS_FEATURES,                           \
-              VkPhysicalDeviceImageRobustnessFeatures)                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES,                           \
-              VkPhysicalDeviceIndexTypeUint8Features);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_VIEW_MIN_LOD_FEATURES_EXT,                     \
-              VkPhysicalDeviceImageViewMinLodFeaturesEXT)                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES,                       \
-              VkPhysicalDeviceInlineUniformBlockFeatures);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_PROPERTIES,                     \
-              VkPhysicalDeviceInlineUniformBlockProperties);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES,                            \
-              VkPhysicalDeviceMaintenance3Properties);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES,                              \
-              VkPhysicalDeviceMaintenance4Features);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES,                            \
-              VkPhysicalDeviceMaintenance4Properties);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES,                              \
-              VkPhysicalDeviceMaintenance5Features);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES,                            \
-              VkPhysicalDeviceMaintenance5Properties);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,                        \
-              VkPhysicalDeviceMemoryBudgetPropertiesEXT);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,                                 \
-              VkPhysicalDeviceMemoryProperties2);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PRIORITY_FEATURES_EXT,                        \
-              VkPhysicalDeviceMemoryPriorityFeaturesEXT);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,                            \
-              VkPhysicalDeviceMeshShaderFeaturesEXT);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT,                          \
-              VkPhysicalDeviceMeshShaderPropertiesEXT);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_FEATURES_EXT,  \
-              VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT);                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,                                  \
-              VkPhysicalDeviceMultiviewFeatures);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES,                                \
-              VkPhysicalDeviceMultiviewProperties);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT,                \
-              VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_FEATURES_EXT,                  \
-              VkPhysicalDeviceNestedCommandBufferFeaturesEXT);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_PROPERTIES_EXT,                \
-              VkPhysicalDeviceNestedCommandBufferPropertiesEXT);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NON_SEAMLESS_CUBE_MAP_FEATURES_EXT,                  \
-              VkPhysicalDeviceNonSeamlessCubeMapFeaturesEXT);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES,                         \
-              VkPhysicalDeviceLineRasterizationFeatures)                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_PROPERTIES,                       \
-              VkPhysicalDeviceLineRasterizationProperties)                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT,           \
-              VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT);                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT,                         \
-              VkPhysicalDevicePCIBusInfoPropertiesEXT);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR,                      \
-              VkPhysicalDevicePerformanceQueryFeaturesKHR);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_PROPERTIES_KHR,                    \
-              VkPhysicalDevicePerformanceQueryPropertiesKHR);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES,            \
-              VkPhysicalDevicePipelineCreationCacheControlFeatures);                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR,         \
-              VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR)                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_POINT_CLIPPING_PROPERTIES,                           \
-              VkPhysicalDevicePointClippingProperties);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,                             \
-              VkPhysicalDevicePresentIdFeaturesKHR);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,                           \
-              VkPhysicalDevicePresentWaitFeaturesKHR);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT,        \
-              VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT)                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVES_GENERATED_QUERY_FEATURES_EXT,             \
-              VkPhysicalDevicePrimitivesGeneratedQueryFeaturesEXT);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIVATE_DATA_FEATURES,                               \
-              VkPhysicalDevicePrivateDataFeatures);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, VkPhysicalDeviceProperties2);          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES,                           \
-              VkPhysicalDeviceProtectedMemoryFeatures);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_PROPERTIES,                         \
-              VkPhysicalDeviceProtectedMemoryProperties);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_FEATURES_EXT,                       \
-              VkPhysicalDeviceProvokingVertexFeaturesEXT);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_PROPERTIES_EXT,                     \
-              VkPhysicalDeviceProvokingVertexPropertiesEXT);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES,                          \
-              VkPhysicalDevicePushDescriptorProperties);                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_FEATURES_EXT,  \
-              VkPhysicalDeviceRasterizationOrderAttachmentAccessFeaturesEXT);                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR,              \
-              VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR);                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,                   \
-              VkPhysicalDeviceRayTracingPipelineFeaturesKHR);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR,                 \
-              VkPhysicalDeviceRayTracingPipelinePropertiesKHR);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR,             \
-              VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,                              \
-              VkPhysicalDeviceRayQueryFeaturesKHR);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RGBA10X6_FORMATS_FEATURES_EXT,                       \
-              VkPhysicalDeviceRGBA10X6FormatsFeaturesEXT);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_KHR,                           \
-              VkPhysicalDeviceRobustness2FeaturesKHR);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_PROPERTIES_KHR,                         \
-              VkPhysicalDeviceRobustness2PropertiesKHR);                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLE_LOCATIONS_PROPERTIES_EXT,                     \
-              VkPhysicalDeviceSampleLocationsPropertiesEXT);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES,                    \
-              VkPhysicalDeviceSamplerFilterMinmaxProperties);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES,                   \
-              VkPhysicalDeviceSamplerYcbcrConversionFeatures);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES,                        \
-              VkPhysicalDeviceScalarBlockLayoutFeatures);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES,             \
-              VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES,                        \
-              VkPhysicalDeviceShaderAtomicInt64Features);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,                    \
-              VkPhysicalDeviceShaderAtomicFloatFeaturesEXT);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_2_FEATURES_EXT,                  \
-              VkPhysicalDeviceShaderAtomicFloat2FeaturesEXT);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_PROPERTIES_AMD,                          \
-              VkPhysicalDeviceShaderCorePropertiesAMD);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR,                           \
-              VkPhysicalDeviceShaderClockFeaturesKHR);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES,         \
-              VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures);                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES,                     \
-              VkPhysicalDeviceShaderDrawParametersFeatures);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EXPECT_ASSUME_FEATURES,                       \
-              VkPhysicalDeviceShaderExpectAssumeFeatures);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,                        \
-              VkPhysicalDeviceShaderFloat16Int8Features);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES,                    \
-              VkPhysicalDeviceShaderFloatControls2Features)                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_IMAGE_ATOMIC_INT64_FEATURES_EXT,              \
-              VkPhysicalDeviceShaderImageAtomicInt64FeaturesEXT)                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_IMAGE_FOOTPRINT_FEATURES_NV,                  \
-              VkPhysicalDeviceShaderImageFootprintFeaturesNV);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES,                 \
-              VkPhysicalDeviceShaderIntegerDotProductFeatures);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_PROPERTIES,               \
-              VkPhysicalDeviceShaderIntegerDotProductProperties);                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR,           \
-              VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR);                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,                          \
-              VkPhysicalDeviceShaderObjectFeaturesEXT);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_PROPERTIES_EXT,                        \
-              VkPhysicalDeviceShaderObjectPropertiesEXT);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_QUAD_CONTROL_FEATURES_KHR,                    \
-              VkPhysicalDeviceShaderQuadControlFeaturesKHR);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR,    \
-              VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR);                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES,             \
-              VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures)                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_ROTATE_FEATURES,                     \
-              VkPhysicalDeviceShaderSubgroupRotateFeatures)                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR,   \
-              VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR)                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_TERMINATE_INVOCATION_FEATURES,                \
-              VkPhysicalDeviceShaderTerminateInvocationFeatures)                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SPARSE_IMAGE_FORMAT_INFO_2,                          \
-              VkPhysicalDeviceSparseImageFormatInfo2);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES,                                 \
-              VkPhysicalDeviceSubgroupProperties);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES,                      \
-              VkPhysicalDeviceSubgroupSizeControlFeatures)                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES,                    \
-              VkPhysicalDeviceSubgroupSizeControlProperties)                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,                \
-              VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT)                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,                          \
-              VkPhysicalDeviceSynchronization2Features);                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXEL_BUFFER_ALIGNMENT_FEATURES_EXT,                 \
-              VkPhysicalDeviceTexelBufferAlignmentFeaturesEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXEL_BUFFER_ALIGNMENT_PROPERTIES,                   \
-              VkPhysicalDeviceTexelBufferAlignmentProperties);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES,               \
-              VkPhysicalDeviceTextureCompressionASTCHDRFeatures);                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,                         \
-              VkPhysicalDeviceTimelineSemaphoreFeatures);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_PROPERTIES,                       \
-              VkPhysicalDeviceTimelineSemaphoreProperties);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TOOL_PROPERTIES, VkPhysicalDeviceToolProperties);    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT,                     \
-              VkPhysicalDeviceTransformFeedbackFeaturesEXT);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_PROPERTIES_EXT,                   \
-              VkPhysicalDeviceTransformFeedbackPropertiesEXT);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES,                          \
-              VkPhysicalDeviceVariablePointersFeatures);                                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES,                   \
-              VkPhysicalDeviceVertexAttributeDivisorFeatures);                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES_EXT,             \
-              VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES,                 \
-              VkPhysicalDeviceVertexAttributeDivisorProperties);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT,             \
-              VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES,             \
-              VkPhysicalDeviceUniformBufferStandardLayoutFeatures);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,                                 \
-              VkPhysicalDeviceVulkan11Features);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES,                               \
-              VkPhysicalDeviceVulkan11Properties);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,                                 \
-              VkPhysicalDeviceVulkan12Features);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES,                               \
-              VkPhysicalDeviceVulkan12Properties);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,                                 \
-              VkPhysicalDeviceVulkan13Features);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES,                               \
-              VkPhysicalDeviceVulkan13Properties);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES,                        \
-              VkPhysicalDeviceVulkanMemoryModelFeatures);                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_FEATURES_KHR,       \
-              VkPhysicalDeviceWorkgroupMemoryExplicitLayoutFeaturesKHR)                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_YCBCR_2_PLANE_444_FORMATS_FEATURES_EXT,              \
-              VkPhysicalDeviceYcbcr2Plane444FormatsFeaturesEXT)                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_YCBCR_IMAGE_ARRAYS_FEATURES_EXT,                     \
-              VkPhysicalDeviceYcbcrImageArraysFeaturesEXT)                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ZERO_INITIALIZE_WORKGROUP_MEMORY_FEATURES,           \
-              VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeatures)                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO, VkPipelineCacheCreateInfo);              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO,                              \
-              VkPipelineCreationFeedbackCreateInfo);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,                              \
-              VkPipelineColorBlendStateCreateInfo);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_COLOR_WRITE_CREATE_INFO_EXT,                                \
-              VkPipelineColorWriteCreateInfoEXT);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,                                 \
-              VkPipelineCreateFlags2CreateInfo);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,                            \
-              VkPipelineDepthStencilStateCreateInfo);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_DISCARD_RECTANGLE_STATE_CREATE_INFO_EXT,                    \
-              VkPipelineDiscardRectangleStateCreateInfoEXT);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,                                  \
-              VkPipelineDynamicStateCreateInfo);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_PROPERTIES_KHR,                                  \
-              VkPipelineExecutablePropertiesKHR)                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR, VkPipelineExecutableStatisticKHR) \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INTERNAL_REPRESENTATION_KHR,                     \
-              VkPipelineExecutableInternalRepresentationKHR)                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_FRAGMENT_SHADING_RATE_STATE_CREATE_INFO_KHR,                \
-              VkPipelineFragmentShadingRateStateCreateInfoKHR)                                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,                           \
-              VkPipelineInputAssemblyStateCreateInfo);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,                              \
-              VkPipelineMultisampleStateCreateInfo);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT,           \
-              VkPipelineRasterizationConservativeStateCreateInfoEXT);                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT,             \
-              VkPipelineRasterizationDepthClipStateCreateInfoEXT);                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO,                       \
-              VkPipelineRasterizationLineStateCreateInfo)                                            \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT,       \
-              VkPipelineRasterizationProvokingVertexStateCreateInfoEXT)                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,                            \
-              VkPipelineRasterizationStateCreateInfo);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_STREAM_CREATE_INFO_EXT,                 \
-              VkPipelineRasterizationStateStreamCreateInfoEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SAMPLE_LOCATIONS_STATE_CREATE_INFO_EXT,                     \
-              VkPipelineSampleLocationsStateCreateInfoEXT);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VkPipelineShaderStageCreateInfo); \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,            \
-              VkPipelineShaderStageRequiredSubgroupSizeCreateInfo)                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_DOMAIN_ORIGIN_STATE_CREATE_INFO,               \
-              VkPipelineTessellationDomainOriginStateCreateInfo);                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,                             \
-              VkPipelineTessellationStateCreateInfo);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO,                     \
-              VkPipelineVertexInputDivisorStateCreateInfo);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,                             \
-              VkPipelineVertexInputStateCreateInfo);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_DEPTH_CLIP_CONTROL_CREATE_INFO_EXT,                \
-              VkPipelineViewportDepthClipControlCreateInfoEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,                                 \
-              VkPipelineViewportStateCreateInfo);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, VkPresentIdKHR);                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR, VkPresentRegionsKHR);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE, VkPresentTimesInfoGOOGLE)                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PRIVATE_DATA_SLOT_CREATE_INFO, VkPrivateDataSlotCreateInfo)          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, VkQueryPoolCreateInfo);                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_QUERY_POOL_PERFORMANCE_CREATE_INFO_KHR,                              \
-              VkQueryPoolPerformanceCreateInfoKHR);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_QUEUE_FAMILY_GLOBAL_PRIORITY_PROPERTIES,                             \
-              VkQueueFamilyGlobalPriorityProperties);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2, VkQueueFamilyProperties2);                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_INTERFACE_CREATE_INFO_KHR,                      \
-              VkRayTracingPipelineInterfaceCreateInfoKHR);                                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,                            \
-              VkRayTracingShaderGroupCreateInfoKHR);                                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, VkRenderPassCreateInfo);                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2, VkRenderPassCreateInfo2);                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,                    \
-              VkRenderPassFragmentDensityMapCreateInfoEXT);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_INPUT_ATTACHMENT_ASPECT_CREATE_INFO,                     \
-              VkRenderPassInputAttachmentAspectCreateInfo);                                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO, VkRenderPassMultiviewCreateInfo); \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_SAMPLE_LOCATIONS_BEGIN_INFO_EXT,                         \
-              VkRenderPassSampleLocationsBeginInfoEXT);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLE_LOCATIONS_INFO_EXT, VkSampleLocationsInfoEXT);                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_BORDER_COLOR_COMPONENT_MAPPING_CREATE_INFO_EXT,              \
-              VkSamplerBorderColorComponentMappingCreateInfoEXT);                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, VkSamplerCreateInfo);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT,                         \
-              VkSamplerCustomBorderColorCreateInfoEXT);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,                                  \
-              VkSamplerReductionModeCreateInfo);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,                                \
-              VkSamplerYcbcrConversionCreateInfo);                                                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES,                    \
-              VkSamplerYcbcrConversionImageFormatProperties);                                        \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, VkSemaphoreCreateInfo);                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO, VkSemaphoreTypeCreateInfo);              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, VkShaderModuleCreateInfo);                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR,                             \
-              VkSharedPresentSurfaceCapabilitiesKHR);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SPARSE_IMAGE_FORMAT_PROPERTIES_2, VkSparseImageFormatProperties2);   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SPARSE_IMAGE_MEMORY_REQUIREMENTS_2,                                  \
-              VkSparseImageMemoryRequirements2);                                                     \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, VkSubpassBeginInfo);                             \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2, VkSubpassDependency2);                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2, VkSubpassDescription2);                       \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE,                           \
-              VkSubpassDescriptionDepthStencilResolve);                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_QCOM,                   \
-              VkSubpassFragmentDensityMapOffsetEndInfoQCOM);                                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_END_INFO, VkSubpassEndInfo);                                 \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_RESOLVE_PERFORMANCE_QUERY_EXT,                               \
-              VkSubpassResolvePerformanceQueryEXT);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBRESOURCE_LAYOUT_2, VkSubresourceLayout2);                         \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_EXT, VkSurfaceCapabilities2EXT);              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR, VkSurfaceCapabilities2KHR);              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR, VkSurfaceFormat2KHR);                          \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT,                              \
-              VkSurfacePresentModeCompatibilityEXT)                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT, VkSurfacePresentModeEXT)                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT,                            \
-              VkSurfacePresentScalingCapabilitiesEXT)                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PROTECTED_CAPABILITIES_KHR,                                  \
-              VkSurfaceProtectedCapabilitiesKHR);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_DISPLAY_NATIVE_HDR_CREATE_INFO_AMD,                        \
-              VkSwapchainDisplayNativeHdrCreateInfoAMD)                                              \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT, VkSwapchainPresentModeInfoEXT)      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,                             \
-              VkSwapchainPresentModesCreateInfoEXT)                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT,                           \
-              VkSwapchainPresentScalingCreateInfoEXT)                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_TEXTURE_LOD_GATHER_FORMAT_PROPERTIES_AMD,                            \
-              VkTextureLODGatherFormatPropertiesAMD);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO, VkTimelineSemaphoreSubmitInfo);      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_VALIDATION_CACHE_CREATE_INFO_EXT, VkValidationCacheCreateInfoEXT);   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT, VkValidationFeaturesEXT);                   \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,                            \
-              VkVertexInputAttributeDescription2EXT);                                                \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,                              \
-              VkVertexInputBindingDescription2EXT);                                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_INLINE_UNIFORM_BLOCK,                           \
-              VkWriteDescriptorSetInlineUniformBlock);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO,                                  \
-              VkRenderingAttachmentLocationInfo);                                                    \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDERING_AREA_INFO, VkRenderingAreaInfo);                           \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO,                               \
-              VkRenderingInputAttachmentIndexInfo);                                                  \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO,                            \
-                           VkLayerInstanceCreateInfo);                                               \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO, VkLayerDeviceCreateInfo);    \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_DEVICE_EVENT_INFO_EXT, VkDeviceEventInfoEXT);           \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_DISPLAY_EVENT_INFO_EXT, VkDisplayEventInfoEXT);         \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_DISPLAY_POWER_INFO_EXT, VkDisplayPowerInfoEXT);         \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO, VkExportFenceCreateInfo);     \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,                            \
-                           VkExportMemoryAllocateInfo);                                              \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_NV,                         \
-                           VkExportMemoryAllocateInfoNV);                                            \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,                           \
-                           VkExportSemaphoreCreateInfo);                                             \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_FENCE_PROPERTIES, VkExternalFenceProperties);  \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO,                     \
-                           VkExternalMemoryBufferCreateInfo);                                        \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,                      \
-                           VkExternalMemoryImageCreateInfo);                                         \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO_NV,                   \
-                           VkExternalMemoryImageCreateInfoNV);                                       \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_SEMAPHORE_PROPERTIES,                          \
-                           VkExternalSemaphoreProperties);                                           \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR, VkImportMemoryFdInfoKHR);    \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR, VkMemoryFdPropertiesKHR);     \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_FENCE_INFO,                    \
-                           VkPhysicalDeviceExternalFenceInfo);                                       \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_PROTECTED_SUBMIT_INFO, VkProtectedSubmitInfo);          \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SHADER_MODULE_VALIDATION_CACHE_CREATE_INFO_EXT,         \
-                           VkShaderModuleValidationCacheCreateInfoEXT);                              \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SWAPCHAIN_COUNTER_CREATE_INFO_EXT,                      \
-                           VkSwapchainCounterCreateInfoEXT);                                         \
-  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_VALIDATION_FLAGS_EXT, VkValidationFlagsEXT);            \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,                    \
-                VkAccelerationStructureBuildGeometryInfoKHR,                                         \
-                UnwrapInPlace(out->srcAccelerationStructure),                                        \
-                UnwrapInPlace(out->dstAccelerationStructure));                                       \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,                            \
-                VkAccelerationStructureCreateInfoKHR, UnwrapInPlace(out->buffer));                   \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,                    \
-                VkAccelerationStructureDeviceAddressInfoKHR,                                         \
-                UnwrapInPlace(out->accelerationStructure));                                          \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO, VkBindBufferMemoryInfo,                   \
-                UnwrapInPlace(out->buffer), UnwrapInPlace(out->memory));                             \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO, VkBindImageMemoryInfo,                     \
-                UnwrapInPlace(out->image), UnwrapInPlace(out->memory));                              \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, VkBufferMemoryBarrier,                      \
-                UnwrapInPlace(out->buffer));                                                         \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2, VkBufferMemoryBarrier2,                   \
-                UnwrapInPlace(out->buffer));                                                         \
-  /* VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_EXT aliased by KHR */                              \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, VkBufferDeviceAddressInfo,             \
-                UnwrapInPlace(out->buffer));                                                         \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,                                 \
-                VkBufferMemoryRequirementsInfo2, UnwrapInPlace(out->buffer));                        \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO, VkBufferViewCreateInfo,                   \
-                UnwrapInPlace(out->buffer));                                                         \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, VkCommandBufferAllocateInfo,         \
-                UnwrapInPlace(out->commandPool));                                                    \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO, VkCommandBufferInheritanceInfo,   \
-                UnwrapInPlace(out->renderPass), UnwrapInPlace(out->framebuffer));                    \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, VkCommandBufferSubmitInfo,             \
-                UnwrapInPlace(out->commandBuffer));                                                  \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT,                              \
-                VkConditionalRenderingBeginInfoEXT, UnwrapInPlace(out->buffer));                     \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR,                              \
-                VkCopyAccelerationStructureInfoKHR, UnwrapInPlace(out->src),                         \
-                UnwrapInPlace(out->dst));                                                            \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_TO_MEMORY_INFO_KHR,                    \
-                VkCopyAccelerationStructureToMemoryInfoKHR, UnwrapInPlace(out->src));                \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET, VkCopyDescriptorSet,                          \
-                UnwrapInPlace(out->srcSet), UnwrapInPlace(out->dstSet));                             \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_MEMORY_TO_ACCELERATION_STRUCTURE_INFO_KHR,                    \
-                VkCopyMemoryToAccelerationStructureInfoKHR, UnwrapInPlace(out->dst));                \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_DENSITY_MAP_ATTACHMENT_INFO_EXT,                \
-                VkRenderingFragmentDensityMapAttachmentInfoEXT, UnwrapInPlace(out->imageView));      \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR,               \
-                VkRenderingFragmentShadingRateAttachmentInfoKHR, UnwrapInPlace(out->imageView));     \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_MEMORY_ALLOCATE_INFO_NV,                      \
-                VkDedicatedAllocationMemoryAllocateInfoNV, UnwrapInPlace(out->buffer),               \
-                UnwrapInPlace(out->image));                                                          \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO,                            \
-                VkDescriptorUpdateTemplateCreateInfo, UnwrapInPlace(out->descriptorSetLayout),       \
-                UnwrapInPlace(out->pipelineLayout));                                                 \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DEVICE_MEMORY_OPAQUE_CAPTURE_ADDRESS_INFO,                         \
-                VkDeviceMemoryOpaqueCaptureAddressInfo, UnwrapInPlace(out->memory));                 \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, VkImageMemoryBarrier,                        \
-                UnwrapInPlace(out->image));                                                          \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, VkImageMemoryBarrier2,                     \
-                UnwrapInPlace(out->image));                                                          \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,                                  \
-                VkImageMemoryRequirementsInfo2, UnwrapInPlace(out->image));                          \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_SPARSE_MEMORY_REQUIREMENTS_INFO_2,                           \
-                VkImageSparseMemoryRequirementsInfo2, UnwrapInPlace(out->image));                    \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, VkImageViewCreateInfo,                     \
-                UnwrapInPlace(out->image));                                                          \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, VkMappedMemoryRange,                          \
-                UnwrapInPlace(out->memory));                                                         \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, VkMemoryDedicatedAllocateInfo,     \
-                UnwrapInPlace(out->buffer), UnwrapInPlace(out->image));                              \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR, VkPipelineInfoKHR,                              \
-                UnwrapInPlace(out->pipeline));                                                       \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR, VkPipelineExecutableInfoKHR,         \
-                UnwrapInPlace(out->pipeline));                                                       \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, VkRenderingAttachmentInfo,              \
-                UnwrapInPlace(out->imageView), UnwrapInPlace(out->resolveImageView));                \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, VkRenderPassBeginInfo,                     \
-                UnwrapInPlace(out->renderPass), UnwrapInPlace(out->framebuffer));                    \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_EXT,                                 \
-                VkReleaseSwapchainImagesInfoEXT, UnwrapInPlace(out->swapchain))                      \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO, VkSamplerYcbcrConversionInfo,       \
-                UnwrapInPlace(out->conversion));                                                     \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, VkSemaphoreSignalInfo,                      \
-                UnwrapInPlace(out->semaphore));                                                      \
-  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, VkSemaphoreSubmitInfo,                      \
-                UnwrapInPlace(out->semaphore));                                                      \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,                          \
-                             VkAcquireNextImageInfoKHR, UnwrapInPlace(out->swapchain),               \
-                             UnwrapInPlace(out->semaphore), UnwrapInPlace(out->fence));              \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_SWAPCHAIN_INFO_KHR,                 \
-                             VkBindImageMemorySwapchainInfoKHR, UnwrapInPlace(out->swapchain));      \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_FENCE_GET_FD_INFO_KHR, VkFenceGetFdInfoKHR,           \
-                             UnwrapInPlace(out->fence));                                             \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMAGE_SWAPCHAIN_CREATE_INFO_KHR,                      \
-                             VkImageSwapchainCreateInfoKHR, UnwrapInPlace(out->swapchain));          \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMPORT_FENCE_FD_INFO_KHR, VkImportFenceFdInfoKHR,     \
-                             UnwrapInPlace(out->fence));                                             \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR,                         \
-                             VkImportSemaphoreFdInfoKHR, UnwrapInPlace(out->semaphore));             \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR, VkMemoryGetFdInfoKHR,         \
-                             UnwrapInPlace(out->memory));                                            \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,                   \
-                             VkPhysicalDeviceSurfaceInfo2KHR, UnwrapInPlace(out->surface));          \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR, VkSemaphoreGetFdInfoKHR,   \
-                             UnwrapInPlace(out->semaphore));                                         \
-  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, VkSwapchainCreateInfoKHR,  \
+#define PROCESS_SIMPLE_STRUCTS()                                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,                          \
+              VkAccelerationStructureBuildSizesInfoKHR);                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR,                       \
+              VkAccelerationStructureGeometryAabbsDataKHR);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,                   \
+              VkAccelerationStructureGeometryInstancesDataKHR);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,                                  \
+              VkAccelerationStructureGeometryKHR);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,                   \
+              VkAccelerationStructureGeometryTrianglesDataKHR);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_VERSION_INFO_KHR,                              \
+              VkAccelerationStructureVersionInfoKHR);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ACQUIRE_PROFILING_LOCK_INFO_KHR, VkAcquireProfilingLockInfoKHR);      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_APPLICATION_INFO, VkApplicationInfo);                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2, VkAttachmentDescription2);                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_STENCIL_LAYOUT,                                \
+              VkAttachmentDescriptionStencilLayout);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2, VkAttachmentReference2);                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_STENCIL_LAYOUT,                                  \
+              VkAttachmentReferenceStencilLayout);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_DEVICE_GROUP_INFO,                                 \
+              VkBindBufferMemoryDeviceGroupInfo);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_DEVICE_GROUP_INFO,                                  \
+              VkBindImageMemoryDeviceGroupInfo);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO, VkBindImagePlaneMemoryInfo);            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_COPY_2, VkBufferCopy2);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, VkBufferCreateInfo);                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_CREATE_INFO_EXT,                                \
+              VkBufferDeviceAddressCreateInfoEXT);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2, VkBufferImageCopy2);                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_OPAQUE_CAPTURE_ADDRESS_CREATE_INFO,                            \
+              VkBufferOpaqueCaptureAddressCreateInfo);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO, VkBufferUsageFlags2CreateInfo);     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, VkCalibratedTimestampInfoKHR);         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, VkCommandBufferBeginInfo);                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_CONDITIONAL_RENDERING_INFO_EXT,            \
+              VkCommandBufferInheritanceConditionalRenderingInfoEXT);                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, VkCommandPoolCreateInfo);                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, VkDebugMarkerMarkerInfoEXT);            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,                                \
+              VkDebugReportCallbackCreateInfoEXT);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, VkDebugUtilsLabelEXT);                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,                                \
+              VkDebugUtilsMessengerCreateInfoEXT);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_BUFFER_CREATE_INFO_NV,                           \
+              VkDedicatedAllocationBufferCreateInfoNV);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_IMAGE_CREATE_INFO_NV,                            \
+              VkDedicatedAllocationImageCreateInfoNV);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT, VkDescriptorBufferBindingInfoEXT) \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT, VkDescriptorAddressInfoEXT)              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, VkDescriptorPoolCreateInfo);             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_INLINE_UNIFORM_BLOCK_CREATE_INFO,                     \
+              VkDescriptorPoolInlineUniformBlockCreateInfo);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,                      \
+              VkDescriptorSetLayoutBindingFlagsCreateInfo);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_SUPPORT, VkDescriptorSetLayoutSupport);         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,               \
+              VkDescriptorSetVariableDescriptorCountAllocateInfo);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT,              \
+              VkDescriptorSetVariableDescriptorCountLayoutSupport);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, VkDeviceCreateInfo);                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_BIND_SPARSE_INFO, VkDeviceGroupBindSparseInfo);          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_COMMAND_BUFFER_BEGIN_INFO,                               \
+              VkDeviceGroupCommandBufferBeginInfo);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_CAPABILITIES_KHR,                                \
+              VkDeviceGroupPresentCapabilitiesKHR);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR, VkDeviceGroupPresentInfoKHR);          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_RENDER_PASS_BEGIN_INFO,                                  \
+              VkDeviceGroupRenderPassBeginInfo);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_SUBMIT_INFO, VkDeviceGroupSubmitInfo);                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_GROUP_SWAPCHAIN_CREATE_INFO_KHR,                               \
+              VkDeviceGroupSwapchainCreateInfoKHR);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_MEMORY_OVERALLOCATION_CREATE_INFO_AMD,                         \
+              VkDeviceMemoryOverallocationCreateInfoAMD);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_PRIVATE_DATA_CREATE_INFO, VkDevicePrivateDataCreateInfo);      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, VkDeviceQueueCreateInfo);                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO,                             \
+              VkDeviceQueueGlobalPriorityCreateInfo);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2, VkDeviceQueueInfo2);                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_MODE_PROPERTIES_2_KHR, VkDisplayModeProperties2KHR);          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_NATIVE_HDR_SURFACE_CAPABILITIES_AMD,                          \
+              VkDisplayNativeHdrSurfaceCapabilitiesAMD)                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PLANE_CAPABILITIES_2_KHR, VkDisplayPlaneCapabilities2KHR);    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PLANE_INFO_2_KHR, VkDisplayPlaneInfo2KHR);                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PLANE_PROPERTIES_2_KHR, VkDisplayPlaneProperties2KHR);        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PRESENT_INFO_KHR, VkDisplayPresentInfoKHR);                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_DISPLAY_PROPERTIES_2_KHR, VkDisplayProperties2KHR);                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_EVENT_CREATE_INFO, VkEventCreateInfo);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_EXTERNAL_BUFFER_PROPERTIES, VkExternalBufferProperties);              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES, VkExternalImageFormatProperties);   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, VkFenceCreateInfo);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_FILTER_CUBIC_IMAGE_VIEW_IMAGE_FORMAT_PROPERTIES_EXT,                  \
+              VkFilterCubicImageViewImageFormatPropertiesEXT);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR,                            \
+              VkFragmentShadingRateAttachmentInfoKHR);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, VkFormatProperties2);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3, VkFormatProperties3);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,                            \
+              VkGraphicsPipelineLibraryCreateInfoEXT);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_HDR_METADATA_EXT, VkHdrMetadataEXT)                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_BLIT_2, VkImageBlit2);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT, VkImageCompressionControlEXT);         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_PROPERTIES_EXT, VkImageCompressionPropertiesEXT);   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_COPY_2, VkImageCopy2);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, VkImageCreateInfo);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, VkImageFormatListCreateInfo);          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, VkImageFormatProperties2);                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,                                 \
+              VkImagePlaneMemoryRequirementsInfo);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2, VkImageResolve2);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_SUBRESOURCE_2, VkImageSubresource2);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_STENCIL_USAGE_CREATE_INFO, VkImageStencilUsageCreateInfo);      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_ASTC_DECODE_MODE_EXT, VkImageViewASTCDecodeModeEXT);       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT, VkImageViewMinLodCreateInfoEXT);  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO, VkImageViewUsageCreateInfo);            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, VkInstanceCreateInfo);                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO, VkMemoryAllocateFlagsInfo);               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, VkMemoryAllocateInfo);                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_BARRIER, VkMemoryBarrier);                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2, VkMemoryBarrier2);                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS, VkMemoryDedicatedRequirements);        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,                          \
+              VkMemoryOpaqueCaptureAddressAllocateInfo);                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_PRIORITY_ALLOCATE_INFO_EXT, VkMemoryPriorityAllocateInfoEXT);  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, VkMemoryRequirements2);                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MULTISAMPLE_PROPERTIES_EXT, VkMultisamplePropertiesEXT);              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT,                       \
+              VkMultisampledRenderToSingleSampledInfoEXT);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT,                              \
+              VkMutableDescriptorTypeCreateInfoEXT);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT,                       \
+              VkOpaqueCaptureDescriptorDataCreateInfoEXT)                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PERFORMANCE_COUNTER_DESCRIPTION_KHR,                                  \
+              VkPerformanceCounterDescriptionKHR);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PERFORMANCE_COUNTER_KHR, VkPerformanceCounterKHR);                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PERFORMANCE_QUERY_SUBMIT_INFO_KHR, VkPerformanceQuerySubmitInfoKHR);  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES,                               \
+              VkPhysicalDevice16BitStorageFeatures);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_4444_FORMATS_FEATURES_EXT,                            \
+              VkPhysicalDevice4444FormatsFeaturesEXT);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES,                                \
+              VkPhysicalDevice8BitStorageFeatures);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,                  \
+              VkPhysicalDeviceAccelerationStructureFeaturesKHR);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR,                \
+              VkPhysicalDeviceAccelerationStructurePropertiesKHR);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ASTC_DECODE_FEATURES_EXT,                             \
+              VkPhysicalDeviceASTCDecodeFeaturesEXT);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_DYNAMIC_STATE_FEATURES_EXT,  \
+              VkPhysicalDeviceAttachmentFeedbackLoopDynamicStateFeaturesEXT);                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_FEATURES_EXT,         \
+              VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT);                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BORDER_COLOR_SWIZZLE_FEATURES_EXT,                    \
+              VkPhysicalDeviceBorderColorSwizzleFeaturesEXT);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT,                   \
+              VkPhysicalDeviceBufferDeviceAddressFeaturesEXT);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,                       \
+              VkPhysicalDeviceBufferDeviceAddressFeatures);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD,                         \
+              VkPhysicalDeviceCoherentMemoryFeaturesAMD);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COLOR_WRITE_ENABLE_FEATURES_EXT,                      \
+              VkPhysicalDeviceColorWriteEnableFeaturesEXT);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,              \
+              VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_PROPERTIES_KHR,            \
+              VkPhysicalDeviceComputeShaderDerivativesPropertiesKHR);                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT,                   \
+              VkPhysicalDeviceConditionalRenderingFeaturesEXT);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT,            \
+              VkPhysicalDeviceConservativeRasterizationPropertiesEXT);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT,                     \
+              VkPhysicalDeviceCustomBorderColorFeaturesEXT);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_PROPERTIES_EXT,                   \
+              VkPhysicalDeviceCustomBorderColorPropertiesEXT);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEDICATED_ALLOCATION_IMAGE_ALIASING_FEATURES_NV,      \
+              VkPhysicalDeviceDedicatedAllocationImageAliasingFeaturesNV);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLAMP_ZERO_ONE_FEATURES_KHR,                    \
+              VkPhysicalDeviceDepthClampZeroOneFeaturesKHR)                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT,                      \
+              VkPhysicalDeviceDepthClipControlFeaturesEXT)                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT,                       \
+              VkPhysicalDeviceDepthClipEnableFeaturesEXT)                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES,                     \
+              VkPhysicalDeviceDepthStencilResolveProperties);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_DENSITY_MAP_PROPERTIES_EXT,         \
+              VkPhysicalDeviceDescriptorBufferDensityMapPropertiesEXT)                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,                       \
+              VkPhysicalDeviceDescriptorBufferFeaturesEXT)                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,                     \
+              VkPhysicalDeviceDescriptorBufferPropertiesEXT)                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,                         \
+              VkPhysicalDeviceDescriptorIndexingFeatures);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES,                       \
+              VkPhysicalDeviceDescriptorIndexingProperties);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISCARD_RECTANGLE_PROPERTIES_EXT,                     \
+              VkPhysicalDeviceDiscardRectanglePropertiesEXT);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,                                    \
+              VkPhysicalDeviceDriverProperties);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,                           \
+              VkPhysicalDeviceDynamicRenderingFeatures)                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES,                \
+              VkPhysicalDeviceDynamicRenderingLocalReadFeatures)                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT,    \
+              VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT)                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,                  \
+              VkPhysicalDeviceExtendedDynamicStateFeaturesEXT);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,                \
+              VkPhysicalDeviceExtendedDynamicState2FeaturesEXT);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,                \
+              VkPhysicalDeviceExtendedDynamicState3FeaturesEXT);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_PROPERTIES_EXT,              \
+              VkPhysicalDeviceExtendedDynamicState3PropertiesEXT);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_BUFFER_INFO,                                 \
+              VkPhysicalDeviceExternalBufferInfo);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,                           \
+              VkPhysicalDeviceExternalImageFormatInfo);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_SEMAPHORE_INFO,                              \
+              VkPhysicalDeviceExternalSemaphoreInfo);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, VkPhysicalDeviceFeatures2);               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES,                            \
+              VkPhysicalDeviceFloatControlsProperties);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR,             \
+              VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR)                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_PROPERTIES_KHR,           \
+              VkPhysicalDeviceFragmentShaderBarycentricPropertiesKHR)                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES,                       \
+              VkPhysicalDeviceGlobalPriorityQueryFeatures)                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,               \
+              VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT)                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT,             \
+              VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT)                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GROUP_PROPERTIES, VkPhysicalDeviceGroupProperties)    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT,                    \
+              VkPhysicalDeviceFragmentDensityMapFeaturesEXT);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_PROPERTIES_EXT,                  \
+              VkPhysicalDeviceFragmentDensityMapPropertiesEXT);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_2_FEATURES_EXT,                  \
+              VkPhysicalDeviceFragmentDensityMap2FeaturesEXT);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_2_PROPERTIES_EXT,                \
+              VkPhysicalDeviceFragmentDensityMap2PropertiesEXT);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM,            \
+              VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM);                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_PROPERTIES_QCOM,          \
+              VkPhysicalDeviceFragmentDensityMapOffsetPropertiesQCOM);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT,               \
+              VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,                   \
+              VkPhysicalDeviceFragmentShadingRateFeaturesKHR);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_KHR,                            \
+              VkPhysicalDeviceFragmentShadingRateKHR);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR,                 \
+              VkPhysicalDeviceFragmentShadingRatePropertiesKHR);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES,                            \
+              VkPhysicalDeviceHostQueryResetFeatures);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES, VkPhysicalDeviceIDProperties);         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_2D_VIEW_OF_3D_FEATURES_EXT,                     \
+              VkPhysicalDeviceImage2DViewOf3DFeaturesEXT);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_FEATURES_EXT,               \
+              VkPhysicalDeviceImageCompressionControlFeaturesEXT);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT,     \
+              VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT);                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,                                  \
+              VkPhysicalDeviceImageFormatInfo2);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_VIEW_IMAGE_FORMAT_INFO_EXT,                     \
+              VkPhysicalDeviceImageViewImageFormatInfoEXT);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES,                       \
+              VkPhysicalDeviceImagelessFramebufferFeatures)                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ROBUSTNESS_FEATURES,                            \
+              VkPhysicalDeviceImageRobustnessFeatures)                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES,                            \
+              VkPhysicalDeviceIndexTypeUint8Features);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_VIEW_MIN_LOD_FEATURES_EXT,                      \
+              VkPhysicalDeviceImageViewMinLodFeaturesEXT)                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES,                        \
+              VkPhysicalDeviceInlineUniformBlockFeatures);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_PROPERTIES,                      \
+              VkPhysicalDeviceInlineUniformBlockProperties);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES,                             \
+              VkPhysicalDeviceMaintenance3Properties);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES,                               \
+              VkPhysicalDeviceMaintenance4Features);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES,                             \
+              VkPhysicalDeviceMaintenance4Properties);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES,                               \
+              VkPhysicalDeviceMaintenance5Features);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES,                             \
+              VkPhysicalDeviceMaintenance5Properties);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,                         \
+              VkPhysicalDeviceMemoryBudgetPropertiesEXT);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,                                  \
+              VkPhysicalDeviceMemoryProperties2);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PRIORITY_FEATURES_EXT,                         \
+              VkPhysicalDeviceMemoryPriorityFeaturesEXT);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,                             \
+              VkPhysicalDeviceMeshShaderFeaturesEXT);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT,                           \
+              VkPhysicalDeviceMeshShaderPropertiesEXT);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_FEATURES_EXT,   \
+              VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT);                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,                                   \
+              VkPhysicalDeviceMultiviewFeatures);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES,                                 \
+              VkPhysicalDeviceMultiviewProperties);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT,                 \
+              VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_FEATURES_EXT,                   \
+              VkPhysicalDeviceNestedCommandBufferFeaturesEXT);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_PROPERTIES_EXT,                 \
+              VkPhysicalDeviceNestedCommandBufferPropertiesEXT);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NON_SEAMLESS_CUBE_MAP_FEATURES_EXT,                   \
+              VkPhysicalDeviceNonSeamlessCubeMapFeaturesEXT);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES,                          \
+              VkPhysicalDeviceLineRasterizationFeatures)                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_PROPERTIES,                        \
+              VkPhysicalDeviceLineRasterizationProperties)                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT,            \
+              VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT);                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT,                          \
+              VkPhysicalDevicePCIBusInfoPropertiesEXT);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR,                       \
+              VkPhysicalDevicePerformanceQueryFeaturesKHR);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_PROPERTIES_KHR,                     \
+              VkPhysicalDevicePerformanceQueryPropertiesKHR);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES,             \
+              VkPhysicalDevicePipelineCreationCacheControlFeatures);                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR,          \
+              VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR)                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_POINT_CLIPPING_PROPERTIES,                            \
+              VkPhysicalDevicePointClippingProperties);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,                              \
+              VkPhysicalDevicePresentIdFeaturesKHR);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,                            \
+              VkPhysicalDevicePresentWaitFeaturesKHR);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT,         \
+              VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT)                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVES_GENERATED_QUERY_FEATURES_EXT,              \
+              VkPhysicalDevicePrimitivesGeneratedQueryFeaturesEXT);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIVATE_DATA_FEATURES,                                \
+              VkPhysicalDevicePrivateDataFeatures);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, VkPhysicalDeviceProperties2);           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES,                            \
+              VkPhysicalDeviceProtectedMemoryFeatures);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_PROPERTIES,                          \
+              VkPhysicalDeviceProtectedMemoryProperties);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_FEATURES_EXT,                        \
+              VkPhysicalDeviceProvokingVertexFeaturesEXT);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_PROPERTIES_EXT,                      \
+              VkPhysicalDeviceProvokingVertexPropertiesEXT);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES,                           \
+              VkPhysicalDevicePushDescriptorProperties);                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_FEATURES_EXT,   \
+              VkPhysicalDeviceRasterizationOrderAttachmentAccessFeaturesEXT);                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR,               \
+              VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR);                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,                    \
+              VkPhysicalDeviceRayTracingPipelineFeaturesKHR);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR,                  \
+              VkPhysicalDeviceRayTracingPipelinePropertiesKHR);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR,              \
+              VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,                               \
+              VkPhysicalDeviceRayQueryFeaturesKHR);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RGBA10X6_FORMATS_FEATURES_EXT,                        \
+              VkPhysicalDeviceRGBA10X6FormatsFeaturesEXT);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_KHR,                            \
+              VkPhysicalDeviceRobustness2FeaturesKHR);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_PROPERTIES_KHR,                          \
+              VkPhysicalDeviceRobustness2PropertiesKHR);                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLE_LOCATIONS_PROPERTIES_EXT,                      \
+              VkPhysicalDeviceSampleLocationsPropertiesEXT);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES,                     \
+              VkPhysicalDeviceSamplerFilterMinmaxProperties);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES,                    \
+              VkPhysicalDeviceSamplerYcbcrConversionFeatures);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES,                         \
+              VkPhysicalDeviceScalarBlockLayoutFeatures);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES,              \
+              VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES,                         \
+              VkPhysicalDeviceShaderAtomicInt64Features);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,                     \
+              VkPhysicalDeviceShaderAtomicFloatFeaturesEXT);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_2_FEATURES_EXT,                   \
+              VkPhysicalDeviceShaderAtomicFloat2FeaturesEXT);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_PROPERTIES_AMD,                           \
+              VkPhysicalDeviceShaderCorePropertiesAMD);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR,                            \
+              VkPhysicalDeviceShaderClockFeaturesKHR);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES,          \
+              VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES,                      \
+              VkPhysicalDeviceShaderDrawParametersFeatures);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EXPECT_ASSUME_FEATURES,                        \
+              VkPhysicalDeviceShaderExpectAssumeFeatures);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,                         \
+              VkPhysicalDeviceShaderFloat16Int8Features);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES,                     \
+              VkPhysicalDeviceShaderFloatControls2Features)                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_IMAGE_ATOMIC_INT64_FEATURES_EXT,               \
+              VkPhysicalDeviceShaderImageAtomicInt64FeaturesEXT)                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_IMAGE_FOOTPRINT_FEATURES_NV,                   \
+              VkPhysicalDeviceShaderImageFootprintFeaturesNV);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES,                  \
+              VkPhysicalDeviceShaderIntegerDotProductFeatures);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_PROPERTIES,                \
+              VkPhysicalDeviceShaderIntegerDotProductProperties);                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR,            \
+              VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR);                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,                           \
+              VkPhysicalDeviceShaderObjectFeaturesEXT);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_PROPERTIES_EXT,                         \
+              VkPhysicalDeviceShaderObjectPropertiesEXT);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_QUAD_CONTROL_FEATURES_KHR,                     \
+              VkPhysicalDeviceShaderQuadControlFeaturesKHR);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR,     \
+              VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR);                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES,              \
+              VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures)                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_ROTATE_FEATURES,                      \
+              VkPhysicalDeviceShaderSubgroupRotateFeatures)                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR,    \
+              VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR)                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_TERMINATE_INVOCATION_FEATURES,                 \
+              VkPhysicalDeviceShaderTerminateInvocationFeatures)                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SPARSE_IMAGE_FORMAT_INFO_2,                           \
+              VkPhysicalDeviceSparseImageFormatInfo2);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES,                                  \
+              VkPhysicalDeviceSubgroupProperties);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES,                       \
+              VkPhysicalDeviceSubgroupSizeControlFeatures)                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES,                     \
+              VkPhysicalDeviceSubgroupSizeControlProperties)                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,                 \
+              VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT)                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,                           \
+              VkPhysicalDeviceSynchronization2Features);                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXEL_BUFFER_ALIGNMENT_FEATURES_EXT,                  \
+              VkPhysicalDeviceTexelBufferAlignmentFeaturesEXT);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXEL_BUFFER_ALIGNMENT_PROPERTIES,                    \
+              VkPhysicalDeviceTexelBufferAlignmentProperties);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES,                \
+              VkPhysicalDeviceTextureCompressionASTCHDRFeatures);                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,                          \
+              VkPhysicalDeviceTimelineSemaphoreFeatures);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_PROPERTIES,                        \
+              VkPhysicalDeviceTimelineSemaphoreProperties);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TOOL_PROPERTIES, VkPhysicalDeviceToolProperties);     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT,                      \
+              VkPhysicalDeviceTransformFeedbackFeaturesEXT);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_PROPERTIES_EXT,                    \
+              VkPhysicalDeviceTransformFeedbackPropertiesEXT);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES,                           \
+              VkPhysicalDeviceVariablePointersFeatures);                                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES,                    \
+              VkPhysicalDeviceVertexAttributeDivisorFeatures);                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES_EXT,              \
+              VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES,                  \
+              VkPhysicalDeviceVertexAttributeDivisorProperties);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT,              \
+              VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES,              \
+              VkPhysicalDeviceUniformBufferStandardLayoutFeatures);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,                                  \
+              VkPhysicalDeviceVulkan11Features);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES,                                \
+              VkPhysicalDeviceVulkan11Properties);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,                                  \
+              VkPhysicalDeviceVulkan12Features);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES,                                \
+              VkPhysicalDeviceVulkan12Properties);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,                                  \
+              VkPhysicalDeviceVulkan13Features);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES,                                \
+              VkPhysicalDeviceVulkan13Properties);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES,                         \
+              VkPhysicalDeviceVulkanMemoryModelFeatures);                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_FEATURES_KHR,        \
+              VkPhysicalDeviceWorkgroupMemoryExplicitLayoutFeaturesKHR)                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_YCBCR_2_PLANE_444_FORMATS_FEATURES_EXT,               \
+              VkPhysicalDeviceYcbcr2Plane444FormatsFeaturesEXT)                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_YCBCR_IMAGE_ARRAYS_FEATURES_EXT,                      \
+              VkPhysicalDeviceYcbcrImageArraysFeaturesEXT)                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ZERO_INITIALIZE_WORKGROUP_MEMORY_FEATURES,            \
+              VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeatures)                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO, VkPipelineCacheCreateInfo);               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO,                               \
+              VkPipelineCreationFeedbackCreateInfo);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,                               \
+              VkPipelineColorBlendStateCreateInfo);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_COLOR_WRITE_CREATE_INFO_EXT,                                 \
+              VkPipelineColorWriteCreateInfoEXT);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,                                  \
+              VkPipelineCreateFlags2CreateInfo);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,                             \
+              VkPipelineDepthStencilStateCreateInfo);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_DISCARD_RECTANGLE_STATE_CREATE_INFO_EXT,                     \
+              VkPipelineDiscardRectangleStateCreateInfoEXT);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,                                   \
+              VkPipelineDynamicStateCreateInfo);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_PROPERTIES_KHR,                                   \
+              VkPipelineExecutablePropertiesKHR)                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR, VkPipelineExecutableStatisticKHR)  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INTERNAL_REPRESENTATION_KHR,                      \
+              VkPipelineExecutableInternalRepresentationKHR)                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_FRAGMENT_SHADING_RATE_STATE_CREATE_INFO_KHR,                 \
+              VkPipelineFragmentShadingRateStateCreateInfoKHR)                                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,                            \
+              VkPipelineInputAssemblyStateCreateInfo);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,                               \
+              VkPipelineMultisampleStateCreateInfo);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT,            \
+              VkPipelineRasterizationConservativeStateCreateInfoEXT);                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT,              \
+              VkPipelineRasterizationDepthClipStateCreateInfoEXT);                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO,                        \
+              VkPipelineRasterizationLineStateCreateInfo)                                             \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT,        \
+              VkPipelineRasterizationProvokingVertexStateCreateInfoEXT)                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,                             \
+              VkPipelineRasterizationStateCreateInfo);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_STREAM_CREATE_INFO_EXT,                  \
+              VkPipelineRasterizationStateStreamCreateInfoEXT);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SAMPLE_LOCATIONS_STATE_CREATE_INFO_EXT,                      \
+              VkPipelineSampleLocationsStateCreateInfoEXT);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, VkPipelineShaderStageCreateInfo);  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,             \
+              VkPipelineShaderStageRequiredSubgroupSizeCreateInfo)                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_DOMAIN_ORIGIN_STATE_CREATE_INFO,                \
+              VkPipelineTessellationDomainOriginStateCreateInfo);                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,                              \
+              VkPipelineTessellationStateCreateInfo);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO,                      \
+              VkPipelineVertexInputDivisorStateCreateInfo);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,                              \
+              VkPipelineVertexInputStateCreateInfo);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_DEPTH_CLIP_CONTROL_CREATE_INFO_EXT,                 \
+              VkPipelineViewportDepthClipControlCreateInfoEXT);                                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,                                  \
+              VkPipelineViewportStateCreateInfo);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, VkPresentIdKHR);                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR, VkPresentRegionsKHR);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE, VkPresentTimesInfoGOOGLE)                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PRIVATE_DATA_SLOT_CREATE_INFO, VkPrivateDataSlotCreateInfo)           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, VkQueryPoolCreateInfo);                       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_QUERY_POOL_PERFORMANCE_CREATE_INFO_KHR,                               \
+              VkQueryPoolPerformanceCreateInfoKHR);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_QUEUE_FAMILY_GLOBAL_PRIORITY_PROPERTIES,                              \
+              VkQueueFamilyGlobalPriorityProperties);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2, VkQueueFamilyProperties2);                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_INTERFACE_CREATE_INFO_KHR,                       \
+              VkRayTracingPipelineInterfaceCreateInfoKHR);                                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,                             \
+              VkRayTracingShaderGroupCreateInfoKHR);                                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, VkRenderPassCreateInfo);                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2, VkRenderPassCreateInfo2);                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,                     \
+              VkRenderPassFragmentDensityMapCreateInfoEXT);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_INPUT_ATTACHMENT_ASPECT_CREATE_INFO,                      \
+              VkRenderPassInputAttachmentAspectCreateInfo);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO, VkRenderPassMultiviewCreateInfo);  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_SAMPLE_LOCATIONS_BEGIN_INFO_EXT,                          \
+              VkRenderPassSampleLocationsBeginInfoEXT);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLE_LOCATIONS_INFO_EXT, VkSampleLocationsInfoEXT);                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_BORDER_COLOR_COMPONENT_MAPPING_CREATE_INFO_EXT,               \
+              VkSamplerBorderColorComponentMappingCreateInfoEXT);                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, VkSamplerCreateInfo);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT,                          \
+              VkSamplerCustomBorderColorCreateInfoEXT);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,                                   \
+              VkSamplerReductionModeCreateInfo);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,                                 \
+              VkSamplerYcbcrConversionCreateInfo);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES,                     \
+              VkSamplerYcbcrConversionImageFormatProperties);                                         \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, VkSemaphoreCreateInfo);                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO, VkSemaphoreTypeCreateInfo);               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, VkShaderModuleCreateInfo);                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR,                              \
+              VkSharedPresentSurfaceCapabilitiesKHR);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SPARSE_IMAGE_FORMAT_PROPERTIES_2, VkSparseImageFormatProperties2);    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SPARSE_IMAGE_MEMORY_REQUIREMENTS_2,                                   \
+              VkSparseImageMemoryRequirements2);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, VkSubpassBeginInfo);                              \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2, VkSubpassDependency2);                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2, VkSubpassDescription2);                        \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE,                            \
+              VkSubpassDescriptionDepthStencilResolve);                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_QCOM,                    \
+              VkSubpassFragmentDensityMapOffsetEndInfoQCOM);                                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_END_INFO, VkSubpassEndInfo);                                  \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_RESOLVE_PERFORMANCE_QUERY_EXT,                                \
+              VkSubpassResolvePerformanceQueryEXT);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBRESOURCE_LAYOUT_2, VkSubresourceLayout2);                          \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_EXT, VkSurfaceCapabilities2EXT);               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR, VkSurfaceCapabilities2KHR);               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR, VkSurfaceFormat2KHR);                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT,                               \
+              VkSurfacePresentModeCompatibilityEXT)                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT, VkSurfacePresentModeEXT)                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT,                             \
+              VkSurfacePresentScalingCapabilitiesEXT)                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PROTECTED_CAPABILITIES_KHR,                                   \
+              VkSurfaceProtectedCapabilitiesKHR);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_DISPLAY_NATIVE_HDR_CREATE_INFO_AMD,                         \
+              VkSwapchainDisplayNativeHdrCreateInfoAMD)                                               \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT, VkSwapchainPresentModeInfoEXT)       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,                              \
+              VkSwapchainPresentModesCreateInfoEXT)                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT,                            \
+              VkSwapchainPresentScalingCreateInfoEXT)                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_TEXTURE_LOD_GATHER_FORMAT_PROPERTIES_AMD,                             \
+              VkTextureLODGatherFormatPropertiesAMD);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO, VkTimelineSemaphoreSubmitInfo);       \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_VALIDATION_CACHE_CREATE_INFO_EXT, VkValidationCacheCreateInfoEXT);    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT, VkValidationFeaturesEXT);                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,                             \
+              VkVertexInputAttributeDescription2EXT);                                                 \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,                               \
+              VkVertexInputBindingDescription2EXT);                                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_INLINE_UNIFORM_BLOCK,                            \
+              VkWriteDescriptorSetInlineUniformBlock);                                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO,                                   \
+              VkRenderingAttachmentLocationInfo);                                                     \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDERING_AREA_INFO, VkRenderingAreaInfo);                            \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO,                                \
+              VkRenderingInputAttachmentIndexInfo);                                                   \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO,                             \
+                           VkLayerInstanceCreateInfo);                                                \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO, VkLayerDeviceCreateInfo);     \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_DEVICE_EVENT_INFO_EXT, VkDeviceEventInfoEXT);            \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_DISPLAY_EVENT_INFO_EXT, VkDisplayEventInfoEXT);          \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_DISPLAY_POWER_INFO_EXT, VkDisplayPowerInfoEXT);          \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO, VkExportFenceCreateInfo);      \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,                             \
+                           VkExportMemoryAllocateInfo);                                               \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_NV,                          \
+                           VkExportMemoryAllocateInfoNV);                                             \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,                            \
+                           VkExportSemaphoreCreateInfo);                                              \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_FENCE_PROPERTIES, VkExternalFenceProperties);   \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO,                      \
+                           VkExternalMemoryBufferCreateInfo);                                         \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,                       \
+                           VkExternalMemoryImageCreateInfo);                                          \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO_NV,                    \
+                           VkExternalMemoryImageCreateInfoNV);                                        \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_EXTERNAL_SEMAPHORE_PROPERTIES,                           \
+                           VkExternalSemaphoreProperties);                                            \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR, VkImportMemoryFdInfoKHR);     \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR, VkMemoryFdPropertiesKHR);      \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_FENCE_INFO,                     \
+                           VkPhysicalDeviceExternalFenceInfo);                                        \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_PROTECTED_SUBMIT_INFO, VkProtectedSubmitInfo);           \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SHADER_MODULE_VALIDATION_CACHE_CREATE_INFO_EXT,          \
+                           VkShaderModuleValidationCacheCreateInfoEXT);                               \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SWAPCHAIN_COUNTER_CREATE_INFO_EXT,                       \
+                           VkSwapchainCounterCreateInfoEXT);                                          \
+  COPY_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_VALIDATION_FLAGS_EXT, VkValidationFlagsEXT);             \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,                     \
+                VkAccelerationStructureBuildGeometryInfoKHR,                                          \
+                UnwrapInPlace(out->srcAccelerationStructure),                                         \
+                UnwrapInPlace(out->dstAccelerationStructure));                                        \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,            \
+                VkAccelerationStructureCaptureDescriptorDataInfoEXT,                                  \
+                UnwrapInPlace(out->accelerationStructure))                                            \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,                             \
+                VkAccelerationStructureCreateInfoKHR, UnwrapInPlace(out->buffer));                    \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,                     \
+                VkAccelerationStructureDeviceAddressInfoKHR,                                          \
+                UnwrapInPlace(out->accelerationStructure));                                           \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO, VkBindBufferMemoryInfo,                    \
+                UnwrapInPlace(out->buffer), UnwrapInPlace(out->memory));                              \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO, VkBindImageMemoryInfo,                      \
+                UnwrapInPlace(out->image), UnwrapInPlace(out->memory));                               \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,                            \
+                VkBufferCaptureDescriptorDataInfoEXT, UnwrapInPlace(out->buffer))                     \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, VkBufferMemoryBarrier,                       \
+                UnwrapInPlace(out->buffer));                                                          \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2, VkBufferMemoryBarrier2,                    \
+                UnwrapInPlace(out->buffer));                                                          \
+  /* VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_EXT aliased by KHR */                               \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, VkBufferDeviceAddressInfo,              \
+                UnwrapInPlace(out->buffer));                                                          \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,                                  \
+                VkBufferMemoryRequirementsInfo2, UnwrapInPlace(out->buffer));                         \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO, VkBufferViewCreateInfo,                    \
+                UnwrapInPlace(out->buffer));                                                          \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, VkCommandBufferAllocateInfo,          \
+                UnwrapInPlace(out->commandPool));                                                     \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO, VkCommandBufferInheritanceInfo,    \
+                UnwrapInPlace(out->renderPass), UnwrapInPlace(out->framebuffer));                     \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, VkCommandBufferSubmitInfo,              \
+                UnwrapInPlace(out->commandBuffer));                                                   \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT,                               \
+                VkConditionalRenderingBeginInfoEXT, UnwrapInPlace(out->buffer));                      \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR,                               \
+                VkCopyAccelerationStructureInfoKHR, UnwrapInPlace(out->src),                          \
+                UnwrapInPlace(out->dst));                                                             \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_TO_MEMORY_INFO_KHR,                     \
+                VkCopyAccelerationStructureToMemoryInfoKHR, UnwrapInPlace(out->src));                 \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET, VkCopyDescriptorSet,                           \
+                UnwrapInPlace(out->srcSet), UnwrapInPlace(out->dstSet));                              \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_COPY_MEMORY_TO_ACCELERATION_STRUCTURE_INFO_KHR,                     \
+                VkCopyMemoryToAccelerationStructureInfoKHR, UnwrapInPlace(out->dst));                 \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_MEMORY_ALLOCATE_INFO_NV,                       \
+                VkDedicatedAllocationMemoryAllocateInfoNV, UnwrapInPlace(out->buffer),                \
+                UnwrapInPlace(out->image));                                                           \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_PUSH_DESCRIPTOR_BUFFER_HANDLE_EXT,        \
+                VkDescriptorBufferBindingPushDescriptorBufferHandleEXT, UnwrapInPlace(out->buffer))   \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO,                             \
+                VkDescriptorUpdateTemplateCreateInfo, UnwrapInPlace(out->descriptorSetLayout),        \
+                UnwrapInPlace(out->pipelineLayout));                                                  \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_DEVICE_MEMORY_OPAQUE_CAPTURE_ADDRESS_INFO,                          \
+                VkDeviceMemoryOpaqueCaptureAddressInfo, UnwrapInPlace(out->memory));                  \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,                             \
+                VkImageCaptureDescriptorDataInfoEXT, UnwrapInPlace(out->image))                       \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, VkImageMemoryBarrier,                         \
+                UnwrapInPlace(out->image));                                                           \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, VkImageMemoryBarrier2,                      \
+                UnwrapInPlace(out->image));                                                           \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,                                   \
+                VkImageMemoryRequirementsInfo2, UnwrapInPlace(out->image));                           \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_SPARSE_MEMORY_REQUIREMENTS_INFO_2,                            \
+                VkImageSparseMemoryRequirementsInfo2, UnwrapInPlace(out->image));                     \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,                        \
+                VkImageViewCaptureDescriptorDataInfoEXT, UnwrapInPlace(out->imageView))               \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, VkImageViewCreateInfo,                      \
+                UnwrapInPlace(out->image));                                                           \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, VkMappedMemoryRange,                           \
+                UnwrapInPlace(out->memory));                                                          \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, VkMemoryDedicatedAllocateInfo,      \
+                UnwrapInPlace(out->buffer), UnwrapInPlace(out->image));                               \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR, VkPipelineInfoKHR,                               \
+                UnwrapInPlace(out->pipeline));                                                        \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR, VkPipelineExecutableInfoKHR,          \
+                UnwrapInPlace(out->pipeline));                                                        \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, VkRenderingAttachmentInfo,               \
+                UnwrapInPlace(out->imageView), UnwrapInPlace(out->resolveImageView));                 \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, VkRenderPassBeginInfo,                      \
+                UnwrapInPlace(out->renderPass), UnwrapInPlace(out->framebuffer));                     \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_DENSITY_MAP_ATTACHMENT_INFO_EXT,                 \
+                VkRenderingFragmentDensityMapAttachmentInfoEXT, UnwrapInPlace(out->imageView));       \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR,                \
+                VkRenderingFragmentShadingRateAttachmentInfoKHR, UnwrapInPlace(out->imageView));      \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_EXT,                                  \
+                VkReleaseSwapchainImagesInfoEXT, UnwrapInPlace(out->swapchain))                       \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,                           \
+                VkSamplerCaptureDescriptorDataInfoEXT, UnwrapInPlace(out->sampler))                   \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO, VkSamplerYcbcrConversionInfo,        \
+                UnwrapInPlace(out->conversion));                                                      \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, VkSemaphoreSignalInfo,                       \
+                UnwrapInPlace(out->semaphore));                                                       \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, VkSemaphoreSubmitInfo,                       \
+                UnwrapInPlace(out->semaphore));                                                       \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,                           \
+                             VkAcquireNextImageInfoKHR, UnwrapInPlace(out->swapchain),                \
+                             UnwrapInPlace(out->semaphore), UnwrapInPlace(out->fence));               \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_SWAPCHAIN_INFO_KHR,                  \
+                             VkBindImageMemorySwapchainInfoKHR, UnwrapInPlace(out->swapchain));       \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_FENCE_GET_FD_INFO_KHR, VkFenceGetFdInfoKHR,            \
+                             UnwrapInPlace(out->fence));                                              \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMAGE_SWAPCHAIN_CREATE_INFO_KHR,                       \
+                             VkImageSwapchainCreateInfoKHR, UnwrapInPlace(out->swapchain));           \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMPORT_FENCE_FD_INFO_KHR, VkImportFenceFdInfoKHR,      \
+                             UnwrapInPlace(out->fence));                                              \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR,                          \
+                             VkImportSemaphoreFdInfoKHR, UnwrapInPlace(out->semaphore));              \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR, VkMemoryGetFdInfoKHR,          \
+                             UnwrapInPlace(out->memory));                                             \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,                    \
+                             VkPhysicalDeviceSurfaceInfo2KHR, UnwrapInPlace(out->surface));           \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR, VkSemaphoreGetFdInfoKHR,    \
+                             UnwrapInPlace(out->semaphore));                                          \
+  UNWRAP_STRUCT_CAPTURE_ONLY(VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, VkSwapchainCreateInfoKHR,   \
                              UnwrapInPlace(out->surface), UnwrapInPlace(out->oldSwapchain));
 
 // define cases for structs we don't handle at all - only the body of the case needs to be defined
@@ -862,7 +885,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR:                                       \
   /* Output structure containing objects. Must be *wrapped* not unwrapped. */                \
   /* So we treat this as unhandled in generic code and require specific handling. */         \
-  case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT:            \
   case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_NV:                              \
   case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_LINEAR_SWEPT_SPHERES_DATA_NV:       \
   case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_MOTION_TRIANGLES_DATA_NV:           \
@@ -882,7 +904,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS:                                                 \
   case VK_STRUCTURE_TYPE_BIND_VIDEO_SESSION_MEMORY_INFO_KHR:                                 \
   case VK_STRUCTURE_TYPE_BLIT_IMAGE_CUBIC_WEIGHTS_INFO_QCOM:                                 \
-  case VK_STRUCTURE_TYPE_BUFFER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT:                            \
   case VK_STRUCTURE_TYPE_BUFFER_COLLECTION_BUFFER_CREATE_INFO_FUCHSIA:                       \
   case VK_STRUCTURE_TYPE_BUFFER_COLLECTION_CONSTRAINTS_INFO_FUCHSIA:                         \
   case VK_STRUCTURE_TYPE_BUFFER_COLLECTION_CREATE_INFO_FUCHSIA:                              \
@@ -918,10 +939,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_CU_MODULE_TEXTURING_MODE_CREATE_INFO_NVX:                           \
   case VK_STRUCTURE_TYPE_DEPTH_BIAS_INFO_EXT:                                                \
   case VK_STRUCTURE_TYPE_DEPTH_BIAS_REPRESENTATION_INFO_EXT:                                 \
-  case VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT:                                        \
-  case VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT:                                 \
-  case VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_PUSH_DESCRIPTOR_BUFFER_HANDLE_EXT:        \
-  case VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT:                                            \
   case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_BINDING_REFERENCE_VALVE:                             \
   case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_HOST_MAPPING_INFO_VALVE:                      \
   case VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_CALLBACK_DATA_EXT:                           \
@@ -971,7 +988,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_HOST_IMAGE_COPY_DEVICE_PERFORMANCE_QUERY:                           \
   case VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO:                                  \
   case VK_STRUCTURE_TYPE_IMAGE_ALIGNMENT_CONTROL_CREATE_INFO_MESA:                           \
-  case VK_STRUCTURE_TYPE_IMAGE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT:                             \
   case VK_STRUCTURE_TYPE_IMAGE_CONSTRAINTS_INFO_FUCHSIA:                                     \
   case VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT:                 \
   case VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT:                     \
@@ -979,7 +995,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_IMAGE_FORMAT_CONSTRAINTS_INFO_FUCHSIA:                              \
   case VK_STRUCTURE_TYPE_IMAGE_TO_MEMORY_COPY:                                               \
   case VK_STRUCTURE_TYPE_IMAGE_VIEW_ADDRESS_PROPERTIES_NVX:                                  \
-  case VK_STRUCTURE_TYPE_IMAGE_VIEW_CAPTURE_DESCRIPTOR_DATA_INFO_EXT:                        \
   case VK_STRUCTURE_TYPE_IMAGE_VIEW_HANDLE_INFO_NVX:                                         \
   case VK_STRUCTURE_TYPE_IMAGE_VIEW_SAMPLE_WEIGHT_CREATE_INFO_QCOM:                          \
   case VK_STRUCTURE_TYPE_IMAGE_VIEW_SLICED_CREATE_INFO_EXT:                                  \
@@ -1025,7 +1040,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_MICROMAP_VERSION_INFO_EXT:                                          \
   case VK_STRUCTURE_TYPE_MULTIVIEW_PER_VIEW_ATTRIBUTES_INFO_NVX:                             \
   case VK_STRUCTURE_TYPE_MULTIVIEW_PER_VIEW_RENDER_AREAS_RENDER_PASS_BEGIN_INFO_QCOM:        \
-  case VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT:                     \
   case VK_STRUCTURE_TYPE_OPTICAL_FLOW_EXECUTE_INFO_NV:                                       \
   case VK_STRUCTURE_TYPE_OPTICAL_FLOW_IMAGE_FORMAT_INFO_NV:                                  \
   case VK_STRUCTURE_TYPE_OPTICAL_FLOW_IMAGE_FORMAT_PROPERTIES_NV:                            \
@@ -1067,9 +1081,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUBIC_WEIGHTS_FEATURES_QCOM:                        \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_BIAS_CONTROL_FEATURES_EXT:                    \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLAMP_CONTROL_FEATURES_EXT:                   \
-  case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_DENSITY_MAP_PROPERTIES_EXT:       \
-  case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT:                     \
-  case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT:                   \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_POOL_OVERALLOCATION_FEATURES_NV:         \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_SET_HOST_MAPPING_FEATURES_VALVE:         \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_GENERATED_COMMANDS_COMPUTE_FEATURES_NV:      \
@@ -1245,7 +1256,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_RENDER_PASS_TILE_SHADING_CREATE_INFO_QCOM:                          \
   case VK_STRUCTURE_TYPE_RENDER_PASS_TRANSFORM_BEGIN_INFO_QCOM:                              \
   case VK_STRUCTURE_TYPE_SAMPLER_BLOCK_MATCH_WINDOW_CREATE_INFO_QCOM:                        \
-  case VK_STRUCTURE_TYPE_SAMPLER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT:                           \
   case VK_STRUCTURE_TYPE_SAMPLER_CUBIC_WEIGHTS_CREATE_INFO_QCOM:                             \
   case VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_YCBCR_DEGAMMA_CREATE_INFO_QCOM:            \
   case VK_STRUCTURE_TYPE_SCREEN_BUFFER_FORMAT_PROPERTIES_QNX:                                \
@@ -1493,6 +1503,20 @@ size_t GetNextPatchSize(const void *pNext)
         for(uint32_t i = 0; i < info->imageMemoryBarrierCount; i++)
           memSize += GetNextPatchSize(info->pImageMemoryBarriers[i].pNext);
 
+        break;
+      }
+      case VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT:
+      {
+        memSize += sizeof(VkDescriptorGetInfoEXT);
+
+        VkDescriptorGetInfoEXT *info = (VkDescriptorGetInfoEXT *)next;
+        memSize += sizeof(VkDescriptorAddressInfoEXT);
+
+        if(info->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
+           info->type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+           info->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
+           info->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+          memSize += GetNextPatchSize(info->data.pUniformBuffer);
         break;
       }
       case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO:
@@ -2366,6 +2390,59 @@ void UnwrapNextChain(CaptureState state, const char *structName, byte *&tempMem,
           UnwrapInPlace(outImageBarriers[i].image);
           UnwrapNextChain(state, "VkImageMemoryBarrier2", tempMem,
                           (VkBaseInStructure *)&outImageBarriers[i]);
+        }
+
+        break;
+      }
+      case VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT:
+      {
+        const VkDescriptorGetInfoEXT *in = (const VkDescriptorGetInfoEXT *)nextInput;
+        VkDescriptorGetInfoEXT *out = (VkDescriptorGetInfoEXT *)tempMem;
+
+        // append immediately so tempMem is incremented
+        AppendModifiedChainedStruct(tempMem, out, nextChainTail);
+
+        // allocate unwrapped address/image info
+        VkDescriptorAddressInfoEXT *outAddr = (VkDescriptorAddressInfoEXT *)tempMem;
+        VkDescriptorImageInfo *outImg = (VkDescriptorImageInfo *)tempMem;
+        VkSampler *outSamp = (VkSampler *)tempMem;
+        tempMem += sizeof(VkDescriptorAddressInfoEXT);
+
+        *out = *in;
+
+        if(out->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
+           out->type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+           out->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
+           out->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+        {
+          if(in->data.pUniformBuffer)
+          {
+            out->data.pUniformBuffer = outAddr;
+            *outAddr = *in->data.pUniformBuffer;
+            UnwrapNextChain(state, "VkDescriptorAddressInfoEXT", tempMem,
+                            (VkBaseInStructure *)out->data.pUniformBuffer);
+          }
+        }
+        else if(out->type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+                out->type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
+                out->type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
+                out->type == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
+        {
+          if(in->data.pCombinedImageSampler)
+          {
+            out->data.pCombinedImageSampler = outImg;
+            *outImg = *in->data.pCombinedImageSampler;
+            UnwrapInPlace(outImg->imageView);
+            UnwrapInPlace(outImg->sampler);
+          }
+        }
+        else if(out->type == VK_DESCRIPTOR_TYPE_SAMPLER)
+        {
+          if(in->data.pSampler)
+          {
+            out->data.pSampler = outSamp;
+            *outSamp = Unwrap(*in->data.pSampler);
+          }
         }
 
         break;
@@ -3357,6 +3434,9 @@ void CopyNextChainForPatching(const char *structName, byte *&tempMem, VkBaseInSt
         break;
       case VK_STRUCTURE_TYPE_DEPENDENCY_INFO:
         CopyNextChainedStruct(sizeof(VkDependencyInfo), tempMem, nextInput, nextChainTail);
+        break;
+      case VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT:
+        CopyNextChainedStruct(sizeof(VkDescriptorGetInfoEXT), tempMem, nextInput, nextChainTail);
         break;
       case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO:
         CopyNextChainedStruct(sizeof(VkDescriptorSetAllocateInfo), tempMem, nextInput, nextChainTail);
