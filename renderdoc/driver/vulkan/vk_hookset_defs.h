@@ -548,7 +548,8 @@
   DeclExt(KHR_ray_tracing_maintenance1);               \
   DeclExt(KHR_maintenance5);                           \
   DeclExt(EXT_image_compression_control);              \
-  DeclExt(EXT_image_compression_control_swapchain);
+  DeclExt(EXT_image_compression_control_swapchain);    \
+  DeclExt(EXT_descriptor_buffer);
 
 // for simplicity and since the check itself is platform agnostic,
 // these aren't protected in platform defines
@@ -686,7 +687,8 @@
   CheckExt(KHR_ray_tracing_maintenance1, VKXX);               \
   CheckExt(KHR_maintenance5, VKXX);                           \
   CheckExt(EXT_image_compression_control, VKXX);              \
-  CheckExt(EXT_image_compression_control_swapchain, VKXX);
+  CheckExt(EXT_image_compression_control_swapchain, VKXX);    \
+  CheckExt(EXT_descriptor_buffer, VKXX);
 
 #define HookInitVulkanInstanceExts_PhysDev()                                                         \
   HookInitExtension(KHR_surface, GetPhysicalDeviceSurfaceSupportKHR);                                \
@@ -1058,6 +1060,17 @@
   HookInitExtension(KHR_maintenance5, GetImageSubresourceLayout2KHR);                                \
   HookInitExtension(KHR_maintenance5, GetRenderingAreaGranularityKHR);                               \
   HookInitExtension(EXT_image_compression_control, GetImageSubresourceLayout2EXT);                   \
+  HookInitExtension(EXT_descriptor_buffer, CmdBindDescriptorBufferEmbeddedSamplersEXT);              \
+  HookInitExtension(EXT_descriptor_buffer, CmdBindDescriptorBuffersEXT);                             \
+  HookInitExtension(EXT_descriptor_buffer, CmdSetDescriptorBufferOffsetsEXT);                        \
+  HookInitExtension(EXT_descriptor_buffer, GetBufferOpaqueCaptureDescriptorDataEXT);                 \
+  HookInitExtension(EXT_descriptor_buffer, GetDescriptorEXT);                                        \
+  HookInitExtension(EXT_descriptor_buffer, GetDescriptorSetLayoutBindingOffsetEXT);                  \
+  HookInitExtension(EXT_descriptor_buffer, GetDescriptorSetLayoutSizeEXT);                           \
+  HookInitExtension(EXT_descriptor_buffer, GetImageOpaqueCaptureDescriptorDataEXT);                  \
+  HookInitExtension(EXT_descriptor_buffer, GetImageViewOpaqueCaptureDescriptorDataEXT);              \
+  HookInitExtension(EXT_descriptor_buffer, GetSamplerOpaqueCaptureDescriptorDataEXT);                \
+  HookInitExtension(EXT_descriptor_buffer, GetAccelerationStructureOpaqueCaptureDescriptorDataEXT);  \
   HookInitExtension_Device_Win32();                                                                  \
   HookInitExtension_Device_Linux();                                                                  \
   HookInitExtension_Device_Android();                                                                \
@@ -1975,6 +1988,29 @@
               const VkRenderingAreaInfo *, pRenderingAreaInfo, VkExtent2D *, pGranularity);          \
   HookDefine4(void, vkGetImageSubresourceLayout2EXT, VkDevice, device, VkImage, image,               \
               const VkImageSubresource2 *, pSubresource, VkSubresourceLayout2 *, pLayout);           \
+  HookDefine3(void, vkGetDescriptorSetLayoutSizeEXT, VkDevice, device, VkDescriptorSetLayout,        \
+              layout, VkDeviceSize *, pLayoutSizeInBytes);                                           \
+  HookDefine4(void, vkGetDescriptorSetLayoutBindingOffsetEXT, VkDevice, device,                      \
+              VkDescriptorSetLayout, layout, uint32_t, binding, VkDeviceSize *, pOffset);            \
+  HookDefine4(void, vkGetDescriptorEXT, VkDevice, device, const VkDescriptorGetInfoEXT *,            \
+              pDescriptorInfo, size_t, dataSize, void *, pDescriptor);                               \
+  HookDefine3(void, vkCmdBindDescriptorBuffersEXT, VkCommandBuffer, commandBuffer, uint32_t,         \
+              bufferCount, const VkDescriptorBufferBindingInfoEXT *, pBindingInfos);                 \
+  HookDefine7(void, vkCmdSetDescriptorBufferOffsetsEXT, VkCommandBuffer, commandBuffer,              \
+              VkPipelineBindPoint, pipelineBindPoint, VkPipelineLayout, layout, uint32_t, firstSet,  \
+              uint32_t, setCount, const uint32_t *, pBufferIndices, const VkDeviceSize *, pOffsets); \
+  HookDefine4(void, vkCmdBindDescriptorBufferEmbeddedSamplersEXT, VkCommandBuffer, commandBuffer,    \
+              VkPipelineBindPoint, pipelineBindPoint, VkPipelineLayout, layout, uint32_t, set);      \
+  HookDefine3(VkResult, vkGetBufferOpaqueCaptureDescriptorDataEXT, VkDevice, device,                 \
+              const VkBufferCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);                   \
+  HookDefine3(VkResult, vkGetImageOpaqueCaptureDescriptorDataEXT, VkDevice, device,                  \
+              const VkImageCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);                    \
+  HookDefine3(VkResult, vkGetImageViewOpaqueCaptureDescriptorDataEXT, VkDevice, device,              \
+              const VkImageViewCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);                \
+  HookDefine3(VkResult, vkGetSamplerOpaqueCaptureDescriptorDataEXT, VkDevice, device,                \
+              const VkSamplerCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);                  \
+  HookDefine3(VkResult, vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT, VkDevice, device,  \
+              const VkAccelerationStructureCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);    \
   HookDefine_Win32();                                                                                \
   HookDefine_Linux();                                                                                \
   HookDefine_Android();                                                                              \

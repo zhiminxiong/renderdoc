@@ -28,7 +28,7 @@
 template <>
 rdcstr DoStringise(const VulkanChunk &el)
 {
-  RDCCOMPILE_ASSERT((uint32_t)VulkanChunk::Max == 1218, "Chunks changed without updating names");
+  RDCCOMPILE_ASSERT((uint32_t)VulkanChunk::Max == 1222, "Chunks changed without updating names");
 
   BEGIN_ENUM_STRINGISE(VulkanChunk)
   {
@@ -250,6 +250,10 @@ rdcstr DoStringise(const VulkanChunk &el)
     STRINGISE_ENUM_CLASS(vkCmdTraceRaysIndirect2KHR)
     STRINGISE_ENUM_CLASS(vkCmdWriteAccelerationStructuresPropertiesKHR)
     STRINGISE_ENUM_CLASS(vkCmdBindIndexBuffer2KHR)
+    STRINGISE_ENUM_CLASS(vkGetDescriptorEXT)
+    STRINGISE_ENUM_CLASS(vkCmdBindDescriptorBuffersEXT)
+    STRINGISE_ENUM_CLASS(vkCmdSetDescriptorBufferOffsetsEXT)
+    STRINGISE_ENUM_CLASS(vkCmdBindDescriptorBufferEmbeddedSamplersEXT)
     STRINGISE_ENUM_CLASS_NAMED(Max, "Max Chunk");
   }
   END_ENUM_STRINGISE()

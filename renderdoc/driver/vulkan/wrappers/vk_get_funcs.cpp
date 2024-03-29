@@ -1332,3 +1332,67 @@ void WrappedVulkan::vkGetImageSubresourceLayout2EXT(VkDevice device, VkImage ima
   ObjDisp(device)->GetImageSubresourceLayout2EXT(Unwrap(device), Unwrap(image), pSubresource,
                                                  pLayout);
 }
+
+void WrappedVulkan::vkGetDescriptorSetLayoutSizeEXT(VkDevice device, VkDescriptorSetLayout layout,
+                                                    VkDeviceSize *pLayoutSizeInBytes)
+{
+  ObjDisp(device)->GetDescriptorSetLayoutSizeEXT(Unwrap(device), Unwrap(layout), pLayoutSizeInBytes);
+}
+
+void WrappedVulkan::vkGetDescriptorSetLayoutBindingOffsetEXT(VkDevice device,
+                                                             VkDescriptorSetLayout layout,
+                                                             uint32_t binding, VkDeviceSize *pOffset)
+{
+  ObjDisp(device)->GetDescriptorSetLayoutBindingOffsetEXT(Unwrap(device), Unwrap(layout), binding,
+                                                          pOffset);
+}
+
+VkResult WrappedVulkan::vkGetBufferOpaqueCaptureDescriptorDataEXT(
+    VkDevice device, const VkBufferCaptureDescriptorDataInfoEXT *pInfo, void *pData)
+{
+  VkBufferCaptureDescriptorDataInfoEXT unwrappedInfo = *pInfo;
+  unwrappedInfo.buffer = Unwrap(unwrappedInfo.buffer);
+
+  return ObjDisp(device)->GetBufferOpaqueCaptureDescriptorDataEXT(Unwrap(device), &unwrappedInfo,
+                                                                  pData);
+}
+
+VkResult WrappedVulkan::vkGetImageOpaqueCaptureDescriptorDataEXT(
+    VkDevice device, const VkImageCaptureDescriptorDataInfoEXT *pInfo, void *pData)
+{
+  VkImageCaptureDescriptorDataInfoEXT unwrappedInfo = *pInfo;
+  unwrappedInfo.image = Unwrap(unwrappedInfo.image);
+
+  return ObjDisp(device)->GetImageOpaqueCaptureDescriptorDataEXT(Unwrap(device), &unwrappedInfo,
+                                                                 pData);
+}
+
+VkResult WrappedVulkan::vkGetImageViewOpaqueCaptureDescriptorDataEXT(
+    VkDevice device, const VkImageViewCaptureDescriptorDataInfoEXT *pInfo, void *pData)
+{
+  VkImageViewCaptureDescriptorDataInfoEXT unwrappedInfo = *pInfo;
+  unwrappedInfo.imageView = Unwrap(unwrappedInfo.imageView);
+
+  return ObjDisp(device)->GetImageViewOpaqueCaptureDescriptorDataEXT(Unwrap(device), &unwrappedInfo,
+                                                                     pData);
+}
+
+VkResult WrappedVulkan::vkGetSamplerOpaqueCaptureDescriptorDataEXT(
+    VkDevice device, const VkSamplerCaptureDescriptorDataInfoEXT *pInfo, void *pData)
+{
+  VkSamplerCaptureDescriptorDataInfoEXT unwrappedInfo = *pInfo;
+  unwrappedInfo.sampler = Unwrap(unwrappedInfo.sampler);
+
+  return ObjDisp(device)->GetSamplerOpaqueCaptureDescriptorDataEXT(Unwrap(device), &unwrappedInfo,
+                                                                   pData);
+}
+
+VkResult WrappedVulkan::vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT(
+    VkDevice device, const VkAccelerationStructureCaptureDescriptorDataInfoEXT *pInfo, void *pData)
+{
+  VkAccelerationStructureCaptureDescriptorDataInfoEXT unwrappedInfo = *pInfo;
+  unwrappedInfo.accelerationStructure = Unwrap(unwrappedInfo.accelerationStructure);
+
+  return ObjDisp(device)->GetAccelerationStructureOpaqueCaptureDescriptorDataEXT(
+      Unwrap(device), &unwrappedInfo, pData);
+}

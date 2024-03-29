@@ -4379,6 +4379,16 @@ bool WrappedVulkan::ProcessChunk(ReadSerialiser &ser, VulkanChunk chunk)
       return Serialise_vkCmdCopyMemoryToAccelerationStructureKHR(ser, VK_NULL_HANDLE, NULL);
     case VulkanChunk::vkCreateAccelerationStructureKHR:
       return Serialise_vkCreateAccelerationStructureKHR(ser, VK_NULL_HANDLE, NULL, NULL, NULL);
+    case VulkanChunk::vkGetDescriptorEXT:
+      return Serialise_vkGetDescriptorEXT(ser, VK_NULL_HANDLE, NULL, 0, NULL);
+    case VulkanChunk::vkCmdBindDescriptorBuffersEXT:
+      return Serialise_vkCmdBindDescriptorBuffersEXT(ser, VK_NULL_HANDLE, 0, NULL);
+    case VulkanChunk::vkCmdSetDescriptorBufferOffsetsEXT:
+      return Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
+          ser, VK_NULL_HANDLE, VK_PIPELINE_BIND_POINT_MAX_ENUM, VK_NULL_HANDLE, 0, 0, NULL, NULL);
+    case VulkanChunk::vkCmdBindDescriptorBufferEmbeddedSamplersEXT:
+      return Serialise_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
+          ser, VK_NULL_HANDLE, VK_PIPELINE_BIND_POINT_MAX_ENUM, VK_NULL_HANDLE, 0);
 
     case VulkanChunk::vkCmdBindShadersEXT:
       return Serialise_vkCmdBindShadersEXT(ser, VK_NULL_HANDLE, 0, NULL, NULL);

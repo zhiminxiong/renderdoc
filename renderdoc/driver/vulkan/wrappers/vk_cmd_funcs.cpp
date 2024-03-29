@@ -8667,6 +8667,52 @@ void WrappedVulkan::vkCmdBindIndexBuffer2KHR(VkCommandBuffer commandBuffer, VkBu
   }
 }
 
+template <typename SerialiserType>
+bool WrappedVulkan::Serialise_vkCmdBindDescriptorBuffersEXT(
+    SerialiserType &ser, VkCommandBuffer commandBuffer, uint32_t bufferCount,
+    const VkDescriptorBufferBindingInfoEXT *pBindingInfos)
+{
+  return true;
+}
+
+void WrappedVulkan::vkCmdBindDescriptorBuffersEXT(VkCommandBuffer commandBuffer, uint32_t bufferCount,
+                                                  const VkDescriptorBufferBindingInfoEXT *pBindingInfos)
+{
+}
+
+template <typename SerialiserType>
+bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
+    SerialiserType &ser, VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
+    VkPipelineLayout layout, uint32_t firstSet, uint32_t setCount, const uint32_t *pBufferIndices,
+    const VkDeviceSize *pOffsets)
+{
+  return true;
+}
+
+void WrappedVulkan::vkCmdSetDescriptorBufferOffsetsEXT(VkCommandBuffer commandBuffer,
+                                                       VkPipelineBindPoint pipelineBindPoint,
+                                                       VkPipelineLayout layout, uint32_t firstSet,
+                                                       uint32_t setCount,
+                                                       const uint32_t *pBufferIndices,
+                                                       const VkDeviceSize *pOffsets)
+{
+}
+
+template <typename SerialiserType>
+bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
+    SerialiserType &ser, VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
+    VkPipelineLayout layout, uint32_t set)
+{
+  return true;
+}
+
+void WrappedVulkan::vkCmdBindDescriptorBufferEmbeddedSamplersEXT(VkCommandBuffer commandBuffer,
+                                                                 VkPipelineBindPoint pipelineBindPoint,
+                                                                 VkPipelineLayout layout,
+                                                                 uint32_t set)
+{
+}
+
 INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCreateCommandPool, VkDevice device,
                                 const VkCommandPoolCreateInfo *pCreateInfo,
                                 const VkAllocationCallbacks *, VkCommandPool *pCommandPool);
@@ -8862,3 +8908,14 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindShadersEXT, VkCommandBuffer comma
 INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindIndexBuffer2KHR, VkCommandBuffer commandBuffer,
                                 VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size,
                                 VkIndexType indexType);
+
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindDescriptorBuffersEXT, VkCommandBuffer commandBuffer,
+                                uint32_t bufferCount,
+                                const VkDescriptorBufferBindingInfoEXT *pBindingInfos);
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetDescriptorBufferOffsetsEXT,
+                                VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
+                                VkPipelineLayout layout, uint32_t firstSet, uint32_t setCount,
+                                const uint32_t *pBufferIndices, const VkDeviceSize *pOffsets);
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindDescriptorBufferEmbeddedSamplersEXT,
+                                VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
+                                VkPipelineLayout layout, uint32_t set);

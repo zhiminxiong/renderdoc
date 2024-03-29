@@ -1211,6 +1211,10 @@ enum class VulkanChunk : uint32_t
   vkCmdTraceRaysIndirect2KHR,
   vkCmdWriteAccelerationStructuresPropertiesKHR,
   vkCmdBindIndexBuffer2KHR,
+  vkGetDescriptorEXT,
+  vkCmdBindDescriptorBuffersEXT,
+  vkCmdSetDescriptorBufferOffsetsEXT,
+  vkCmdBindDescriptorBufferEmbeddedSamplersEXT,
   Max,
 };
 

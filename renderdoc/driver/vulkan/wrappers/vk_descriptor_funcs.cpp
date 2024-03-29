@@ -1870,6 +1870,19 @@ void WrappedVulkan::vkUpdateDescriptorSetWithTemplate(
   }
 }
 
+template <typename SerialiserType>
+bool WrappedVulkan::Serialise_vkGetDescriptorEXT(SerialiserType &ser, VkDevice device,
+                                                 const VkDescriptorGetInfoEXT *pDescriptorInfo,
+                                                 size_t dataSize, void *pDescriptor)
+{
+  return true;
+}
+
+void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInfoEXT *pDescriptorInfo,
+                                       size_t dataSize, void *pDescriptor)
+{
+}
+
 INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCreateDescriptorSetLayout, VkDevice device,
                                 const VkDescriptorSetLayoutCreateInfo *pCreateInfo,
                                 const VkAllocationCallbacks *, VkDescriptorSetLayout *pSetLayout);
@@ -1897,3 +1910,7 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkUpdateDescriptorSetWithTemplate, VkDevic
                                 VkDescriptorSet descriptorSet,
                                 VkDescriptorUpdateTemplate descriptorUpdateTemplate,
                                 const void *pData);
+
+INSTANTIATE_FUNCTION_SERIALISED(void, vkGetDescriptorEXT, VkDevice device,
+                                const VkDescriptorGetInfoEXT *pDescriptorInfo, size_t dataSize,
+                                void *pDescriptor);

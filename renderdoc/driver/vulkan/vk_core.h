@@ -3054,4 +3054,35 @@ public:
   void vkGetImageSubresourceLayout2EXT(VkDevice device, VkImage image,
                                        const VkImageSubresource2 *pSubresource,
                                        VkSubresourceLayout2 *pLayout);
+
+  // VK_EXT_descriptor_buffer
+  void vkGetDescriptorSetLayoutSizeEXT(VkDevice device, VkDescriptorSetLayout layout,
+                                       VkDeviceSize *pLayoutSizeInBytes);
+  void vkGetDescriptorSetLayoutBindingOffsetEXT(VkDevice device, VkDescriptorSetLayout layout,
+                                                uint32_t binding, VkDeviceSize *pOffset);
+  VkResult vkGetBufferOpaqueCaptureDescriptorDataEXT(VkDevice device,
+                                                     const VkBufferCaptureDescriptorDataInfoEXT *pInfo,
+                                                     void *pData);
+  VkResult vkGetImageOpaqueCaptureDescriptorDataEXT(VkDevice device,
+                                                    const VkImageCaptureDescriptorDataInfoEXT *pInfo,
+                                                    void *pData);
+  VkResult vkGetImageViewOpaqueCaptureDescriptorDataEXT(
+      VkDevice device, const VkImageViewCaptureDescriptorDataInfoEXT *pInfo, void *pData);
+  VkResult vkGetSamplerOpaqueCaptureDescriptorDataEXT(
+      VkDevice device, const VkSamplerCaptureDescriptorDataInfoEXT *pInfo, void *pData);
+  VkResult vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT(
+      VkDevice device, const VkAccelerationStructureCaptureDescriptorDataInfoEXT *pInfo, void *pData);
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkGetDescriptorEXT, VkDevice device,
+                                const VkDescriptorGetInfoEXT *pDescriptorInfo, size_t dataSize,
+                                void *pDescriptor);
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindDescriptorBuffersEXT, VkCommandBuffer commandBuffer,
+                                uint32_t bufferCount,
+                                const VkDescriptorBufferBindingInfoEXT *pBindingInfos);
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetDescriptorBufferOffsetsEXT,
+                                VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
+                                VkPipelineLayout layout, uint32_t firstSet, uint32_t setCount,
+                                const uint32_t *pBufferIndices, const VkDeviceSize *pOffsets);
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindDescriptorBufferEmbeddedSamplersEXT,
+                                VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
+                                VkPipelineLayout layout, uint32_t set);
 };
