@@ -318,6 +318,7 @@
     <ClCompile Include="vk\vk_counters.cpp" />
     <ClCompile Include="vk\vk_custom_border_color.cpp" />
     <ClCompile Include="vk\vk_dedicated_allocation.cpp" />
+    <ClCompile Include="vk\vk_descriptor_buffer_analyse.cpp" />
     <ClCompile Include="vk\vk_descriptor_reuse.cpp" />
     <ClCompile Include="vk\vk_descriptor_variable_count.cpp" />
     <ClCompile Include="vk\vk_discard_zoo.cpp" />
