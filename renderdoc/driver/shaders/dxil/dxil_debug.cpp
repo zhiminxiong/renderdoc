@@ -99,6 +99,17 @@ using namespace DXDebug;
 
 const uint32_t POINTER_MAGIC = 0xBEAFDEAF;
 
+static bool IsFloatingPointType(VarType type)
+{
+  switch(type)
+  {
+    case VarType::Double:
+    case VarType::Float:
+    case VarType::Half: return true;
+    default: return false;
+  }
+}
+
 static bool IsEncodedPointer(const ShaderVariable &var)
 {
   if(var.type != VarType::GPUPointer)
@@ -3022,13 +3033,24 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             ShaderVariable b;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, a));
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, b));
-            RDCASSERTEQUAL(a.type, VarType::Float);
-            RDCASSERTEQUAL(b.type, VarType::Float);
-            RDCASSERTEQUAL(result.type, VarType::Float);
+            RDCASSERT(IsFloatingPointType(a.type));
+            RDCASSERTEQUAL(a.type, b.type);
+            RDCASSERTEQUAL(result.type, a.type);
+            const uint32_t c = 0;
             if(dxOpCode == DXOp::FMin)
-              result.value.f32v[0] = dxbc_min(a.value.f32v[0], b.value.f32v[0]);
+            {
+#undef _IMPL
+#define _IMPL(T) comp<T>(result, c) = dxbc_min(comp<T>(a, c), comp<T>(b, c));
+
+              IMPL_FOR_FLOAT_TYPES_FOR_TYPE(_IMPL, result.type);
+            }
             else if(dxOpCode == DXOp::FMax)
-              result.value.f32v[0] = dxbc_max(a.value.f32v[0], b.value.f32v[0]);
+            {
+#undef _IMPL
+#define _IMPL(T) comp<T>(result, c) = dxbc_max(comp<T>(a, c), comp<T>(b, c));
+
+              IMPL_FOR_FLOAT_TYPES_FOR_TYPE(_IMPL, result.type);
+            }
             break;
           }
           case DXOp::Fma:
