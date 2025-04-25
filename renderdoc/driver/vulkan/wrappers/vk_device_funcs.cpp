@@ -4497,6 +4497,79 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
   else if(createInfo.pEnabledFeatures)
     enabledFeatures = *createInfo.pEnabledFeatures;
 
+  bool descIndexingAllowsRBA = true;
+
+  VkPhysicalDeviceVulkan12Features *vulkan12Features =
+      (VkPhysicalDeviceVulkan12Features *)FindNextStruct(
+          &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+
+  if(vulkan12Features && (vulkan12Features->descriptorBindingUniformBufferUpdateAfterBind ||
+                          vulkan12Features->descriptorBindingStorageBufferUpdateAfterBind ||
+                          vulkan12Features->descriptorBindingUniformTexelBufferUpdateAfterBind ||
+                          vulkan12Features->descriptorBindingStorageTexelBufferUpdateAfterBind))
+  {
+    // if any update after bind feature is enabled, check robustBufferAccessUpdateAfterBind
+    VkPhysicalDeviceVulkan12Properties vulkan12Props = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES,
+    };
+
+    VkPhysicalDeviceProperties2 availBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    availBase.pNext = &vulkan12Props;
+    ObjDisp(physicalDevice)->GetPhysicalDeviceProperties2(Unwrap(physicalDevice), &availBase);
+
+    descIndexingAllowsRBA = vulkan12Props.robustBufferAccessUpdateAfterBind != VK_FALSE;
+  }
+
+  VkPhysicalDeviceDescriptorIndexingFeatures *descIndexingFeatures =
+      (VkPhysicalDeviceDescriptorIndexingFeatures *)FindNextStruct(
+          &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES);
+
+  if(descIndexingFeatures &&
+     (descIndexingFeatures->descriptorBindingUniformBufferUpdateAfterBind ||
+      descIndexingFeatures->descriptorBindingStorageBufferUpdateAfterBind ||
+      descIndexingFeatures->descriptorBindingUniformTexelBufferUpdateAfterBind ||
+      descIndexingFeatures->descriptorBindingStorageTexelBufferUpdateAfterBind))
+  {
+    // if any update after bind feature is enabled, check robustBufferAccessUpdateAfterBind
+    VkPhysicalDeviceDescriptorIndexingProperties descIndexingProps = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES,
+    };
+
+    VkPhysicalDeviceProperties2 availBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    availBase.pNext = &descIndexingProps;
+    ObjDisp(physicalDevice)->GetPhysicalDeviceProperties2(Unwrap(physicalDevice), &availBase);
+
+    descIndexingAllowsRBA = descIndexingProps.robustBufferAccessUpdateAfterBind != VK_FALSE;
+  }
+
+  if(availFeatures.robustBufferAccess && !descIndexingAllowsRBA)
+  {
+    // if the feature is available but we can't use it, warn
+    RDCWARN(
+        "robustBufferAccess is available, but cannot be enabled due to "
+        "robustBufferAccessUpdateAfterBind not being avilable and some UpdateAfterBind features "
+        "being enabled. "
+        "out of bounds access due to bugs in application or RenderDoc may cause crashes");
+
+    for(const char *e : Extensions)
+    {
+      if(rdcstr(e) == VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
+      {
+        RDCERR("VK_EXT_descriptor_buffer is enabled without robust buffer access!");
+      }
+    }
+  }
+  else
+  {
+    // either the feature is available, and we enable it, or it's not available at all.
+    if(availFeatures.robustBufferAccess)
+      enabledFeatures.robustBufferAccess = true;
+    else
+      RDCWARN(
+          "robustBufferAccess = false, out of bounds access due to bugs in application or "
+          "RenderDoc may cause crashes");
+  }
+
   // enable this feature as it's needed at capture time to save MSAA initial states
   if(availFeatures.shaderStorageImageWriteWithoutFormat)
     enabledFeatures.shaderStorageImageWriteWithoutFormat = true;
