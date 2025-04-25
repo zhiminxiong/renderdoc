@@ -901,6 +901,7 @@ private:
 DECLARE_REFLECTION_STRUCT(DescriptorSetSlot);
 
 constexpr uint64_t FixedOpaqueDescriptorCaptureSize = 16;
+constexpr uint64_t MaxDescriptorSize = 256;
 
 #define NUM_VK_IMAGE_ASPECTS 4
 #define VK_ACCESS_ALL_READ_BITS                                                        \

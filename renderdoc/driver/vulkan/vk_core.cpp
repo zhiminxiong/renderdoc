@@ -2088,6 +2088,96 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
         return true;
       }
 
+      if(!strcmp(ext.extensionName, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
+      {
+        // require GPDP2
+        if(instDevInfo->ext_KHR_get_physical_device_properties2)
+        {
+          VkPhysicalDeviceDescriptorBufferFeaturesEXT descFeats = {
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT};
+          VkPhysicalDeviceFeatures2 baseFeats = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+          baseFeats.pNext = &descFeats;
+          ObjDisp(physDev)->GetPhysicalDeviceFeatures2(Unwrap(physDev), &baseFeats);
+
+          if(!descFeats.descriptorBufferCaptureReplay)
+          {
+            if(!filterWarned)
+            {
+              RDCWARN(
+                  "VkPhysicalDeviceDescriptorBufferFeaturesEXT.descriptorBufferCaptureReplay "
+                  "is false, can't support capture of VK_EXT_descriptor_buffer");
+            }
+            return true;
+          }
+
+          VkPhysicalDeviceDescriptorBufferPropertiesEXT descProps = {
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
+          VkPhysicalDeviceProperties2 baseProps = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+          baseProps.pNext = &descProps;
+          ObjDisp(physDev)->GetPhysicalDeviceProperties2(Unwrap(physDev), &baseProps);
+
+#define CHECK_PROP_SIZE(prop, max)                                                                 \
+  if(descProps.prop > max)                                                                         \
+  {                                                                                                \
+    if(!filterWarned)                                                                              \
+    {                                                                                              \
+      RDCWARN(                                                                                     \
+          "VkPhysicalDeviceDescriptorBufferPropertiesEXT." #prop                                   \
+          "is too large at %u (must be <= %u), can't support capture of VK_EXT_descriptor_buffer", \
+          descProps.prop, max);                                                                    \
+    }                                                                                              \
+    return true;                                                                                   \
+  }
+
+          CHECK_PROP_SIZE(bufferCaptureReplayDescriptorDataSize, FixedOpaqueDescriptorCaptureSize);
+          CHECK_PROP_SIZE(imageCaptureReplayDescriptorDataSize, FixedOpaqueDescriptorCaptureSize);
+          CHECK_PROP_SIZE(imageViewCaptureReplayDescriptorDataSize, FixedOpaqueDescriptorCaptureSize);
+          CHECK_PROP_SIZE(samplerCaptureReplayDescriptorDataSize, FixedOpaqueDescriptorCaptureSize);
+          CHECK_PROP_SIZE(accelerationStructureCaptureReplayDescriptorDataSize,
+                          FixedOpaqueDescriptorCaptureSize);
+
+          CHECK_PROP_SIZE(samplerDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(combinedImageSamplerDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(sampledImageDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(storageImageDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(uniformTexelBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(robustUniformTexelBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(storageTexelBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(robustStorageTexelBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(uniformBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(robustUniformBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(storageBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(robustStorageBufferDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(inputAttachmentDescriptorSize, MaxDescriptorSize);
+          CHECK_PROP_SIZE(accelerationStructureDescriptorSize, MaxDescriptorSize);
+
+          // we don't expect any world where descriptor buffer is available but descriptor indexing
+          // doesn't support robust update after bind, but require it anyway as we force robustness on
+          VkPhysicalDeviceDescriptorIndexingProperties descIndexingProps = {
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES,
+          };
+          baseProps.pNext = &descIndexingProps;
+          ObjDisp(physDev)->GetPhysicalDeviceProperties2(Unwrap(physDev), &baseProps);
+
+          if(!descIndexingProps.robustBufferAccessUpdateAfterBind)
+          {
+            if(!filterWarned)
+            {
+              RDCWARN(
+                  "VkPhysicalDeviceDescriptorIndexingProperties.robustBufferAccessUpdateAfterBind "
+                  "is false, can't support capture of VK_EXT_descriptor_buffer");
+            }
+            return true;
+          }
+
+          // supported and all descriptor sizes are sensible
+          return false;
+        }
+
+        // if it wasn't supported, remove the extension
+        return true;
+      }
+
       if(!strcmp(ext.extensionName, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
       {
         // require GPDP2
