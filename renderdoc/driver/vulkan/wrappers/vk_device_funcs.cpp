@@ -3438,14 +3438,6 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
         CHECK_PHYS_EXT_FEATURE(rayTracingPipelineTraceRaysIndirect);
         CHECK_PHYS_EXT_FEATURE(rayTraversalPrimitiveCulling);
 
-        VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayProps = {
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR,
-        };
-
-        VkPhysicalDeviceProperties2 availPropsBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        availPropsBase.pNext = &rayProps;
-        ObjDisp(physicalDevice)->GetPhysicalDeviceProperties2(Unwrap(physicalDevice), &availPropsBase);
-
         if(ext->rayTracingPipeline && !avail.rayTracingPipelineShaderGroupHandleCaptureReplay)
         {
           SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
@@ -3496,6 +3488,29 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT);
       {
         CHECK_PHYS_EXT_FEATURE(imageCompressionControlSwapchain);
+      }
+      END_PHYS_EXT_CHECK();
+
+      BEGIN_PHYS_EXT_CHECK(VkPhysicalDeviceDescriptorBufferFeaturesEXT,
+                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
+      {
+        CHECK_PHYS_EXT_FEATURE(descriptorBuffer);
+        CHECK_PHYS_EXT_FEATURE(descriptorBufferCaptureReplay);
+        CHECK_PHYS_EXT_FEATURE(descriptorBufferImageLayoutIgnored);
+        CHECK_PHYS_EXT_FEATURE(descriptorBufferPushDescriptors);
+
+        if(ext->descriptorBuffer && !avail.descriptorBufferCaptureReplay)
+        {
+          SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
+                           "Capture requires descriptorBuffer support, which is available, but "
+                           "descriptorBufferCaptureReplay support is not "
+                           "available which is required to replay\n"
+                           "\n%s",
+                           GetPhysDeviceCompatString(false, false).c_str());
+          return false;
+        }
+        if(ext->descriptorBuffer)
+          ext->descriptorBufferCaptureReplay = VK_TRUE;
       }
       END_PHYS_EXT_CHECK();
     }
@@ -4564,6 +4579,14 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
   if(rtpFeatures && rtpFeatures->rayTracingPipeline)
   {
     rtpFeatures->rayTracingPipelineShaderGroupHandleCaptureReplay = VK_TRUE;
+  }
+
+  VkPhysicalDeviceDescriptorBufferFeaturesEXT *descBufFeatures =
+      (VkPhysicalDeviceDescriptorBufferFeaturesEXT *)FindNextStruct(
+          &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
+  if(descBufFeatures && descBufFeatures->descriptorBuffer)
+  {
+    descBufFeatures->descriptorBufferCaptureReplay = VK_TRUE;
   }
 
   VkResult ret;
