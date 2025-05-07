@@ -528,15 +528,14 @@ void D3D12PipelineStateViewer::OnEventChanged(uint32_t eventId)
 
       // if the last range is contiguous with this access, append this access as a new range to query
       if(!ranges.empty() && ranges.back().descriptorSize == acc.byteSize &&
-         ranges.back().offset + ranges.back().descriptorSize == acc.byteOffset)
+         ranges.back().offset + ranges.back().descriptorSize == acc.byteOffset &&
+         ranges.back().type == acc.type)
       {
         ranges.back().count++;
         continue;
       }
 
-      DescriptorRange range;
-      range.offset = acc.byteOffset;
-      range.descriptorSize = acc.byteSize;
+      DescriptorRange range = acc;
       ranges.push_back(range);
     }
 

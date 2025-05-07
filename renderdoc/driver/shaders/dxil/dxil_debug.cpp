@@ -1604,28 +1604,82 @@ void ResourceReferenceInfo::Create(const DXIL::ResourceReference *resRef, uint32
       srvData.sampleCount = resRef->resourceBase.srvData.sampleCount;
       srvData.compType = (DXDebug::ResourceRetType)ConvertComponentTypeToResourceRetType(
           resRef->resourceBase.srvData.compType);
-      type = VarType::ReadOnlyResource;
-      category = DescriptorCategory::ReadOnlyResource;
+      varType = VarType::ReadOnlyResource;
+
+      switch(resRef->resourceBase.srvData.shape)
+      {
+        default:
+          RDCERR("Unexpected resource shape");
+          descType = DescriptorType::Unknown;
+          break;
+        case ResourceKind::Texture1D:
+        case ResourceKind::Texture2D:
+        case ResourceKind::Texture2DMS:
+        case ResourceKind::Texture3D:
+        case ResourceKind::TextureCube:
+        case ResourceKind::Texture1DArray:
+        case ResourceKind::Texture2DArray:
+        case ResourceKind::Texture2DMSArray:
+        case ResourceKind::TextureCubeArray:
+        case ResourceKind::FeedbackTexture2D:
+        case ResourceKind::FeedbackTexture2DArray: descType = DescriptorType::Image; break;
+        case ResourceKind::TypedBuffer:
+        case ResourceKind::TBuffer: descType = DescriptorType::TypedBuffer; break;
+        case ResourceKind::RawBuffer:
+        case ResourceKind::StructuredBuffer:
+        case ResourceKind::StructuredBufferWithCounter: descType = DescriptorType::Buffer; break;
+        case ResourceKind::RTAccelerationStructure:
+          descType = DescriptorType::AccelerationStructure;
+          break;
+      }
       break;
     }
     case DXIL::ResourceClass::UAV:
     {
-      type = VarType::ReadWriteResource;
-      category = DescriptorCategory::ReadWriteResource;
+      varType = VarType::ReadWriteResource;
+
+      switch(resRef->resourceBase.uavData.shape)
+      {
+        default:
+          RDCERR("Unexpected resource shape");
+          descType = DescriptorType::Unknown;
+          break;
+        case ResourceKind::Texture1D:
+        case ResourceKind::Texture2D:
+        case ResourceKind::Texture2DMS:
+        case ResourceKind::Texture3D:
+        case ResourceKind::TextureCube:
+        case ResourceKind::Texture1DArray:
+        case ResourceKind::Texture2DArray:
+        case ResourceKind::Texture2DMSArray:
+        case ResourceKind::TextureCubeArray:
+        case ResourceKind::FeedbackTexture2D:
+        case ResourceKind::FeedbackTexture2DArray: descType = DescriptorType::ReadWriteImage; break;
+        case ResourceKind::TypedBuffer:
+        case ResourceKind::TBuffer: descType = DescriptorType::ReadWriteTypedBuffer; break;
+        case ResourceKind::RawBuffer:
+        case ResourceKind::StructuredBuffer:
+        case ResourceKind::StructuredBufferWithCounter:
+          descType = DescriptorType::ReadWriteBuffer;
+          break;
+        case ResourceKind::RTAccelerationStructure:
+          descType = DescriptorType::AccelerationStructure;
+          break;
+      }
       break;
     }
     case DXIL::ResourceClass::CBuffer:
     {
-      type = VarType::ConstantBlock;
-      category = DescriptorCategory::ConstantBlock;
+      varType = VarType::ConstantBlock;
+      descType = DescriptorType::ConstantBuffer;
       break;
     }
     case DXIL::ResourceClass::Sampler:
     {
       samplerData.samplerMode =
           ConvertSamplerKindToSamplerMode(resRef->resourceBase.samplerData.samplerType);
-      type = VarType::Sampler;
-      category = DescriptorCategory::Sampler;
+      varType = VarType::Sampler;
+      descType = DescriptorType::Sampler;
       break;
     }
     default: RDCERR("Unexpected resource class %s", ToStr(resClass).c_str()); break;
@@ -2420,11 +2474,11 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             RDCASSERT(m_DirectHeapAccessBindings.count(resultId) == 0);
             m_DirectHeapAccessBindings[resultId] = resRefInfo;
 
-            ShaderDirectAccess access = apiWrapper->GetShaderDirectAccess(resRefInfo.category, slot);
+            ShaderDirectAccess access = apiWrapper->GetShaderDirectAccess(resRefInfo.descType, slot);
             // Default to unannotated handle
             ClearAnnotatedHandle(result);
             rdcstr resName = m_Program.GetHandleAlias(result.name);
-            result.type = resRefInfo.type;
+            result.type = resRefInfo.varType;
             result.name = resName;
             result.SetDirectAccess(access);
             break;

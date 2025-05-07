@@ -1109,19 +1109,18 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
     case D3D12DescriptorType::CBV:
     {
       resRefInfo.resClass = DXIL::ResourceClass::CBuffer;
-      resRefInfo.category = DescriptorCategory::ConstantBlock;
-      resRefInfo.type = VarType::ConstantBlock;
+      resRefInfo.descType = DescriptorType::ConstantBuffer;
+      resRefInfo.varType = VarType::ConstantBlock;
     }
     case D3D12DescriptorType::SRV:
     {
+      D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = desc.GetSRV();
       ResourceId srvId = desc.GetResResourceId();
       ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(srvId);
       if(pResource)
       {
         resRefInfo.resClass = DXIL::ResourceClass::SRV;
-        resRefInfo.category = DescriptorCategory::ReadOnlyResource;
-        resRefInfo.type = VarType::ReadOnlyResource;
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = desc.GetSRV();
+        resRefInfo.varType = VarType::ReadOnlyResource;
         if(srvDesc.ViewDimension == D3D12_SRV_DIMENSION_UNKNOWN)
           srvDesc = MakeSRVDesc(pResource->GetDesc());
 
@@ -1145,20 +1144,37 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
         RDCERR("Unknown SRV resource at Descriptor Index %u", descriptorIndex);
         return ResourceReferenceInfo();
       }
+
+      if(srvDesc.ViewDimension == D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE)
+        resRefInfo.descType = DescriptorType::AccelerationStructure;
+      else if(srvDesc.ViewDimension == D3D12_SRV_DIMENSION_BUFFER &&
+              (srvDesc.Buffer.StructureByteStride > 0 || srvDesc.Format == DXGI_FORMAT_UNKNOWN))
+        resRefInfo.descType = DescriptorType::Buffer;
+      else if(srvDesc.ViewDimension == D3D12_SRV_DIMENSION_BUFFER)
+        resRefInfo.descType = DescriptorType::TypedBuffer;
+      else
+        resRefInfo.descType = DescriptorType::Image;
+
       break;
     }
     case D3D12DescriptorType::UAV:
     {
+      D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = desc.GetUAV();
       resRefInfo.resClass = DXIL::ResourceClass::UAV;
-      resRefInfo.category = DescriptorCategory::ReadWriteResource;
-      resRefInfo.type = VarType::ReadWriteResource;
+      resRefInfo.varType = VarType::ReadWriteResource;
+      if(uavDesc.ViewDimension == D3D12_UAV_DIMENSION_BUFFER)
+        resRefInfo.descType = uavDesc.Format != DXGI_FORMAT_UNKNOWN
+                                  ? DescriptorType::ReadWriteTypedBuffer
+                                  : DescriptorType::ReadWriteBuffer;
+      else
+        resRefInfo.descType = DescriptorType::ReadWriteImage;
       break;
     }
     case D3D12DescriptorType::Sampler:
     {
       resRefInfo.resClass = DXIL::ResourceClass::Sampler;
-      resRefInfo.category = DescriptorCategory::Sampler;
-      resRefInfo.type = VarType::Sampler;
+      resRefInfo.descType = DescriptorType::Sampler;
+      resRefInfo.varType = VarType::Sampler;
       D3D12_SAMPLER_DESC2 samplerDesc = desc.GetSampler();
       // Don't think SAMPLER_MODE_MONO is supported in D3D12 (set for filter mode D3D10_FILTER_TEXT_1BIT)
       resRefInfo.samplerData.samplerMode =
@@ -1172,7 +1188,7 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
   return resRefInfo;
 }
 
-ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorCategory category,
+ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorType type,
                                                           const DXDebug::BindingSlot &slot)
 {
   const HeapDescriptorType heapType = slot.heapType;
@@ -1196,8 +1212,8 @@ ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorCategory cat
     {
       if(heapType == HeapDescriptorType::Sampler)
       {
-        RDCASSERTEQUAL(category, DescriptorCategory::Sampler);
-        return ShaderDirectAccess(category, rm->GetOriginalID(heapId), byteOffset, byteSize);
+        RDCASSERTEQUAL(CategoryForDescriptorType(type), DescriptorCategory::Sampler);
+        return ShaderDirectAccess(type, rm->GetOriginalID(heapId), byteOffset, byteSize);
       }
     }
     else
@@ -1205,8 +1221,8 @@ ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorCategory cat
       RDCASSERT(heapDesc.Type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
       if(heapType == HeapDescriptorType::CBV_SRV_UAV)
       {
-        RDCASSERTNOTEQUAL(category, DescriptorCategory::Sampler);
-        return ShaderDirectAccess(category, rm->GetOriginalID(heapId), byteOffset, byteSize);
+        RDCASSERTNOTEQUAL(CategoryForDescriptorType(type), DescriptorCategory::Sampler);
+        return ShaderDirectAccess(type, rm->GetOriginalID(heapId), byteOffset, byteSize);
       }
     }
   }

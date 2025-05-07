@@ -498,6 +498,8 @@ void D3D11PipelineStateViewer::OnEventChanged(uint32_t eventId)
     range.offset = 0;
     range.descriptorSize = state->descriptorByteSize;
     range.count = state->descriptorCount;
+    // D3D11 doesn't need the descriptor type, it has internal type information
+    range.type = DescriptorType::Unknown;
 
     rdcarray<DescriptorRange> ranges = {range};
 

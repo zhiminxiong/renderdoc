@@ -170,7 +170,7 @@ struct AccessedResourceTag
   {
   }
   AccessedResourceTag(ShaderDirectAccess acc, VarType t)
-      : resRef(acc), type(t), step(0), category(acc.category)
+      : resRef(acc), type(t), step(0), category(CategoryForDescriptorType(acc.type))
   {
   }
   AccessedResourceTag(ShaderVariable var) : step(0), type(var.type)
@@ -181,7 +181,7 @@ struct AccessedResourceTag
       {
         resRef.directAccess = true;
         resRef.access = var.GetDirectAccess();
-        category = resRef.access.category;
+        category = CategoryForDescriptorType(resRef.access.type);
       }
       else
       {
@@ -2979,6 +2979,7 @@ QString ShaderViewer::stringRep(const ShaderVariable &var, uint32_t row)
               ranges[0].count = 1;
               ranges[0].descriptorSize = access.byteSize;
               ranges[0].offset = access.byteOffset;
+              ranges[0].type = access.type;
 
               rdcarray<DescriptorLogicalLocation> locations =
                   r->GetDescriptorLocations(access.descriptorStore, ranges);
@@ -5249,7 +5250,7 @@ RDTreeWidgetItem *ShaderViewer::makeAccessedResourceNode(const ShaderVariable &v
     }
     else
     {
-      category = acc.category;
+      category = CategoryForDescriptorType(acc.type);
       bindIdx = m_ReadOnlyResources.indexOf(acc);
     }
     if(category != DescriptorCategory::ReadOnlyResource)
@@ -5269,7 +5270,7 @@ RDTreeWidgetItem *ShaderViewer::makeAccessedResourceNode(const ShaderVariable &v
     }
     else
     {
-      category = acc.category;
+      category = CategoryForDescriptorType(acc.type);
       bindIdx = m_ReadWriteResources.indexOf(acc);
     }
     if(category != DescriptorCategory::ReadWriteResource)

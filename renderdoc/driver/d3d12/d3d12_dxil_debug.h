@@ -61,8 +61,7 @@ public:
                                const DXBC::ShaderType shaderType, const char *opString);
   ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType, const char *opString);
   ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot);
-  ShaderDirectAccess GetShaderDirectAccess(DescriptorCategory category,
-                                           const DXDebug::BindingSlot &slot);
+  ShaderDirectAccess GetShaderDirectAccess(DescriptorType type, const DXDebug::BindingSlot &slot);
 
 private:
   void FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);

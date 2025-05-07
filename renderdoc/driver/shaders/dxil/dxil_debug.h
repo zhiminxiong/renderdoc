@@ -138,8 +138,8 @@ struct ResourceReferenceInfo
 
   DXIL::ResourceClass resClass;
   BindingSlot binding;
-  DescriptorCategory category;
-  VarType type;
+  DescriptorType descType;
+  VarType varType;
 
   struct SRVData
   {
@@ -197,7 +197,7 @@ public:
   virtual ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
                                                    const char *opString) = 0;
   virtual ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) = 0;
-  virtual ShaderDirectAccess GetShaderDirectAccess(DescriptorCategory category,
+  virtual ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
                                                    const DXDebug::BindingSlot &slot) = 0;
 };
 

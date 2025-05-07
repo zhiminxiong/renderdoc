@@ -3294,15 +3294,14 @@ void TextureViewer::OnEventChanged(uint32_t eventId)
 
         // if the last range is contiguous with this access, append this access as a new range to query
         if(!ranges.empty() && ranges.back().descriptorSize == update.access.byteSize &&
-           ranges.back().offset + ranges.back().descriptorSize == update.access.byteOffset)
+           ranges.back().offset + ranges.back().descriptorSize == update.access.byteOffset &&
+           ranges.back().type == update.access.type)
         {
           ranges.back().count++;
           continue;
         }
 
-        DescriptorRange range;
-        range.offset = update.access.byteOffset;
-        range.descriptorSize = update.access.byteSize;
+        DescriptorRange range = update.access;
         ranges.push_back(range);
       }
 

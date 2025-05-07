@@ -1475,6 +1475,8 @@ void DescriptorViewer::ViewD3D12State()
         ranges[0].count = resourceDesc->descriptorCount;
         ranges[0].descriptorSize = resourceDesc->descriptorByteSize;
         ranges[0].offset = resourceDesc->firstDescriptorOffset;
+        // we are interpreting typeless descriptors, assume D3D12 can interpret it
+        ranges[0].type = DescriptorType::Unknown;
         descriptors = r->GetDescriptors(resourceDesc->resourceId, ranges);
       }
     }
@@ -1487,6 +1489,8 @@ void DescriptorViewer::ViewD3D12State()
         ranges[0].count = samplerDesc->descriptorCount;
         ranges[0].descriptorSize = samplerDesc->descriptorByteSize;
         ranges[0].offset = samplerDesc->firstDescriptorOffset;
+        // we are interpreting typeless descriptors, assume D3D12 can interpret it
+        ranges[0].type = DescriptorType::Unknown;
         samplerDescriptors = r->GetSamplerDescriptors(samplerDesc->resourceId, ranges);
       }
     }
@@ -1525,6 +1529,8 @@ void DescriptorViewer::OnEventChanged(uint32_t eventId)
       ranges[0].count = m_DescriptorStore.descriptorCount;
       ranges[0].descriptorSize = descSize;
       ranges[0].offset = m_DescriptorStore.firstDescriptorOffset;
+      // assume this descriptor store knows its type information and can interpret typeless descriptors
+      ranges[0].type = DescriptorType::Unknown;
 
       rdcarray<Descriptor> descriptors = r->GetDescriptors(m_DescriptorStore.resourceId, ranges);
       rdcarray<DescriptorLogicalLocation> locations =
@@ -1547,7 +1553,9 @@ void DescriptorViewer::OnEventChanged(uint32_t eventId)
           idx++;
 
           // combine contiguous ranges
-          if(!ranges.empty() && ranges.back().offset + ranges.back().count * descSize == i * descSize)
+          if(!ranges.empty() &&
+             ranges.back().offset + ranges.back().count * descSize == i * descSize &&
+             ranges.back().type == descriptors[i].type)
           {
             ranges.back().count++;
           }
@@ -1557,6 +1565,7 @@ void DescriptorViewer::OnEventChanged(uint32_t eventId)
             range.offset = m_DescriptorStore.firstDescriptorOffset + uint32_t(i * descSize);
             range.descriptorSize = descSize;
             range.count = 1;
+            range.type = descriptors[i].type;
             ranges.push_back(range);
           }
         }

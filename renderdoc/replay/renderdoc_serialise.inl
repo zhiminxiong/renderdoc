@@ -1059,8 +1059,9 @@ void DoSerialise(SerialiserType &ser, DescriptorRange &el)
   SERIALISE_MEMBER(offset);
   SERIALISE_MEMBER(descriptorSize);
   SERIALISE_MEMBER(count);
+  SERIALISE_MEMBER(type);
 
-  SIZE_CHECK(12);
+  SIZE_CHECK(16);
 }
 
 template <typename SerialiserType>
