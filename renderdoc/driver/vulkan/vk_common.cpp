@@ -219,7 +219,7 @@ void GPUBuffer::Create(WrappedVulkan *driver, VkDevice dev, VkDeviceSize size, u
   ringCount = ringSize;
 
   VkBufferCreateInfo bufInfo = {
-      VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, NULL, 0, totalsize, 0,
+      VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, NULL, driver->DefaultBufferCreateFlags(), totalsize, 0,
   };
 
   bufInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -269,6 +269,14 @@ void GPUBuffer::Create(WrappedVulkan *driver, VkDevice dev, VkDeviceSize size, u
   {
     allocInfo.pNext = &memFlags;
     memFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+  }
+
+  if((driver->DefaultBufferCreateFlags() &
+      VK_BUFFER_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT) != 0)
+  {
+    allocInfo.pNext = &memFlags;
+    memFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
+                     VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
   }
 
   vkr = ObjDisp(dev)->AllocateMemory(Unwrap(dev), &allocInfo, NULL, &mem);

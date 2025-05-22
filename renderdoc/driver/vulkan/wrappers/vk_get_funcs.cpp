@@ -121,6 +121,8 @@ void WrappedVulkan::PatchImageCreateInfo(VkImageCreateInfo *info, VkFormat *newV
 
   info->flags &= ~VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT;
 
+  info->flags |= DefaultImageCreateFlags();
+
   VkImageStencilUsageCreateInfo *separateStencilUsage =
       (VkImageStencilUsageCreateInfo *)FindNextStruct(
           info, VK_STRUCTURE_TYPE_IMAGE_STENCIL_USAGE_CREATE_INFO);

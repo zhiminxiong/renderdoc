@@ -4069,7 +4069,7 @@ void VulkanReplay::GetTextureData(ResourceId tex, const Subresource &sub,
       VkImageViewCreateInfo viewInfo = {
           VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           NULL,
-          0,
+          m_pDriver->DefaultImageViewCreateFlags(),
           tmpImage,
           VK_IMAGE_VIEW_TYPE_2D,
           imCreateInfo.format,

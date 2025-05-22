@@ -4284,6 +4284,15 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
 
     m_PhysicalDeviceData.enabledFeatures = enabledFeatures;
 
+    const VkPhysicalDeviceDescriptorBufferFeaturesEXT *descBufFeats =
+        (const VkPhysicalDeviceDescriptorBufferFeaturesEXT *)FindNextStruct(
+            &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
+
+    if(m_EnabledExtensions.ext_EXT_descriptor_buffer && descBufFeats && descBufFeats->descriptorBuffer)
+    {
+      m_DescriptorBuffers = true;
+    }
+
     // MoltenVK reports 0x3fffffff for this limit so just ignore that value if it comes up
     RDCASSERT(m_PhysicalDeviceData.props.limits.maxBoundDescriptorSets <
                       ARRAY_COUNT(BakedCmdBufferInfo::pushDescriptorID[0]) ||
@@ -4863,6 +4872,12 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
 
     GetPhysicalDeviceDriverProperties(ObjDisp(physicalDevice), Unwrap(physicalDevice),
                                       m_PhysicalDeviceData.driverProps);
+
+    if(m_EnabledExtensions.ext_EXT_descriptor_buffer && descBufFeatures &&
+       descBufFeatures->descriptorBuffer)
+    {
+      m_DescriptorBuffers = true;
+    }
 
     m_PhysicalDeviceData.driverInfo =
         VkDriverInfo(m_PhysicalDeviceData.props, m_PhysicalDeviceData.driverProps, true);

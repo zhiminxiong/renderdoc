@@ -443,7 +443,7 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
         VkBufferCreateInfo bufInfo = {
             VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             NULL,
-            0,
+            DefaultBufferCreateFlags(),
             AllocateInfo.allocationSize,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         };
@@ -510,10 +510,16 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
     VkBufferCreateInfo bufInfo = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         NULL,
-        0,
+        DefaultBufferCreateFlags(),
         info.allocationSize,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     };
+
+    if(DescriptorBuffers())
+    {
+      bufInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+      bufInfo.flags |= VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+    }
 
     // since this is very short lived, it's not wrapped
     VkBuffer buf;
@@ -651,7 +657,7 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
     VkBufferCreateInfo bufInfo = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         NULL,
-        0,
+        IsCaptureMode(m_State) ? DefaultBufferCreateFlags() : 0,
         info.allocationSize,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     };
@@ -1850,6 +1856,8 @@ bool WrappedVulkan::Serialise_vkCreateBuffer(SerialiserType &ser, VkDevice devic
         queueFamiles[q] = m_QueueRemapping[queueFamiles[q]][0].family;
     }
 
+    CreateInfo.flags |= DefaultBufferCreateFlags();
+
     VkBufferCreateInfo patched = CreateInfo;
 
     byte *tempMem = GetTempMemory(GetNextPatchSize(patched.pNext));
@@ -1938,6 +1946,9 @@ VkResult WrappedVulkan::vkCreateBuffer(VkDevice device, const VkBufferCreateInfo
     if(adjusted_usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
       adjusted_info.flags |= VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
   }
+
+  if(IsCaptureMode(m_State))
+    adjusted_info.flags |= DefaultBufferCreateFlags();
 
   SetBufferUsageFlags(&adjusted_info, adjusted_usage);
 
@@ -2342,6 +2353,8 @@ bool WrappedVulkan::Serialise_vkCreateImage(SerialiserType &ser, VkDevice device
     // create non-subsampled image to be able to copy its content
     CreateInfo.flags &= ~VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT;
 
+    CreateInfo.flags |= DefaultImageCreateFlags();
+
     APIProps.YUVTextures |= IsYUVFormat(CreateInfo.format);
 
     const bool isSparse = (CreateInfo.flags & (VK_IMAGE_CREATE_SPARSE_BINDING_BIT |
@@ -2560,6 +2573,9 @@ VkResult WrappedVulkan::vkCreateImage(VkDevice device, const VkImageCreateInfo *
 
   // create non-subsampled image to be able to copy its content
   createInfo_adjusted.flags &= ~VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT;
+
+  if(IsCaptureMode(m_State))
+    createInfo_adjusted.flags |= DefaultImageCreateFlags();
 
   size_t tempMemSize = GetNextPatchSize(createInfo_adjusted.pNext);
 
@@ -2953,6 +2969,8 @@ bool WrappedVulkan::Serialise_vkCreateImageView(SerialiserType &ser, VkDevice de
       PatchImageViewUsage(usageInfo, CreateInfo.format, samples);
     }
 
+    unwrappedInfo->flags |= DefaultImageViewCreateFlags();
+
     VkResult ret = ObjDisp(device)->CreateImageView(Unwrap(device), unwrappedInfo, NULL, &view);
 
     APIProps.YUVTextures |= IsYUVFormat(CreateInfo.format);
@@ -3014,6 +3032,8 @@ VkResult WrappedVulkan::vkCreateImageView(VkDevice device, const VkImageViewCrea
 
     PatchImageViewUsage(usageInfo, pCreateInfo->format, samples);
   }
+
+  unwrappedInfo->flags |= DefaultImageViewCreateFlags();
 
   VkResult ret;
   SERIALISE_TIME_CALL(
@@ -3510,6 +3530,10 @@ bool WrappedVulkan::Serialise_vkCreateAccelerationStructureKHR(
     VkAccelerationStructureCreateInfoKHR unwrappedInfo = CreateInfo;
     unwrappedInfo.buffer = Unwrap(unwrappedInfo.buffer);
 
+    if(m_DescriptorBuffers)
+      unwrappedInfo.createFlags |=
+          VK_ACCELERATION_STRUCTURE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT;
+
     VkAccelerationStructureKHR acc = VK_NULL_HANDLE;
     VkResult ret =
         ObjDisp(device)->CreateAccelerationStructureKHR(Unwrap(device), &unwrappedInfo, NULL, &acc);
@@ -3565,6 +3589,10 @@ VkResult WrappedVulkan::vkCreateAccelerationStructureKHR(
   if(IsCaptureMode(m_State))
     unwrappedInfo.createFlags |=
         VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
+
+  if(m_DescriptorBuffers)
+    unwrappedInfo.createFlags |=
+        VK_ACCELERATION_STRUCTURE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT;
 
   unwrappedInfo.buffer = Unwrap(unwrappedInfo.buffer);
   VkResult ret;

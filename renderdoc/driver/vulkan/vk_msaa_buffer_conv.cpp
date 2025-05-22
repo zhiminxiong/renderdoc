@@ -54,7 +54,7 @@ void VulkanDebugManager::CopyTex2DMSToBuffer(VkCommandBuffer cmd, VkBuffer destB
   VkImageViewCreateInfo viewInfo = {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       NULL,
-      0,
+      m_pDriver->DefaultImageViewCreateFlags(),
       srcMS,
       VK_IMAGE_VIEW_TYPE_2D_ARRAY,
       VK_FORMAT_UNDEFINED,
@@ -235,7 +235,7 @@ void VulkanDebugManager::CopyDepthTex2DMSToBuffer(VkCommandBuffer cmd, VkBuffer 
   VkImageViewCreateInfo viewInfo = {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       NULL,
-      0,
+      m_pDriver->DefaultImageViewCreateFlags(),
       srcMS,
       VK_IMAGE_VIEW_TYPE_2D_ARRAY,
       fmt,
@@ -422,7 +422,7 @@ void VulkanDebugManager::CopyBufferToTex2DMS(VkCommandBuffer cmd, VkImage destMS
   VkImageViewCreateInfo viewInfo = {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       NULL,
-      0,
+      m_pDriver->DefaultImageViewCreateFlags(),
       destMS,
       VK_IMAGE_VIEW_TYPE_2D_ARRAY,
       VK_FORMAT_UNDEFINED,
@@ -631,7 +631,7 @@ void VulkanDebugManager::CopyDepthBufferToTex2DMS(VkCommandBuffer cmd, VkImage d
   VkImageViewCreateInfo viewInfo = {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       NULL,
-      0,
+      m_pDriver->DefaultImageViewCreateFlags(),
       destMS,
       VK_IMAGE_VIEW_TYPE_2D_ARRAY,
       fmt,

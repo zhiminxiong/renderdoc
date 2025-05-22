@@ -57,6 +57,7 @@ VulkanTextRenderer::VulkanTextRenderer(WrappedVulkan *driver)
   // create linear sampler
   VkSamplerCreateInfo sampInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
 
+  sampInfo.flags = driver->DefaultSamplerCreateFlags();
   sampInfo.minFilter = sampInfo.magFilter = VK_FILTER_LINEAR;
   sampInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
   sampInfo.addressModeU = sampInfo.addressModeV = sampInfo.addressModeW =
@@ -273,7 +274,7 @@ VulkanTextRenderer::VulkanTextRenderer(WrappedVulkan *driver)
     VkImageCreateInfo imInfo = {
         VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         NULL,
-        0,
+        driver->DefaultImageCreateFlags(),
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R8_UNORM,
         {width, height, 1},
@@ -333,6 +334,14 @@ VulkanTextRenderer::VulkanTextRenderer(WrappedVulkan *driver)
           driver->GetGPULocalMemoryIndex(mrq.memoryTypeBits),
       };
 
+      VkMemoryAllocateFlagsInfo memFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+      if(driver->DescriptorBuffers())
+      {
+        allocInfo.pNext = &memFlags;
+        memFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
+                         VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+      }
+
       vkr = ObjDisp(dev)->AllocateMemory(Unwrap(dev), &allocInfo, NULL, &m_TextAtlasMem);
       RDCASSERTEQUAL(vkr, VK_SUCCESS);
 
@@ -342,7 +351,7 @@ VulkanTextRenderer::VulkanTextRenderer(WrappedVulkan *driver)
       VkImageViewCreateInfo viewInfo = {
           VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           NULL,
-          0,
+          driver->DefaultImageViewCreateFlags(),
           m_TextAtlas,
           VK_IMAGE_VIEW_TYPE_2D,
           imInfo.format,

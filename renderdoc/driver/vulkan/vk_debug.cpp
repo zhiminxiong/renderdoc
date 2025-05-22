@@ -456,7 +456,7 @@ VulkanDebugManager::VulkanDebugManager(WrappedVulkan *driver)
     VkImageCreateInfo imInfo = {
         VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         NULL,
-        0,
+        m_pDriver->DefaultImageCreateFlags(),
         VK_IMAGE_TYPE_2D,
         // format is required to be supported for sampling
         VK_FORMAT_R8G8B8A8_UNORM,
@@ -507,7 +507,7 @@ VulkanDebugManager::VulkanDebugManager(WrappedVulkan *driver)
     VkImageCreateInfo imInfo = {
         VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         NULL,
-        0,
+        m_pDriver->DefaultImageCreateFlags(),
         VK_IMAGE_TYPE_2D,
         f,
         {1, 1, 1},
@@ -584,6 +584,14 @@ VulkanDebugManager::VulkanDebugManager(WrappedVulkan *driver)
         driver->GetGPULocalMemoryIndex(mrq.memoryTypeBits),
     };
 
+    VkMemoryAllocateFlagsInfo memFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+    if(driver->DescriptorBuffers())
+    {
+      allocInfo.pNext = &memFlags;
+      memFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
+                       VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+    }
+
     vkr = ObjDisp(dev)->AllocateMemory(Unwrap(dev), &allocInfo, NULL, &m_UnwrappedDummyMemory);
     CHECK_VKR(m_pDriver, vkr);
 
@@ -603,7 +611,7 @@ VulkanDebugManager::VulkanDebugManager(WrappedVulkan *driver)
     VkImageViewCreateInfo viewInfo = {
         VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         NULL,
-        0,
+        m_pDriver->DefaultImageViewCreateFlags(),
         m_UnwrappedDummyStencilImage,
         VK_IMAGE_VIEW_TYPE_2D_ARRAY,
         f,
@@ -4143,7 +4151,7 @@ void VulkanReplay::TextureRendering::Init(WrappedVulkan *driver, VkDescriptorPoo
         VkImageCreateInfo imInfo = {
             VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             NULL,
-            0,
+            driver->DefaultImageCreateFlags(),
             types[type],
             formats[fmt],
             {1, 1, 1},
@@ -4162,7 +4170,7 @@ void VulkanReplay::TextureRendering::Init(WrappedVulkan *driver, VkDescriptorPoo
         if(type == 1)
         {
           imInfo.arrayLayers = 6;
-          imInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+          imInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
 
         // some depth images might not be supported
@@ -4179,7 +4187,7 @@ void VulkanReplay::TextureRendering::Init(WrappedVulkan *driver, VkDescriptorPoo
             {
               // create non-cube compatible
               imInfo.arrayLayers = 1;
-              imInfo.flags = 0;
+              imInfo.flags &= ~VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
               DepthCubesSupported = false;
             }

@@ -631,6 +631,8 @@ bool WrappedVulkan::Serialise_vkCreateSampler(SerialiserType &ser, VkDevice devi
 
     VkSamplerCreateInfo patched = CreateInfo;
 
+    patched.flags |= DefaultSamplerCreateFlags();
+
     byte *tempMem = GetTempMemory(GetNextPatchSize(patched.pNext));
 
     UnwrapNextChain(m_State, "VkSamplerCreateInfo", tempMem, (VkBaseInStructure *)&patched);
@@ -688,6 +690,8 @@ VkResult WrappedVulkan::vkCreateSampler(VkDevice device, const VkSamplerCreateIn
   // like in VkCreateImage, create non-subsampled sampler since the image is now non-subsampled.
   info_adjusted.flags &= ~VK_SAMPLER_CREATE_SUBSAMPLED_BIT_EXT;
   info_adjusted.flags &= ~VK_SAMPLER_CREATE_SUBSAMPLED_COARSE_RECONSTRUCTION_BIT_EXT;
+
+  info_adjusted.flags |= DefaultSamplerCreateFlags();
 
   byte *tempMem = GetTempMemory(GetNextPatchSize(info_adjusted.pNext));
 

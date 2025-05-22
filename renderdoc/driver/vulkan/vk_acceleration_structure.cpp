@@ -864,7 +864,7 @@ VulkanAccelerationStructureManager::Allocation VulkanAccelerationStructureManage
   const VkBufferCreateInfo bufInfo = {
       VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       NULL,
-      0,
+      m_pDriver->DefaultBufferCreateFlags(),
       size,
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | extraUsageFlags,

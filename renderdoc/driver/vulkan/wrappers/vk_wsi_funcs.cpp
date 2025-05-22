@@ -369,7 +369,7 @@ bool WrappedVulkan::Serialise_vkCreateSwapchainKHR(SerialiserType &ser, VkDevice
 
     swapinfo.images.resize(NumImages);
 
-    VkImageCreateFlags imageFlags = 0;
+    VkImageCreateFlags imageFlags = DefaultImageCreateFlags();
 
     if(CreateInfo.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR)
       imageFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
@@ -428,6 +428,14 @@ bool WrappedVulkan::Serialise_vkCreateSwapchainKHR(SerialiserType &ser, VkDevice
           mrq.size,
           GetGPULocalMemoryIndex(mrq.memoryTypeBits),
       };
+
+      VkMemoryAllocateFlagsInfo memFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+      if(DescriptorBuffers())
+      {
+        allocInfo.pNext = &memFlags;
+        memFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
+                         VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+      }
 
       vkr = ObjDisp(device)->AllocateMemory(Unwrap(device), &allocInfo, NULL, &mem);
       CHECK_VKR(this, vkr);
@@ -645,7 +653,7 @@ void WrappedVulkan::WrapAndProcessCreatedSwapchain(VkDevice device,
           VkImageViewCreateInfo info = {
               VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
               NULL,
-              0,
+              DefaultImageViewCreateFlags(),
               Unwrap(images[i]),
               VK_IMAGE_VIEW_TYPE_2D,
               pCreateInfo->imageFormat,

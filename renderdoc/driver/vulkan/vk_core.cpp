@@ -2676,7 +2676,7 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
     VkBufferCreateInfo bufInfo = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         NULL,
-        0,
+        DefaultBufferCreateFlags(),
         GetByteSize(imageInfo.extent.width, imageInfo.extent.height, 1, imageInfo.format, 0),
         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     };

@@ -485,6 +485,7 @@ private:
   bool m_AccelerationStructures = false;
   bool m_ShaderObject = false;
   bool m_Maintenance5 = false;
+  bool m_DescriptorBuffers = false;
 
   uint32_t m_RTCaptureReplayHandleSize = 0;
 
@@ -1385,6 +1386,7 @@ public:
   bool AccelerationStructures() const { return m_AccelerationStructures; }
   bool ShaderObject() const { return m_ShaderObject; }
   bool Maintenance5() const { return m_Maintenance5; }
+  bool DescriptorBuffers() const { return m_DescriptorBuffers; }
   VulkanRenderState &GetRenderState() { return m_RenderState; }
   void SetActionCB(VulkanActionCallback *cb) { m_ActionCallback = cb; }
   void SetSubmitChain(void *submitChain) { m_SubmitChain = submitChain; }
@@ -1401,6 +1403,23 @@ public:
                                                        VkExtensionProperties *pProperties);
   static VkResult GetProvidedInstanceExtensionProperties(uint32_t *pPropertyCount,
                                                          VkExtensionProperties *pProperties);
+
+  VkBufferCreateFlags DefaultBufferCreateFlags()
+  {
+    return DescriptorBuffers() ? VK_BUFFER_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT : 0;
+  }
+  VkImageCreateFlags DefaultImageCreateFlags()
+  {
+    return DescriptorBuffers() ? VK_IMAGE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT : 0;
+  }
+  VkImageViewCreateFlags DefaultImageViewCreateFlags()
+  {
+    return DescriptorBuffers() ? VK_IMAGE_VIEW_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT : 0;
+  }
+  VkSamplerCreateFlags DefaultSamplerCreateFlags()
+  {
+    return DescriptorBuffers() ? VK_SAMPLER_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT : 0;
+  }
 
   const VkPhysicalDeviceFeatures &GetDeviceEnabledFeatures()
   {
