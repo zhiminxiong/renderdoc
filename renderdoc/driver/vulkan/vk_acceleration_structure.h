@@ -66,6 +66,8 @@ struct VkAccelerationStructureInfo
   void convertGeometryData(rdcarray<VkAccelerationStructureGeometryKHR> &geometry) const;
   rdcarray<VkAccelerationStructureBuildRangeInfoKHR> getBuildRanges() const;
 
+  VkDeviceAddress address;
+
   VkAccelerationStructureTypeKHR type =
       VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR;
   VkBuildAccelerationStructureFlagsKHR flags = 0;

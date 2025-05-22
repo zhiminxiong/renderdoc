@@ -156,18 +156,6 @@ static void MakeSubpassLoadRP(RPCreateInfo &info, const RPCreateInfo *origInfo, 
   }
 }
 
-template <typename type>
-bool RemoveForcedRef()
-{
-  return false;
-}
-
-template <>
-bool RemoveForcedRef<VkAccelerationStructureKHR>()
-{
-  return true;
-}
-
 // note, for threading reasons we ensure to release the wrappers before
 // releasing the underlying object. Otherwise after releasing the vulkan object
 // that same handle could be returned by create on another thread, and we
@@ -178,11 +166,6 @@ bool RemoveForcedRef<VkAccelerationStructureKHR>()
     if(obj == VK_NULL_HANDLE)                                                            \
       return;                                                                            \
     type unwrappedObj = Unwrap(obj);                                                     \
-    if(RemoveForcedRef<type>())                                                          \
-    {                                                                                    \
-      SCOPED_LOCK(m_ForcedReferencesLock);                                               \
-      m_ForcedReferences.removeOne(GetRecord(obj));                                      \
-    }                                                                                    \
     if(IsReplayMode(m_State))                                                            \
       m_CreationInfo.erase(GetResID(obj));                                               \
     GetResourceManager()->ReleaseWrappedResource(obj, true);                             \
@@ -205,10 +188,29 @@ DESTROY_IMPL(VkCommandPool, DestroyCommandPool)
 DESTROY_IMPL(VkQueryPool, DestroyQueryPool)
 DESTROY_IMPL(VkDescriptorUpdateTemplate, DestroyDescriptorUpdateTemplate)
 DESTROY_IMPL(VkSamplerYcbcrConversion, DestroySamplerYcbcrConversion)
-DESTROY_IMPL(VkAccelerationStructureKHR, DestroyAccelerationStructureKHR)
 DESTROY_IMPL(VkShaderEXT, DestroyShaderEXT)
 
 #undef DESTROY_IMPL
+
+void WrappedVulkan::vkDestroyAccelerationStructureKHR(VkDevice device, VkAccelerationStructureKHR obj,
+                                                      const VkAllocationCallbacks *)
+{
+  if(obj == VK_NULL_HANDLE)
+    return;
+  VkAccelerationStructureKHR unwrappedObj = Unwrap(obj);
+  {
+    SCOPED_LOCK(m_ASLookupByAddrLock);
+    m_ASLookupByAddr.erase(GetRecord(obj)->accelerationStructureInfo->address);
+  }
+  {
+    SCOPED_LOCK(m_ForcedReferencesLock);
+    m_ForcedReferences.removeOne(GetRecord(obj));
+  }
+  if(IsReplayMode(m_State))
+    m_CreationInfo.erase(GetResID(obj));
+  GetResourceManager()->ReleaseWrappedResource(obj, true);
+  ObjDisp(device)->DestroyAccelerationStructureKHR(Unwrap(device), unwrappedObj, NULL);
+}
 
 void WrappedVulkan::vkDestroyFramebuffer(VkDevice device, VkFramebuffer obj,
                                          const VkAllocationCallbacks *)

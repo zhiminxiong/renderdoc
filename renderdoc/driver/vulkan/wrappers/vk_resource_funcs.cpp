@@ -3567,6 +3567,16 @@ bool WrappedVulkan::Serialise_vkCreateAccelerationStructureKHR(
 
         m_CreationInfo.m_AccelerationStructure[live].Init(GetResourceManager(), m_CreationInfo,
                                                           &CreateInfo);
+
+        const VkAccelerationStructureDeviceAddressInfoKHR getInfo = {
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+            NULL,
+            Unwrap(acc),
+        };
+        const VkDeviceAddress addr =
+            ObjDisp(device)->GetAccelerationStructureDeviceAddressKHR(Unwrap(device), &getInfo);
+
+        m_ASLookupByAddr[addr] = live;
       }
     }
 
@@ -3638,6 +3648,7 @@ VkResult WrappedVulkan::vkCreateAccelerationStructureKHR(
       record->AddParent(bufferRecord);
 
       record->accelerationStructureInfo = new VkAccelerationStructureInfo();
+      record->accelerationStructureInfo->address = addr;
 
       // store the base resource
       record->baseResource = bufferRecord->GetResourceID();
@@ -3658,6 +3669,14 @@ VkResult WrappedVulkan::vkCreateAccelerationStructureKHR(
 
         // in case we're currently capturing, immediately consider the AS as referenced
         GetResourceManager()->MarkResourceFrameReferenced(record->GetResourceID(), eFrameRef_Read);
+      }
+
+      if(m_DescriptorBuffers)
+      {
+        {
+          SCOPED_LOCK(m_ASLookupByAddrLock);
+          m_ASLookupByAddr[addr] = id;
+        }
       }
     }
     else

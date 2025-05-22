@@ -447,6 +447,9 @@ private:
     VkQueueFamilyProperties queueProps[16] = {};
   };
 
+  Threading::CriticalSection m_ASLookupByAddrLock;
+  rdcflatmap<VkDeviceAddress, ResourceId> m_ASLookupByAddr;
+
   bool m_SeparateDepthStencil = false;
   bool m_NULLDescriptorsAllowed = false;
   bool m_ExtendedDynState = false;
