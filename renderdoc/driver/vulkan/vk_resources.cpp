@@ -3973,6 +3973,10 @@ VkResourceRecord::~VkResourceRecord()
   if(resType == eResBuffer || resType == eResImage)
     SAFE_DELETE(resInfo);
 
+  // for image views with descriptors, they have a duplicated resInfo
+  if(resType == eResImageView && resInfo && resInfo->parentResInfo != resInfo)
+    SAFE_DELETE(resInfo);
+
   if(resType == eResInstance || resType == eResDevice || resType == eResPhysicalDevice)
     SAFE_DELETE(instDevInfo);
 

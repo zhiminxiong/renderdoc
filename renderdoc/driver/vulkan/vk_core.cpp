@@ -5383,6 +5383,37 @@ WrappedVulkan::CommandBufferNode *WrappedVulkan::GetCommandBufferPartialSubmissi
   return NULL;
 }
 
+size_t WrappedVulkan::DescriptorDataSize(VkDescriptorType type)
+{
+  size_t ret = 0;
+
+  const VkPhysicalDeviceDescriptorBufferPropertiesEXT &descSizes = m_DescriptorBufferProperties;
+  switch(type)
+  {
+    case VK_DESCRIPTOR_TYPE_SAMPLER: ret = descSizes.samplerDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+      ret = descSizes.combinedImageSamplerDescriptorSize;
+      break;
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT: ret = descSizes.inputAttachmentDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: ret = descSizes.sampledImageDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: ret = descSizes.storageImageDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+      ret = descSizes.uniformTexelBufferDescriptorSize;
+      break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+      ret = descSizes.storageTexelBufferDescriptorSize;
+      break;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: ret = descSizes.uniformBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: ret = descSizes.storageBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+      ret = descSizes.accelerationStructureDescriptorSize;
+      break;
+    default: break;
+  }
+
+  return ret;
+}
+
 bool WrappedVulkan::IsPartialRenderPassActive()
 {
   for(const CommandBufferNode &cmdNode : m_Partial.partialStack)

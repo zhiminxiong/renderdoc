@@ -1118,7 +1118,9 @@ void WrappedVulkan::CaptureQueueSubmit(VkQueue queue,
 
       for(auto refit = refs.sparseRefs.begin(); refit != refs.sparseRefs.end(); ++refit)
       {
-        GetResourceManager()->MarkSparseMapReferenced((*refit)->resInfo);
+        // for these which are added as image views, step up to the image (if it's not an identity
+        // pointer) - see declaration of parentResInfo
+        GetResourceManager()->MarkSparseMapReferenced((*refit)->resInfo->parentResInfo);
       }
 
       UpdateImageStates(refs.bindImageStates);

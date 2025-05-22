@@ -1017,14 +1017,82 @@ struct AspectSparseTable
 
 DECLARE_REFLECTION_STRUCT(AspectSparseTable);
 
+struct DescriptorUniquenessKey
+{
+  DescriptorUniquenessKey(VkImageLayout layout)
+      : layout(layout), offset(0), size(0), fmt(VK_FORMAT_UNDEFINED)
+  {
+  }
+  DescriptorUniquenessKey(uint64_t offset, uint64_t size, VkFormat fmt)
+      : layout(VK_IMAGE_LAYOUT_UNDEFINED), offset(offset), size(size), fmt(fmt)
+  {
+  }
+
+  bool operator==(const DescriptorUniquenessKey &key) const
+  {
+    return layout == key.layout && offset == key.offset && size == key.size && fmt == key.fmt;
+  }
+
+  VkImageLayout layout;
+  uint64_t offset, size;
+  VkFormat fmt;
+};
+
+namespace std
+{
+template <>
+struct hash<DescriptorUniquenessKey>
+{
+  std::size_t operator()(const DescriptorUniquenessKey &key) const
+  {
+    std::size_t hash = std::hash<uint32_t>()(key.layout);
+    hash ^= std::hash<uint64_t>()(key.offset) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    hash ^= std::hash<uint64_t>()(key.size) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    hash ^= std::hash<uint32_t>()(key.fmt) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    return hash;
+  }
+};
+};
+
 // these structs are allocated for images and buffers, then pointed to (non-owning) by views
 struct ResourceInfo
 {
+  ResourceInfo() = default;
+  ResourceInfo(const ResourceInfo &other)
+      : banDedicated(other.banDedicated),
+        sparseAspect(other.sparseAspect),
+        dedicatedMemory(other.dedicatedMemory),
+        memreqs(other.memreqs),
+        imageInfo(other.imageInfo)
+  {
+    // this constructor is used to duplicate an image's resinfo in an image view when descriptor
+    // buffers are in use so that each view can have its own descriptor tracking.
+
+    // sparse table info deliberately not copied as it is mutable, and obviously the same for the descriptors
+  }
+
   // commonly we expect only one aspect (COLOR is vastly likely and METADATA is rare) so have one
   // directly accessible. If we have others (like separate DEPTH and STENCIL, or anything and
   // METADATA) we put them in the array.
   Sparse::PageTable sparseTable;
   rdcarray<AspectSparseTable> altSparseAspects;
+
+  // for images this is a self pointer. For image views when we are using descriptor buffers we
+  // can't alias the resInfo in each view's record because each view needs to track its own
+  // descriptors - instead we point back to the image's resInfo here for sparse info. blech
+  ResourceInfo *parentResInfo;
+
+  // for buffers, or for images when layouts can affect descriptors, the set of descriptors which
+  // have already been serialised
+  Threading::CriticalSection descriptorLock;
+  std::unordered_set<DescriptorUniquenessKey> descriptors;
+
+  // return true if this is a new descriptor, false if we already had it
+  bool AddDescriptor(DescriptorUniquenessKey key)
+  {
+    SCOPED_LOCK(descriptorLock);
+    return descriptors.insert(key).second;
+  }
 
   // for external images if we query both external and non-external and the sizes are different, we
   // can't allow dedicated memory as it is required to precisely match in size.
@@ -2329,6 +2397,8 @@ public:
   bool storable = false;
   bool dedicated = false;
   bool hasBDA = false;
+  bool hasDescriptorSaved = false;
+  bool hasNULLDescriptorSaved = false;
 
   void MarkMemoryFrameReferenced(ResourceId mem, VkDeviceSize offset, VkDeviceSize size,
                                  FrameRefType refType);

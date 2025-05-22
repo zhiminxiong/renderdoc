@@ -4291,6 +4291,53 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
     if(m_EnabledExtensions.ext_EXT_descriptor_buffer && descBufFeats && descBufFeats->descriptorBuffer)
     {
       m_DescriptorBuffers = true;
+
+      // if any update after bind feature is enabled, check robustBufferAccessUpdateAfterBind
+      m_DescriptorBufferProperties = {
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
+      };
+
+      VkPhysicalDeviceProperties2 availBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+      availBase.pNext = &m_DescriptorBufferProperties;
+      ObjDisp(physicalDevice)->GetPhysicalDeviceProperties2(Unwrap(physicalDevice), &availBase);
+
+      bool robustness = false;
+
+      // VkPhysicalDeviceFeatures2 takes priority
+      if(enabledFeatures2)
+      {
+        robustness = enabledFeatures2->features.robustBufferAccess != VK_FALSE;
+      }
+      else if(createInfo.pEnabledFeatures && createInfo.pEnabledFeatures->robustBufferAccess)
+      {
+        robustness = true;
+      }
+
+      // we should have forced on robustness
+      RDCASSERT(robustness);
+
+      m_DescriptorBufferProperties.uniformBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustUniformBufferDescriptorSize;
+      m_DescriptorBufferProperties.storageBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustStorageBufferDescriptorSize;
+      m_DescriptorBufferProperties.uniformTexelBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustUniformTexelBufferDescriptorSize;
+      m_DescriptorBufferProperties.storageTexelBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustStorageTexelBufferDescriptorSize;
+
+      // ensure our fixed-size is large enough for this driver.
+      RDCASSERT(m_DescriptorBufferProperties.accelerationStructureCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.bufferCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.imageCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.imageViewCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.samplerCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+
+      m_IgnoreLayoutForDescriptors = descBufFeats->descriptorBufferImageLayoutIgnored != VK_FALSE;
     }
 
     // MoltenVK reports 0x3fffffff for this limit so just ignore that value if it comes up
@@ -4877,6 +4924,100 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
        descBufFeatures->descriptorBuffer)
     {
       m_DescriptorBuffers = true;
+
+      // if any update after bind feature is enabled, check robustBufferAccessUpdateAfterBind
+      m_DescriptorBufferProperties = {
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
+      };
+
+      VkPhysicalDeviceProperties2 availBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+      availBase.pNext = &m_DescriptorBufferProperties;
+      ObjDisp(physicalDevice)->GetPhysicalDeviceProperties2(Unwrap(physicalDevice), &availBase);
+
+      bool robustness = false;
+
+      // VkPhysicalDeviceFeatures2 takes priority
+      if(enabledFeatures2)
+      {
+        robustness = enabledFeatures2->features.robustBufferAccess != VK_FALSE;
+      }
+      else if(createInfo.pEnabledFeatures && createInfo.pEnabledFeatures->robustBufferAccess)
+      {
+        robustness = true;
+      }
+
+      // we should have forced on robustness
+      RDCASSERT(robustness);
+
+      m_DescriptorBufferProperties.uniformBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustUniformBufferDescriptorSize;
+      m_DescriptorBufferProperties.storageBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustStorageBufferDescriptorSize;
+      m_DescriptorBufferProperties.uniformTexelBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustUniformTexelBufferDescriptorSize;
+      m_DescriptorBufferProperties.storageTexelBufferDescriptorSize =
+          m_DescriptorBufferProperties.robustStorageTexelBufferDescriptorSize;
+
+      // ensure our fixed-size is large enough for this driver.
+      RDCASSERT(m_DescriptorBufferProperties.accelerationStructureCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.bufferCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.imageCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.imageViewCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+      RDCASSERT(m_DescriptorBufferProperties.samplerCaptureReplayDescriptorDataSize <=
+                FixedOpaqueDescriptorCaptureSize);
+
+      m_IgnoreLayoutForDescriptors = descBufFeatures->descriptorBufferImageLayoutIgnored != VK_FALSE;
+
+      VkPhysicalDeviceRobustness2FeaturesKHR *robustness2 =
+          (VkPhysicalDeviceRobustness2FeaturesKHR *)FindNextStruct(
+              &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_KHR);
+
+      // record all the NULL descriptors
+      if(IsCaptureMode(m_State) && robustness2 && robustness2->nullDescriptor)
+      {
+        VkResourceRecord *record = GetRecord(*pDevice);
+        RDCASSERT(record);
+
+        VkDescriptorGetInfoEXT getInfo = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+        };
+
+        rdcarray<rdcpair<VkDescriptorType, size_t>> descriptorTypes = {
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+             m_DescriptorBufferProperties.sampledImageDescriptorSize},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+             m_DescriptorBufferProperties.storageImageDescriptorSize},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+             m_DescriptorBufferProperties.robustUniformTexelBufferDescriptorSize},
+            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+             m_DescriptorBufferProperties.robustStorageTexelBufferDescriptorSize},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+             m_DescriptorBufferProperties.robustUniformBufferDescriptorSize},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             m_DescriptorBufferProperties.robustStorageBufferDescriptorSize},
+        };
+
+        if(m_AccelerationStructures)
+        {
+          descriptorTypes.push_back(
+              {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+               m_DescriptorBufferProperties.accelerationStructureDescriptorSize});
+        }
+
+        byte dummy[256];
+        for(rdcpair<VkDescriptorType, size_t> typeAndSize : descriptorTypes)
+        {
+          getInfo.type = typeAndSize.first;
+
+          vkGetDescriptorEXT(*pDevice, &getInfo, typeAndSize.second, dummy);
+        }
+      }
+
+      m_NULLDescriptorPatternSaved = true;
     }
 
     m_PhysicalDeviceData.driverInfo =

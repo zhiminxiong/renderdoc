@@ -2083,7 +2083,7 @@ VkResult WrappedVulkan::vkCreateBuffer(VkDevice device, const VkBufferCreateInfo
 
       record->resInfo = NULL;
 
-      if(isSparse || isExternal)
+      if(isSparse || isExternal || m_DescriptorBuffers)
       {
         record->resInfo = new ResourceInfo();
 
@@ -2686,6 +2686,7 @@ VkResult WrappedVulkan::vkCreateImage(VkDevice device, const VkImageCreateInfo *
       record->AddChunk(chunk);
 
       record->resInfo = new ResourceInfo();
+      record->resInfo->parentResInfo = record->resInfo;
       ResourceInfo &resInfo = *record->resInfo;
       resInfo.imageInfo = ImageInfo(*pCreateInfo);
 
@@ -3067,7 +3068,15 @@ VkResult WrappedVulkan::vkCreateImageView(VkDevice device, const VkImageViewCrea
       record->baseResource = imageRecord->GetResourceID();
       record->baseResourceMem = imageRecord->baseResourceMem;
       record->dedicated = imageRecord->dedicated;
-      record->resInfo = imageRecord->resInfo;
+      if(m_DescriptorBuffers)
+      {
+        record->resInfo = new ResourceInfo(*imageRecord->resInfo);
+        record->resInfo->parentResInfo = imageRecord->resInfo;
+      }
+      else
+      {
+        record->resInfo = imageRecord->resInfo;
+      }
       record->viewRange = pCreateInfo->subresourceRange;
       record->viewRange.setViewType(pCreateInfo->viewType);
     }
@@ -3677,6 +3686,15 @@ VkResult WrappedVulkan::vkCreateAccelerationStructureKHR(
           SCOPED_LOCK(m_ASLookupByAddrLock);
           m_ASLookupByAddr[addr] = id;
         }
+
+        VkDescriptorGetInfoEXT getDesc = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+        };
+        byte dummy[256];
+        getDesc.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        getDesc.data.accelerationStructure = addr;
+        vkGetDescriptorEXT(device, &getDesc,
+                           m_DescriptorBufferProperties.accelerationStructureDescriptorSize, dummy);
       }
     }
     else

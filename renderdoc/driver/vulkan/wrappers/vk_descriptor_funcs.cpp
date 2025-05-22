@@ -199,6 +199,83 @@ VkCopyDescriptorSet WrappedVulkan::UnwrapInfo(const VkCopyDescriptorSet *copyDes
   return ret;
 }
 
+template <>
+VkDescriptorGetInfoEXT WrappedVulkan::UnwrapInfo(const VkDescriptorGetInfoEXT *pDescriptorInfo)
+{
+  VkDescriptorGetInfoEXT ret = *pDescriptorInfo;
+
+  byte *memory = GetTempMemory(sizeof(VkDescriptorAddressInfoEXT) + GetNextPatchSize(ret.pNext));
+  RDCCOMPILE_ASSERT(sizeof(VkDescriptorAddressInfoEXT) >= sizeof(VkDescriptorImageInfo),
+                    "Structure sizes mean not enough space is allocated for write data");
+
+  if(pDescriptorInfo->data.pUniformBuffer)
+    ret.data.pUniformBuffer = (VkDescriptorAddressInfoEXT *)memory;
+
+  byte *nextMem = memory + sizeof(VkDescriptorBufferInfo);
+
+  UnwrapNextChain(m_State, "VkDescriptorGetInfoEXT", nextMem, (VkBaseInStructure *)&ret);
+
+  switch(ret.type)
+  {
+    case VK_DESCRIPTOR_TYPE_SAMPLER:
+    {
+      VkSampler *samp = (VkSampler *)memory;
+      if(pDescriptorInfo->data.pSampler)
+      {
+        *samp = Unwrap(*pDescriptorInfo->data.pSampler);
+      }
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+      // ignore the sampler part
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+    {
+      VkDescriptorImageInfo *img = (VkDescriptorImageInfo *)ret.data.pCombinedImageSampler;
+      if(pDescriptorInfo->data.pCombinedImageSampler)
+      {
+        img->imageView = Unwrap(pDescriptorInfo->data.pCombinedImageSampler->imageView);
+        img->sampler = Unwrap(pDescriptorInfo->data.pCombinedImageSampler->sampler);
+        img->imageLayout = pDescriptorInfo->data.pCombinedImageSampler->imageLayout;
+      }
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+    {
+      // no unwrap, just copy
+      VkDescriptorAddressInfoEXT *buf = (VkDescriptorAddressInfoEXT *)ret.data.pUniformBuffer;
+      if(pDescriptorInfo->data.pUniformBuffer)
+        *buf = *pDescriptorInfo->data.pUniformBuffer;
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+    {
+      // no unwrap, just copy
+      ret.data.accelerationStructure = pDescriptorInfo->data.accelerationStructure;
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+    case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+    case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+    case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+    case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_MAX_ENUM:
+    {
+      RDCERR("Invalid descriptor type %s", ToStr(ret.type).c_str());
+      break;
+    }
+  }
+
+  return ret;
+}
+
 template <typename SerialiserType>
 bool WrappedVulkan::Serialise_vkCreateDescriptorPool(SerialiserType &ser, VkDevice device,
                                                      const VkDescriptorPoolCreateInfo *pCreateInfo,
@@ -1873,14 +1950,247 @@ void WrappedVulkan::vkUpdateDescriptorSetWithTemplate(
 template <typename SerialiserType>
 bool WrappedVulkan::Serialise_vkGetDescriptorEXT(SerialiserType &ser, VkDevice device,
                                                  const VkDescriptorGetInfoEXT *pDescriptorInfo,
-                                                 size_t dataSize, void *pDescriptor)
+                                                 size_t dataSize_, void *pDescriptor)
 {
+  SERIALISE_ELEMENT(device);
+  SERIALISE_ELEMENT_LOCAL(DescriptorInfo, *pDescriptorInfo).Important();
+  SERIALISE_ELEMENT_LOCAL(dataSize, uint64_t(dataSize_));
+  SERIALISE_ELEMENT_ARRAY(pDescriptor, dataSize_);
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    byte *tempMem = GetTempMemory(GetNextPatchSize(&DescriptorInfo));
+    VkDescriptorGetInfoEXT *unwrappedInfo = UnwrapStructAndChain(m_State, tempMem, &DescriptorInfo);
+
+    uint64_t curDataSize = DescriptorDataSize(DescriptorInfo.type);
+    if(dataSize != curDataSize)
+    {
+      SET_ERROR_RESULT(
+          m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
+          "Descriptor of type %s changed size, it was %llu bytes during capture but is %llu bytes "
+          "during replay.\n"
+          "\n%s",
+          ToStr(DescriptorInfo.type).c_str(), dataSize, curDataSize,
+          GetPhysDeviceCompatString(false, false).c_str());
+      return false;
+    }
+
+    bytebuf replayDescriptor;
+    replayDescriptor.resize(dataSize);
+
+    // verify the descriptor is bitwise identical
+    ObjDisp(device)->GetDescriptorEXT(Unwrap(device), unwrappedInfo, (size_t)dataSize,
+                                      replayDescriptor.data());
+
+    if(memcmp(replayDescriptor.data(), pDescriptor, dataSize) != 0)
+    {
+      rdcstr bitDifferences;
+
+      uint32_t *capU32 = (uint32_t *)pDescriptor;
+      uint32_t *replayU32 = (uint32_t *)replayDescriptor.data();
+
+      bitDifferences = "Capture:\n";
+      for(uint32_t d = 0; d * 4 < dataSize; d++)
+        bitDifferences += StringFormat::Fmt("%08llx ", capU32[d]);
+      bitDifferences += "\n\n";
+      bitDifferences += "Replay:\n";
+      for(uint32_t d = 0; d * 4 < dataSize; d++)
+        bitDifferences += StringFormat::Fmt("%08llx ", replayU32[d]);
+      bitDifferences += "\n";
+
+      SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
+                       "Descriptor of type %s changed bit pattern.\n"
+                       "\n%s"
+                       "\n%s",
+                       ToStr(DescriptorInfo.type).c_str(), bitDifferences.c_str(),
+                       GetPhysDeviceCompatString(false, false).c_str());
+      return false;
+    }
+  }
+
   return true;
 }
 
 void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInfoEXT *pDescriptorInfo,
                                        size_t dataSize, void *pDescriptor)
 {
+  // the user *could* be querying straight into GPU upload memory which would be very bad to read
+  // back from. To avoid that, we read into our temporary memory then memcpy to user memory but only
+  // if we're actually going to process this.
+
+  // first determine where this should go, based on the 'primary' resource. For combined
+  // image/samplers, we pre-populated the sampler one so we treat them as-if they're just images
+  VkResourceRecord *dstRecord = NULL;
+
+  if(IsCaptureMode(m_State))
+  {
+    switch(pDescriptorInfo->type)
+    {
+      case VK_DESCRIPTOR_TYPE_SAMPLER:
+      {
+        if(pDescriptorInfo->data.pSampler)
+        {
+          dstRecord = GetRecord(*pDescriptorInfo->data.pSampler);
+          // don't need to worry about the race here, worst case we save an extra descriptor
+          if(dstRecord->hasDescriptorSaved)
+            dstRecord = NULL;
+          else
+            dstRecord->hasDescriptorSaved = true;
+        }
+        else
+        {
+          dstRecord = GetRecord(m_Device);
+          if(m_NULLDescriptorPatternSaved)
+            dstRecord = NULL;
+        }
+        break;
+      }
+      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+      case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+      case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+      case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+      {
+        // sampled/storage/input attachment are identical in the union. Since the type forms part of
+        // our this logic can be done in common
+        if(pDescriptorInfo->data.pSampledImage &&
+           pDescriptorInfo->data.pSampledImage->imageView != VK_NULL_HANDLE)
+        {
+          dstRecord = GetRecord(pDescriptorInfo->data.pSampledImage->imageView);
+
+          DescriptorUniquenessKey descKey(
+              m_IgnoreLayoutForDescriptors
+                  ? VK_IMAGE_LAYOUT_UNDEFINED
+                  : pDescriptorInfo->data.pCombinedImageSampler->imageLayout);
+
+          // this is internally locked
+          if(!dstRecord->resInfo->AddDescriptor(descKey))
+            dstRecord = NULL;
+        }
+        else if(pDescriptorInfo->data.pCombinedImageSampler &&
+                pDescriptorInfo->data.pCombinedImageSampler->imageView == VK_NULL_HANDLE &&
+                pDescriptorInfo->data.pCombinedImageSampler->sampler != VK_NULL_HANDLE)
+        {
+          dstRecord = GetRecord(pDescriptorInfo->data.pCombinedImageSampler->sampler);
+          // don't need to worry about the race here, worst case we save an extra descriptor
+          if(dstRecord->hasNULLDescriptorSaved)
+            dstRecord = NULL;
+          else
+            dstRecord->hasNULLDescriptorSaved = true;
+        }
+        else
+        {
+          dstRecord = GetRecord(m_Device);
+          if(m_NULLDescriptorPatternSaved)
+            dstRecord = NULL;
+        }
+        break;
+      }
+      case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+      case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+      {
+        // uniform/storage are identical in the union. Since the type forms part of our this
+        // logic can be done in common
+        if(pDescriptorInfo->data.pUniformBuffer)
+        {
+          ResourceId id;
+          uint64_t offs = 0;
+          GetResIDFromAddr(pDescriptorInfo->data.pUniformBuffer->address, id, offs);
+
+          dstRecord = GetResourceManager()->GetResourceRecord(id);
+
+          VkFormat fmt = VK_FORMAT_UNDEFINED;
+          if(pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
+             pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+          {
+            fmt = pDescriptorInfo->data.pUniformTexelBuffer->format;
+          }
+
+          DescriptorUniquenessKey descKey(offs, pDescriptorInfo->data.pUniformBuffer->range, fmt);
+
+          // this is internally locked
+          if(!dstRecord->resInfo->AddDescriptor(descKey))
+            dstRecord = NULL;
+        }
+        else
+        {
+          dstRecord = GetRecord(m_Device);
+          if(m_NULLDescriptorPatternSaved)
+            dstRecord = NULL;
+        }
+        break;
+      }
+      case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+      {
+        if(pDescriptorInfo->data.accelerationStructure)
+        {
+          ResourceId id;
+          {
+            SCOPED_LOCK(m_ASLookupByAddrLock);
+            id = m_ASLookupByAddr[pDescriptorInfo->data.accelerationStructure];
+          }
+
+          dstRecord = GetResourceManager()->GetResourceRecord(id);
+          // don't need to worry about the race here, worst case we save an extra descriptor
+          if(dstRecord->hasDescriptorSaved)
+            dstRecord = NULL;
+          else
+            dstRecord->hasDescriptorSaved = true;
+        }
+        else
+        {
+          dstRecord = GetRecord(m_Device);
+          if(m_NULLDescriptorPatternSaved)
+            dstRecord = NULL;
+        }
+        break;
+      }
+      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+      case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+      case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+      case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+      case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+      case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
+      case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+      case VK_DESCRIPTOR_TYPE_MAX_ENUM:
+        RDCERR("Invalid descriptor type passed to vkGetDescriptorEXT");
+        break;
+    }
+  }
+
+  size_t localSize = 0;
+  if(dstRecord)
+    localSize = dataSize;
+
+  byte tempMem[256] = {};
+  VkDescriptorGetInfoEXT unwrappedInfo = UnwrapInfo(pDescriptorInfo);
+
+  SERIALISE_TIME_CALL(ObjDisp(device)->GetDescriptorEXT(Unwrap(device), &unwrappedInfo, dataSize,
+                                                        dstRecord ? tempMem : pDescriptor));
+
+  // if we needed to serialise this descriptor
+  if(dstRecord)
+  {
+    // copy to the user's memory
+    memcpy(pDescriptor, tempMem, dataSize);
+
+    Chunk *chunk = NULL;
+
+    {
+      CACHE_THREAD_SERIALISER();
+
+      SCOPED_SERIALISE_CHUNK(VulkanChunk::vkGetDescriptorEXT);
+      Serialise_vkGetDescriptorEXT(ser, device, pDescriptorInfo, dataSize, tempMem);
+
+      chunk = scope.Get();
+    }
+
+    dstRecord->AddChunk(chunk);
+  }
 }
 
 INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCreateDescriptorSetLayout, VkDevice device,

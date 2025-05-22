@@ -731,6 +731,18 @@ VkResult WrappedVulkan::vkCreateSampler(VkDevice device, const VkSamplerCreateIn
         VkResourceRecord *ycbcrRecord = GetRecord(ycbcr->conversion);
         record->AddParent(ycbcrRecord);
       }
+
+      if(m_DescriptorBuffers)
+      {
+        VkDescriptorGetInfoEXT getDesc = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+        };
+        byte dummy[256];
+        getDesc.type = VK_DESCRIPTOR_TYPE_SAMPLER;
+        getDesc.data.pSampler = pSampler;
+        vkGetDescriptorEXT(device, &getDesc, m_DescriptorBufferProperties.samplerDescriptorSize,
+                           dummy);
+      }
     }
     else
     {

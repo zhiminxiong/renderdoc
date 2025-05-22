@@ -447,8 +447,14 @@ private:
     VkQueueFamilyProperties queueProps[16] = {};
   };
 
+  VkPhysicalDeviceDescriptorBufferPropertiesEXT m_DescriptorBufferProperties;
+  size_t DescriptorDataSize(VkDescriptorType type);
+
   Threading::CriticalSection m_ASLookupByAddrLock;
   rdcflatmap<VkDeviceAddress, ResourceId> m_ASLookupByAddr;
+
+  bool m_NULLDescriptorPatternSaved = false;
+  bool m_IgnoreLayoutForDescriptors = false;
 
   bool m_SeparateDepthStencil = false;
   bool m_NULLDescriptorsAllowed = false;
