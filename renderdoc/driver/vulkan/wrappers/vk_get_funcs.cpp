@@ -878,6 +878,24 @@ void WrappedVulkan::vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevi
 
     memcpy(shadObj->shaderBinaryUUID, fakeRenderDocUUID, VK_UUID_SIZE);
   }
+
+  VkPhysicalDeviceDescriptorBufferPropertiesEXT *descBufferProperties =
+      (VkPhysicalDeviceDescriptorBufferPropertiesEXT *)FindNextStruct(
+          pProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT);
+
+  // we force the use of robustness, so tweak sizes to be robust sizes as the application doesn't
+  // know we forced robustness
+  if(descBufferProperties)
+  {
+    descBufferProperties->uniformBufferDescriptorSize =
+        descBufferProperties->robustUniformBufferDescriptorSize;
+    descBufferProperties->storageBufferDescriptorSize =
+        descBufferProperties->robustStorageBufferDescriptorSize;
+    descBufferProperties->uniformTexelBufferDescriptorSize =
+        descBufferProperties->robustUniformTexelBufferDescriptorSize;
+    descBufferProperties->storageTexelBufferDescriptorSize =
+        descBufferProperties->robustStorageTexelBufferDescriptorSize;
+  }
 }
 
 void WrappedVulkan::vkGetPhysicalDeviceQueueFamilyProperties2(
