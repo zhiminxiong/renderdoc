@@ -26,6 +26,7 @@
 
 #include "common/timing.h"
 #include "core/gpu_address_range_tracker.h"
+#include "core/rdcbytetrie.h"
 #include "serialise/serialiser.h"
 #include "vk_acceleration_structure.h"
 #include "vk_common.h"
@@ -281,6 +282,19 @@ struct UserDebugUtilsCallbackData
   VkDebugUtilsMessengerEXT realObject;
 };
 
+struct DescriptorTrieNode : DescriptorSetSlot
+{
+  DescriptorTrieNode() = default;
+  DescriptorTrieNode(const DescriptorSetSlot &slot) : DescriptorSetSlot(slot), _trie(0) {}
+  uint16_t _trie;
+
+  // this equality operator allows a tolerance of range to account for implementations that drop
+  // lower bits off sizes (the alignment requirements on offsets takes care of that)
+  bool operator==(const DescriptorTrieNode &o) const;
+
+  static uint64_t rangeToleranceMask;
+};
+
 class WrappedVulkan : public IFrameCapturer
 {
 private:
@@ -452,6 +466,16 @@ private:
 
   Threading::CriticalSection m_ASLookupByAddrLock;
   rdcflatmap<VkDeviceAddress, ResourceId> m_ASLookupByAddr;
+
+  struct DescriptorLookups
+  {
+    // overall lookup of all descriptors by bytes, fallback in case any others don't work - we
+    // expect this to always hit
+    rdcbytetrie<DescriptorTrieNode> fallback;
+  };
+  DescriptorLookups m_DescriptorLookup;
+
+  void RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data);
 
   bool m_NULLDescriptorPatternSaved = false;
   bool m_IgnoreLayoutForDescriptors = false;
@@ -1292,6 +1316,8 @@ public:
   void TrackBufferAddress(VkDevice device, VkBuffer buffer);
   void UntrackBufferAddress(VkDevice device, VkBuffer buffer);
   void GetResIDFromAddr(GPUAddressRange::Address addr, ResourceId &id, uint64_t &offs);
+
+  ResourceId GetASFromAddr(VkDeviceAddress addr);
 
   EventFlags GetEventFlags(uint32_t eid) { return m_EventFlags[eid]; }
   rdcarray<EventUsage> GetUsage(ResourceId id) { return m_ResourceUses[id]; }

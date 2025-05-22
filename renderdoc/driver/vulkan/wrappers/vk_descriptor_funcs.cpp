@@ -2008,6 +2008,11 @@ bool WrappedVulkan::Serialise_vkGetDescriptorEXT(SerialiserType &ser, VkDevice d
                        GetPhysDeviceCompatString(false, false).c_str());
       return false;
     }
+
+    DescriptorSetSlot descriptorData = {};
+    descriptorData.SetDescriptor(this, DescriptorInfo);
+
+    RegisterDescriptor(replayDescriptor, descriptorData);
   }
 
   return true;

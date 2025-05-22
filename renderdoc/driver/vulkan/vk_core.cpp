@@ -103,6 +103,40 @@ void VkInitParams::Set(const VkInstanceCreateInfo *pCreateInfo, ResourceId inst)
   InstanceID = inst;
 }
 
+bool DescriptorTrieNode::operator==(const DescriptorTrieNode &o) const
+{
+  // allow samplers to alias as drivers may deduplicate these. We will still verify the match by
+  // checking that the descriptor bytes for the resulting sampler comes out the same.
+  if(type == DescriptorSlotType::Sampler && o.type == DescriptorSlotType::Sampler)
+    return true;
+
+  // allow a NULL descriptor of different types to alias
+  if(resource == ResourceId() && sampler == ResourceId() && o.resource == ResourceId() &&
+     sampler == ResourceId())
+    return true;
+
+  // allow a NULL combined image/sampler to alias with a sampler
+  if((type == DescriptorSlotType::Sampler && o.type == DescriptorSlotType::SampledImage) ||
+     (type == DescriptorSlotType::SampledImage && o.type == DescriptorSlotType::Sampler))
+  {
+    if(resource == ResourceId() && o.resource == ResourceId())
+      return true;
+  }
+
+  if(type != o.type || resource != o.resource || sampler != o.sampler || offset != o.offset)
+    return false;
+
+  // deliberately allow imageLayout differences to be considered equal still - some drivers are
+  // likely to ignore imageLayout for the descriptor bytes even if the feature is not enabled
+
+  if((range & rangeToleranceMask) != (o.range & rangeToleranceMask))
+    return false;
+
+  return true;
+}
+
+uint64_t DescriptorTrieNode::rangeToleranceMask = ~0ULL;
+
 WrappedVulkan::WrappedVulkan()
 {
   RenderDoc::Inst().RegisterMemoryRegion(this, sizeof(WrappedVulkan));
@@ -5383,6 +5417,12 @@ WrappedVulkan::CommandBufferNode *WrappedVulkan::GetCommandBufferPartialSubmissi
   return NULL;
 }
 
+ResourceId WrappedVulkan::GetASFromAddr(VkDeviceAddress addr)
+{
+  SCOPED_LOCK(m_ASLookupByAddrLock);
+  return m_ASLookupByAddr[addr];
+}
+
 size_t WrappedVulkan::DescriptorDataSize(VkDescriptorType type)
 {
   size_t ret = 0;
@@ -5412,6 +5452,11 @@ size_t WrappedVulkan::DescriptorDataSize(VkDescriptorType type)
   }
 
   return ret;
+}
+
+void WrappedVulkan::RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data)
+{
+  m_DescriptorLookup.fallback.insert(key, data);
 }
 
 bool WrappedVulkan::IsPartialRenderPassActive()

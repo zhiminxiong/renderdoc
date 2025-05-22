@@ -2377,7 +2377,7 @@ void VulkanReplay::FillDescriptor(Descriptor &dstel, const DescriptorSetSlot &sr
         dstel.firstSlice = dstel.numSlices = 0;
 
       // cheeky hack, store image layout enum in byteOffset as it's not used for images
-      dstel.byteOffset = convert(srcel.imageLayout);
+      dstel.byteOffset = convert(srcel.imageLayoutOrFormat);
 
       dstel.minLODClamp = c.m_ImageView[viewid].minLOD;
     }

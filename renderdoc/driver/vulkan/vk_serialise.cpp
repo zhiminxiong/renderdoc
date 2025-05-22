@@ -5602,14 +5602,14 @@ void DoSerialise(SerialiserType &ser, DescriptorSetSlot &el)
     {
       VkImageLayout imageLayout;
       if(ser.IsWriting())
-        imageLayout = convert(el.imageLayout);
+        imageLayout = convert(el.imageLayoutOrFormat);
       SERIALISE_ELEMENT(imageLayout);
       if(ser.IsReading())
-        el.imageLayout = convert(imageLayout);
+        el.imageLayoutOrFormat = convert(imageLayout);
     }
     else if(ser.IsReading())
     {
-      el.imageLayout = DescriptorSlotImageLayout::Undefined;
+      el.imageLayoutOrFormat = DescriptorSlotImageLayout::Undefined;
     }
 
     // serialise buffer range, for buffer types and inline block
@@ -5670,7 +5670,7 @@ void DoSerialise(SerialiserType &ser, DescriptorSetSlot &el)
     {
       el.resource = imageInfo.imageView;
       el.sampler = imageInfo.sampler;
-      el.imageLayout = convert(imageInfo.imageLayout);
+      el.imageLayoutOrFormat = convert(imageInfo.imageLayout);
     }
     else
     {

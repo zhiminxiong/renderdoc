@@ -739,7 +739,7 @@ bool CreateDescriptorWritesForSlotData(WrappedVulkan *vk, rdcarray<VkWriteDescri
         else
           writeImage[arrayIdx].sampler = VK_NULL_HANDLE;
 
-        writeImage[arrayIdx].imageLayout = convert(slots[slot].imageLayout);
+        writeImage[arrayIdx].imageLayout = convert(slots[slot].imageLayoutOrFormat);
 
         // if we're not updating a SAMPLER descriptor fill in immutable samplers so that
         // our

@@ -811,6 +811,7 @@ struct DescriptorSetSlot
   void SetTexelBuffer(VkDescriptorType writeType, ResourceId id);
   void SetAccelerationStructure(VkDescriptorType writeType,
                                 VkAccelerationStructureKHR accelerationStructure);
+  void SetDescriptor(WrappedVulkan *driver, const VkDescriptorGetInfoEXT &desc);
 
   // 48-bit truncated VK_WHOLE_SIZE
   static const VkDeviceSize WholeSizeRange = 0xFFFFFFFFFFFF;
@@ -828,7 +829,9 @@ struct DescriptorSetSlot
   // normal descriptors.
   DescriptorSlotType type : 8;
   // used for images, the image layout
-  DescriptorSlotImageLayout imageLayout : 8;
+  // aliased with format for descriptor-based texel buffers - to preserve bitfield packing we use
+  // the more useful enum of the image layout and will do a direct cast for formats
+  DescriptorSlotImageLayout imageLayoutOrFormat : 8;
 
 #if GCC_WORKAROUND
 #pragma pack(pop)

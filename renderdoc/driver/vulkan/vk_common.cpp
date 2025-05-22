@@ -1308,13 +1308,14 @@ void DescriptorSetSlot::SetImage(VkDescriptorType writeType, const VkDescriptorI
     sampler = GetResID(imInfo.sampler);
   if(type != DescriptorSlotType::Sampler)
     resource = GetResID(imInfo.imageView);
-  imageLayout = convert(imInfo.imageLayout);
+  imageLayoutOrFormat = convert(imInfo.imageLayout);
 }
 
 void DescriptorSetSlot::SetTexelBuffer(VkDescriptorType writeType, ResourceId id)
 {
   type = convert(writeType);
   resource = id;
+  imageLayoutOrFormat = DescriptorSlotImageLayout::Undefined;
 }
 
 void DescriptorSetSlot::SetAccelerationStructure(VkDescriptorType writeType,
@@ -1322,6 +1323,71 @@ void DescriptorSetSlot::SetAccelerationStructure(VkDescriptorType writeType,
 {
   type = convert(writeType);
   resource = GetResID(accelerationStructure);
+}
+
+void DescriptorSetSlot::SetDescriptor(WrappedVulkan *driver, const VkDescriptorGetInfoEXT &desc)
+{
+  type = convert(desc.type);
+  switch(desc.type)
+  {
+    case VK_DESCRIPTOR_TYPE_SAMPLER:
+    {
+      sampler = desc.data.pSampler ? GetResID(*desc.data.pSampler) : ResourceId();
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+      // ignore the sampler part
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+    {
+      // sampled/storage/input attachment are identical in the union. Since the type forms part of
+      // our this logic can be done in common
+      if(desc.data.pCombinedImageSampler)
+      {
+        resource = GetResID(desc.data.pCombinedImageSampler->imageView);
+        sampler = GetResID(desc.data.pCombinedImageSampler->sampler);
+        imageLayoutOrFormat = convert(desc.data.pCombinedImageSampler->imageLayout);
+      }
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+    {
+      // uniform/storage are identical in the union. Since the type forms part of our this
+      // logic can be done in common
+      if(desc.data.pUniformBuffer)
+      {
+        ResourceId id;
+        driver->GetResIDFromAddr(desc.data.pUniformBuffer->address, resource, offset);
+        range = desc.data.pUniformBuffer->range;
+        // we only expect texel buffers with the simple formats that come from vulkan base which are less than 256
+        imageLayoutOrFormat = DescriptorSlotImageLayout(desc.data.pUniformTexelBuffer->format & 0xff);
+        RDCASSERT(uint32_t(desc.data.pUniformTexelBuffer->format) < 0xff,
+                  desc.data.pUniformTexelBuffer->format);
+      }
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+    {
+      if(desc.data.accelerationStructure)
+        resource = driver->GetASFromAddr(desc.data.accelerationStructure);
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+    case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+    case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+    case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
+    case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_MAX_ENUM:
+      RDCERR("Invalid descriptor type passed to vkGetDescriptorEXT");
+      break;
+  }
 }
 
 void AddBindFrameRef(DescriptorBindRefs &refs, ResourceId id, FrameRefType ref)

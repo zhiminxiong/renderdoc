@@ -1137,7 +1137,7 @@ void VulkanRenderState::BindDescriptorSet(WrappedVulkan *vk, const DescSetLayout
 
         for(uint32_t a = 0; a < push.descriptorCount; a++)
         {
-          dst[a].imageLayout = convert(slots[a].imageLayout);
+          dst[a].imageLayout = convert(slots[a].imageLayoutOrFormat);
           dst[a].sampler = Unwrap(rm->GetCurrentHandle<VkSampler>(slots[a].sampler));
           dst[a].imageView = Unwrap(rm->GetCurrentHandle<VkImageView>(slots[a].resource));
 
