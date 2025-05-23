@@ -395,7 +395,7 @@ MemoryAllocation WrappedVulkan::AllocateMemoryForResource(bool buffer, VkMemoryR
     };
     VkMemoryAllocateInfo info = {
         VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        AccelerationStructures() ? &flagsInfo : NULL,
+        (DescriptorBuffers() || AccelerationStructures()) ? &flagsInfo : NULL,
         allocSize * 1024 * 1024,
         memoryTypeIndex,
     };

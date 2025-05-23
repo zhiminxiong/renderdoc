@@ -320,14 +320,15 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
         {
           RDCDEBUG("Patching dedicated allocation for incompatible size");
 
-          // if acceleration structures are used, we promote all non-dedicated memory to be BDA as
-          // we can't know if it will be used for an AS or not during capture. That means that
-          // during self-capture if we just remove the dedicated allocation structure here without
-          // any other changes the self-capture layer will promote it to BDA and potentially cause
-          // clashes with reserved addresses elsewhere.
+          // if acceleration structures or descriptor buffers are used, we promote all non-dedicated
+          // memory to be BDA as we can't know if it will be used for an AS or not during capture.
+          // That means that during self-capture if we just remove the dedicated allocation
+          // structure here without any other changes the self-capture layer will promote it to BDA
+          // and potentially cause clashes with reserved addresses elsewhere.
+          //
           // instead we do the more dangerous thing of adjusting the allocation size to match the
           // image's memory requirements and keep the dedicated allocation.
-          if(AccelerationStructures())
+          if(AccelerationStructures() || DescriptorBuffers())
             patched.allocationSize = mrq.size;
           else
             RemoveNextStruct(&patched, VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO);
@@ -562,7 +563,7 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
   // means that when RT is enabled ALL MEMORY IN THE ENTIRE PROGRAM must be marked as BDA just in
   // case.
   bool forceBDA = false;
-  if(IsCaptureMode(m_State) && AccelerationStructures())
+  if(IsCaptureMode(m_State) && (AccelerationStructures() || DescriptorBuffers()))
   {
     // force BDA flag when creating, by adding the struct if needed
     forceBDA = true;

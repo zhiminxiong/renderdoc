@@ -4716,6 +4716,9 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
   if(descBufFeatures && descBufFeatures->descriptorBuffer)
   {
     descBufFeatures->descriptorBufferCaptureReplay = VK_TRUE;
+    m_DescriptorBuffers = true;
+
+    RDCLOG("descriptor buffers enabled, ALL MEMORY WILL BE MARKED AS BDA");
   }
 
   VkResult ret;
@@ -4923,8 +4926,6 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
     if(m_EnabledExtensions.ext_EXT_descriptor_buffer && descBufFeatures &&
        descBufFeatures->descriptorBuffer)
     {
-      m_DescriptorBuffers = true;
-
       // if any update after bind feature is enabled, check robustBufferAccessUpdateAfterBind
       m_DescriptorBufferProperties = {
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
