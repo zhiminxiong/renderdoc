@@ -3511,6 +3511,10 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
         }
         if(ext->descriptorBuffer)
           ext->descriptorBufferCaptureReplay = VK_TRUE;
+
+        // enable the imageLayoutIgnored feature if available
+        if(avail.descriptorBufferImageLayoutIgnored)
+          ext->descriptorBufferImageLayoutIgnored = VK_TRUE;
       }
       END_PHYS_EXT_CHECK();
     }
@@ -4717,6 +4721,18 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
   {
     descBufFeatures->descriptorBufferCaptureReplay = VK_TRUE;
     m_DescriptorBuffers = true;
+
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT availDescBufFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+    };
+
+    VkPhysicalDeviceFeatures2 availBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    availBase.pNext = &availDescBufFeatures;
+    ObjDisp(physicalDevice)->GetPhysicalDeviceFeatures2(Unwrap(physicalDevice), &availBase);
+
+    // enable the imageLayoutIgnored feature if available
+    if(availDescBufFeatures.descriptorBufferImageLayoutIgnored)
+      descBufFeatures->descriptorBufferImageLayoutIgnored = VK_TRUE;
 
     RDCLOG("descriptor buffers enabled, ALL MEMORY WILL BE MARKED AS BDA");
   }
