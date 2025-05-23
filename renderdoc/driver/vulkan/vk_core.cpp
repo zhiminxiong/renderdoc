@@ -5457,6 +5457,15 @@ size_t WrappedVulkan::DescriptorDataSize(VkDescriptorType type)
 void WrappedVulkan::RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data)
 {
   m_DescriptorLookup.fallback.insert(key, data);
+
+  // store unique texel buffer formats used, expecting this to be small and it will help descriptor lookups
+  if(data.type == DescriptorSlotType::UniformTexelBuffer ||
+     data.type == DescriptorSlotType::StorageTexelBuffer)
+  {
+    VkFormat fmt = VkFormat(data.imageLayoutOrFormat);
+    if(data.resource != ResourceId() && !m_DescriptorLookup.texelFormats.contains(fmt))
+      m_DescriptorLookup.texelFormats.push_back(fmt);
+  }
 }
 
 bool WrappedVulkan::IsPartialRenderPassActive()

@@ -472,6 +472,11 @@ private:
     // overall lookup of all descriptors by bytes, fallback in case any others don't work - we
     // expect this to always hit
     rdcbytetrie<DescriptorTrieNode> fallback;
+
+    // unique texel formats. So that if we fast identify a buffer via address+size we can iterate
+    // over all of these if we know it's a texel buffer. The expectation is this is short so we
+    // don't have to store this per-buffer but globally and can just try different possibilities.
+    rdcarray<VkFormat> texelFormats;
   };
   DescriptorLookups m_DescriptorLookup;
 
