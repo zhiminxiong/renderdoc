@@ -46,6 +46,10 @@ RDOC_DEBUG_CONFIG(bool, Vulkan_Debug_SingleSubmitFlushing, false,
                   "Every command buffer is submitted and fully flushed to the GPU, to narrow down "
                   "the source of problems.");
 
+RDOC_CONFIG(bool, Vulkan_Debug_UseFastDescriptorLookup, true,
+            "Use fast pattern-matching lookup to try to identify descriptors before falling back "
+            "to trie lookup.");
+
 uint64_t VkInitParams::GetSerialiseSize()
 {
   // misc bytes and fixed integer members
@@ -5452,6 +5456,657 @@ size_t WrappedVulkan::DescriptorDataSize(VkDescriptorType type)
   }
 
   return ret;
+}
+
+void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSize,
+                                     DescriptorType type, DescriptorSetSlot &data)
+{
+  const size_t combinedSize = m_DescriptorBufferProperties.combinedImageSamplerDescriptorSize;
+  const size_t sampledSize = m_DescriptorBufferProperties.sampledImageDescriptorSize;
+  const size_t samplerSize = m_DescriptorBufferProperties.samplerDescriptorSize;
+
+  union
+  {
+    VkDescriptorImageInfo imInfo;
+    VkDescriptorAddressInfoEXT bufinfo;
+    VkSampler sampler;
+  };
+
+  bufinfo = {};
+
+  VkDescriptorGetInfoEXT info = {
+      VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+  };
+
+  info.data.pUniformBuffer = &bufinfo;
+
+  byte tempMem[256] = {};
+  // start with the descriptor bytes in case the driver doesn't initialise them all. If this
+  // contains random bytes from user memory we want it to match
+  memcpy(tempMem, descriptorBytes, descriptorSize);
+  if(Vulkan_Debug_UseFastDescriptorLookup())
+  {
+    switch(type)
+    {
+      case DescriptorType::Sampler:
+      {
+        ResourceId samp = GetSamplerForDescriptor(descriptorBytes, descriptorSize);
+
+        if(samp != ResourceId())
+        {
+          data = {};
+          data.SetSampler(samp);
+
+          // verify that descriptor roundtrips that our detection was correct
+          info.type = VK_DESCRIPTOR_TYPE_SAMPLER;
+          sampler = Unwrap(GetResourceManager()->GetCurrentHandle<VkSampler>(samp));
+
+          ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descriptorSize, tempMem);
+
+          if(memcmp(tempMem, descriptorBytes, descriptorSize) == 0)
+            return;
+        }
+
+        break;
+      }
+      case DescriptorType::ImageSampler:
+      case DescriptorType::Image:
+      case DescriptorType::ReadWriteImage:
+      {
+        if(type == DescriptorType::ImageSampler)
+          info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        else if(type == DescriptorType::Image)
+          info.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        else if(type == DescriptorType::ReadWriteImage)
+          info.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+
+        ResourceId samp;
+        ResourceId view;
+
+        if(type == DescriptorType::ImageSampler)
+        {
+          if(m_DescriptorLookup.sampled == ImageDescriptorFormat::Indexed2012)
+          {
+            // for the indexed format, the sampler/view are encoded together
+            view = GetImageViewForDescriptor(descriptorBytes, descriptorSize, type);
+            samp = GetSamplerForDescriptor(descriptorBytes, descriptorSize);
+          }
+          else if(m_DescriptorLookup.sampled == ImageDescriptorFormat::UnknownImageDescriptor)
+          {
+            break;
+          }
+          else
+          {
+            // all known formats we expect an image view to be followed by a sampler
+            if(combinedSize == m_DescriptorLookup.combinedSamplerOffset + samplerSize)
+            {
+              view = GetImageViewForDescriptor(descriptorBytes, sampledSize, type);
+              samp = GetSamplerForDescriptor(
+                  descriptorBytes + m_DescriptorLookup.combinedSamplerOffset, samplerSize);
+            }
+            else
+            {
+              RDCWARN(
+                  "non-indexed combined image/sampler is not (padded) image followed by sampler");
+            }
+          }
+
+          if(samp == ResourceId())
+          {
+            RDCWARN("Fast-detection failed to get sampler for image/sampler descriptor");
+            break;
+          }
+        }
+        else
+        {
+          view = GetImageViewForDescriptor(descriptorBytes, descriptorSize, type);
+        }
+
+        // exit silently, may be unknown descriptor format which would spam
+        if(view == ResourceId())
+          break;
+
+        rdcarray<VkImageLayout> layouts;
+
+        if(!m_IgnoreLayoutForDescriptors)
+        {
+          layouts = m_DescriptorLookup.generalImageLayouts;
+
+          if(m_CreationInfo.m_ImageView[view].isDepthImage)
+            layouts.append(m_DescriptorLookup.depthImageLayouts);
+        }
+
+        imInfo.sampler = Unwrap(GetResourceManager()->GetCurrentHandle<VkSampler>(samp));
+        imInfo.imageView = Unwrap(GetResourceManager()->GetCurrentHandle<VkImageView>(view));
+
+        // always iterate at least once even if the layouts array is empty
+        for(size_t i = 0; i < layouts.size() || (i == 0 && layouts.empty()); i++)
+        {
+          imInfo.imageLayout = i < layouts.size() ? layouts[i] : VK_IMAGE_LAYOUT_GENERAL;
+
+          ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descriptorSize, tempMem);
+
+          if(memcmp(tempMem, descriptorBytes, descriptorSize) == 0)
+          {
+            data.SetImageSampler(info.type, view, samp, imInfo.imageLayout);
+            return;
+          }
+        }
+
+        RDCWARN("Fast-detection failed for %s descriptor", ToStr(type).c_str());
+
+        break;
+      }
+      case DescriptorType::TypedBuffer:
+      case DescriptorType::ReadWriteTypedBuffer:
+      case DescriptorType::ConstantBuffer:
+      case DescriptorType::ReadWriteBuffer:
+      case DescriptorType::AccelerationStructure:
+      {
+        if(type == DescriptorType::TypedBuffer)
+          info.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+        else if(type == DescriptorType::ReadWriteTypedBuffer)
+          info.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+        else if(type == DescriptorType::ConstantBuffer)
+          info.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        else if(type == DescriptorType::ReadWriteBuffer)
+          info.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        else if(type == DescriptorType::AccelerationStructure)
+          info.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+
+        const bool texelBuffer =
+            type == DescriptorType::TypedBuffer || type == DescriptorType::ReadWriteTypedBuffer;
+
+        VkDeviceAddress address;
+        VkDeviceSize size;
+
+        GetPointerAndSizeForDescriptor(descriptorBytes, descriptorSize, type, address, size);
+
+        if(address == 0)
+        {
+          // exit silently, may be unknown descriptor format which would spam
+          break;
+        }
+        else
+        {
+          if(type == DescriptorType::AccelerationStructure)
+          {
+            info.data.accelerationStructure = address;
+          }
+          else
+          {
+            bufinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
+            bufinfo.address = address;
+            bufinfo.range = size;
+          }
+
+          bufinfo.format = VK_FORMAT_UNDEFINED;
+          for(size_t i = 0, n = texelBuffer ? m_DescriptorLookup.texelFormats.size() : 1; i < n; i++)
+          {
+            if(texelBuffer)
+              bufinfo.format = m_DescriptorLookup.texelFormats[i];
+
+            if(type != DescriptorType::AccelerationStructure)
+            {
+              // a couple of formats modify the address or size in non-trivial ways that need to be patched
+              // here. This also handles converting an element size back into a byte size trivially
+              GetFinalBufferParameters(descriptorBytes, descriptorSize, type, bufinfo.format,
+                                       address, size, bufinfo.address, bufinfo.range);
+            }
+
+            ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descriptorSize, tempMem);
+
+            if(memcmp(tempMem, descriptorBytes, descriptorSize) != 0)
+            {
+              // try sign extending if the top bit is set
+              address |= (0xffffULL << 48);
+              if(type == DescriptorType::AccelerationStructure)
+                info.data.accelerationStructure = address;
+              else
+                bufinfo.address = address;
+
+              ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descriptorSize, tempMem);
+            }
+
+            if(memcmp(tempMem, descriptorBytes, descriptorSize) == 0)
+            {
+              ResourceId id;
+              VkDeviceSize offs;
+
+              if(type != DescriptorType::AccelerationStructure)
+              {
+                GetResIDFromAddr(bufinfo.address, id, offs);
+
+                if(id == ResourceId() && (bufinfo.address & (1ULL << 47)))
+                {
+                  // try sign extending if the top bit is set
+                  GetResIDFromAddr(bufinfo.address | (0xffffULL << 48), id, offs);
+                }
+
+                if(id == ResourceId())
+                {
+                  RDCWARN("Unknown buffer at descriptor address %llx", bufinfo.address);
+                }
+                else
+                {
+                  data.SetBuffer(info.type, id, offs, bufinfo.range, bufinfo.format);
+
+                  return;
+                }
+              }
+              else
+              {
+                id = m_ASLookupByAddr[address];
+
+                if(id == ResourceId() && (address & (1ULL << 47)))
+                {
+                  // try sign extending if the top bit is set
+                  id = m_ASLookupByAddr[address | (0xffffULL << 48)];
+                }
+
+                if(id == ResourceId())
+                {
+                  RDCWARN("Unknown AS at descriptor address %llx", address);
+                }
+                else
+                {
+                  data.SetAccelerationStructure(
+                      VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+                      GetResourceManager()->GetCurrentHandle<VkAccelerationStructureKHR>(id));
+
+                  return;
+                }
+              }
+            }
+          }
+
+          RDCWARN("Fast-detection failed to get match for %s descriptor", ToStr(type).c_str());
+        }
+
+        break;
+      }
+      case DescriptorType::Buffer:
+      case DescriptorType::Unknown: RDCERR("Invalid descriptor type being looked up"); break;
+    }
+  }
+
+  data = m_DescriptorLookup.fallback.lookup({descriptorBytes, descriptorSize});
+
+#if ENABLED(RDOC_DEVEL)
+  if(!m_DescriptorLookup.fallback.contains({descriptorBytes, descriptorSize}))
+  {
+    RDCERR("Trie descriptor lookup failed");
+    // dump the descriptor
+    uint64_t *descriptorU64 = (uint64_t *)descriptorBytes;
+    for(uint32_t i = 0; i * 8 < descriptorSize; i++)
+      RDCLOG("  [%u]: %llx", i, descriptorU64[i]);
+  }
+#endif
+}
+
+ResourceId WrappedVulkan::GetSamplerForDescriptor(byte *descriptorBytes, size_t descriptorSize)
+{
+  if(m_DescriptorLookup.sampled == ImageDescriptorFormat::Indexed2012)
+  {
+    if(descriptorSize == sizeof(uint32_t))
+    {
+      uint32_t idx = (*(uint32_t *)descriptorBytes) >> 20;
+
+      if(idx > 0 && idx < m_DescriptorLookup.samplerPalette.size())
+      {
+        return m_DescriptorLookup.samplerPalette[idx];
+      }
+
+      RDCWARN("Indexed sampler descriptor index is %u", idx);
+      return ResourceId();
+    }
+
+    RDCWARN("Indexed sampler descriptor is %zu bytes", descriptorSize);
+    return ResourceId();
+  }
+
+  DescriptorTrieNode data = m_DescriptorLookup.samplers.lookup({descriptorBytes, descriptorSize});
+  // we should find this
+  if(data.sampler == ResourceId())
+    RDCWARN("Couldn't find solo sampler in sampler lookup trie");
+
+  return data.sampler;
+}
+
+ResourceId WrappedVulkan::GetImageViewForDescriptor(byte *descriptorBytes, size_t descriptorSize,
+                                                    DescriptorType type)
+{
+  ImageDescriptorFormat format = m_DescriptorLookup.sampled;
+  if(type == DescriptorType::ReadWriteImage)
+    format = m_DescriptorLookup.storage;
+
+  // we assumed if one image type is indexed, all are
+  if(format == ImageDescriptorFormat::Indexed2012)
+  {
+    if(descriptorSize == sizeof(uint32_t))
+    {
+      uint32_t idx = (*(uint32_t *)descriptorBytes) & 0xfffff;
+
+      if(idx > 0 && idx < m_DescriptorLookup.imageViewPalette.size())
+      {
+        return m_DescriptorLookup.imageViewPalette[idx];
+      }
+
+      RDCWARN("Indexed view descriptor index is %u", idx);
+      return ResourceId();
+    }
+
+    RDCWARN("Indexed view descriptor is %zu bytes", descriptorSize);
+    return ResourceId();
+  }
+
+  // other descriptors are recognised by pointer
+  uint64_t ptr = 0;
+
+  if(format == ImageDescriptorFormat::PointerShifted_32 ||
+     format == ImageDescriptorFormat::PointerShifted_64)
+  {
+    if(descriptorSize == 32 || descriptorSize == 64)
+    {
+      ptr = (((uint64_t *)descriptorBytes)[0] << 8) & ((1ULL << 48) - 1);
+    }
+    else
+    {
+      RDCWARN("Unexpected descriptor format for detected format %u: %u", format, descriptorSize);
+      return ResourceId();
+    }
+  }
+  else if(format == ImageDescriptorFormat::Pointer2_64)
+  {
+    if(descriptorSize == 64)
+    {
+      ptr = ((uint64_t *)descriptorBytes)[2] & ((1ULL << 48) - 1);
+    }
+    else
+    {
+      RDCWARN("Unexpected descriptor format for detected format %u: %u", format, descriptorSize);
+      return ResourceId();
+    }
+  }
+  else if(format == ImageDescriptorFormat::Pointer4_64)
+  {
+    if(descriptorSize == 64)
+    {
+      ptr = ((uint64_t *)descriptorBytes)[4] & ((1ULL << 48) - 1);
+    }
+    else
+    {
+      RDCWARN("Unexpected descriptor format for detected format %u: %u", format, descriptorSize);
+      return ResourceId();
+    }
+  }
+  else
+  {
+    return ResourceId();
+  }
+
+  ResourceId imageId;
+  uint64_t unused;
+  m_DescriptorLookup.imageAddresses.GetResIDFromAddr(ptr, imageId, unused);
+
+  if(imageId == ResourceId() && (ptr & (1ULL << 47)))
+  {
+    // try sign extending if the top bit is set
+    m_DescriptorLookup.imageAddresses.GetResIDFromAddr(ptr | (0xffffULL << 48), imageId, unused);
+  }
+
+  if(imageId == ResourceId())
+  {
+    RDCWARN("View descriptor gave unrecognised pointer %llx", ptr);
+    return ResourceId();
+  }
+
+  ResourceId viewId =
+      m_CreationInfo.m_Image[imageId].getViewFromDescriptor(descriptorBytes, descriptorSize);
+
+  if(viewId == ResourceId())
+  {
+    RDCWARN("View descriptor gave pointer %llx for image %s but was unrecognised", ptr,
+            ToStr(imageId).c_str());
+    return ResourceId();
+  }
+
+  return viewId;
+}
+
+void WrappedVulkan::GetPointerAndSizeForDescriptor(byte *descriptorBytes, size_t descriptorSize,
+                                                   DescriptorType type, VkDeviceAddress &address,
+                                                   VkDeviceSize &size)
+{
+  address = 0;
+  size = 0;
+
+  BufferDescriptorFormat format = m_DescriptorLookup.uniformBuffer;
+  if(type == DescriptorType::ReadWriteBuffer)
+    format = m_DescriptorLookup.storageBuffer;
+  else if(type == DescriptorType::TypedBuffer)
+    format = m_DescriptorLookup.uniformTexelBuffer;
+  else if(type == DescriptorType::ReadWriteTypedBuffer)
+    format = m_DescriptorLookup.storageTexelBuffer;
+  else if(type == DescriptorType::AccelerationStructure)
+    format = m_DescriptorLookup.accelStructure;
+
+  if(format == BufferDescriptorFormat::Pointer_8 && descriptorSize == sizeof(uint64_t))
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[0] & ((1ULL << 48) - 1));
+  }
+  else if(format == BufferDescriptorFormat::Packed_4519_Aligned16_8 &&
+          descriptorSize == sizeof(uint64_t))
+  {
+    uint64_t packed = *(uint64_t *)descriptorBytes;
+    address = (packed & ((1ULL << 45) - 1)) << 4;
+    size = (packed >> 45) << 4;
+  }
+  else if(format == BufferDescriptorFormat::Packed_4519_Aligned256_8 &&
+          descriptorSize == sizeof(uint64_t))
+  {
+    uint64_t packed = *(uint64_t *)descriptorBytes;
+    address = (packed & ((1ULL << 45) - 1)) << 4;
+    size = (packed >> 45) << 4;
+  }
+  else if(format == BufferDescriptorFormat::Pointer_ElemSize_16 &&
+          descriptorSize == sizeof(uint64_t) * 2)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[0] & ((1ULL << 48) - 1));
+    size = (packed[1] & 0xFFFFFFFFULL);
+  }
+  else if(format == BufferDescriptorFormat::PointerDivided_ElemSize_16 &&
+          descriptorSize == sizeof(uint64_t) * 2)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[0] & ((1ULL << 48) - 1));
+    size = (packed[1] & 0xFFFFFFFFULL);
+
+    // address is incomplete, but can't be fixed until we know the texel size
+  }
+  else if(format == BufferDescriptorFormat::Pointer0_16 && descriptorSize == sizeof(uint64_t) * 2)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[0] & ((1ULL << 48) - 1));
+  }
+  else if(format == BufferDescriptorFormat::ByteSize0_Pointer1_32 &&
+          descriptorSize == sizeof(uint64_t) * 4)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[1] & ((1ULL << 48) - 1));
+    size = (packed[0] >> 32);
+  }
+  else if(format == BufferDescriptorFormat::Pointer1_32 && descriptorSize == sizeof(uint64_t) * 4)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[1] & ((1ULL << 48) - 1));
+  }
+  else if(format == BufferDescriptorFormat::Pointer2_64 && descriptorSize == sizeof(uint64_t) * 4)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[2] & ((1ULL << 48) - 1));
+  }
+  else if(format == BufferDescriptorFormat::Pointer4_ByteSize5_Unaligned_64 &&
+          descriptorSize == sizeof(uint64_t) * 8)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[4] & ((1ULL << 48) - 1));
+    size = (packed[5] >> 32);
+  }
+  else if(format == BufferDescriptorFormat::Pointer4_ByteSize5_Aligned_64 &&
+          descriptorSize == sizeof(uint64_t) * 8)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[4] & ((1ULL << 48) - 1));
+    size = (packed[5] >> 32);
+  }
+  else if(format == BufferDescriptorFormat::ElemSizeScattered1_Pointer4_64 &&
+          descriptorSize == sizeof(uint64_t) * 8)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[4] & ((1ULL << 48) - 1));
+
+    uint64_t sizeScattered = packed[1];
+    size = (sizeScattered & 0x7f) | ((sizeScattered >> 9) & 0x1fff80) | ((sizeScattered >> 53) << 21);
+
+    // this is still swizzled on the low bits, but we won't know how to decode that until we have the texel format
+  }
+  else if((format == BufferDescriptorFormat::Strided4_MultiDescriptor_64 ||
+           format == BufferDescriptorFormat::Strided2_MultiDescriptor_64 ||
+           format == BufferDescriptorFormat::Strided1_MultiDescriptor_64) &&
+          (descriptorSize == sizeof(uint64_t) * 8 * 1 || descriptorSize == sizeof(uint64_t) * 8 * 2))
+  {
+    const uint32_t stride = format == BufferDescriptorFormat::Strided4_MultiDescriptor_64   ? 4
+                            : format == BufferDescriptorFormat::Strided2_MultiDescriptor_64 ? 2
+                                                                                            : 1;
+
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[2] & ((1ULL << 48) - 1));
+
+    address += ((packed[1] >> 16) & 0x3f) << stride;
+
+    size = (packed[0] >> 32) << stride;
+  }
+  else if(format == BufferDescriptorFormat::ElemSize0_Pointer2_64 &&
+          descriptorSize == sizeof(uint64_t) * 8)
+  {
+    uint64_t *packed = (uint64_t *)descriptorBytes;
+    address = (packed[2] & ((1ULL << 48) - 1));
+    size = (packed[0] >> 32);
+  }
+}
+
+void WrappedVulkan::GetFinalBufferParameters(byte *descriptorBytes, size_t descriptorSize,
+                                             DescriptorType type, VkFormat texelFormat,
+                                             VkDeviceAddress inAddress, VkDeviceSize inSize,
+                                             VkDeviceAddress &outAddress, VkDeviceSize &outSize)
+{
+  BufferDescriptorFormat format = m_DescriptorLookup.uniformBuffer;
+
+  if(type == DescriptorType::ReadWriteBuffer)
+    format = m_DescriptorLookup.storageBuffer;
+  else if(type == DescriptorType::TypedBuffer)
+    format = m_DescriptorLookup.uniformTexelBuffer;
+  else if(type == DescriptorType::ReadWriteTypedBuffer)
+    format = m_DescriptorLookup.storageTexelBuffer;
+  else if(type == DescriptorType::AccelerationStructure)
+    format = m_DescriptorLookup.accelStructure;
+
+  uint32_t elemSize = 1;
+  if(type == DescriptorType::TypedBuffer || type == DescriptorType::ReadWriteTypedBuffer)
+    elemSize = GetByteSize(1, 1, 1, texelFormat, 0) & 0xffff;
+
+  if(format == BufferDescriptorFormat::ElemSize0_Pointer2_64 ||
+     format == BufferDescriptorFormat::Pointer_ElemSize_16)
+  {
+    outAddress = inAddress;
+    outSize = inSize * elemSize;
+  }
+  else if(format == BufferDescriptorFormat::PointerDivided_ElemSize_16)
+  {
+    outAddress = inAddress * elemSize;
+
+    // for elemSize==12 the address didn't divide evenly so we need to grab the remainder
+    if(elemSize == 12)
+    {
+      uint64_t *packed = (uint64_t *)descriptorBytes;
+      uint64_t remainder = (packed[1] >> 32) & 0x3f;
+      // the actual pattern to this is entirely unknown and it's assumed to be some internal base
+      // offset, but this seems consistent as the 3 remainders (0, 4, 8 bytes) are always 23 apart in these bits
+      outAddress += 4 * (remainder / 23);
+    }
+
+    // outAddress += remainder;
+    outSize = inSize * elemSize;
+  }
+  else if(format == BufferDescriptorFormat::ElemSizeScattered1_Pointer4_64)
+  {
+    outAddress = inAddress;
+
+    if(elemSize >= 4)
+    {
+      outSize = (inSize + 1) * elemSize;
+    }
+    else
+    {
+      // unswizzle the 2-byte/1-byte size. There's probably a fancier way to express this
+      // bit-twiddling but it's more readable to have this verbosely specified
+      //
+      // the general scheme for encoding is:
+      //
+      // lop off the bottom 8 bits, which we call 'x'
+      //
+      // swizzle those bits in this formula:
+      // 1 byte elements: ((x & 0xfc) + 6 - (x & 0x3))
+      // 2 byte elements: ((x & 0xfe) + 2 - (x & 0x1))
+      //
+      // note that this means the bottom bits can be swizzled into 9 bits of data and increment into
+      // the upper bits, so we need to deal with carrying. E.g. for x = 0xfd this produces 0x102 result
+
+      const uint32_t upperMask = elemSize == 1 ? 0xfc : 0xfe;
+      const uint32_t lowerMask = 0xff - upperMask;
+      const uint32_t offset = lowerMask << 1;
+
+      // segment the lower swizzled bits. There may be leakage due to the carry bit but we handle that
+      const uint64_t upperSize = inSize & ~0xff;
+      const uint32_t lowerSize = inSize & 0xff;
+
+      // need a carry bit for some cases, this will be subtracted later
+      const uint32_t carry = lowerSize < offset ? 128 : 0;
+
+      // this is (mostly) the result of the (x & 0xfc) - (x & 0x3) subtraction
+      const uint32_t xsubbed = lowerSize + carry - offset;
+
+      // assuming a lower mask of 0x3 (bottom two bits) if xsubbed ends in 00 then it must have been
+      // aligned, if it ended in 11 then it must have been 01 subtracted from the value above, etc.
+      // this will give us the original bottom two bits of x by subtracting and masking
+      const uint32_t xlow = ((lowerMask + 1) - (xsubbed & lowerMask)) & lowerMask;
+
+      // the upper bits of the size are added on unconditionally, we also undo the +1 to the range here
+      outSize = upperSize + 1;
+
+      // no bits = no subtraction! x must have been aligned when we did the sum so just the upperMask bits are used
+      if(xlow == 0)
+        outSize += xsubbed;
+      else
+        // xlow had some bits, so we figure out what it must have been subtracted from and add that to the upper mask
+        outSize += ((xsubbed & upperMask) + (lowerMask + 1) + xlow);
+
+      // subtract any carry we added now
+      outSize -= carry;
+
+      // finally convert to bytes
+      outSize *= elemSize;
+    }
+  }
+  else
+  {
+    // byte sizes, no translation needed
+    outAddress = inAddress;
+    outSize = inSize;
+  }
 }
 
 void WrappedVulkan::RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data)

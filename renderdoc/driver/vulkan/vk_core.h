@@ -511,6 +511,17 @@ private:
   DescriptorLookups m_DescriptorLookup;
 
   void RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data);
+  void LookupDescriptor(byte *descriptorBytes, size_t descriptorSize, DescriptorType type,
+                        DescriptorSetSlot &data);
+  ResourceId GetSamplerForDescriptor(byte *descriptorBytes, size_t descriptorSize);
+  ResourceId GetImageViewForDescriptor(byte *descriptorBytes, size_t descriptorSize,
+                                       DescriptorType type);
+  void GetPointerAndSizeForDescriptor(byte *descriptorBytes, size_t descriptorSize,
+                                      DescriptorType type, VkDeviceAddress &address,
+                                      VkDeviceSize &size);
+  void GetFinalBufferParameters(byte *descriptorBytes, size_t descriptorSize, DescriptorType type,
+                                VkFormat texelFormat, VkDeviceAddress inAddress, VkDeviceSize inSize,
+                                VkDeviceAddress &outAddress, VkDeviceSize &outSize);
 
   bool m_NULLDescriptorPatternSaved = false;
   bool m_IgnoreLayoutForDescriptors = false;
