@@ -45,14 +45,32 @@ struct VulkanStatePipeline
   struct DescriptorAndOffsets
   {
     ResourceId pipeLayout;
+
+    // if descriptor set bound
     ResourceId descSet;
     rdcarray<uint32_t> offsets;
+
+    // if descriptor buffer bound
+    uint32_t descBufferIdx = ~0U;
+    VkDeviceSize descBufferOffset = 0;
+    bool descBufferEmbeddedSamplers = false;
+
+    bool IsBound() const
+    {
+      return descSet != ResourceId() || descBufferIdx != ~0U || descBufferEmbeddedSamplers;
+    }
   };
   rdcarray<DescriptorAndOffsets> descSets;
   // the index of the last set bound. In the case where we are re-binding sets and don't have a
   // valid pipeline to reference, this can help us resolve which descriptor sets to rebind in the
   // event that they're not all compatible
   uint32_t lastBoundSet = 0;
+
+  bool UsingDescBufs() const
+  {
+    // all sets must be using buffers or not
+    return !descSets.empty() && descSets[0].descBufferIdx != ~0U;
+  }
 };
 
 struct VulkanRenderState
@@ -180,6 +198,15 @@ struct VulkanRenderState
       return rt;
     return compute;
   }
+
+  struct DescriptorBuffer
+  {
+    VkDeviceAddress address;
+    VkBufferUsageFlags2 usage;
+    bool flags2;
+    ResourceId pushBuffer;
+  };
+  rdcarray<DescriptorBuffer> descBufs;
 
   struct IdxBuffer
   {

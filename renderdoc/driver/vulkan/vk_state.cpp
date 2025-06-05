@@ -311,6 +311,52 @@ void VulkanRenderState::BindPipeline(WrappedVulkan *vk, VkCommandBuffer cmd,
   if(subpass0 && dynamicRendering.active)
     subpass0 = false;
 
+  if(!descBufs.empty())
+  {
+    VkDescriptorBufferBindingPushDescriptorBufferHandleEXT push;
+    rdcarray<VkBufferUsageFlags2CreateInfo> usage2;
+    rdcarray<VkDescriptorBufferBindingInfoEXT> bind;
+
+    uint32_t bufferCount = descBufs.count();
+
+    usage2.resize(bufferCount);
+    bind.resize(bufferCount);
+
+    for(uint32_t i = 0; i < bufferCount; i++)
+    {
+      bind[i] = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+      bind[i].address = descBufs[i].address;
+
+      if(descBufs[i].flags2)
+      {
+        usage2[i] = {
+            VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+            NULL,
+            descBufs[i].usage,
+        };
+
+        bind[i].pNext = &usage2[i];
+      }
+      else
+      {
+        bind[i].usage = VkBufferUsageFlags(descBufs[i].usage);
+      }
+
+      if(descBufs[i].pushBuffer != ResourceId())
+      {
+        push = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_PUSH_DESCRIPTOR_BUFFER_HANDLE_EXT,
+            bind[i].pNext,
+            Unwrap(vk->GetResourceManager()->GetCurrentHandle<VkBuffer>(descBufs[i].pushBuffer)),
+        };
+
+        bind[i].pNext = &push;
+      }
+    }
+
+    ObjDisp(cmd)->CmdBindDescriptorBuffersEXT(Unwrap(cmd), bufferCount, bind.data());
+  }
+
   if(binding == BindGraphics || binding == BindInitial)
   {
     if(graphics.pipeline != ResourceId())
@@ -798,7 +844,7 @@ void VulkanRenderState::BindDescriptorSetsForPipeline(WrappedVulkan *vk, VkComma
   {
     const DescSetLayout &descLayout = vk->GetDebugManager()->GetDescSetLayout(descSetLayouts[i]);
 
-    if(i < pipe.descSets.size() && pipe.descSets[i].descSet != ResourceId())
+    if(i < pipe.descSets.size() && pipe.descSets[i].IsBound())
     {
       // if we come to a descriptor set that isn't compatible, stop setting descriptor sets from
       // here on.
@@ -808,7 +854,19 @@ void VulkanRenderState::BindDescriptorSetsForPipeline(WrappedVulkan *vk, VkComma
       // by the next action. The remaining sets are invalid, but also unused and this is
       // explicitly allowed by the spec. We just have to make sure we don't try to actively bind
       // an incompatible descriptor set.
-      ResourceId createdDescSetLayoutId = vk->GetDescLayoutForDescSet(pipe.descSets[i].descSet);
+      ResourceId createdDescSetLayoutId;
+
+      if(pipe.descSets[i].descSet != ResourceId())
+      {
+        createdDescSetLayoutId = vk->GetDescLayoutForDescSet(pipe.descSets[i].descSet);
+      }
+      else
+      {
+        const VulkanCreationInfo::PipelineLayout &refPipeLayout =
+            vk->GetDebugManager()->GetPipelineLayoutInfo(pipe.descSets[i].pipeLayout);
+
+        createdDescSetLayoutId = refPipeLayout.descSetLayouts[i];
+      }
 
       if(descSetLayouts[i] != createdDescSetLayoutId)
       {
@@ -877,7 +935,7 @@ void VulkanRenderState::BindDescriptorSetsWithoutPipeline(WrappedVulkan *vk, VkC
 
   for(size_t i = 0; i < pipe.descSets.size(); i++)
   {
-    if(pipe.descSets[i].pipeLayout == ResourceId() || pipe.descSets[i].descSet == ResourceId())
+    if(pipe.descSets[i].pipeLayout == ResourceId() || !pipe.descSets[i].IsBound())
       continue;
 
     const VulkanCreationInfo::PipelineLayout &iPipeLayout =
@@ -953,7 +1011,7 @@ void VulkanRenderState::BindDescriptorSetsWithoutPipeline(WrappedVulkan *vk, VkC
       }
     }
 
-    if(pipe.descSets[i].descSet != ResourceId())
+    if(pipe.descSets[i].IsBound())
     {
       const DescSetLayout &descLayout =
           vk->GetDebugManager()->GetDescSetLayout(iPipeLayout.descSetLayouts[i]);
@@ -1006,7 +1064,7 @@ void VulkanRenderState::BindDescriptorSetsForShaders(WrappedVulkan *vk, VkComman
   {
     const DescSetLayout &descLayout = vk->GetDebugManager()->GetDescSetLayout(descSetLayouts[i]);
 
-    if(i < pipe.descSets.size() && pipe.descSets[i].descSet != ResourceId())
+    if(i < pipe.descSets.size() && pipe.descSets[i].IsBound())
     {
       // if we come to a descriptor set that isn't compatible, stop setting descriptor sets from
       // here on.
@@ -1016,7 +1074,19 @@ void VulkanRenderState::BindDescriptorSetsForShaders(WrappedVulkan *vk, VkComman
       // by the next action. The remaining sets are invalid, but also unused and this is
       // explicitly allowed by the spec. We just have to make sure we don't try to actively bind
       // an incompatible descriptor set.
-      ResourceId createdDescSetLayoutId = vk->GetDescLayoutForDescSet(pipe.descSets[i].descSet);
+      ResourceId createdDescSetLayoutId;
+
+      if(pipe.descSets[i].descSet != ResourceId())
+      {
+        createdDescSetLayoutId = vk->GetDescLayoutForDescSet(pipe.descSets[i].descSet);
+      }
+      else
+      {
+        const VulkanCreationInfo::PipelineLayout &refPipeLayout =
+            vk->GetDebugManager()->GetPipelineLayoutInfo(pipe.descSets[i].pipeLayout);
+
+        createdDescSetLayoutId = refPipeLayout.descSetLayouts[i];
+      }
 
       if(descSetLayouts[i] != createdDescSetLayoutId)
       {
@@ -1069,22 +1139,43 @@ void VulkanRenderState::BindDescriptorSet(WrappedVulkan *vk, const DescSetLayout
                                           VkCommandBuffer cmd, VkPipelineBindPoint bindPoint,
                                           uint32_t setIndex, uint32_t *dynamicOffsets)
 {
-  ResourceId descSet = GetPipeline(bindPoint).descSets[setIndex].descSet;
-  ResourceId pipeLayout = GetPipeline(bindPoint).descSets[setIndex].pipeLayout;
+  const VulkanStatePipeline::DescriptorAndOffsets &desc = GetPipeline(bindPoint).descSets[setIndex];
+  ResourceId descSet = desc.descSet;
+  ResourceId pipeLayout = desc.pipeLayout;
   VkPipelineLayout layout = vk->GetResourceManager()->GetCurrentHandle<VkPipelineLayout>(pipeLayout);
 
   if((descLayout.flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT) == 0)
   {
-    ObjDisp(cmd)->CmdBindDescriptorSets(
-        Unwrap(cmd), bindPoint, Unwrap(layout), (uint32_t)setIndex, 1,
-        UnwrapPtr(vk->GetResourceManager()->GetCurrentHandle<VkDescriptorSet>(descSet)),
-        descLayout.dynamicCount, dynamicOffsets);
+    if(descSet != ResourceId())
+    {
+      ObjDisp(cmd)->CmdBindDescriptorSets(
+          Unwrap(cmd), bindPoint, Unwrap(layout), setIndex, 1,
+          UnwrapPtr(vk->GetResourceManager()->GetCurrentHandle<VkDescriptorSet>(descSet)),
+          descLayout.dynamicCount, dynamicOffsets);
+    }
+    else if(desc.descBufferEmbeddedSamplers)
+    {
+      ObjDisp(cmd)->CmdBindDescriptorBufferEmbeddedSamplersEXT(Unwrap(cmd), bindPoint,
+                                                               Unwrap(layout), setIndex);
+    }
+    else
+    {
+      ObjDisp(cmd)->CmdSetDescriptorBufferOffsetsEXT(Unwrap(cmd), bindPoint, Unwrap(layout), setIndex,
+                                                     1, &desc.descBufferIdx, &desc.descBufferOffset);
+    }
   }
   else
   {
     // this isn't a real descriptor set, it's a push descriptor, so we need to push the
     // current state.
     rdcarray<VkWriteDescriptorSet> writes;
+
+    // for descriptor buffer there may be a buffer to bind still
+    if(desc.descBufferIdx != ~0U)
+    {
+      ObjDisp(cmd)->CmdSetDescriptorBufferOffsetsEXT(Unwrap(cmd), bindPoint, Unwrap(layout), setIndex,
+                                                     1, &desc.descBufferIdx, &desc.descBufferOffset);
+    }
 
     // any allocated arrays
     rdcarray<VkDescriptorImageInfo *> allocImgWrites;
