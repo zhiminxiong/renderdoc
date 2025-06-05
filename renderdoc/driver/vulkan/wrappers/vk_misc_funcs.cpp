@@ -669,6 +669,29 @@ bool WrappedVulkan::Serialise_vkCreateSampler(SerialiserType &ser, VkDevice devi
 
         m_CreationInfo.m_Sampler[live].Init(GetResourceManager(), m_CreationInfo, &CreateInfo);
       }
+
+      // if we're using indexed descriptors then look for the opaque info
+      if(DescriptorBuffers() && m_DescriptorLookup.sampled == ImageDescriptorFormat::Indexed2012)
+      {
+        // if we have opaque capture data that's 8 bytes and isn't 0, assume it's the image's
+        // address. If we guess wrong here this won't be bad necessarily it would just break the
+        // fast descriptor lookup for images
+        VkOpaqueCaptureDescriptorDataCreateInfoEXT *opaque =
+            (VkOpaqueCaptureDescriptorDataCreateInfoEXT *)FindNextStruct(
+                &CreateInfo, VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT);
+        if(opaque && m_DescriptorBufferProperties.samplerCaptureReplayDescriptorDataSize == 4)
+        {
+          uint32_t idx = *(uint32_t *)opaque->opaqueCaptureDescriptorData;
+
+          if(idx)
+          {
+            if(idx < m_DescriptorLookup.samplerPalette.size())
+              m_DescriptorLookup.samplerPalette[idx] = GetResID(samp);
+            else
+              RDCERR("Invalid saved index %u", idx);
+          }
+        }
+      }
     }
 
     AddResource(Sampler, ResourceType::Sampler, "Sampler");

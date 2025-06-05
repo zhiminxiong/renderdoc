@@ -449,6 +449,11 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         };
 
+        if(DescriptorBuffers())
+        {
+          bufInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        }
+
         ret = ObjDisp(device)->CreateBuffer(Unwrap(device), &bufInfo, NULL, &buf);
         RDCASSERTEQUAL(ret, VK_SUCCESS);
 
@@ -1698,6 +1703,40 @@ bool WrappedVulkan::Serialise_vkBindImageMemory(SerialiserType &ser, VkDevice de
     m_CreationInfo.m_Memory[GetResID(memory)].BindMemory(
         memoryOffset, mrq.size,
         imgInfo.linear ? VulkanCreationInfo::Memory::Linear : VulkanCreationInfo::Memory::Tiled);
+
+    // try to determine image's address via best effort for descriptor buffer lookups if needed
+    if(DescriptorBuffers() && m_DescriptorLookup.sampled != ImageDescriptorFormat::Indexed2012)
+    {
+      VkDeviceAddress addr = imgInfo.address;
+
+      if(addr == 0)
+      {
+        const VulkanCreationInfo::Memory &memInfo = m_CreationInfo.m_Memory[GetResID(memory)];
+
+        if(memInfo.wholeMemBuf != VK_NULL_HANDLE)
+        {
+          VkBufferDeviceAddressInfo getInfo = {
+              VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+              NULL,
+              Unwrap(memInfo.wholeMemBuf),
+          };
+
+          addr = ObjDisp(device)->GetBufferDeviceAddress(Unwrap(device), &getInfo) + memoryOffset;
+        }
+        else if(memInfo.opaqueAddr)
+        {
+          addr = memInfo.opaqueAddr + memoryOffset;
+          RDCWARN("Using opaque address %llx to estimate as base address for image %s", addr,
+                  ToStr(GetResID(image)).c_str());
+        }
+      }
+
+      if(addr != 0)
+        m_DescriptorLookup.imageAddresses.AddTo(
+            {addr, addr + mrq.size, addr + mrq.size, GetResID(image)});
+      else
+        RDCLOG("Couldn't get base address for image %s", ToStr(GetResID(image)).c_str());
+    }
   }
 
   return true;
@@ -2427,6 +2466,20 @@ bool WrappedVulkan::Serialise_vkCreateImage(SerialiserType &ser, VkDevice device
       m_CreationInfo.m_Image[live].Init(GetResourceManager(), m_CreationInfo, &CreateInfo,
                                         memoryRequirements);
 
+      // if we have opaque capture data that's 8 bytes and isn't 0, assume it's the image's address.
+      // If we guess wrong here this won't be bad necessarily it would just break the fast
+      // descriptor lookup for images
+      VkOpaqueCaptureDescriptorDataCreateInfoEXT *opaque =
+          (VkOpaqueCaptureDescriptorDataCreateInfoEXT *)FindNextStruct(
+              &CreateInfo, VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT);
+      if(opaque && m_DescriptorBufferProperties.imageCaptureReplayDescriptorDataSize == 8)
+      {
+        uint64_t *ptr = (uint64_t *)opaque->opaqueCaptureDescriptorData;
+
+        if(*ptr != 0)
+          m_CreationInfo.m_Image[live].address = *ptr;
+      }
+
       bool inserted = false;
       auto state = InsertImageState(img, live, CreateInfo, eFrameRef_Unknown, &inserted);
       if(!inserted)
@@ -2978,6 +3031,37 @@ bool WrappedVulkan::Serialise_vkCreateImageView(SerialiserType &ser, VkDevice de
       }
     }
 
+    // if we're using indexed descriptors then look for the opaque info
+    if(DescriptorBuffers() && m_DescriptorLookup.sampled == ImageDescriptorFormat::Indexed2012)
+    {
+      // if we have opaque capture data that's 8 bytes and isn't 0, assume it's the image's address.
+      // If we guess wrong here this won't be bad necessarily it would just break the fast
+      // descriptor lookup for images
+      VkOpaqueCaptureDescriptorDataCreateInfoEXT *opaque =
+          (VkOpaqueCaptureDescriptorDataCreateInfoEXT *)FindNextStruct(
+              &CreateInfo, VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT);
+      if(opaque && m_DescriptorBufferProperties.imageViewCaptureReplayDescriptorDataSize >= 4)
+      {
+        const uint32_t numIndices =
+            uint32_t(m_DescriptorBufferProperties.imageViewCaptureReplayDescriptorDataSize / 4);
+        uint32_t *ptr = (uint32_t *)opaque->opaqueCaptureDescriptorData;
+
+        // these would be expected to be sampled, storage (if possible), input (if possible)
+        // but we only need to know the image view itself as we always know the descriptor type when
+        // decoding due to varying size etc
+        for(uint32_t i = 0; i < numIndices; i++)
+        {
+          if(ptr[i])
+          {
+            if(ptr[0] < m_DescriptorLookup.imageViewPalette.size())
+              m_DescriptorLookup.imageViewPalette[ptr[i]] = GetResID(view);
+            else
+              RDCERR("Invalid saved index %u", ptr[i]);
+          }
+        }
+      }
+    }
+
     AddResource(View, ResourceType::View, "Image View");
     DerivedResource(device, View);
     DerivedResource(CreateInfo.image, View);
@@ -3292,6 +3376,42 @@ bool WrappedVulkan::Serialise_vkBindImageMemory2(SerialiserType &ser, VkDevice d
         m_CreationInfo.m_Memory[GetResID(bindInfo.memory)].BindMemory(
             bindInfo.memoryOffset, mrq.size,
             imgInfo.linear ? VulkanCreationInfo::Memory::Linear : VulkanCreationInfo::Memory::Tiled);
+
+        // try to determine image's address via best effort for descriptor buffer lookups if needed
+        if(DescriptorBuffers() && m_DescriptorLookup.sampled != ImageDescriptorFormat::Indexed2012)
+        {
+          VkDeviceAddress addr = imgInfo.address;
+
+          if(addr == 0)
+          {
+            const VulkanCreationInfo::Memory &memInfo =
+                m_CreationInfo.m_Memory[GetResID(bindInfo.memory)];
+
+            if(memInfo.wholeMemBuf != VK_NULL_HANDLE)
+            {
+              VkBufferDeviceAddressInfo getInfo = {
+                  VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                  NULL,
+                  Unwrap(memInfo.wholeMemBuf),
+              };
+
+              addr = ObjDisp(device)->GetBufferDeviceAddress(Unwrap(device), &getInfo) +
+                     bindInfo.memoryOffset;
+            }
+            else if(memInfo.opaqueAddr)
+            {
+              addr = memInfo.opaqueAddr + bindInfo.memoryOffset;
+              RDCWARN("Using opaque address to estimate as base address for image %s",
+                      ToStr(GetResID(bindInfo.image)).c_str());
+            }
+          }
+
+          if(addr != 0)
+            m_DescriptorLookup.imageAddresses.AddTo(
+                {addr, addr + mrq.size, addr + mrq.size, GetResID(bindInfo.image)});
+          else
+            RDCLOG("Couldn't get base address for image %s", ToStr(GetResID(bindInfo.image)).c_str());
+        }
       }
     }
 

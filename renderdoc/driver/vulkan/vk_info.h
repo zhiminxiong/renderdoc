@@ -643,7 +643,22 @@ struct VulkanCreationInfo
     bool cube;
     TextureCategory creationFlags;
 
+    VkDeviceAddress address;
     VkMemoryRequirements mrq;
+
+    rdcarray<rdcpair<bytebuf, ResourceId>> viewDescriptors;
+
+    ResourceId getViewFromDescriptor(const byte *descriptorBytes, size_t descriptorSize)
+    {
+      for(auto it = viewDescriptors.begin(); it != viewDescriptors.end(); ++it)
+      {
+        if(it->first.size() == descriptorSize &&
+           memcmp(it->first.data(), descriptorBytes, descriptorSize) == 0)
+          return it->second;
+      }
+
+      return ResourceId();
+    }
   };
   std::unordered_map<ResourceId, Image> m_Image;
 
@@ -710,6 +725,8 @@ struct VulkanCreationInfo
     VkFormat format;
     VkImageSubresourceRange range;
     VkComponentMapping componentMapping;
+
+    bool isDepthImage;
 
     // VkImageViewMinLodCreateInfoEXT
     float minLOD;

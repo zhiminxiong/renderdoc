@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "common/formatting.h"
 #include "common/timing.h"
 #include "core/gpu_address_range_tracker.h"
 #include "core/rdcbytetrie.h"
@@ -469,14 +470,43 @@ private:
 
   struct DescriptorLookups
   {
+    BufferDescriptorFormat uniformBuffer = BufferDescriptorFormat::UnknownBufferDescriptor;
+    BufferDescriptorFormat storageBuffer = BufferDescriptorFormat::UnknownBufferDescriptor;
+    BufferDescriptorFormat uniformTexelBuffer = BufferDescriptorFormat::UnknownBufferDescriptor;
+    BufferDescriptorFormat storageTexelBuffer = BufferDescriptorFormat::UnknownBufferDescriptor;
+
+    BufferDescriptorFormat accelStructure = BufferDescriptorFormat::UnknownBufferDescriptor;
+
+    ImageDescriptorFormat sampled = ImageDescriptorFormat::UnknownImageDescriptor;
+    ImageDescriptorFormat storage = ImageDescriptorFormat::UnknownImageDescriptor;
+
+    uint32_t combinedSamplerOffset = 0;
+
     // overall lookup of all descriptors by bytes, fallback in case any others don't work - we
     // expect this to always hit
     rdcbytetrie<DescriptorTrieNode> fallback;
+
+    // lookup with only samplers, as we expect for non-indexed descriptors this will be hit often
+    rdcbytetrie<DescriptorTrieNode> samplers;
+
+    // for implementations where image descriptors are expected to contain a pointer to the image.
+    // We use a _range_ tracker here because some descriptors like depth/stencil or planar formats
+    // can contain base addresses different to the simple base of the image
+    GPUAddressRangeTracker imageAddresses;
+
+    // for NV-style palettised sampler/image view descriptors. These will be resized to the max size
+    // (0xfff / 0xfffff respectively) and can be used for direct indexed lookup
+    rdcarray<ResourceId> samplerPalette;
+    rdcarray<ResourceId> imageViewPalette;
 
     // unique texel formats. So that if we fast identify a buffer via address+size we can iterate
     // over all of these if we know it's a texel buffer. The expectation is this is short so we
     // don't have to store this per-buffer but globally and can just try different possibilities.
     rdcarray<VkFormat> texelFormats;
+
+    // unique image layouts. In case image layout affects the descriptor bits
+    rdcarray<VkImageLayout> generalImageLayouts;
+    rdcarray<VkImageLayout> depthImageLayouts;
   };
   DescriptorLookups m_DescriptorLookup;
 

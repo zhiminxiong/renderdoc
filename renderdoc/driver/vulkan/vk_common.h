@@ -811,7 +811,13 @@ struct DescriptorSetSlot
   void SetTexelBuffer(VkDescriptorType writeType, ResourceId id);
   void SetAccelerationStructure(VkDescriptorType writeType,
                                 VkAccelerationStructureKHR accelerationStructure);
+
   void SetDescriptor(WrappedVulkan *driver, const VkDescriptorGetInfoEXT &desc);
+  void SetSampler(ResourceId samplerId);
+  void SetImageSampler(VkDescriptorType descType, ResourceId imageView, ResourceId samplerId,
+                       VkImageLayout layout);
+  void SetBuffer(VkDescriptorType descType, ResourceId buffer, uint64_t startOffset, uint64_t size,
+                 VkFormat format);
 
   // 48-bit truncated VK_WHOLE_SIZE
   static const VkDeviceSize WholeSizeRange = 0xFFFFFFFFFFFF;
@@ -905,6 +911,118 @@ DECLARE_REFLECTION_STRUCT(DescriptorSetSlot);
 
 constexpr uint64_t FixedOpaqueDescriptorCaptureSize = 16;
 constexpr uint64_t MaxDescriptorSize = 256;
+
+// pointers are considered to be 48-bit only, as some descriptors only store those and no-one
+// uses the upper bits relevantly
+//
+// byteSize is obvious, elemSize is the size in elements (N byte texels for texel buffers, bytes
+// for everything else)
+//
+// sizes with a numerical suffix indicates alignment e.g byteSize64 = AlignUp(byteSize, 64)
+//
+// we only care about enough identifiable information is to 'read' a descriptor. We do _not_
+// expect to be able to fully predict the bits in a descriptor. Some of these formats leave no
+// bits unspecified but many have implementation-defined bits, we are only using this for lookup.
+enum class BufferDescriptorFormat
+{
+  UnknownBufferDescriptor = 0,
+
+  // 8 bytes:
+  //    uint64[0] = pointer
+  Pointer_8,
+
+  // 8 bytes:
+  //    bottom 45 = pointer>>4
+  //    top_19 = byteSize16>>4
+  Packed_4519_Aligned16_8,
+
+  // 8 bytes:
+  //    bottom 45 = pointer>>4
+  //    top_19 = byteSize256>>4
+  Packed_4519_Aligned256_8,
+
+  // 16 bytes:
+  //    uint64[0] = pointer
+  //    uint64[1] = elemSize
+  Pointer_ElemSize_16,
+
+  // 16 bytes:
+  //    uint64[0] = pointer/texelSize - special handling for NPOT texelSize (12 bytes)
+  //    uint64[1] = elemSize
+  PointerDivided_ElemSize_16,
+
+  // 16 bytes:
+  //    uint64[0] = pointer
+  Pointer0_16,
+
+  // 32 bytes:
+  //    uint64[0] = byteSize<<32
+  //    uint64[1] = pointer
+  ByteSize0_Pointer1_32,
+
+  // 32 bytes:
+  //    uint64[1] = pointer
+  Pointer1_32,
+
+  // 64 bytes:
+  //    uint64[4] = pointer
+  //    uint64[5] = byteSize << 32
+  Pointer4_ByteSize5_Unaligned_64,
+
+  // 64 bytes:
+  //    uint64[4] = pointer
+  //    uint64[5] = byteSize64 << 32
+  Pointer4_ByteSize5_Aligned_64,
+
+  // 64 bytes:
+  //    uint64[1] = bitScattered(elemSize-1) - complex bit scattering and masking
+  //    uint64[4] = pointer
+  ElemSizeScattered1_Pointer4_64,
+
+  // 64*n bytes: for n=1 or n=2 repeated with different strides (4, 2, 4+2, 2+4, 2+1, 1+2)
+  //    uint64[0] = (byteSize >> stride) << 32
+  //    uint64[1] = ((pointer&0x3f) >> stride) << 16
+  //    uint64[2] = pointer64
+  Strided4_MultiDescriptor_64,
+  Strided2_MultiDescriptor_64,
+  Strided1_MultiDescriptor_64,
+
+  // 64 bytes:
+  //    uint64[0] = elemSize << 32
+  //    uint64[2] = pointer
+  ElemSize0_Pointer2_64,
+
+  // 64 bytes:
+  //    uint64[2] = pointer
+  Pointer2_64,
+};
+
+//
+enum class ImageDescriptorFormat
+{
+  UnknownImageDescriptor = 0,
+
+  // 4 bytes:
+  //   bottom 20 bits = imageViewIndex (stored in opaque capture data, sampled/storage/input), 0
+  //   if absent top 12 bits = samplerIndex (stored in opaque capture data), 0 if absent
+  Indexed2012,
+
+  // 32 bytes:
+  //    uint64[0] = pointer>>8
+  PointerShifted_32,
+
+  // 64 bytes:
+  //    uint64[0] = pointer>>8
+  PointerShifted_64,
+
+  // 64 bytes:
+  //    uint64[2] = pointer
+  Pointer2_64,
+
+  // 64 bytes:
+  //    uint64[4] = pointer
+  Pointer4_64,
+};
 
 #define NUM_VK_IMAGE_ASPECTS 4
 #define VK_ACCESS_ALL_READ_BITS                                                        \

@@ -5466,6 +5466,65 @@ void WrappedVulkan::RegisterDescriptor(const bytebuf &key, const DescriptorSetSl
     if(data.resource != ResourceId() && !m_DescriptorLookup.texelFormats.contains(fmt))
       m_DescriptorLookup.texelFormats.push_back(fmt);
   }
+  else if(data.type == DescriptorSlotType::CombinedImageSampler ||
+          data.type == DescriptorSlotType::SampledImage ||
+          data.type == DescriptorSlotType::StorageImage ||
+          data.type == DescriptorSlotType::InputAttachment)
+  {
+    VkImageLayout layout = convert(data.imageLayoutOrFormat);
+
+    if(layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL ||
+       layout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL ||
+       layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL ||
+       layout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
+       layout == VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL)
+    {
+      if(!m_DescriptorLookup.depthImageLayouts.contains(layout))
+        m_DescriptorLookup.depthImageLayouts.push_back(layout);
+    }
+    else
+    {
+      if(!m_DescriptorLookup.generalImageLayouts.contains(layout))
+      {
+        m_DescriptorLookup.generalImageLayouts.push_back(layout);
+        // keep the list sorted so that rare/niche layouts like feedback loop or local read are tried last
+        std::sort(m_DescriptorLookup.generalImageLayouts.begin(),
+                  m_DescriptorLookup.generalImageLayouts.end());
+      }
+    }
+  }
+
+  size_t combinedSize = m_DescriptorBufferProperties.combinedImageSamplerDescriptorSize;
+  size_t sampledSize = m_DescriptorBufferProperties.sampledImageDescriptorSize;
+  size_t samplerSize = m_DescriptorBufferProperties.samplerDescriptorSize;
+
+  // if this is just a sampler descriptor, store it directly (unless we're not using indexed)
+  if(data.type == DescriptorSlotType::Sampler &&
+     m_DescriptorLookup.sampled != ImageDescriptorFormat::Indexed2012)
+  {
+    m_DescriptorLookup.samplers.insert(key, data);
+  }
+  // if this is a combined descriptor but it looks like it's an image+sampler (which is common) and
+  // we're not indexed, store the second part as sampler bytes. This may be wrong, but that's fine
+  // and worst case we pollute the samplers lookup and fail to do a fast lookup of this descriptor
+  else if(data.type == DescriptorSlotType::CombinedImageSampler &&
+          combinedSize == m_DescriptorLookup.combinedSamplerOffset + samplerSize)
+  {
+    DescriptorSetSlot samplerData;
+    samplerData.SetSampler(data.sampler);
+
+    m_DescriptorLookup.samplers.insert(
+        {key.data() + m_DescriptorLookup.combinedSamplerOffset, samplerSize}, samplerData);
+  }
+
+  if((data.type == DescriptorSlotType::InputAttachment ||
+      data.type == DescriptorSlotType::StorageImage || data.type == DescriptorSlotType::SampledImage ||
+      data.type == DescriptorSlotType::CombinedImageSampler) &&
+     m_DescriptorLookup.sampled != ImageDescriptorFormat::Indexed2012)
+  {
+    m_CreationInfo.m_Image[m_CreationInfo.m_ImageView[data.resource].image].viewDescriptors.push_back(
+        {bytebuf(key.data(), sampledSize), data.resource});
+  }
 }
 
 bool WrappedVulkan::IsPartialRenderPassActive()

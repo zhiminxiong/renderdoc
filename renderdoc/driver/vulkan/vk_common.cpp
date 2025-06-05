@@ -1325,6 +1325,32 @@ void DescriptorSetSlot::SetAccelerationStructure(VkDescriptorType writeType,
   resource = GetResID(accelerationStructure);
 }
 
+void DescriptorSetSlot::SetSampler(ResourceId samplerId)
+{
+  type = DescriptorSlotType::Sampler;
+  sampler = samplerId;
+}
+
+void DescriptorSetSlot::SetImageSampler(VkDescriptorType descType, ResourceId imageView,
+                                        ResourceId samplerId, VkImageLayout layout)
+{
+  type = convert(descType);
+  resource = imageView;
+  sampler = samplerId;
+  imageLayoutOrFormat = convert(layout);
+}
+
+void DescriptorSetSlot::SetBuffer(VkDescriptorType descType, ResourceId buffer,
+                                  uint64_t startOffset, uint64_t size, VkFormat format)
+{
+  type = convert(descType);
+  resource = buffer;
+  offset = startOffset;
+  range = size;
+  imageLayoutOrFormat = DescriptorSlotImageLayout(format & 0xff);
+  RDCASSERT(uint32_t(format) < 0xff, format);
+}
+
 void DescriptorSetSlot::SetDescriptor(WrappedVulkan *driver, const VkDescriptorGetInfoEXT &desc)
 {
   type = convert(desc.type);

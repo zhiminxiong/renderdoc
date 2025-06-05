@@ -2404,6 +2404,8 @@ void VulkanCreationInfo::Image::Init(VulkanResourceManager *resourceMan, VulkanC
     creationFlags |= TextureCategory::ShaderReadWrite;
 
   cube = (pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) ? true : false;
+
+  address = 0;
 }
 
 void VulkanCreationInfo::Sampler::Init(VulkanResourceManager *resourceMan, VulkanCreationInfo &info,
@@ -2540,6 +2542,8 @@ void VulkanCreationInfo::ImageView::Init(VulkanResourceManager *resourceMan, Vul
   {
     minLOD = minLODInfo->minLod;
   }
+
+  isDepthImage = !!(info.m_Image[image].creationFlags & TextureCategory::DepthTarget);
 }
 
 void VulkanCreationInfo::ShaderModule::Init(VulkanResourceManager *resourceMan,
