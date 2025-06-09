@@ -997,6 +997,8 @@ enum class BufferDescriptorFormat
   Pointer2_64,
 };
 
+DECLARE_STRINGISE_TYPE(BufferDescriptorFormat);
+
 //
 enum class ImageDescriptorFormat
 {
@@ -1023,6 +1025,8 @@ enum class ImageDescriptorFormat
   //    uint64[4] = pointer
   Pointer4_64,
 };
+
+DECLARE_STRINGISE_TYPE(ImageDescriptorFormat);
 
 #define NUM_VK_IMAGE_ASPECTS 4
 #define VK_ACCESS_ALL_READ_BITS                                                        \

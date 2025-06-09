@@ -4372,6 +4372,9 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
 
     ChooseMemoryIndices();
 
+    if(DescriptorBuffers())
+      EstimateDescriptorFormats();
+
     APIProps.vendor = GetDriverInfo().Vendor();
 
     // temporarily disable the debug message sink, to ignore any false positive messages from our
@@ -5053,6 +5056,9 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
 
     m_PhysicalDeviceData.maxMemoryAllocationSize = 0;
     ChooseMemoryIndices();
+
+    if(DescriptorBuffers())
+      EstimateDescriptorFormats();
 
     m_PhysicalDeviceData.queueCount = (uint32_t)queueProps.size();
     for(size_t i = 0; i < queueProps.size(); i++)

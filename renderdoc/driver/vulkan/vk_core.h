@@ -510,6 +510,10 @@ private:
   };
   DescriptorLookups m_DescriptorLookup;
 
+  void EstimateDescriptorFormats();
+  BufferDescriptorFormat EstimateBufferDescriptor(VkDescriptorType type, VkDeviceAddress addr,
+                                                  VkFormat texelFormat = VK_FORMAT_UNDEFINED);
+
   void RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data);
   void LookupDescriptor(byte *descriptorBytes, size_t descriptorSize, DescriptorType type,
                         DescriptorSetSlot &data);

@@ -260,6 +260,47 @@ rdcstr DoStringise(const VulkanChunk &el)
 }
 
 template <>
+rdcstr DoStringise(const BufferDescriptorFormat &el)
+{
+  BEGIN_ENUM_STRINGISE(BufferDescriptorFormat);
+  {
+    STRINGISE_ENUM_CLASS(UnknownBufferDescriptor)
+    STRINGISE_ENUM_CLASS(Pointer_8)
+    STRINGISE_ENUM_CLASS(Packed_4519_Aligned16_8)
+    STRINGISE_ENUM_CLASS(Packed_4519_Aligned256_8)
+    STRINGISE_ENUM_CLASS(Pointer_ElemSize_16)
+    STRINGISE_ENUM_CLASS(PointerDivided_ElemSize_16)
+    STRINGISE_ENUM_CLASS(Pointer0_16)
+    STRINGISE_ENUM_CLASS(ByteSize0_Pointer1_32)
+    STRINGISE_ENUM_CLASS(Pointer1_32)
+    STRINGISE_ENUM_CLASS(Pointer4_ByteSize5_Unaligned_64)
+    STRINGISE_ENUM_CLASS(Pointer4_ByteSize5_Aligned_64)
+    STRINGISE_ENUM_CLASS(ElemSizeScattered1_Pointer4_64)
+    STRINGISE_ENUM_CLASS(Strided4_MultiDescriptor_64)
+    STRINGISE_ENUM_CLASS(Strided2_MultiDescriptor_64)
+    STRINGISE_ENUM_CLASS(Strided1_MultiDescriptor_64)
+    STRINGISE_ENUM_CLASS(ElemSize0_Pointer2_64)
+    STRINGISE_ENUM_CLASS(Pointer2_64)
+  }
+  END_ENUM_STRINGISE();
+}
+
+template <>
+rdcstr DoStringise(const ImageDescriptorFormat &el)
+{
+  BEGIN_ENUM_STRINGISE(ImageDescriptorFormat);
+  {
+    STRINGISE_ENUM_CLASS(UnknownImageDescriptor)
+    STRINGISE_ENUM_CLASS(Indexed2012)
+    STRINGISE_ENUM_CLASS(PointerShifted_32)
+    STRINGISE_ENUM_CLASS(PointerShifted_64)
+    STRINGISE_ENUM_CLASS(Pointer2_64)
+    STRINGISE_ENUM_CLASS(Pointer4_64)
+  }
+  END_ENUM_STRINGISE();
+}
+
+template <>
 rdcstr DoStringise(const VkResourceType &el)
 {
   BEGIN_ENUM_STRINGISE(VkResourceType);

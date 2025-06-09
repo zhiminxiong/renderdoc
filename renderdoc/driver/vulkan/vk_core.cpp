@@ -5458,6 +5458,584 @@ size_t WrappedVulkan::DescriptorDataSize(VkDescriptorType type)
   return ret;
 }
 
+void WrappedVulkan::EstimateDescriptorFormats()
+{
+  // we want to differentiate the descriptor in as few tests as possible. We don't necessarily care
+  // if we falsely identify a descriptor format once we've isolated it down to one since worst case
+  // we'd have to fall back to nothing.
+
+  // create an image first so we can make a buffer on the same memory type and re-use the memory
+  // allocation for everything. We make it with a format that should be guaranteed supported by all drivers
+  VkImageCreateInfo imCreateInfo = {
+      VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      NULL,
+      VK_IMAGE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT,
+      VK_IMAGE_TYPE_2D,
+      VK_FORMAT_R32G32B32A32_SFLOAT,
+      {128, 128, 1},
+      1,
+      1,
+      VK_SAMPLE_COUNT_1_BIT,
+      VK_IMAGE_TILING_OPTIMAL,
+      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+      VK_SHARING_MODE_EXCLUSIVE,
+      VK_IMAGE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT,
+      NULL,
+      VK_IMAGE_LAYOUT_UNDEFINED,
+  };
+
+  VkImage image = VK_NULL_HANDLE;
+  VkResult vkr = ObjDisp(m_Device)->CreateImage(Unwrap(m_Device), &imCreateInfo, NULL, &image);
+  CHECK_VKR(this, vkr);
+
+  VkMemoryRequirements imgMrq = {0};
+  ObjDisp(m_Device)->GetImageMemoryRequirements(Unwrap(m_Device), image, &imgMrq);
+
+  // we make the memory at least 4MB since that's pretty modest still and gives us enough room to
+  // try different buffer sizes to determine weird swizzling.
+  const VkDeviceSize size = 0x400000;
+
+  RDCASSERT(size >= imgMrq.size);
+
+  VkMemoryAllocateFlagsInfo memFlags = {
+      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO, 0,
+      VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT};
+  VkMemoryAllocateInfo allocInfo = {
+      VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      &memFlags,
+      size,
+      GetGPULocalMemoryIndex(imgMrq.memoryTypeBits),
+  };
+
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+  vkr = ObjDisp(m_Device)->AllocateMemory(Unwrap(m_Device), &allocInfo, NULL, &memory);
+  CHECK_VKR(this, vkr);
+
+  // allocate a buffer onto the memory too. We assume that reasonable usage will not exclude the
+  // image's memory type
+
+  VkBufferCreateInfo bufInfo = {
+      VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      NULL,
+      VK_BUFFER_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT |
+          VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT,
+      size,
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT |
+          VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
+  };
+  VkBuffer buffer = VK_NULL_HANDLE;
+  vkr = ObjDisp(m_Device)->CreateBuffer(Unwrap(m_Device), &bufInfo, NULL, &buffer);
+  CHECK_VKR(this, vkr);
+
+  VkMemoryRequirements bufMrq;
+  ObjDisp(m_Device)->GetBufferMemoryRequirements(Unwrap(m_Device), buffer, &bufMrq);
+  if((bufMrq.memoryTypeBits & (1 << allocInfo.memoryTypeIndex)) == 0)
+  {
+    RDCERR("Can't detect descriptor types, image memory type can't bind buffer");
+    ObjDisp(m_Device)->FreeMemory(Unwrap(m_Device), memory, NULL);
+    ObjDisp(m_Device)->DestroyImage(Unwrap(m_Device), image, NULL);
+    ObjDisp(m_Device)->DestroyBuffer(Unwrap(m_Device), buffer, NULL);
+    return;
+  }
+
+  ObjDisp(m_Device)->BindBufferMemory(Unwrap(m_Device), buffer, memory, 0);
+  ObjDisp(m_Device)->BindImageMemory(Unwrap(m_Device), image, memory, 0);
+
+  // create image view
+  VkImageView imageView = VK_NULL_HANDLE;
+
+  VkImageViewCreateInfo imgViewInfo = {
+      VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      NULL,
+      VK_IMAGE_VIEW_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT,
+      image,
+      VK_IMAGE_VIEW_TYPE_2D,
+      VK_FORMAT_R32G32B32A32_SFLOAT,
+      {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+       VK_COMPONENT_SWIZZLE_IDENTITY},
+      {
+          VK_IMAGE_ASPECT_COLOR_BIT,
+          0,
+          VK_REMAINING_MIP_LEVELS,
+          0,
+          1,
+      },
+  };
+
+  vkr = ObjDisp(m_Device)->CreateImageView(Unwrap(m_Device), &imgViewInfo, NULL, &imageView);
+  CHECK_VKR(this, vkr);
+
+  // make a couple of samplers also to be able to decode combined image/sampler layouts
+  VkSamplerCreateInfo sampInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+  sampInfo.minFilter = sampInfo.magFilter = VK_FILTER_NEAREST;
+  sampInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  sampInfo.addressModeU = sampInfo.addressModeV = sampInfo.addressModeW =
+      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampInfo.mipLodBias = 1.6f;
+  sampInfo.flags = VK_SAMPLER_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT;
+
+  VkSampler sampler;
+  vkr = ObjDisp(m_Device)->CreateSampler(Unwrap(m_Device), &sampInfo, NULL, &sampler);
+  CHECK_VKR(this, vkr);
+
+  VkSampler altSampler;
+  sampInfo.minFilter = sampInfo.magFilter = VK_FILTER_LINEAR;
+  sampInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+  sampInfo.addressModeU = sampInfo.addressModeV = sampInfo.addressModeW =
+      VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  sampInfo.mipLodBias = -1.6f;
+  vkr = ObjDisp(m_Device)->CreateSampler(Unwrap(m_Device), &sampInfo, NULL, &altSampler);
+  CHECK_VKR(this, vkr);
+
+  VkBufferDeviceAddressInfo getInfo = {
+      VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+      NULL,
+      buffer,
+  };
+  VkDeviceAddress addr = ObjDisp(m_Device)->GetBufferDeviceAddress(Unwrap(m_Device), &getInfo);
+
+  DescriptorTrieNode::rangeToleranceMask = ~0ULL;
+
+  m_DescriptorLookup.uniformBuffer =
+      EstimateBufferDescriptor(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, addr);
+  m_DescriptorLookup.storageBuffer =
+      EstimateBufferDescriptor(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, addr);
+  // we use a 4-byte format here to distinguish byte size from elem size, but otherwise don't need
+  // to check multiple formats. There are no possible cases where there's ambiguity between *known*
+  // descriptor formats. If a descriptor format looks like one of ours for this but not for other
+  // formats there's not much we can do about that.
+  //
+  // we'd slightly prefer a 2-byte format but these aren't required and 4-byte does just as well
+  m_DescriptorLookup.uniformTexelBuffer =
+      EstimateBufferDescriptor(VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, addr, VK_FORMAT_R32_UINT);
+  m_DescriptorLookup.storageTexelBuffer =
+      EstimateBufferDescriptor(VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, addr, VK_FORMAT_R32_UINT);
+
+  if(DescriptorDataSize(VK_DESCRIPTOR_TYPE_SAMPLER) == 4 &&
+     DescriptorDataSize(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) == 4 &&
+     DescriptorDataSize(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) == 4 &&
+     DescriptorDataSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) == 4)
+  {
+    // there's only one possible encoding that puts this in 4 bytes
+    m_DescriptorLookup.storage = m_DescriptorLookup.sampled = ImageDescriptorFormat::Indexed2012;
+
+    m_DescriptorLookup.samplerPalette.resize(0xfff);
+    m_DescriptorLookup.imageViewPalette.resize(0xfffff);
+  }
+  else
+  {
+    rdcpair<VkDescriptorType, ImageDescriptorFormat &> formats[] = {
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, m_DescriptorLookup.sampled},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, m_DescriptorLookup.storage},
+    };
+
+    VkDescriptorGetInfoEXT info = {
+        VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+        NULL,
+    };
+
+    VkDescriptorImageInfo imginfo = {};
+    info.data.pSampledImage = &imginfo;
+    imginfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imginfo.imageView = imageView;
+
+    uint64_t descData[8] = {};
+
+    // we only compare the bottom 48 bits of pointers (after shifting appropriately) since some
+    // descriptors stuff things in the upper bits
+    const uint64_t ptrMask = ((1ULL << 48) - 1);
+
+    // we allow any pointer within the image to work, since some may be offset (not likely for the
+    // format we have chosen, but just in case)
+    VkDeviceAddress imgBase = addr & ptrMask;
+    VkDeviceAddress imgEnd = imgBase + imgMrq.size;
+
+    for(size_t i = 0; i < ARRAY_COUNT(formats); i++)
+    {
+      size_t descSize = DescriptorDataSize(formats[i].first);
+
+      info.type = formats[i].first;
+
+      ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descData);
+
+      if(descSize == 32 && ((descData[0] << 8) & ptrMask) >= imgBase &&
+         ((descData[0] << 8) & ptrMask) < imgEnd)
+      {
+        formats[i].second = ImageDescriptorFormat::PointerShifted_32;
+      }
+      else if(descSize == 64 && ((descData[0] << 8) & ptrMask) >= imgBase &&
+              ((descData[0] << 8) & ptrMask) < imgEnd)
+      {
+        formats[i].second = ImageDescriptorFormat::PointerShifted_64;
+      }
+      else if(descSize == 64 && (descData[2] & ptrMask) >= imgBase && (descData[2] & ptrMask) < imgEnd)
+      {
+        formats[i].second = ImageDescriptorFormat::Pointer2_64;
+      }
+      else if(descSize == 64 && (descData[4] & ptrMask) >= imgBase && (descData[4] & ptrMask) < imgEnd)
+      {
+        formats[i].second = ImageDescriptorFormat::Pointer2_64;
+      }
+      else
+      {
+        RDCERR("Couldn't determine %s descriptor format for image %llx-%llx",
+               ToStr(info.type).c_str(), imgBase, imgEnd);
+        // dump the descriptor
+        for(uint32_t d = 0; d * 8 < descSize; d++)
+          RDCLOG("[%u]: %llx", d, descData[d]);
+      }
+    }
+
+    size_t combinedSize = m_DescriptorBufferProperties.combinedImageSamplerDescriptorSize;
+    size_t sampledSize = m_DescriptorBufferProperties.sampledImageDescriptorSize;
+    size_t samplerSize = m_DescriptorBufferProperties.samplerDescriptorSize;
+
+    if(combinedSize == sampledSize + samplerSize)
+    {
+      m_DescriptorLookup.combinedSamplerOffset = (uint32_t)sampledSize;
+    }
+    else if(combinedSize >= sampledSize + sampledSize)
+    {
+      byte combined1[256] = {};
+      byte combined2[256] = {};
+
+      imginfo.sampler = sampler;
+      info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      size_t descSize = DescriptorDataSize(info.type);
+
+      ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, combined1);
+
+      imginfo.sampler = altSampler;
+
+      ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, combined2);
+
+      for(uint32_t i = 0; i < combinedSize; i++)
+      {
+        if(combined1[i] != combined2[i])
+        {
+          m_DescriptorLookup.combinedSamplerOffset = i;
+          break;
+        }
+      }
+
+      if(m_DescriptorLookup.combinedSamplerOffset < sampledSize)
+      {
+        RDCERR(
+            "Unexpected descriptor difference at byte %u, less than sampled size %u in combined %u",
+            m_DescriptorLookup.combinedSamplerOffset, sampledSize, combinedSize);
+        m_DescriptorLookup.combinedSamplerOffset = (uint32_t)sampledSize;
+      }
+      else if(m_DescriptorLookup.combinedSamplerOffset + samplerSize < combinedSize)
+      {
+        if(memcmp(combined1 + m_DescriptorLookup.combinedSamplerOffset + samplerSize,
+                  combined2 + m_DescriptorLookup.combinedSamplerOffset + samplerSize,
+                  combinedSize - (m_DescriptorLookup.combinedSamplerOffset + samplerSize)) != 0)
+        {
+          RDCERR(
+              "Unexpected descriptor difference after sampler at offset %u + size %u, before end "
+              "of combined %u bytes",
+              m_DescriptorLookup.combinedSamplerOffset, samplerSize, combinedSize);
+        }
+      }
+
+      RDCLOG("Combined sampler offset is %u into %u byte combined descriptor",
+             m_DescriptorLookup.combinedSamplerOffset, combinedSize);
+    }
+    else
+    {
+      RDCLOG("Unexpected combined size %u with sampled size %u and sampler size %u", combinedSize,
+             sampledSize, samplerSize);
+    }
+  }
+
+  // check for AS descriptors too, and do this last as it stomps the union a bit
+  if(AccelerationStructures())
+  {
+    VkAccelerationStructureKHR as = VK_NULL_HANDLE;
+    const VkAccelerationStructureCreateInfoKHR asCreateInfo = {
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+        NULL,
+        VK_ACCELERATION_STRUCTURE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT,
+        buffer,
+        0,
+        size,
+        VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
+        0x0,
+    };
+    vkr = ObjDisp(m_Device)->CreateAccelerationStructureKHR(Unwrap(m_Device), &asCreateInfo, NULL,
+                                                            &as);
+    CHECK_VKR(this, vkr);
+
+    VkAccelerationStructureDeviceAddressInfoKHR asGetInfo = {
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+        NULL,
+        as,
+    };
+
+    VkDeviceAddress asAddr =
+        ObjDisp(m_Device)->GetAccelerationStructureDeviceAddressKHR(Unwrap(m_Device), &asGetInfo);
+
+    m_DescriptorLookup.accelStructure =
+        EstimateBufferDescriptor(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, asAddr);
+
+    ObjDisp(m_Device)->DestroyAccelerationStructureKHR(Unwrap(m_Device), as, NULL);
+  }
+
+  // shutdown and destroy the objects we made
+  ObjDisp(m_Device)->DestroySampler(Unwrap(m_Device), sampler, NULL);
+  ObjDisp(m_Device)->DestroySampler(Unwrap(m_Device), altSampler, NULL);
+  ObjDisp(m_Device)->DestroyImageView(Unwrap(m_Device), imageView, NULL);
+  ObjDisp(m_Device)->DestroyImage(Unwrap(m_Device), image, NULL);
+  ObjDisp(m_Device)->DestroyBuffer(Unwrap(m_Device), buffer, NULL);
+  ObjDisp(m_Device)->FreeMemory(Unwrap(m_Device), memory, NULL);
+
+  RDCLOG("Descriptor format estimates:");
+  RDCLOG("  Uniform buffers: %s", ToStr(m_DescriptorLookup.uniformBuffer).c_str());
+  RDCLOG("  Storage buffers: %s", ToStr(m_DescriptorLookup.storageBuffer).c_str());
+  RDCLOG("  Uniform texel buffers: %s", ToStr(m_DescriptorLookup.uniformTexelBuffer).c_str());
+  RDCLOG("  Storage texel buffers: %s", ToStr(m_DescriptorLookup.storageTexelBuffer).c_str());
+  RDCLOG("  Accel Structs: %s", ToStr(m_DescriptorLookup.accelStructure).c_str());
+  RDCLOG("  Sampled images: %s", ToStr(m_DescriptorLookup.sampled).c_str());
+  RDCLOG("  Storage images: %s", ToStr(m_DescriptorLookup.storage).c_str());
+}
+
+BufferDescriptorFormat WrappedVulkan::EstimateBufferDescriptor(VkDescriptorType type,
+                                                               VkDeviceAddress addr,
+                                                               VkFormat texelFormat)
+{
+  BufferDescriptorFormat outFormat = BufferDescriptorFormat::UnknownBufferDescriptor;
+
+  union
+  {
+    byte descriptorBytes[256];
+    uint64_t descriptorU64[32];
+  };
+
+  VkDescriptorGetInfoEXT info = {
+      VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+  };
+
+  info.type = type;
+
+  const uint64_t texelSize =
+      texelFormat == VK_FORMAT_UNDEFINED ? 1 : GetByteSize(1, 1, 1, texelFormat, 0);
+
+  // start with a size that will never run afoul of alignment problems but isn't likely to be
+  // misidentified by a random bit. This also stays under 64k which is the minimum limit for some buffers
+  VkDeviceAddress byteSize = 0xd300;
+  VkDeviceAddress elemSize = byteSize / texelSize;
+
+  size_t descSize = DescriptorDataSize(info.type);
+
+  VkDescriptorAddressInfoEXT bufinfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT};
+
+  if(info.type != VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
+  {
+    bufinfo.address = addr;
+    bufinfo.range = byteSize;
+    bufinfo.format = texelFormat;
+    info.data.pUniformBuffer = &bufinfo;
+  }
+  else
+  {
+    info.data.accelerationStructure = addr;
+  }
+
+  ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descriptorBytes);
+
+  // we only compare the bottom 48 bits of pointers (after shifting appropriately) since some
+  // descriptors stuff things in the upper bits
+  const uint64_t ptrMask = ((1ULL << 48) - 1);
+
+  addr &= ptrMask;
+
+  if(addr == 0)
+  {
+    RDCERR("Invalid address returned");
+  }
+  else if(type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
+  {
+    if(descSize == 8 && (descriptorU64[0] & ptrMask) == addr)
+      outFormat = BufferDescriptorFormat::Pointer_8;
+    else if(descSize == 16 && (descriptorU64[0] & ptrMask) == addr)
+      outFormat = BufferDescriptorFormat::Pointer0_16;
+    else if(descSize == 32 && (descriptorU64[1] & ptrMask) == addr)
+      outFormat = BufferDescriptorFormat::Pointer1_32;
+    else if(descSize == 64 && (descriptorU64[2] & ptrMask) == addr)
+      outFormat = BufferDescriptorFormat::Pointer2_64;
+  }
+  else if(descSize == 8 && descriptorU64[0] == ((bufinfo.address >> 4) | ((byteSize >> 4) << 45)))
+  {
+    // check alignment
+    bufinfo.range = byteSize = 16;
+    ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descriptorBytes);
+
+    if((descriptorU64[0] & ptrMask) == ((bufinfo.address >> 4) | ((byteSize >> 4) << 45)))
+    {
+      outFormat = BufferDescriptorFormat::Packed_4519_Aligned16_8;
+      DescriptorTrieNode::rangeToleranceMask = ~0xFULL;
+    }
+    else if((descriptorU64[0] & ptrMask) == ((bufinfo.address >> 4) | ((256ULL >> 4) << 45)))
+    {
+      outFormat = BufferDescriptorFormat::Packed_4519_Aligned256_8;
+      DescriptorTrieNode::rangeToleranceMask = ~0xFFULL;
+    }
+    else
+    {
+      outFormat = BufferDescriptorFormat::UnknownBufferDescriptor;
+    }
+  }
+  else if(descSize == 16)
+  {
+    if((descriptorU64[0] & ptrMask) == (bufinfo.address & ptrMask) &&
+       (descriptorU64[1] & 0xffffffff) == elemSize)
+      outFormat = BufferDescriptorFormat::Pointer_ElemSize_16;
+    else if((descriptorU64[0] & ptrMask) == ((bufinfo.address & ptrMask) / texelSize) &&
+            (descriptorU64[1] & 0xffffffff) == elemSize)
+      outFormat = BufferDescriptorFormat::PointerDivided_ElemSize_16;
+  }
+  else if(descSize == 32)
+  {
+    if((descriptorU64[1] & ptrMask) == (bufinfo.address & ptrMask) &&
+       (descriptorU64[0] >> 32) == byteSize)
+      outFormat = BufferDescriptorFormat::ByteSize0_Pointer1_32;
+    if((descriptorU64[4] & ptrMask) == (bufinfo.address & ptrMask) &&
+       (descriptorU64[5] >> 32) == byteSize)
+      outFormat = BufferDescriptorFormat::Pointer4_ByteSize5_Unaligned_64;
+  }
+  else if(descSize == 64)
+  {
+    // don't check ElemSize0_Pointer2_64 here due to possible aliasing with Strided*_MultiDescriptor_64
+    /*
+    if((descriptorU64[2] & ptrMask) == bufinfo.address && (descriptorU64[0] >> 32) == elemSize)
+    {
+      outFormat = BufferDescriptorFormat::ElemSize0_Pointer2_64;
+    }
+    else
+    */
+
+    if((descriptorU64[4] & ptrMask) == (bufinfo.address & ptrMask) &&
+       (descriptorU64[5] >> 32) == byteSize)
+    {
+      // check alignment
+      bufinfo.range = 16;
+      ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descriptorBytes);
+
+      if((descriptorU64[4] & ptrMask) == (bufinfo.address & ptrMask) && (descriptorU64[5] >> 32) == 64)
+      {
+        outFormat = BufferDescriptorFormat::Pointer4_ByteSize5_Aligned_64;
+        DescriptorTrieNode::rangeToleranceMask = ~0x3FULL;
+      }
+      else if((descriptorU64[4] & ptrMask) == (bufinfo.address & ptrMask) &&
+              (descriptorU64[5] >> 32) == 16)
+      {
+        outFormat = BufferDescriptorFormat::Pointer4_ByteSize5_Unaligned_64;
+      }
+    }
+    else if((descriptorU64[4] & ptrMask) == (bufinfo.address & ptrMask))
+    {
+      // check for complex scattering, we sized the memory large enough for 3 million specifically to test this
+      uint64_t inputs[3] = {256, 200, 3000000};
+      uint64_t scattered[3] = {descriptorU64[1]};
+
+      bufinfo.range = inputs[1];
+      ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descriptorBytes);
+      scattered[1] = descriptorU64[1];
+
+      bufinfo.range = inputs[2];
+      ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descriptorBytes);
+      scattered[2] = descriptorU64[1];
+
+      bool match = true;
+      for(size_t i = 0; i < ARRAY_COUNT(inputs); i++)
+      {
+        uint64_t num = inputs[i] - 1;
+        if(texelSize > 1)
+          num = (inputs[i] / texelSize) - 1;
+
+        if(texelSize == 1)
+        {
+          uint8_t x = num & 0xff;
+          num = (num & ~0xff) + ((x & 0xfc) + 6 - (x & 0x3));
+        }
+        else if(texelSize == 2)
+        {
+          uint8_t x = num & 0xff;
+          num = (num & ~0xff) + ((x & 0xfe) + 2 - (x & 0x1));
+        }
+
+        uint64_t expected = ((num & 0x00007f) << 0) | ((num & 0x1fff80) << 9) | ((num >> 21) << 53);
+        if(expected != (scattered[i] & 0xffe00000001fffffULL))
+        {
+          match = false;
+          break;
+        }
+      }
+
+      if(match)
+        outFormat = BufferDescriptorFormat::ElemSizeScattered1_Pointer4_64;
+    }
+  }
+
+  // variable size descriptors
+  if(outFormat == BufferDescriptorFormat::UnknownBufferDescriptor &&
+     (descSize == 64 || descSize == 128))
+  {
+    // check with non-64byte aligned pointer just to check. 16 bytes is safe for all possible inputs
+    bufinfo.address += 16;
+    ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descSize, descriptorBytes);
+
+    VkDeviceAddress remainder = bufinfo.address & 0x3f;
+    VkDeviceAddress alignedAddr = (bufinfo.address & ptrMask) - remainder;
+    RDCASSERT(remainder != 0, bufinfo.address);
+
+    BufferDescriptorFormat fmts[] = {
+        BufferDescriptorFormat::Strided4_MultiDescriptor_64,
+        BufferDescriptorFormat::Strided2_MultiDescriptor_64,
+        BufferDescriptorFormat::Strided1_MultiDescriptor_64,
+    };
+    uint32_t strides[] = {
+        4,
+        2,
+        1,
+    };
+    RDCCOMPILE_ASSERT(ARRAY_COUNT(fmts) == ARRAY_COUNT(strides),
+                      "Strides don't match number of descriptor formats");
+
+    for(size_t i = 0; i < ARRAY_COUNT(fmts); i++)
+    {
+      uint32_t stride = strides[i];
+
+      if((descriptorU64[2] & ptrMask) == alignedAddr &&
+         descriptorU64[0] >> 32 == (byteSize >> stride) &&
+         ((descriptorU64[1] >> 16) & 0x3f) == (remainder >> stride))
+      {
+        outFormat = fmts[i];
+        break;
+      }
+    }
+
+    if(outFormat == BufferDescriptorFormat::UnknownBufferDescriptor &&
+       (descriptorU64[2] & ptrMask) == (bufinfo.address & ptrMask) &&
+       (descriptorU64[0] >> 32) == elemSize)
+    {
+      outFormat = BufferDescriptorFormat::ElemSize0_Pointer2_64;
+    }
+  }
+
+  if(outFormat == BufferDescriptorFormat::UnknownBufferDescriptor)
+  {
+    RDCERR("Couldn't determine %s descriptor format for address %llx range %llx",
+           ToStr(info.type).c_str(), addr, bufinfo.range);
+    // dump the descriptor
+    for(uint32_t i = 0; i * 8 < descSize; i++)
+      RDCLOG("[%u]: %llx", i, descriptorU64[i]);
+  }
+
+  return outFormat;
+}
+
 void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSize,
                                      DescriptorType type, DescriptorSetSlot &data)
 {
