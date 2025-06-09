@@ -1269,6 +1269,24 @@ public:
     return *this;
   }
 
+  Serialiser &GPUAddress()
+  {
+    if(ExportStructure() && !m_StructureStack.empty())
+    {
+      SDObject &current = *m_StructureStack.back();
+
+      if(current.NumChildren() > 0)
+      {
+        SDType &type = current.GetChild(current.NumChildren() - 1)->type;
+        RDCASSERT(type.basetype == SDBasic::UnsignedInteger);
+        RDCASSERT(type.byteSize == 8);
+        type.basetype = SDBasic::GPUAddress;
+      }
+    }
+
+    return *this;
+  }
+
   // these functions should be used very carefully, they completely disable structured export for
   // anything serialised while internal is set.
   void PushInternal() { m_InternalElement++; }
@@ -1309,6 +1327,7 @@ public:
       case SDBasic::String: RDCFATAL("eString should be specialised!"); break;
       case SDBasic::Enum:
       case SDBasic::Resource:
+      case SDBasic::GPUAddress:
       case SDBasic::UnsignedInteger:
         if(byteSize == 1)
           current.data.basic.u = (uint64_t)(uint8_t)el;

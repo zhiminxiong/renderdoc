@@ -91,6 +91,11 @@ DOCUMENT(R"(The basic irreducible type of an object. Every other more complex ty
 
   A ResourceId. Equivalent to (and stored as) an 8-byte unsigned integer, but specifically contains
   the unique Id of a resource in a capture.
+
+.. data:: GPUAddress
+
+  A GPU pointer. Equivalent to (and stored as) an 8-byte unsigned integer, but specifically contains
+  the address of a resource in a capture.
 )");
 enum class SDBasic : uint32_t
 {
@@ -107,6 +112,7 @@ enum class SDBasic : uint32_t
   Boolean,
   Character,
   Resource,
+  GPUAddress,
 };
 
 DECLARE_REFLECTION_ENUM(SDBasic);
@@ -932,6 +938,7 @@ Invalid if the object is not actually a :class:`ResourceId`.
       case SDBasic::Buffer: return QVariant();
       case SDBasic::String: return data.str;
       case SDBasic::Enum:
+      case SDBasic::GPUAddress:
       case SDBasic::UnsignedInteger: return QVariant(qulonglong(data.basic.u));
       case SDBasic::SignedInteger: return QVariant(qlonglong(data.basic.i));
       case SDBasic::Resource: return (QVariant)data.basic.id;

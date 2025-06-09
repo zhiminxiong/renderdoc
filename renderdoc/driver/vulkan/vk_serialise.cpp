@@ -9786,7 +9786,7 @@ void DoSerialise(SerialiserType &ser, VkDescriptorBufferBindingInfoEXT &el)
   RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT);
   SerialiseNext(ser, el.sType, el.pNext);
 
-  SERIALISE_MEMBER(address);
+  SERIALISE_MEMBER(address).GPUAddress();
   SERIALISE_MEMBER_VKFLAGS(VkBufferUsageFlags, usage);
 }
 
@@ -9818,7 +9818,7 @@ void DoSerialise(SerialiserType &ser, VkDescriptorAddressInfoEXT &el)
   RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT);
   SerialiseNext(ser, el.sType, el.pNext);
 
-  SERIALISE_MEMBER(address);
+  SERIALISE_MEMBER(address).GPUAddress();
   SERIALISE_MEMBER(range);
   SERIALISE_MEMBER(format);
 }

@@ -69,6 +69,7 @@ void DumpObject(FileIO::LogFileHandle *log, const rdcstr &indent, SDObject *obj)
       case SDBasic::Boolean: val = ToStr(obj->data.basic.b); break;
       case SDBasic::Character: val = ToStr(obj->data.basic.c); break;
       case SDBasic::Resource: val = ToStr(obj->data.basic.id); break;
+      case SDBasic::GPUAddress: val = "GPUAddress::" + ToStr(obj->data.basic.u); break;
     }
     rdcstr msg = StringFormat::Fmt("%s%s %s = %s\n", indent.c_str(), obj->type.name.c_str(),
                                    obj->name.c_str(), val.c_str());
@@ -838,6 +839,7 @@ void DoSerialise(SerialiserType &ser, SDObject *el)
     case SDBasic::Character: ser.Serialise(""_lit, el->data.basic.c); break;
     case SDBasic::Resource: ser.Serialise(""_lit, el->data.basic.id); break;
     case SDBasic::Enum:
+    case SDBasic::GPUAddress:
     case SDBasic::UnsignedInteger:
       if(el->type.byteSize == 1)
       {

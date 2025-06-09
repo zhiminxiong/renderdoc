@@ -4728,6 +4728,7 @@ QVariant VulkanPipelineStateViewer::ConvertSDObjectToFossilizeJSON(const SDObjec
       return list;
     }
     case SDBasic::String: return QString(obj->AsString());
+    case SDBasic::GPUAddress:
     case SDBasic::Enum:
     case SDBasic::UnsignedInteger: return (qulonglong)obj->AsUInt64();
     case SDBasic::SignedInteger: return (qlonglong)obj->AsInt64();
