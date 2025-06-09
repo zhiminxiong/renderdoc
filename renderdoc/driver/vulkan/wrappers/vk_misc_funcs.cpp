@@ -173,12 +173,10 @@ static void MakeSubpassLoadRP(RPCreateInfo &info, const RPCreateInfo *origInfo, 
   }
 
 DESTROY_IMPL(VkBufferView, DestroyBufferView)
-DESTROY_IMPL(VkImageView, DestroyImageView)
 DESTROY_IMPL(VkShaderModule, DestroyShaderModule)
 DESTROY_IMPL(VkPipeline, DestroyPipeline)
 DESTROY_IMPL(VkPipelineCache, DestroyPipelineCache)
 DESTROY_IMPL(VkPipelineLayout, DestroyPipelineLayout)
-DESTROY_IMPL(VkSampler, DestroySampler)
 DESTROY_IMPL(VkDescriptorSetLayout, DestroyDescriptorSetLayout)
 DESTROY_IMPL(VkDescriptorPool, DestroyDescriptorPool)
 DESTROY_IMPL(VkSemaphore, DestroySemaphore)
@@ -191,6 +189,36 @@ DESTROY_IMPL(VkSamplerYcbcrConversion, DestroySamplerYcbcrConversion)
 DESTROY_IMPL(VkShaderEXT, DestroyShaderEXT)
 
 #undef DESTROY_IMPL
+
+void WrappedVulkan::vkDestroyImageView(VkDevice device, VkImageView obj, const VkAllocationCallbacks *)
+{
+  if(obj == VK_NULL_HANDLE)
+    return;
+  VkImageView unwrappedObj = Unwrap(obj);
+  {
+    SCOPED_LOCK(m_ForcedReferencesLock);
+    m_ForcedReferences.removeOne(GetRecord(obj));
+  }
+  if(IsReplayMode(m_State))
+    m_CreationInfo.erase(GetResID(obj));
+  GetResourceManager()->ReleaseWrappedResource(obj, true);
+  ObjDisp(device)->DestroyImageView(Unwrap(device), unwrappedObj, NULL);
+}
+
+void WrappedVulkan::vkDestroySampler(VkDevice device, VkSampler obj, const VkAllocationCallbacks *)
+{
+  if(obj == VK_NULL_HANDLE)
+    return;
+  VkSampler unwrappedObj = Unwrap(obj);
+  {
+    SCOPED_LOCK(m_ForcedReferencesLock);
+    m_ForcedReferences.removeOne(GetRecord(obj));
+  }
+  if(IsReplayMode(m_State))
+    m_CreationInfo.erase(GetResID(obj));
+  GetResourceManager()->ReleaseWrappedResource(obj, true);
+  ObjDisp(device)->DestroySampler(Unwrap(device), unwrappedObj, NULL);
+}
 
 void WrappedVulkan::vkDestroyAccelerationStructureKHR(VkDevice device, VkAccelerationStructureKHR obj,
                                                       const VkAllocationCallbacks *)
@@ -349,6 +377,11 @@ void WrappedVulkan::vkDestroyImage(VkDevice device, VkImage obj, const VkAllocat
 {
   if(obj == VK_NULL_HANDLE)
     return;
+
+  {
+    SCOPED_LOCK(m_ForcedReferencesLock);
+    m_ForcedReferences.removeOne(GetRecord(obj));
+  }
 
   VkImage unwrappedObj = Unwrap(obj);
   GetResourceManager()->ReleaseWrappedResource(obj, true);
@@ -755,6 +788,11 @@ VkResult WrappedVulkan::vkCreateSampler(VkDevice device, const VkSamplerCreateIn
 
       VkResourceRecord *record = GetResourceManager()->AddResourceRecord(*pSampler);
       record->AddChunk(chunk);
+
+      // can't differentiate whether this sampler will be used with descriptor buffers, must force
+      // reference all samplers
+      if(DescriptorBuffers())
+        AddForcedReference(record);
 
       const VkSamplerYcbcrConversionInfo *ycbcr =
           (const VkSamplerYcbcrConversionInfo *)FindNextStruct(

@@ -1814,6 +1814,15 @@ VkResult WrappedVulkan::vkBindImageMemory(VkDevice device, VkImage image, VkDevi
 
     record->AddParent(memrecord);
 
+    // if the image was force-referenced, do the same with the memory
+    if(IsForcedReference(record))
+    {
+      // AddForcedReference will also call MarkResourceFrameReferenced() on the image in case
+      // we're currently capturing, do the same with the memory with the correct semantics.
+      GetResourceManager()->MarkMemoryFrameReferenced(
+          GetResID(mem), memOffset, record->resInfo->memreqs.size, eFrameRef_ReadBeforeWrite);
+    }
+
     // images are a base resource but we want to track where their memory comes from.
     // Anything that looks up a baseResource for an image knows not to chase further
     // than the image.
@@ -2728,6 +2737,11 @@ VkResult WrappedVulkan::vkCreateImage(VkDevice device, const VkImageCreateInfo *
       VkResourceRecord *record = GetResourceManager()->AddResourceRecord(*pImage);
       record->AddChunk(chunk);
 
+      // can't differentiate whether this image will be used with descriptor buffers, must force
+      // reference all images
+      if(DescriptorBuffers())
+        AddForcedReference(record);
+
       record->resInfo = new ResourceInfo();
       record->resInfo->parentResInfo = record->resInfo;
       ResourceInfo &resInfo = *record->resInfo;
@@ -3147,6 +3161,11 @@ VkResult WrappedVulkan::vkCreateImageView(VkDevice device, const VkImageViewCrea
       record->AddChunk(chunk);
       record->AddParent(imageRecord);
 
+      // can't differentiate whether this image will be used with descriptor buffers, must force
+      // reference all images
+      if(DescriptorBuffers())
+        AddForcedReference(record);
+
       // store the base resource. Note images have a baseResource pointing
       // to their memory, which we will also need so we store that separately
       record->baseResource = imageRecord->GetResourceID();
@@ -3524,6 +3543,16 @@ VkResult WrappedVulkan::vkBindImageMemory2(VkDevice device, uint32_t bindInfoCou
       // to memory mid-frame
       imgrecord->AddChunk(chunk);
 
+      // if the image was force-referenced, do the same with the memory
+      if(IsForcedReference(imgrecord))
+      {
+        // AddForcedReference will also call MarkResourceFrameReferenced() on the buffer in case
+        // we're currently capturing, do the same with the memory with the correct semantics.
+        GetResourceManager()->MarkMemoryFrameReferenced(
+            GetResID(pBindInfos[i].memory), pBindInfos[i].memoryOffset,
+            imgrecord->resInfo->memreqs.size, eFrameRef_ReadBeforeWrite);
+      }
+
       const VkBindImageMemorySwapchainInfoKHR *swapBind =
           (const VkBindImageMemorySwapchainInfoKHR *)FindNextStruct(
               &pBindInfos[i], VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_SWAPCHAIN_INFO_KHR);
@@ -3785,11 +3814,12 @@ VkResult WrappedVulkan::vkCreateAccelerationStructureKHR(
 
       GetResourceManager()->MarkDirtyResource(id);
       if(pCreateInfo->type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR ||
-         pCreateInfo->type == VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR)
+         pCreateInfo->type == VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR || DescriptorBuffers())
       {
         // We force reference BLASs as it is not feasible to track at the API level which TLASs
         // reference them.  We force ref generics too as they could bottom or top level so we
         // conservatively assume they are bottom
+        // when descriptor buffers are enabled, we must force reference all ASs
         AddForcedReference(record);
 
         // in case we're currently capturing, immediately consider the AS as referenced
