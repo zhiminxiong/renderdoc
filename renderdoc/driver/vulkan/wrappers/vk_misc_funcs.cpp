@@ -734,11 +734,21 @@ VkResult WrappedVulkan::vkCreateSampler(VkDevice device, const VkSamplerCreateIn
     {
       Chunk *chunk = NULL;
 
+      VkSamplerCreateInfo serialisedCreateInfo = *pCreateInfo;
+
+      OpaqueDataForSerialising opaqueData;
+
+      if(DescriptorBuffers())
+      {
+        opaqueData.fill(device, *pSampler, m_DescriptorBufferProperties);
+        opaqueData.addForSerialising((VkBaseInStructure *)&serialisedCreateInfo);
+      }
+
       {
         CACHE_THREAD_SERIALISER();
 
         SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCreateSampler);
-        Serialise_vkCreateSampler(ser, device, pCreateInfo, NULL, pSampler);
+        Serialise_vkCreateSampler(ser, device, &serialisedCreateInfo, NULL, pSampler);
 
         chunk = scope.Get();
       }

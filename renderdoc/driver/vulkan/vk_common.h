@@ -912,6 +912,32 @@ DECLARE_REFLECTION_STRUCT(DescriptorSetSlot);
 constexpr uint64_t FixedOpaqueDescriptorCaptureSize = 16;
 constexpr uint64_t MaxDescriptorSize = 256;
 
+struct OpaqueDataForSerialising : VkOpaqueCaptureDescriptorDataCreateInfoEXT
+{
+  OpaqueDataForSerialising()
+  {
+    sType = VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT;
+    pNext = NULL;
+    opaqueCaptureDescriptorData = data;
+  }
+
+  void fill(VkDevice wrappedDevice, VkSampler wrappedSampler,
+            VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
+  void fill(VkDevice wrappedDevice, VkBuffer wrappedBuffer,
+            VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
+  void fill(VkDevice wrappedDevice, VkImage wrappedImage,
+            VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
+  void fill(VkDevice wrappedDevice, VkImageView wrappedView,
+            VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
+  void fill(VkDevice wrappedDevice, VkAccelerationStructureKHR wrappedAS,
+            VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
+
+  void addForSerialising(VkBaseInStructure *serialisedCreateInfo);
+
+  byte data[FixedOpaqueDescriptorCaptureSize] = {};
+  size_t sz = 0;
+};
+
 // pointers are considered to be 48-bit only, as some descriptors only store those and no-one
 // uses the upper bits relevantly
 //

@@ -1016,6 +1016,113 @@ void DoSerialise(SerialiserType &ser, VkInitParams &el)
 
 INSTANTIATE_SERIALISE_TYPE(VkInitParams);
 
+void OpaqueDataForSerialising::fill(VkDevice wrappedDevice, VkSampler wrappedSampler,
+                                    VkPhysicalDeviceDescriptorBufferPropertiesEXT &props)
+{
+  VkSamplerCaptureDescriptorDataInfoEXT getInfo = {
+      VK_STRUCTURE_TYPE_SAMPLER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,
+      NULL,
+      Unwrap(wrappedSampler),
+  };
+
+  sz = props.samplerCaptureReplayDescriptorDataSize;
+
+  VkResult opaqueQuery =
+      ObjDisp(wrappedDevice)
+          ->GetSamplerOpaqueCaptureDescriptorDataEXT(Unwrap(wrappedDevice), &getInfo, data);
+  if(opaqueQuery != VK_SUCCESS)
+    RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
+}
+
+void OpaqueDataForSerialising::fill(VkDevice wrappedDevice, VkBuffer wrappedBuffer,
+                                    VkPhysicalDeviceDescriptorBufferPropertiesEXT &props)
+{
+  VkBufferCaptureDescriptorDataInfoEXT getInfo = {
+      VK_STRUCTURE_TYPE_BUFFER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,
+      NULL,
+      Unwrap(wrappedBuffer),
+  };
+
+  sz = props.bufferCaptureReplayDescriptorDataSize;
+
+  VkResult opaqueQuery =
+      ObjDisp(wrappedDevice)
+          ->GetBufferOpaqueCaptureDescriptorDataEXT(Unwrap(wrappedDevice), &getInfo, data);
+  if(opaqueQuery != VK_SUCCESS)
+    RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
+}
+
+void OpaqueDataForSerialising::fill(VkDevice wrappedDevice, VkImage wrappedImage,
+                                    VkPhysicalDeviceDescriptorBufferPropertiesEXT &props)
+{
+  VkImageCaptureDescriptorDataInfoEXT getInfo = {
+      VK_STRUCTURE_TYPE_IMAGE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,
+      NULL,
+      Unwrap(wrappedImage),
+  };
+
+  sz = props.imageCaptureReplayDescriptorDataSize;
+
+  VkResult opaqueQuery =
+      ObjDisp(wrappedDevice)
+          ->GetImageOpaqueCaptureDescriptorDataEXT(Unwrap(wrappedDevice), &getInfo, data);
+  if(opaqueQuery != VK_SUCCESS)
+    RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
+}
+
+void OpaqueDataForSerialising::fill(VkDevice wrappedDevice, VkImageView wrappedView,
+                                    VkPhysicalDeviceDescriptorBufferPropertiesEXT &props)
+{
+  VkImageViewCaptureDescriptorDataInfoEXT getInfo = {
+      VK_STRUCTURE_TYPE_IMAGE_VIEW_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,
+      NULL,
+      Unwrap(wrappedView),
+  };
+
+  sz = props.imageViewCaptureReplayDescriptorDataSize;
+
+  VkResult opaqueQuery =
+      ObjDisp(wrappedDevice)
+          ->GetImageViewOpaqueCaptureDescriptorDataEXT(Unwrap(wrappedDevice), &getInfo, data);
+  if(opaqueQuery != VK_SUCCESS)
+    RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
+}
+
+void OpaqueDataForSerialising::fill(VkDevice wrappedDevice, VkAccelerationStructureKHR wrappedAS,
+                                    VkPhysicalDeviceDescriptorBufferPropertiesEXT &props)
+{
+  VkAccelerationStructureCaptureDescriptorDataInfoEXT getInfo = {
+      VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,
+      NULL,
+      Unwrap(wrappedAS),
+  };
+
+  sz = props.accelerationStructureCaptureReplayDescriptorDataSize;
+
+  VkResult opaqueQuery = ObjDisp(wrappedDevice)
+                             ->GetAccelerationStructureOpaqueCaptureDescriptorDataEXT(
+                                 Unwrap(wrappedDevice), &getInfo, data);
+  if(opaqueQuery != VK_SUCCESS)
+    RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
+}
+
+void OpaqueDataForSerialising::addForSerialising(VkBaseInStructure *serialisedCreateInfo)
+{
+  VkOpaqueCaptureDescriptorDataCreateInfoEXT *existing =
+      (VkOpaqueCaptureDescriptorDataCreateInfoEXT *)FindNextStruct(
+          serialisedCreateInfo, VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT);
+
+  if(existing)
+  {
+    RDCASSERT(memcmp(data, existing->opaqueCaptureDescriptorData, sz) == 0);
+  }
+  else
+  {
+    pNext = serialisedCreateInfo->pNext;
+    serialisedCreateInfo->pNext = (VkBaseInStructure *)this;
+  }
+}
+
 void GetPhysicalDeviceDriverProperties(VkInstDispatchTable *instDispatchTable,
                                        VkPhysicalDevice unwrappedPhysicalDevice,
                                        VkPhysicalDeviceDriverProperties &driverProps)

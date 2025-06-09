@@ -1996,6 +1996,8 @@ VkResult WrappedVulkan::vkCreateBuffer(VkDevice device, const VkBufferCreateInfo
         serialisedUsage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
       SetBufferUsageFlags(&serialisedCreateInfo, serialisedUsage);
 
+      OpaqueDataForSerialising opaqueData;
+
       // if we're using VK_[KHR|EXT]_buffer_device_address, we fetch the device address that's been
       // allocated and insert it into the next chain and patch the flags so that it replays
       // naturally.
@@ -2060,6 +2062,12 @@ VkResult WrappedVulkan::vkCreateBuffer(VkDevice device, const VkBufferCreateInfo
         {
           SCOPED_LOCK(m_DeviceAddressResourcesLock);
           m_DeviceAddressResources.IDs.push_back(record->GetResourceID());
+        }
+
+        if(DescriptorBuffers())
+        {
+          opaqueData.fill(device, *pBuffer, m_DescriptorBufferProperties);
+          opaqueData.addForSerialising((VkBaseInStructure *)&serialisedCreateInfo);
         }
       }
 
@@ -2698,11 +2706,21 @@ VkResult WrappedVulkan::vkCreateImage(VkDevice device, const VkImageCreateInfo *
     {
       Chunk *chunk = NULL;
 
+      VkImageCreateInfo serialisedCreateInfo = *pCreateInfo;
+
+      OpaqueDataForSerialising opaqueData;
+
+      if(DescriptorBuffers())
+      {
+        opaqueData.fill(device, *pImage, m_DescriptorBufferProperties);
+        opaqueData.addForSerialising((VkBaseInStructure *)&serialisedCreateInfo);
+      }
+
       {
         CACHE_THREAD_SERIALISER();
 
         SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCreateImage);
-        Serialise_vkCreateImage(ser, device, pCreateInfo, NULL, pImage);
+        Serialise_vkCreateImage(ser, device, &serialisedCreateInfo, NULL, pImage);
 
         chunk = scope.Get();
       }
@@ -3104,11 +3122,21 @@ VkResult WrappedVulkan::vkCreateImageView(VkDevice device, const VkImageViewCrea
     {
       Chunk *chunk = NULL;
 
+      VkImageViewCreateInfo serialisedCreateInfo = *pCreateInfo;
+
+      OpaqueDataForSerialising opaqueData;
+
+      if(DescriptorBuffers())
+      {
+        opaqueData.fill(device, *pView, m_DescriptorBufferProperties);
+        opaqueData.addForSerialising((VkBaseInStructure *)&serialisedCreateInfo);
+      }
+
       {
         CACHE_THREAD_SERIALISER();
 
         SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCreateImageView);
-        Serialise_vkCreateImageView(ser, device, pCreateInfo, NULL, pView);
+        Serialise_vkCreateImageView(ser, device, &serialisedCreateInfo, NULL, pView);
 
         chunk = scope.Get();
       }
@@ -3717,6 +3745,14 @@ VkResult WrappedVulkan::vkCreateAccelerationStructureKHR(
       const VkDeviceAddress addr =
           ObjDisp(device)->GetAccelerationStructureDeviceAddressKHR(Unwrap(device), &getInfo);
       serialisedCreateInfo.deviceAddress = addr;
+
+      OpaqueDataForSerialising opaqueData;
+
+      if(DescriptorBuffers())
+      {
+        opaqueData.fill(device, *pAccelerationStructure, m_DescriptorBufferProperties);
+        opaqueData.addForSerialising((VkBaseInStructure *)&serialisedCreateInfo);
+      }
 
       Chunk *chunk = NULL;
 
