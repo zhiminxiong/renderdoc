@@ -2672,7 +2672,7 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
 
     const SwapchainInfo &swapInfo = *swaprecord->swapInfo;
 
-    backbuffer = swapInfo.images[swapInfo.lastPresent.imageIndex].im;
+    backbuffer = swapInfo.images[swapInfo.lastPresent.imageIndex].userSwapImage;
     swapImageInfo = &swapInfo.imageInfo;
     swapQueueIndex = GetRecord(swapInfo.lastPresent.presentQueue)->queueFamilyIndex;
     swapLayout =
@@ -2680,8 +2680,12 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
 
     // mark all images referenced as well
     for(size_t i = 0; i < swapInfo.images.size(); i++)
-      GetResourceManager()->MarkResourceFrameReferenced(GetResID(swapInfo.images[i].im),
+      GetResourceManager()->MarkResourceFrameReferenced(GetResID(swapInfo.images[i].userSwapImage),
                                                         eFrameRef_Read);
+
+    // we're using the fake image for descriptor buffers, which is in layout general not present
+    if(DescriptorBuffers())
+      swapLayout = VK_IMAGE_LAYOUT_GENERAL;
   }
   else
   {
@@ -2697,7 +2701,7 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
 
       const SwapchainInfo &swapInfo = *swaprecord->swapInfo;
 
-      backbuffer = swapInfo.images[swapInfo.lastPresent.imageIndex].im;
+      backbuffer = swapInfo.images[swapInfo.lastPresent.imageIndex].userSwapImage;
       swapImageInfo = &swapInfo.imageInfo;
       swapQueueIndex = GetRecord(swapInfo.lastPresent.presentQueue)->queueFamilyIndex;
       swapLayout =
@@ -2705,8 +2709,11 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
 
       // mark all images referenced as well
       for(size_t i = 0; i < swapInfo.images.size(); i++)
-        GetResourceManager()->MarkResourceFrameReferenced(GetResID(swapInfo.images[i].im),
-                                                          eFrameRef_Read);
+        GetResourceManager()->MarkResourceFrameReferenced(
+            GetResID(swapInfo.images[i].userSwapImage), eFrameRef_Read);
+
+      if(DescriptorBuffers())
+        swapLayout = VK_IMAGE_LAYOUT_GENERAL;
     }
     else if(VRBackbufferRecord)
     {

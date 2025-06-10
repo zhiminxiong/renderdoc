@@ -123,6 +123,7 @@ rdcstr HumanDriverName(VkDriverId driverId);
 void SanitiseOldImageLayout(VkImageLayout &layout);
 void SanitiseNewImageLayout(VkImageLayout &layout);
 void SanitiseReplayImageLayout(VkImageLayout &layout);
+void SanitiseDescriptorBufferImageLayout(VkImageLayout &layout);
 
 void CombineDepthStencilLayouts(rdcarray<VkImageMemoryBarrier> &barriers);
 
@@ -945,6 +946,9 @@ struct OpaqueDataForSerialising : VkOpaqueCaptureDescriptorDataCreateInfoEXT
             VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
   void fill(VkDevice wrappedDevice, VkAccelerationStructureKHR wrappedAS,
             VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
+
+  void fillUnwrapped(VkDevice wrappedDevice, VkImage unwrappedImage,
+                     VkPhysicalDeviceDescriptorBufferPropertiesEXT &props);
 
   void addForSerialising(VkBaseInStructure *serialisedCreateInfo);
 

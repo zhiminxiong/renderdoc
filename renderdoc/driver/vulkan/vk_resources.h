@@ -979,9 +979,9 @@ DECLARE_REFLECTION_STRUCT(ImageInfo);
 
 struct PresentInfo
 {
-  VkQueue presentQueue;
+  VkQueue presentQueue = VK_NULL_HANDLE;
   rdcarray<VkSemaphore> waitSemaphores;
-  uint32_t imageIndex;
+  uint32_t imageIndex = 0;
 };
 
 struct SwapchainInfo
@@ -996,16 +996,25 @@ struct SwapchainInfo
 
   struct SwapImage
   {
-    VkImage im;
+    // the handle returned to the user, whether real or fake
+    VkImage userSwapImage = VK_NULL_HANDLE;
+    // if we made a fake swap image then this is the real unwrapped swapchain image
+    VkImage unwrappedRealSwapImage = VK_NULL_HANDLE;
 
-    VkImageView view;
-    VkFramebuffer fb;
+    uint64_t fakeImageMemoryOffset = 0;
 
-    VkFence fence;
-    VkCommandBuffer cmd;
-    VkSemaphore overlaydone;
+    VkImageView view = VK_NULL_HANDLE;
+    VkFramebuffer fb = VK_NULL_HANDLE;
+
+    VkFence fence = VK_NULL_HANDLE;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    VkSemaphore overlaydone = VK_NULL_HANDLE;
   };
   rdcarray<SwapImage> images;
+  VkDeviceMemory imageMemory = VK_NULL_HANDLE;
+  uint32_t imageMemoryIndex = ~0U;
+  uint64_t imageMemorySize = 0;
+
   PresentInfo lastPresent;
 };
 

@@ -923,6 +923,14 @@ void WrappedVulkan::vkCmdWaitEvents(VkCommandBuffer commandBuffer, uint32_t even
     {
       im[i] = pImageMemoryBarriers[i];
       im[i].image = Unwrap(im[i].image);
+
+      // descriptor buffers intercepts all swapchain images during capture so we change any
+      // reference to PRESENT layout into GENERAL since that's what is valid for our image
+      if(DescriptorBuffers())
+      {
+        SanitiseDescriptorBufferImageLayout(im[i].newLayout);
+        SanitiseDescriptorBufferImageLayout(im[i].newLayout);
+      }
     }
 
     SERIALISE_TIME_CALL(ObjDisp(commandBuffer)
@@ -1182,6 +1190,13 @@ void WrappedVulkan::vkCmdSetEvent2(VkCommandBuffer commandBuffer, VkEvent event,
   byte *tempMem = GetTempMemory(GetNextPatchSize(pDependencyInfo));
   VkDependencyInfo *unwrappedInfo = UnwrapStructAndChain(m_State, tempMem, pDependencyInfo);
 
+  for(uint32_t im = 0; im < unwrappedInfo->imageMemoryBarrierCount; im++)
+  {
+    VkImageMemoryBarrier2 &b = (VkImageMemoryBarrier2 &)unwrappedInfo->pImageMemoryBarriers[im];
+    SanitiseDescriptorBufferImageLayout(b.newLayout);
+    SanitiseDescriptorBufferImageLayout(b.newLayout);
+  }
+
   SERIALISE_TIME_CALL(
       ObjDisp(commandBuffer)->CmdSetEvent2(Unwrap(commandBuffer), Unwrap(event), unwrappedInfo));
 
@@ -1431,6 +1446,13 @@ void WrappedVulkan::vkCmdWaitEvents2(VkCommandBuffer commandBuffer, uint32_t eve
     {
       ev[i] = Unwrap(pEvents[i]);
       depInfo[i] = *UnwrapStructAndChain(m_State, tempMem, &pDependencyInfos[i]);
+
+      for(uint32_t im = 0; im < depInfo[i].imageMemoryBarrierCount; im++)
+      {
+        VkImageMemoryBarrier2 &b = (VkImageMemoryBarrier2 &)depInfo[i].pImageMemoryBarriers[im];
+        SanitiseDescriptorBufferImageLayout(b.newLayout);
+        SanitiseDescriptorBufferImageLayout(b.newLayout);
+      }
     }
 
     SERIALISE_TIME_CALL(

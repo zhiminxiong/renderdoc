@@ -4182,6 +4182,9 @@ void WrappedVulkan::vkCmdPipelineBarrier(
     {
       im[i] = pImageMemoryBarriers[i];
       im[i].image = Unwrap(im[i].image);
+
+      SanitiseDescriptorBufferImageLayout(im[i].newLayout);
+      SanitiseDescriptorBufferImageLayout(im[i].newLayout);
     }
 
     SERIALISE_TIME_CALL(ObjDisp(commandBuffer)
@@ -4415,6 +4418,13 @@ void WrappedVulkan::vkCmdPipelineBarrier2(VkCommandBuffer commandBuffer,
 
   byte *tempMem = GetTempMemory(GetNextPatchSize(pDependencyInfo));
   VkDependencyInfo *unwrappedInfo = UnwrapStructAndChain(m_State, tempMem, pDependencyInfo);
+
+  for(uint32_t im = 0; im < unwrappedInfo->imageMemoryBarrierCount; im++)
+  {
+    VkImageMemoryBarrier2 &b = (VkImageMemoryBarrier2 &)unwrappedInfo->pImageMemoryBarriers[im];
+    SanitiseDescriptorBufferImageLayout(b.newLayout);
+    SanitiseDescriptorBufferImageLayout(b.newLayout);
+  }
 
   SERIALISE_TIME_CALL(
       ObjDisp(commandBuffer)->CmdPipelineBarrier2(Unwrap(commandBuffer), unwrappedInfo));

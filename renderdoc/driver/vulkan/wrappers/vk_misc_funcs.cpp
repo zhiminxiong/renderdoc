@@ -348,15 +348,18 @@ void WrappedVulkan::vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR obj,
     for(size_t i = 0; i < info.images.size(); i++)
     {
       VkFramebuffer unwrappedFB = Unwrap(info.images[i].fb);
+      VkImage unwrappedImage = Unwrap(info.images[i].userSwapImage);
       VkImageView unwrappedView = Unwrap(info.images[i].view);
       VkSemaphore unwrappedSem = Unwrap(info.images[i].overlaydone);
       VkFence unwrappedFence = Unwrap(info.images[i].fence);
       GetResourceManager()->ReleaseWrappedResource(info.images[i].fb, true);
-      // note, image doesn't have to be destroyed, just untracked
-      GetResourceManager()->ReleaseWrappedResource(info.images[i].im, true);
+      GetResourceManager()->ReleaseWrappedResource(info.images[i].userSwapImage, true);
       GetResourceManager()->ReleaseWrappedResource(info.images[i].view, true);
       GetResourceManager()->ReleaseWrappedResource(info.images[i].overlaydone);
       GetResourceManager()->ReleaseWrappedResource(info.images[i].fence);
+      // if we had a separate real image, then the unwrappedImage is a fake one we  created and must be destroyed
+      if(info.images[i].unwrappedRealSwapImage != VK_NULL_HANDLE)
+        ObjDisp(device)->DestroyImage(Unwrap(device), unwrappedImage, NULL);
       ObjDisp(device)->DestroyFramebuffer(Unwrap(device), unwrappedFB, NULL);
       ObjDisp(device)->DestroyImageView(Unwrap(device), unwrappedView, NULL);
       ObjDisp(device)->DestroySemaphore(Unwrap(device), unwrappedSem, NULL);
@@ -364,6 +367,12 @@ void WrappedVulkan::vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR obj,
 
       // return the command buffers to the pool
       AddFreeCommandBuffer(info.images[i].cmd);
+    }
+
+    if(info.imageMemory != VK_NULL_HANDLE)
+    {
+      ObjDisp(device)->FreeMemory(Unwrap(device), Unwrap(info.imageMemory), NULL);
+      GetResourceManager()->ReleaseWrappedResource(info.imageMemory, true);
     }
   }
 
@@ -1313,9 +1322,27 @@ bool WrappedVulkan::Serialise_vkCreateRenderPass(SerialiserType &ser, VkDevice d
 VkResult WrappedVulkan::vkCreateRenderPass(VkDevice device, const VkRenderPassCreateInfo *pCreateInfo,
                                            const VkAllocationCallbacks *, VkRenderPass *pRenderPass)
 {
+  VkRenderPassCreateInfo patchedCreateInfo = *pCreateInfo;
+
+  // descriptor buffers intercepts all swapchain images during capture so we change any
+  // reference to PRESENT layout into GENERAL since that's what is valid for our image
+  if(DescriptorBuffers())
+  {
+    byte *tempMem = GetTempMemory(GetNextPatchSize(patchedCreateInfo.pNext));
+    CopyNextChainForPatching("VkRenderPassCreateInfo", tempMem,
+                             (VkBaseInStructure *)&patchedCreateInfo);
+
+    for(uint32_t a = 0; a < patchedCreateInfo.attachmentCount; a++)
+    {
+      VkAttachmentDescription &att = (VkAttachmentDescription &)patchedCreateInfo.pAttachments[a];
+      SanitiseDescriptorBufferImageLayout(att.initialLayout);
+      SanitiseDescriptorBufferImageLayout(att.finalLayout);
+    }
+  }
+
   VkResult ret;
-  SERIALISE_TIME_CALL(
-      ret = ObjDisp(device)->CreateRenderPass(Unwrap(device), pCreateInfo, NULL, pRenderPass));
+  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CreateRenderPass(Unwrap(device), &patchedCreateInfo,
+                                                              NULL, pRenderPass));
 
   if(ret == VK_SUCCESS)
   {
@@ -1573,6 +1600,24 @@ VkResult WrappedVulkan::vkCreateRenderPass2(VkDevice device,
                                             const VkRenderPassCreateInfo2 *pCreateInfo,
                                             const VkAllocationCallbacks *, VkRenderPass *pRenderPass)
 {
+  VkRenderPassCreateInfo2 patchedCreateInfo = *pCreateInfo;
+
+  // descriptor buffers intercepts all swapchain images during capture so we change any
+  // reference to PRESENT layout into GENERAL since that's what is valid for our image
+  if(DescriptorBuffers())
+  {
+    byte *tempMem = GetTempMemory(GetNextPatchSize(patchedCreateInfo.pNext));
+    CopyNextChainForPatching("VkRenderPassCreateInfo2", tempMem,
+                             (VkBaseInStructure *)&patchedCreateInfo);
+
+    for(uint32_t a = 0; a < patchedCreateInfo.attachmentCount; a++)
+    {
+      VkAttachmentDescription2 &att = (VkAttachmentDescription2 &)patchedCreateInfo.pAttachments[a];
+      SanitiseDescriptorBufferImageLayout(att.initialLayout);
+      SanitiseDescriptorBufferImageLayout(att.finalLayout);
+    }
+  }
+
   VkResult ret;
   SERIALISE_TIME_CALL(
       ret = ObjDisp(device)->CreateRenderPass2(Unwrap(device), pCreateInfo, NULL, pRenderPass));

@@ -433,7 +433,7 @@ bool VkInitParams::IsSupportedVersion(uint64_t ver)
   if(ver == CurrentVersion)
     return true;
 
-  // 0x16 -> 0x17 - added indication of reserved descriptors
+  // 0x16 -> 0x17 - added indication of reserved descriptors and descriptor buffer support for swapchains
   if(ver == 0x16)
     return true;
 
@@ -487,6 +487,13 @@ bool VkInitParams::IsSupportedVersion(uint64_t ver)
     return true;
 
   return false;
+}
+
+void SanitiseDescriptorBufferImageLayout(VkImageLayout &layout)
+{
+  // for descriptor buffers we intercept swapchain images so we have to remap present layouts to general
+  if(layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR || layout == VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR)
+    layout = VK_IMAGE_LAYOUT_GENERAL;
 }
 
 void SanitiseReplayImageLayout(VkImageLayout &layout)
@@ -1056,6 +1063,24 @@ void OpaqueDataForSerialising::fill(VkDevice wrappedDevice, VkBuffer wrappedBuff
   VkResult opaqueQuery =
       ObjDisp(wrappedDevice)
           ->GetBufferOpaqueCaptureDescriptorDataEXT(Unwrap(wrappedDevice), &getInfo, data);
+  if(opaqueQuery != VK_SUCCESS)
+    RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
+}
+
+void OpaqueDataForSerialising::fillUnwrapped(VkDevice wrappedDevice, VkImage unwrappedImage,
+                                             VkPhysicalDeviceDescriptorBufferPropertiesEXT &props)
+{
+  VkImageCaptureDescriptorDataInfoEXT getInfo = {
+      VK_STRUCTURE_TYPE_IMAGE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT,
+      NULL,
+      unwrappedImage,
+  };
+
+  sz = props.imageCaptureReplayDescriptorDataSize;
+
+  VkResult opaqueQuery =
+      ObjDisp(wrappedDevice)
+          ->GetImageOpaqueCaptureDescriptorDataEXT(Unwrap(wrappedDevice), &getInfo, data);
   if(opaqueQuery != VK_SUCCESS)
     RDCERR("Couldn't get opaque capture/replay data: %s", ToStr(opaqueQuery).c_str());
 }
