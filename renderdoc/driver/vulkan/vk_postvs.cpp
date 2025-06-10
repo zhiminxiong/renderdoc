@@ -5203,6 +5203,9 @@ void VulkanReplay::FetchVSOut(uint32_t eventId, VulkanRenderState &state)
   // repoint pipeline layout
   compPipeInfo.layout = patchedBufferdata.pipeLayout;
 
+  if(pipeCreateInfo.flags & VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+    compPipeInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+
   // create vertex shader with modified code
   VkShaderModuleCreateInfo moduleCreateInfo = {
       VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, NULL,         0,
