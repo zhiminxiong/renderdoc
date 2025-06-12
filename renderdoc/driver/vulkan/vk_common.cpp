@@ -1277,6 +1277,14 @@ VkDriverInfo::VkDriverInfo(const VkPhysicalDeviceProperties &physProps,
     if(active)
       RDCLOG("Enabling NV workaround for unaligned BDA memory capture/replay");
     nvidiaUnalignedBDAIssue = true;
+
+    // this was found in the initial implementation, if mesh output is fetched and a user descriptor
+    // set has no vertex bindings at all (and they're not also compute bindings) then a descriptor
+    // set layout devoid of any compute bindings being bound causes problems. To fix this we set one
+    // binding visible to all stages in every descriptor set layout.
+    if(active)
+      RDCLOG("Enabling NV workaround for descriptor buffers to preserve compute bindings");
+    nvidiaDescriptorBufferExtraBinding = true;
   }
 
   if(driverProps.driverID == VK_DRIVER_ID_AMD_PROPRIETARY ||

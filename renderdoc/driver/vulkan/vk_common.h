@@ -378,6 +378,11 @@ public:
   // this is believed to be a windows bug currently, it only manifests on NV and a workaround will
   // be arriving in later NV drivers, so for now we treat this as a driver bug.
   bool NVUnalignedBDAIssue() const { return nvidiaUnalignedBDAIssue; }
+  // on NV there is an issue with descriptor buffer bindings where if a descriptor set being set as
+  // an offset has no bindings for compute whatsoever but is bound to the compute pipeline, it will
+  // break other descriptor sets. As a workaround we make the first binding of all descriptor
+  // set layouts have all-stages visibility
+  bool NVDescriptorBufferExtraBinding() const { return nvidiaDescriptorBufferExtraBinding; }
 private:
   GPUVendor m_Vendor;
 
@@ -395,6 +400,7 @@ private:
   bool nvidiaStaticPipelineRebindStates = false;
   bool maliBrokenASDeviceSerialisation = false;
   bool nvidiaUnalignedBDAIssue = false;
+  bool nvidiaDescriptorBufferExtraBinding = false;
 };
 
 struct DynamicRenderingLocalRead

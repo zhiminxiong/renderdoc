@@ -390,6 +390,16 @@ bool WrappedVulkan::Serialise_vkCreateDescriptorSetLayout(
       }
     }
 
+    if(m_DescriptorBuffers && GetDriverInfo().NVDescriptorBufferExtraBinding() &&
+       (unwrapped.flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT))
+    {
+      if(unwrapped.bindingCount > 0)
+      {
+        VkDescriptorSetLayoutBinding &bind = (VkDescriptorSetLayoutBinding &)unwrapped.pBindings[0];
+        bind.stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+      }
+    }
+
     VkResult ret =
         ObjDisp(device)->CreateDescriptorSetLayout(Unwrap(device), &unwrapped, NULL, &layout);
 
