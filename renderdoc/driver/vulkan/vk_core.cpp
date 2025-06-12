@@ -7102,21 +7102,23 @@ void WrappedVulkan::AddUsage(VulkanActionTreeNode &actionNode, rdcarray<DebugMes
       if(!constantBlock.bufferBacked)
         continue;
 
-      AddUsageForBind(actionNode, debugMessages, constantBlock.fixedBindSetOrSpace,
-                      constantBlock.fixedBindNumber,
-                      ResourceUsage(uint32_t(ResourceUsage::VS_Constants) + shad));
+      AddUsageForDescriptorSetBind(actionNode, debugMessages, constantBlock.fixedBindSetOrSpace,
+                                   constantBlock.fixedBindNumber,
+                                   ResourceUsage(uint32_t(ResourceUsage::VS_Constants) + shad));
     }
 
     for(const ShaderResource &res : sh.refl->readOnlyResources)
     {
-      AddUsageForBind(actionNode, debugMessages, res.fixedBindSetOrSpace, res.fixedBindNumber,
-                      ResourceUsage(uint32_t(ResourceUsage::VS_Resource) + shad));
+      AddUsageForDescriptorSetBind(actionNode, debugMessages, res.fixedBindSetOrSpace,
+                                   res.fixedBindNumber,
+                                   ResourceUsage(uint32_t(ResourceUsage::VS_Resource) + shad));
     }
 
     for(const ShaderResource &res : sh.refl->readWriteResources)
     {
-      AddUsageForBind(actionNode, debugMessages, res.fixedBindSetOrSpace, res.fixedBindNumber,
-                      ResourceUsage(uint32_t(ResourceUsage::VS_RWResource) + shad));
+      AddUsageForDescriptorSetBind(actionNode, debugMessages, res.fixedBindSetOrSpace,
+                                   res.fixedBindNumber,
+                                   ResourceUsage(uint32_t(ResourceUsage::VS_RWResource) + shad));
     }
   }
 
@@ -7127,9 +7129,9 @@ void WrappedVulkan::AddUsage(VulkanActionTreeNode &actionNode, rdcarray<DebugMes
     AddFramebufferUsage(actionNode, state);
 }
 
-void WrappedVulkan::AddUsageForBind(VulkanActionTreeNode &actionNode,
-                                    rdcarray<DebugMessage> &debugMessages, uint32_t bindset,
-                                    uint32_t bind, ResourceUsage usage)
+void WrappedVulkan::AddUsageForDescriptorSetBind(VulkanActionTreeNode &actionNode,
+                                                 rdcarray<DebugMessage> &debugMessages,
+                                                 uint32_t bindset, uint32_t bind, ResourceUsage usage)
 {
   static bool hugeRangeWarned = false;
   uint32_t eid = actionNode.action.eventId;
@@ -7148,8 +7150,12 @@ void WrappedVulkan::AddUsageForBind(VulkanActionTreeNode &actionNode,
   msg.source = MessageSource::IncorrectAPIUse;
   msg.severity = MessageSeverity::High;
 
-  if(bindset >= descSets.size() || descSets[bindset].descSet == ResourceId())
+  if(bindset >= descSets.size() || !descSets[bindset].IsBound())
   {
+    // can't generate usage for descriptor buffers
+    if(!state.descBufs.empty())
+      return;
+
     msg.description =
         StringFormat::Fmt("Shader referenced a descriptor set %i that was not bound", bindset);
     debugMessages.push_back(msg);
@@ -7210,49 +7216,56 @@ void WrappedVulkan::AddUsageForBind(VulkanActionTreeNode &actionNode,
     if(!descset.data.binds[bind])
       return;
 
-    DescriptorSetSlot &slot = descset.data.binds[bind][a];
-
-    // handled as part of the framebuffer attachments
-    if(slot.type == DescriptorSlotType::InputAttachment)
-      return;
-
-    // ignore unwritten descriptors
-    if(slot.type == DescriptorSlotType::Unwritten)
-      return;
-
-    // we don't mark samplers with usage
-    if(slot.type == DescriptorSlotType::Sampler)
-      return;
-
-    ResourceId id;
-
-    switch(slot.type)
-    {
-      case DescriptorSlotType::CombinedImageSampler:
-      case DescriptorSlotType::SampledImage:
-      case DescriptorSlotType::StorageImage:
-        if(slot.resource != ResourceId())
-          id = c.m_ImageView[slot.resource].image;
-        break;
-      case DescriptorSlotType::UniformTexelBuffer:
-      case DescriptorSlotType::StorageTexelBuffer:
-        if(slot.resource != ResourceId())
-          id = c.m_BufferView[slot.resource].buffer;
-        break;
-      case DescriptorSlotType::UniformBuffer:
-      case DescriptorSlotType::UniformBufferDynamic:
-      case DescriptorSlotType::StorageBuffer:
-      case DescriptorSlotType::StorageBufferDynamic:
-      case DescriptorSlotType::AccelerationStructure:
-        if(slot.resource != ResourceId())
-          id = slot.resource;
-        break;
-      default: RDCERR("Unexpected type %d", slot.type); break;
-    }
-
-    if(id != ResourceId())
-      actionNode.resourceUsage.push_back(make_rdcpair(id, EventUsage(eid, usage)));
+    AddUsageForDescriptor(actionNode, descset.data.binds[bind][a], usage);
   }
+}
+
+void WrappedVulkan::AddUsageForDescriptor(VulkanActionTreeNode &actionNode,
+                                          const DescriptorSetSlot &slot, ResourceUsage usage)
+{
+  VulkanCreationInfo &c = m_CreationInfo;
+  uint32_t eid = actionNode.action.eventId;
+
+  // handled as part of the framebuffer attachments
+  if(slot.type == DescriptorSlotType::InputAttachment)
+    return;
+
+  // ignore unwritten descriptors
+  if(slot.type == DescriptorSlotType::Unwritten)
+    return;
+
+  // we don't mark samplers with usage
+  if(slot.type == DescriptorSlotType::Sampler)
+    return;
+
+  ResourceId id;
+
+  switch(slot.type)
+  {
+    case DescriptorSlotType::CombinedImageSampler:
+    case DescriptorSlotType::SampledImage:
+    case DescriptorSlotType::StorageImage:
+      if(slot.resource != ResourceId())
+        id = c.m_ImageView[slot.resource].image;
+      break;
+    case DescriptorSlotType::UniformTexelBuffer:
+    case DescriptorSlotType::StorageTexelBuffer:
+      if(slot.resource != ResourceId())
+        id = c.m_BufferView[slot.resource].buffer;
+      break;
+    case DescriptorSlotType::UniformBuffer:
+    case DescriptorSlotType::UniformBufferDynamic:
+    case DescriptorSlotType::StorageBuffer:
+    case DescriptorSlotType::StorageBufferDynamic:
+    case DescriptorSlotType::AccelerationStructure:
+      if(slot.resource != ResourceId())
+        id = slot.resource;
+      break;
+    default: RDCERR("Unexpected type %d", slot.type); break;
+  }
+
+  if(id != ResourceId())
+    actionNode.resourceUsage.push_back(make_rdcpair(id, EventUsage(eid, usage)));
 }
 
 void WrappedVulkan::AddFramebufferUsage(VulkanActionTreeNode &actionNode,

@@ -8756,6 +8756,10 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBuffersEXT(
     }
     else
     {
+      // track while reading, as while we can't track resource usage for descriptor buffers we want
+      // to know we're using them
+      m_BakedCmdBufferInfo[m_LastCmdBufferID].state.descBufs.resize(bufferCount);
+
       ObjDisp(commandBuffer)
           ->CmdBindDescriptorBuffersEXT(Unwrap(commandBuffer), bufferCount, unwrappedInfos.data());
     }
@@ -8860,6 +8864,15 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
     }
     else
     {
+      // track while reading, as while we can't track resource usage for descriptor buffers we want
+      // to know we're using them
+      for(VkPipelineBindPoint bindPoint :
+          {VK_PIPELINE_BIND_POINT_GRAPHICS, VK_PIPELINE_BIND_POINT_COMPUTE,
+           VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR})
+      {
+        m_BakedCmdBufferInfo[m_LastCmdBufferID].state.GetPipeline(bindPoint).descSets.clear();
+      }
+
       ObjDisp(commandBuffer)
           ->CmdSetDescriptorBufferOffsetsEXT(Unwrap(commandBuffer), pipelineBindPoint, Unwrap(layout),
                                              firstSet, setCount, pBufferIndices, pOffsets);

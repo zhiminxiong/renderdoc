@@ -1231,8 +1231,11 @@ private:
   void AddEvent();
 
   void AddUsage(VulkanActionTreeNode &actionNode, rdcarray<DebugMessage> &debugMessages);
-  void AddUsageForBind(VulkanActionTreeNode &actionNode, rdcarray<DebugMessage> &debugMessages,
-                       uint32_t bindset, uint32_t bind, ResourceUsage usage);
+  void AddUsageForDescriptorSetBind(VulkanActionTreeNode &actionNode,
+                                    rdcarray<DebugMessage> &debugMessages, uint32_t bindset,
+                                    uint32_t bind, ResourceUsage usage);
+  void AddUsageForDescriptor(VulkanActionTreeNode &actionNode, const DescriptorSetSlot &slot,
+                             ResourceUsage usage);
 
   void AddFramebufferUsage(VulkanActionTreeNode &actionNode, const VulkanRenderState &renderState);
   void AddFramebufferUsageAllChildren(VulkanActionTreeNode &actionNode,
