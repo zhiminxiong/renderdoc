@@ -1628,52 +1628,25 @@ private:
   {
     // pick a non-overlapping bind namespace for direct pointer access
     ShaderBindIndex bind;
-    uint64_t base;
-    uint64_t end;
     ResourceId id;
-    bool valid = false;
-    if(m_Creation.m_BufferAddresses.empty())
+    uint64_t ptrOffs;
+
+    m_pDriver->GetResIDFromAddr(address, id, ptrOffs);
+    if(id == ResourceId())
     {
       bind.arrayElement = 0;
       auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
-      m_pDriver->AddDebugMessage(
-          MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
-          StringFormat::Fmt("pointer access detected but no address-capable buffers allocated."));
+      m_pDriver->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
+                                 MessageSource::RuntimeWarning,
+                                 StringFormat::Fmt("invalid or OOB pointer access detected ."));
       return insertIt.first->second;
     }
-    else
-    {
-      auto it = m_Creation.m_BufferAddresses.lower_bound(address);
-      // lower_bound puts us at the same or next item. Since we want the buffer that contains
-      // this address, we go to the previous iter unless we're already on the first or
-      // it's an exact match
-      if(it == m_Creation.m_BufferAddresses.end() ||
-         (address != it->first && it != m_Creation.m_BufferAddresses.begin()))
-        it--;
-      // use the index in the map as a unique buffer identifier that's not 64-bit
-      bind.arrayElement = uint32_t(it - m_Creation.m_BufferAddresses.begin());
-      {
-        base = it->first;
-        id = it->second;
-        end = base + m_Creation.m_Buffer[id].size;
-        if(base <= address && address < end)
-        {
-          offs = (size_t)(address - base);
-          valid = true;
-        }
-      }
-    }
-    if(!valid)
-    {
-      m_pDriver->AddDebugMessage(
-          MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
-          StringFormat::Fmt("out of bounds pointer access of address %#18llx detected.Closest "
-                            "buffer is address range %#18llx -> %#18llx (%s)",
-                            address, base, end, ToStr(id).c_str()));
-    }
+    bind.arrayElement = (address - offs) & 0xFFFFFFFFU;
+    offs = ptrOffs;
+
     auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
     bytebuf &data = insertIt.first->second;
-    if(insertIt.second && valid)
+    if(insertIt.second)
     {
       // if the resources might be dirty from side-effects from the action, replay back to right
       // before it.

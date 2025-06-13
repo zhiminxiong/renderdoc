@@ -1572,23 +1572,7 @@ bool WrappedVulkan::Serialise_vkBindBufferMemory(SerialiserType &ser, VkDevice d
     // for buffers created with device addresses, fetch it now as that's possible for both EXT and
     // KHR variants now.
     if(bufInfo.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-    {
-      VkBufferDeviceAddressInfo getInfo = {
-          VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-          NULL,
-          Unwrap(buffer),
-      };
-
-      RDCCOMPILE_ASSERT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO ==
-                            VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_EXT,
-                        "KHR and EXT buffer_device_address should be interchangeable here.");
-
-      if(GetExtensions(GetRecord(device)).ext_KHR_buffer_device_address)
-        bufInfo.gpuAddress = ObjDisp(device)->GetBufferDeviceAddress(Unwrap(device), &getInfo);
-      else if(GetExtensions(GetRecord(device)).ext_EXT_buffer_device_address)
-        bufInfo.gpuAddress = ObjDisp(device)->GetBufferDeviceAddressEXT(Unwrap(device), &getInfo);
-      m_CreationInfo.m_BufferAddresses[bufInfo.gpuAddress] = GetResID(buffer);
-    }
+      TrackReplayBufferAddress(device, buffer, memory, memoryOffset);
 
     m_CreationInfo.m_Memory[GetResID(memory)].BindMemory(memoryOffset, mrq.size,
                                                          VulkanCreationInfo::Memory::Linear);
@@ -1884,32 +1868,19 @@ bool WrappedVulkan::Serialise_vkCreateBuffer(SerialiserType &ser, VkDevice devic
                                          memoryRequirements);
     }
 
+    if(patchedusage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+    {
+      m_DeviceAddressResources.IDs.push_back(GetResID(buf));
+    }
+
     if(CreateInfo.flags &
        (VK_BUFFER_CREATE_SPARSE_BINDING_BIT | VK_BUFFER_CREATE_SPARSE_RESIDENCY_BIT))
     {
       APIProps.SparseResources = true;
 
       // for sparse BDA buffers we can and must request the address now since it won't be queried on memory bind
-      if(CreateInfo.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-      {
-        VulkanCreationInfo::Buffer &bufInfo = m_CreationInfo.m_Buffer[GetResID(buf)];
-
-        VkBufferDeviceAddressInfo getInfo = {
-            VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-            NULL,
-            Unwrap(buf),
-        };
-
-        RDCCOMPILE_ASSERT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO ==
-                              VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_EXT,
-                          "KHR and EXT buffer_device_address should be interchangeable here.");
-
-        if(GetExtensions(GetRecord(device)).ext_KHR_buffer_device_address)
-          bufInfo.gpuAddress = ObjDisp(device)->GetBufferDeviceAddress(Unwrap(device), &getInfo);
-        else if(GetExtensions(GetRecord(device)).ext_EXT_buffer_device_address)
-          bufInfo.gpuAddress = ObjDisp(device)->GetBufferDeviceAddressEXT(Unwrap(device), &getInfo);
-        m_CreationInfo.m_BufferAddresses[bufInfo.gpuAddress] = GetResID(buf);
-      }
+      if(patchedusage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+        TrackReplayBufferAddress(device, buf, VK_NULL_HANDLE, 0);
     }
 
     AddResource(Buffer, ResourceType::Buffer, "Buffer");
@@ -3145,19 +3116,7 @@ bool WrappedVulkan::Serialise_vkBindBufferMemory2(SerialiserType &ser, VkDevice 
       // for buffers created with device addresses, fetch it now as that's possible for both EXT and
       // KHR variants now.
       if(bufInfo.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-      {
-        VkBufferDeviceAddressInfo getInfo = {
-            VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-            NULL,
-            Unwrap(bindInfo.buffer),
-        };
-
-        if(GetExtensions(GetRecord(device)).ext_KHR_buffer_device_address)
-          bufInfo.gpuAddress = ObjDisp(device)->GetBufferDeviceAddress(Unwrap(device), &getInfo);
-        else if(GetExtensions(GetRecord(device)).ext_EXT_buffer_device_address)
-          bufInfo.gpuAddress = ObjDisp(device)->GetBufferDeviceAddressEXT(Unwrap(device), &getInfo);
-        m_CreationInfo.m_BufferAddresses[bufInfo.gpuAddress] = GetResID(bindInfo.buffer);
-      }
+        TrackReplayBufferAddress(device, bindInfo.buffer, bindInfo.memory, bindInfo.memoryOffset);
 
       // the memory is immediately dirty because we don't use dirty tracking, it's too expensive to
       // follow all frame refs in the background and it's pointless because memory almost always

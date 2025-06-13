@@ -72,6 +72,44 @@ GPUAddressRange WrappedVulkan::CreateAddressRange(VkDevice device, VkBuffer buff
   };
 }
 
+void WrappedVulkan::TrackReplayBufferAddress(VkDevice device, VkBuffer buffer,
+                                             VkDeviceMemory memory, VkDeviceSize memoryOffset)
+{
+  const VkBufferDeviceAddressInfo addrInfo = {
+      VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+      NULL,
+      Unwrap(buffer),
+  };
+
+  RDCCOMPILE_ASSERT(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO ==
+                        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_EXT,
+                    "KHR and EXT buffer_device_address should be interchangeable here.");
+
+  VkDeviceAddress address = 0;
+  if(GetExtensions(GetRecord(device)).ext_KHR_buffer_device_address)
+    address = ObjDisp(device)->GetBufferDeviceAddressKHR(Unwrap(device), &addrInfo);
+  else if(GetExtensions(GetRecord(device)).ext_EXT_buffer_device_address)
+    address = ObjDisp(device)->GetBufferDeviceAddressEXT(Unwrap(device), &addrInfo);
+
+  VulkanCreationInfo::Buffer &bufInfo = m_CreationInfo.m_Buffer[GetResID(buffer)];
+
+  bufInfo.gpuAddress = address;
+  VkDeviceSize bufSize = bufInfo.size;
+
+  VkDeviceSize oobSize = bufSize;
+  if(memory != VK_NULL_HANDLE)
+  {
+    oobSize = m_CreationInfo.m_Memory[GetResID(memory)].allocSize - memoryOffset;
+  }
+
+  m_AddressTracker.AddTo({
+      address,
+      address + bufSize,
+      address + oobSize,
+      GetResID(buffer),
+  });
+}
+
 void WrappedVulkan::TrackBufferAddress(VkDevice device, VkBuffer buffer)
 {
   const GPUAddressRange rng = CreateAddressRange(device, buffer);

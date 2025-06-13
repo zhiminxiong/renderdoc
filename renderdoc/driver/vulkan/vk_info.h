@@ -614,7 +614,6 @@ struct VulkanCreationInfo
     VkMemoryRequirements mrq;
   };
   std::unordered_map<ResourceId, Buffer> m_Buffer;
-  rdcsortedflatmap<uint64_t, ResourceId> m_BufferAddresses;
 
   struct BufferView
   {

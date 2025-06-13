@@ -1319,6 +1319,8 @@ public:
   void ChooseMemoryIndices();
 
   void TrackBufferAddress(VkDevice device, VkBuffer buffer);
+  void TrackReplayBufferAddress(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
+                                VkDeviceSize memoryOffset);
   void UntrackBufferAddress(VkDevice device, VkBuffer buffer);
   void GetResIDFromAddr(GPUAddressRange::Address addr, ResourceId &id, uint64_t &offs);
 
