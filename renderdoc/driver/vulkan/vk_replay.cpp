@@ -3061,36 +3061,8 @@ void VulkanReplay::FillCBufferVariables(ResourceId pipeline, ResourceId shader, 
 
   if(c.bufferBacked)
   {
-    const rdcarray<VulkanStatePipeline::DescriptorAndOffsets> &descSets =
-        (refl.stage == ShaderStage::Compute) ? m_pDriver->m_RenderState.compute.descSets
-                                             : m_pDriver->m_RenderState.graphics.descSets;
-
-    if(c.fixedBindSetOrSpace < descSets.size())
-    {
-      ResourceId set = descSets[c.fixedBindSetOrSpace].descSet;
-
-      const WrappedVulkan::DescriptorSetInfo &setData = m_pDriver->m_DescriptorSetState[set];
-
-      ResourceId layoutId = setData.layout;
-
-      if(c.fixedBindNumber < m_pDriver->m_CreationInfo.m_DescSetLayout[layoutId].bindings.size())
-      {
-        const DescSetLayout::Binding &layoutBind =
-            m_pDriver->m_CreationInfo.m_DescSetLayout[layoutId].bindings[c.fixedBindNumber];
-
-        if(layoutBind.layoutDescType == VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK)
-        {
-          bytebuf inlineData;
-          inlineData.assign(
-              setData.data.inlineBytes.data() + setData.data.binds[c.fixedBindNumber]->offset,
-              layoutBind.variableSize ? setData.data.variableDescriptorCount
-                                      : layoutBind.descriptorCount);
-          StandardFillCBufferVariables(refl.resourceId, c.variables, outvars, inlineData);
-          return;
-        }
-      }
-    }
-
+    // inline UBO data is already handled by having descriptors point at the appropriate 'offset' in
+    // the descriptor set and GetBufferData has a special-case for it
     StandardFillCBufferVariables(refl.resourceId, c.variables, outvars, data);
   }
   else
