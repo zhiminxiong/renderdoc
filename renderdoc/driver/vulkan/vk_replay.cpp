@@ -275,6 +275,8 @@ rdcarray<uint32_t> VulkanReplay::GetPassEvents(uint32_t eventId)
 
 ResourceId VulkanReplay::GetLiveID(ResourceId id)
 {
+  if(m_pDriver->m_InlineBuffers.find(id) != m_pDriver->m_InlineBuffers.end())
+    return id;
   if(!m_pDriver->GetResourceManager()->HasLiveResource(id))
     return ResourceId();
   return m_pDriver->GetResourceManager()->GetLiveID(id);
@@ -2656,24 +2658,65 @@ rdcarray<DescriptorAccess> VulkanReplay::GetDescriptorAccess(uint32_t eventId)
 
   for(DescriptorAccess &access : ret)
   {
-    uint32_t bindset = (uint32_t)access.byteSize;
-    access.byteSize = 1;
-    if(access.descriptorStore == m_pDriver->m_CreationInfo.pushConstantDescriptorStorage)
+    if(access.descriptorStore == VulkanCreationInfo::pushConstantDescriptorStorage)
     {
       access.descriptorStore = m_pDriver->GetPushConstantCommandBuffer();
     }
-    else if(access.descriptorStore == ResourceId())
+    else
     {
-      const rdcarray<VulkanStatePipeline::DescriptorAndOffsets> &descSets =
-          access.stage == ShaderStage::Compute ? state.compute.descSets : state.graphics.descSets;
+      int setIdx = VulkanCreationInfo::descriptorSetStorage.indexOf(access.descriptorStore);
+      int bufSetIdx = VulkanCreationInfo::descriptorBufferStorage.indexOf(access.descriptorStore);
+      int inlinebufSetIdx = VulkanCreationInfo::inlineBufferStorage.indexOf(access.descriptorStore);
+      if(setIdx >= 0)
+      {
+        const rdcarray<VulkanStatePipeline::DescriptorAndOffsets> &descSets =
+            access.stage == ShaderStage::Compute ? state.compute.descSets : state.graphics.descSets;
 
-      if(bindset >= descSets.size())
-      {
-        RDCERR("Unbound descriptor set referenced in static usage");
+        access.byteSize = 1;
+
+        if(setIdx >= descSets.count())
+        {
+          RDCERR("Unbound descriptor set referenced in static usage");
+        }
+        else
+        {
+          access.descriptorStore = rm->GetOriginalID(descSets[setIdx].descSet);
+        }
       }
-      else
+      else if(bufSetIdx >= 0 || inlinebufSetIdx >= 0)
       {
-        access.descriptorStore = rm->GetOriginalID(descSets[bindset].descSet);
+        const rdcarray<VulkanStatePipeline::DescriptorAndOffsets> &descSets =
+            access.stage == ShaderStage::Compute ? state.compute.descSets : state.graphics.descSets;
+
+        // one will be -1
+        int i = RDCMAX(bufSetIdx, inlinebufSetIdx);
+
+        if(i >= descSets.count())
+        {
+          RDCERR("Unbound descriptor set referenced in static usage");
+        }
+        else
+        {
+          const VulkanStatePipeline::DescriptorAndOffsets &bufSet = descSets[i];
+
+          if(bufSet.descBufferEmbeddedSamplers)
+          {
+            access.descriptorStore = rm->GetOriginalID(
+                m_pDriver->m_CreationInfo.m_PipelineLayout[bufSet.pipeLayout].descSetLayouts[i]);
+            access.byteOffset = 0;
+          }
+          else
+          {
+            ResourceId id;
+            uint64_t offs = 0;
+            m_pDriver->GetResIDFromAddr(state.descBufs[bufSet.descBufferIdx].address, id, offs);
+            if(inlinebufSetIdx >= 0)
+              access.descriptorStore = m_pDriver->m_CreationInfo.m_Buffer[id].inlineDescriptorId;
+            else
+              access.descriptorStore = rm->GetOriginalID(id);
+            access.byteOffset += uint32_t(offs + bufSet.descBufferOffset);
+          }
+        }
       }
     }
 

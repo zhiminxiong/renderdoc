@@ -4370,10 +4370,28 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
       m_PhysicalDeviceData.maxMemoryAllocationSize = 0x80000000U;
     }
 
+    VulkanCreationInfo::pushConstantDescriptorStorage = ResourceIDGen::GetNewUniqueID();
+    VulkanCreationInfo::descriptorSetStorage.resize(
+        m_PhysicalDeviceData.props.limits.maxBoundDescriptorSets);
+    for(size_t i = 0; i < VulkanCreationInfo::descriptorSetStorage.size(); i++)
+      VulkanCreationInfo::descriptorSetStorage[i] = ResourceIDGen::GetNewUniqueID();
+
     ChooseMemoryIndices();
 
     if(DescriptorBuffers())
+    {
+      VulkanCreationInfo::descriptorBufferStorage.resize(
+          m_DescriptorBufferProperties.maxDescriptorBufferBindings);
+      VulkanCreationInfo::inlineBufferStorage.resize(
+          m_DescriptorBufferProperties.maxDescriptorBufferBindings);
+      for(size_t i = 0; i < VulkanCreationInfo::descriptorBufferStorage.size(); i++)
+      {
+        VulkanCreationInfo::descriptorBufferStorage[i] = ResourceIDGen::GetNewUniqueID();
+        VulkanCreationInfo::inlineBufferStorage[i] = ResourceIDGen::GetNewUniqueID();
+      }
+
       EstimateDescriptorFormats();
+    }
 
     APIProps.vendor = GetDriverInfo().Vendor();
 

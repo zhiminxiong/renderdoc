@@ -36,7 +36,7 @@ VulkanDynamicStateIndex ConvertDynamicState(VkDynamicState state);
 
 struct DescSetLayout
 {
-  void Init(VulkanResourceManager *resourceMan, VulkanCreationInfo &info,
+  void Init(VulkanResourceManager *resourceMan, VulkanCreationInfo &info, ResourceId id,
             const VkDescriptorSetLayoutCreateInfo *pCreateInfo);
 
   void CreateBindingsArray(BindingStorage &bindingStorage, uint32_t variableAllocSize) const;
@@ -120,6 +120,8 @@ struct DescSetLayout
     }
   };
   rdcarray<Binding> bindings;
+
+  ResourceId resourceId;
 
   // parallel array to bindings, with a bitmask of mutable types
   rdcarray<uint64_t> mutableBitmasks;
@@ -246,10 +248,6 @@ struct VulkanCreationInfo
 
     // VkPipelineShaderStageRequiredSubgroupSizeCreateInfo
     uint32_t requiredSubgroupSize = 0;
-
-    void ProcessStaticDescriptorAccess(ResourceId pushStorage, ResourceId specStorage,
-                                       rdcarray<DescriptorAccess> &staticDescriptorAccess,
-                                       rdcarray<const DescSetLayout *> setLayoutInfos) const;
   };
 
   struct Pipeline
@@ -612,6 +610,8 @@ struct VulkanCreationInfo
     bool external;
 
     VkMemoryRequirements mrq;
+
+    ResourceId inlineDescriptorId;
   };
   std::unordered_map<ResourceId, Buffer> m_Buffer;
 
@@ -814,7 +814,11 @@ struct VulkanCreationInfo
   std::unordered_map<ResourceId, uint32_t> m_Queue;
 
   // the fake ID of the 'command buffer' descriptor store for push constants
-  ResourceId pushConstantDescriptorStorage;
+  static ResourceId pushConstantDescriptorStorage;
+  // fake IDs for each set/buffer
+  static rdcarray<ResourceId> descriptorSetStorage;
+  static rdcarray<ResourceId> descriptorBufferStorage;
+  static rdcarray<ResourceId> inlineBufferStorage;
 
   void erase(ResourceId id)
   {

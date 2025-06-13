@@ -213,6 +213,8 @@ public:
 
   ResourceId GetFirstIDForHandle(uint64_t handle);
 
+  uint32_t DescriptorDataSize(VkDescriptorType type);
+
   // easy path for getting the wrapped handle cast to the correct type
   template <typename realtype>
   realtype GetLiveHandle(ResourceId origid)

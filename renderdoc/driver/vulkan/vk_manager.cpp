@@ -908,6 +908,11 @@ ResourceId VulkanResourceManager::GetFirstIDForHandle(uint64_t handle)
   return ResourceId();
 }
 
+uint32_t VulkanResourceManager::DescriptorDataSize(VkDescriptorType type)
+{
+  return m_Core->DescriptorDataSize(type);
+}
+
 void VulkanResourceManager::MarkMemoryFrameReferenced(ResourceId mem, VkDeviceSize offset,
                                                       VkDeviceSize size, FrameRefType refType)
 {

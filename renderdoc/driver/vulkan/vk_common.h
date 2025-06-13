@@ -918,6 +918,9 @@ DECLARE_REFLECTION_STRUCT(DescriptorSetSlot);
 constexpr uint64_t FixedOpaqueDescriptorCaptureSize = 16;
 constexpr uint64_t MaxDescriptorSize = 256;
 
+uint32_t DescriptorDataSize(const VkPhysicalDeviceDescriptorBufferPropertiesEXT &descSizes,
+                            VkDescriptorType type);
+
 struct OpaqueDataForSerialising : VkOpaqueCaptureDescriptorDataCreateInfoEXT
 {
   OpaqueDataForSerialising()

@@ -429,7 +429,27 @@ bool WrappedVulkan::Serialise_vkCreateDescriptorSetLayout(
         live = GetResourceManager()->WrapResource(Unwrap(device), layout);
         GetResourceManager()->AddLiveResource(SetLayout, layout);
 
-        m_CreationInfo.m_DescSetLayout[live].Init(GetResourceManager(), m_CreationInfo, &CreateInfo);
+        m_CreationInfo.m_DescSetLayout[live].Init(GetResourceManager(), m_CreationInfo, live,
+                                                  &CreateInfo);
+
+        if((CreateInfo.flags & (VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT |
+                                VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR)) ==
+           VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        {
+          // fetch actual offsets. Sizes we defer due to possible mutable descriptors
+          rdcarray<DescSetLayout::Binding> &bindings = m_CreationInfo.m_DescSetLayout[live].bindings;
+          for(uint32_t b = 0; b < bindings.size(); b++)
+          {
+            if(bindings[b].layoutDescType == VK_DESCRIPTOR_TYPE_MAX_ENUM)
+              continue;
+
+            VkDeviceSize offs = 0;
+            ObjDisp(device)->GetDescriptorSetLayoutBindingOffsetEXT(Unwrap(device), Unwrap(layout),
+                                                                    b, &offs);
+            bindings[b].elemOffset = offs & 0xffffffffU;
+            RDCASSERTEQUAL(bindings[b].elemOffset, offs);
+          }
+        }
       }
 
       AddResource(SetLayout, ResourceType::ShaderBinding, "Descriptor Layout");
@@ -485,7 +505,7 @@ VkResult WrappedVulkan::vkCreateDescriptorSetLayout(VkDevice device,
 
       record->descInfo = new DescriptorSetData();
       record->descInfo->layout = new DescSetLayout();
-      record->descInfo->layout->Init(GetResourceManager(), m_CreationInfo, pCreateInfo);
+      record->descInfo->layout->Init(GetResourceManager(), m_CreationInfo, id, pCreateInfo);
 
       for(uint32_t i = 0; i < pCreateInfo->bindingCount; i++)
       {
@@ -504,7 +524,7 @@ VkResult WrappedVulkan::vkCreateDescriptorSetLayout(VkDevice device,
     {
       GetResourceManager()->AddLiveResource(id, *pSetLayout);
 
-      m_CreationInfo.m_DescSetLayout[id].Init(GetResourceManager(), m_CreationInfo, pCreateInfo);
+      m_CreationInfo.m_DescSetLayout[id].Init(GetResourceManager(), m_CreationInfo, id, pCreateInfo);
     }
   }
 

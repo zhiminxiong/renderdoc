@@ -1914,6 +1914,13 @@ bool WrappedVulkan::Serialise_vkCreateBuffer(SerialiserType &ser, VkDevice devic
 
       m_CreationInfo.m_Buffer[live].Init(GetResourceManager(), m_CreationInfo, &CreateInfo,
                                          memoryRequirements);
+
+      if(patchedusage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+      {
+        ResourceId inlineDescriptorId = m_CreationInfo.m_Buffer[live].inlineDescriptorId =
+            ResourceIDGen::GetNewUniqueID();
+        m_InlineBuffers[inlineDescriptorId] = live;
+      }
     }
 
     if(patchedusage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)

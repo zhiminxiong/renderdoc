@@ -463,7 +463,6 @@ private:
   };
 
   VkPhysicalDeviceDescriptorBufferPropertiesEXT m_DescriptorBufferProperties;
-  size_t DescriptorDataSize(VkDescriptorType type);
 
   Threading::CriticalSection m_ASLookupByAddrLock;
   rdcflatmap<VkDeviceAddress, ResourceId> m_ASLookupByAddr;
@@ -529,6 +528,7 @@ private:
 
   bool m_NULLDescriptorPatternSaved = false;
   bool m_IgnoreLayoutForDescriptors = false;
+  std::unordered_map<ResourceId, ResourceId> m_InlineBuffers;
 
   bool m_SeparateDepthStencil = false;
   bool m_NULLDescriptorsAllowed = false;
@@ -1493,6 +1493,8 @@ public:
                                                        VkExtensionProperties *pProperties);
   static VkResult GetProvidedInstanceExtensionProperties(uint32_t *pPropertyCount,
                                                          VkExtensionProperties *pProperties);
+
+  uint32_t DescriptorDataSize(VkDescriptorType type);
 
   VkBufferCreateFlags DefaultBufferCreateFlags()
   {
