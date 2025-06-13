@@ -374,10 +374,12 @@ VulkanPipelineStateViewer::VulkanPipelineStateViewer(ICaptureContext &ctx,
     RDHeaderView *header = new RDHeaderView(Qt::Horizontal, this);
     desc->setHeader(header);
 
-    desc->setColumns({tr("Index"), tr("Layout"), tr("Bound Set"), tr("Go")});
-    header->setColumnStretchHints({-1, 4, 4, -1});
+    // Buffer / Set
+    desc->setColumns({tr("Index"), tr("Layout"), tr("Buffer"), tr("Buffer Offset"),
+                      tr("Set Offset"), tr("Type"), tr("Go")});
+    header->setColumnStretchHints({-1, 4, 4, 2, 2, 2, -1});
 
-    desc->setHoverIconColumn(3, action, action_hover);
+    desc->setHoverIconColumn(6, action, action_hover);
     desc->setClearSelectionOnFocusLoss(true);
     desc->setInstantTooltips(true);
 
@@ -1736,14 +1738,94 @@ void VulkanPipelineStateViewer::setShaderState(const VKPipe::Pipeline &pipe,
                             .arg(ToQStr(pipe.pipelineFragmentLayoutResourceId)));
   }
 
-  descSets->clear();
+  bool descBuf = false;
   for(uint32_t i = 0; i < pipe.descriptorSets.size(); i++)
   {
-    RDTreeWidgetItem *item =
-        new RDTreeWidgetItem({i, pipe.descriptorSets[i].layoutResourceId,
-                              pipe.descriptorSets[i].descriptorSetResourceId, QString()});
-    item->setTag(i);
-    descSets->addTopLevelItem(item);
+    if(pipe.descriptorSets[i].descriptorBufferIndex >= 0)
+    {
+      descBuf = true;
+      break;
+    }
+  }
+
+  if(descBuf)
+  {
+    descSets->setHeaderText(2, tr(" Buffer"));
+    descSets->header()->showSection(3);    // buffer offset
+    descSets->header()->showSection(4);    // set offset
+    descSets->header()->showSection(5);    // type
+  }
+  else
+  {
+    descSets->setHeaderText(2, tr("Set"));
+    descSets->header()->hideSection(3);    // buffer offset
+    descSets->header()->hideSection(4);    // set offset
+    descSets->header()->hideSection(5);    // type
+  }
+
+  descSets->clear();
+  if(descBuf)
+  {
+    for(uint32_t i = 0; i < pipe.descriptorSets.size(); i++)
+    {
+      RDTreeWidgetItem *item = new RDTreeWidgetItem(
+          {i, pipe.descriptorSets[i].layoutResourceId, QString(), QString(),
+           qulonglong(pipe.descriptorSets[i].descriptorBufferByteOffset), QString(), QString()});
+      item->setTag(i);
+
+      if(pipe.descriptorSets[i].descriptorBufferEmbeddedSamplers)
+      {
+        item->setText(2, tr("Embedded Samplers"));
+        item->setText(4, QString());
+        item->setText(5, tr("Immutable Samplers"));
+      }
+      else if(pipe.descriptorSets[i].pushDescriptor)
+      {
+        item->setText(2, tr("Bufferless"));
+
+        for(size_t b = 0; b < pipe.descriptorBuffers.size(); b++)
+          if(pipe.descriptorBuffers[b].pushBuffer != ResourceId())
+            item->setText(2, ToQStr(pipe.descriptorBuffers[b].pushBuffer));
+
+        item->setText(4, QString());
+
+        item->setText(5, tr("Push Descriptors"));
+      }
+      else if(pipe.descriptorSets[i].descriptorBufferIndex < 0 ||
+              pipe.descriptorSets[i].descriptorBufferIndex >= pipe.descriptorBuffers.count())
+      {
+        setEmptyRow(item);
+      }
+      else
+      {
+        const VKPipe::DescriptorBuffer &buf =
+            pipe.descriptorBuffers[pipe.descriptorSets[i].descriptorBufferIndex];
+        item->setText(2, buf.buffer);
+        item->setText(3, qulonglong(buf.offset));
+        QString type = tr("None");
+        if(buf.resourceBuffer && buf.samplerBuffer)
+          type = tr("Resources+Samplers");
+        else if(buf.resourceBuffer)
+          type = tr("Resources");
+        else if(buf.samplerBuffer)
+          type = tr("Samplers");
+
+        item->setText(5, type);
+      }
+
+      descSets->addTopLevelItem(item);
+    }
+  }
+  else
+  {
+    for(uint32_t i = 0; i < pipe.descriptorSets.size(); i++)
+    {
+      RDTreeWidgetItem *item = new RDTreeWidgetItem({i, pipe.descriptorSets[i].layoutResourceId,
+                                                     pipe.descriptorSets[i].descriptorSetResourceId,
+                                                     QString(), QString(), QString(), QString()});
+      item->setTag(i);
+      descSets->addTopLevelItem(item);
+    }
   }
 }
 
@@ -3178,11 +3260,31 @@ void VulkanPipelineStateViewer::descSet_itemActivated(RDTreeWidgetItem *item, in
       stage->stage == ShaderStage::Compute ? m_Ctx.CurVulkanPipelineState()->compute.descriptorSets
                                            : m_Ctx.CurVulkanPipelineState()->graphics.descriptorSets;
 
+  const rdcarray<VKPipe::DescriptorBuffer> &descBufs =
+      stage->stage == ShaderStage::Compute
+          ? m_Ctx.CurVulkanPipelineState()->compute.descriptorBuffers
+          : m_Ctx.CurVulkanPipelineState()->graphics.descriptorBuffers;
+
   if(index < descSets.count())
   {
-    IDescriptorViewer *viewer = m_Ctx.ViewDescriptorStore(descSets[index].descriptorSetResourceId);
+    if(descSets[index].descriptorBufferIndex >= 0)
+    {
+      if(descSets[index].descriptorBufferIndex < descBufs.count())
+      {
+        IBufferViewer *viewer =
+            m_Ctx.ViewBuffer(descBufs[descSets[index].descriptorBufferIndex].offset +
+                                 descSets[index].descriptorBufferByteOffset,
+                             0, descBufs[descSets[index].descriptorBufferIndex].buffer);
 
-    m_Ctx.AddDockWindow(viewer->Widget(), DockReference::AddTo, this);
+        m_Ctx.AddDockWindow(viewer->Widget(), DockReference::AddTo, this);
+      }
+    }
+    else
+    {
+      IDescriptorViewer *viewer = m_Ctx.ViewDescriptorStore(descSets[index].descriptorSetResourceId);
+
+      m_Ctx.AddDockWindow(viewer->Widget(), DockReference::AddTo, this);
+    }
   }
 }
 

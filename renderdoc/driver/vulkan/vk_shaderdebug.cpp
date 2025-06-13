@@ -203,6 +203,7 @@ public:
         ResourceId sourceSet = srcData.descSet;
         const uint32_t *srcOffset = srcData.offsets.begin();
 
+        // this could be either an unbound set, or descriptor buffers (which can't use dynamic offsets anyway)
         if(sourceSet == ResourceId())
           continue;
 

@@ -2108,6 +2108,7 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
 
         destSet.dynamicOffsets.clear();
 
+        // this could be either an unbound set, or descriptor buffers (which can't use dynamic offsets anyway)
         if(sourceSet == ResourceId())
           continue;
 
@@ -2145,6 +2146,7 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
     }
   }
 
+  // store the sets and descriptor buffers themselves
   {
     rdcarray<VKPipe::DescriptorSet> *dsts[] = {
         &ret.graphics.descriptorSets,
@@ -2164,8 +2166,45 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
     {
       for(size_t i = 0; i < srcs[p]->size(); i++)
       {
-        ResourceId sourceSet = (*srcs[p])[i].descSet;
+        const VulkanStatePipeline::DescriptorAndOffsets &setBindingInfo = (*srcs[p])[i];
         VKPipe::DescriptorSet &destSet = (*dsts[p])[i];
+
+        if(setBindingInfo.descBufferIdx != ~0U)
+        {
+          destSet.descriptorSetResourceId = ResourceId();
+          destSet.pushDescriptor = false;
+          destSet.layoutResourceId =
+              rm->GetOriginalID(c.m_PipelineLayout[setBindingInfo.pipeLayout].descSetLayouts[i]);
+
+          destSet.dynamicOffsets.clear();
+
+          destSet.descriptorBufferIndex = (int)setBindingInfo.descBufferIdx;
+          destSet.descriptorBufferByteOffset = setBindingInfo.descBufferOffset;
+          destSet.descriptorBufferEmbeddedSamplers = false;
+
+          continue;
+        }
+        else if(setBindingInfo.descBufferEmbeddedSamplers)
+        {
+          destSet.descriptorSetResourceId = ResourceId();
+          destSet.pushDescriptor = false;
+          destSet.layoutResourceId =
+              rm->GetOriginalID(c.m_PipelineLayout[setBindingInfo.pipeLayout].descSetLayouts[i]);
+
+          destSet.dynamicOffsets.clear();
+
+          destSet.descriptorBufferIndex = -1;
+          destSet.descriptorBufferByteOffset = 0;
+          destSet.descriptorBufferEmbeddedSamplers = true;
+
+          continue;
+        }
+
+        ResourceId sourceSet = setBindingInfo.descSet;
+
+        destSet.descriptorBufferIndex = -1;
+        destSet.descriptorBufferByteOffset = 0;
+        destSet.descriptorBufferEmbeddedSamplers = false;
 
         if(sourceSet == ResourceId())
         {
@@ -2184,6 +2223,26 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
         destSet.layoutResourceId = rm->GetOriginalID(layoutId);
       }
     }
+
+    ret.compute.descriptorBuffers.resize(state.descBufs.size());
+    for(size_t i = 0; i < state.descBufs.size(); i++)
+    {
+      ret.compute.descriptorBuffers[i].resourceBuffer =
+          (state.descBufs[i].usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
+      ret.compute.descriptorBuffers[i].samplerBuffer =
+          (state.descBufs[i].usage & VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
+      ret.compute.descriptorBuffers[i].pushDescriptor =
+          (state.descBufs[i].usage & VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
+      ret.compute.descriptorBuffers[i].pushBuffer = rm->GetOriginalID(state.descBufs[i].pushBuffer);
+
+      ResourceId id;
+      m_pDriver->GetResIDFromAddr(state.descBufs[i].address, id,
+                                  ret.compute.descriptorBuffers[i].offset);
+      ret.compute.descriptorBuffers[i].buffer = rm->GetOriginalID(id);
+    }
+
+    // these are not actually pipeline specific but for organisation/ease we store them there
+    ret.graphics.descriptorBuffers = ret.compute.descriptorBuffers;
   }
 
   // image layouts
