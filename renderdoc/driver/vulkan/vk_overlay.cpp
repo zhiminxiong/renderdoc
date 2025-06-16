@@ -45,11 +45,12 @@ RDOC_EXTERN_CONFIG(bool, Vulkan_Debug_SingleSubmitFlushing);
 struct VulkanQuadOverdrawCallback : public VulkanActionCallback
 {
   VulkanQuadOverdrawCallback(WrappedVulkan *vk, VkDescriptorSetLayout descSetLayout,
-                             VkDescriptorSet descSet, const rdcarray<uint32_t> &events,
-                             bool multiview)
+                             VkDescriptorSet descSet, VkDescriptorSetLayout descBufLayout,
+                             const rdcarray<uint32_t> &events, bool multiview)
       : m_pDriver(vk),
         m_DescSetLayout(descSetLayout),
         m_DescSet(descSet),
+        m_DescBufLayout(descBufLayout),
         m_Events(events),
         m_Multiview(multiview)
   {
@@ -92,6 +93,8 @@ struct VulkanQuadOverdrawCallback : public VulkanActionCallback
     CachedPipeline pipe = m_PipelineCache[pipestate.graphics.pipeline];
     CachedShader shad = m_ShaderCache[pipestate.shaderObjects[4]];
 
+    bool descBuf = false;
+
     // if we don't get a hit, create a modified pipeline
     if(pipestate.graphics.shaderObject ? shad.shad == VK_NULL_HANDLE : pipe.pipe == VK_NULL_HANDLE)
     {
@@ -120,8 +123,13 @@ struct VulkanQuadOverdrawCallback : public VulkanActionCallback
         descSetLayouts[i] = m_pDriver->GetResourceManager()->GetCurrentHandle<VkDescriptorSetLayout>(
             origDescSetLayouts[i]);
 
-      // this layout has storage image and
-      descSetLayouts[descSet] = m_DescSetLayout;
+      // this layout has storage image
+      descBuf = (p.flags & VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
+
+      if(descBuf)
+        descSetLayouts[descSet] = m_DescBufLayout;
+      else
+        descSetLayouts[descSet] = m_DescSetLayout;
 
       // don't have to handle separate vert/frag layouts as push constant ranges must be identical
       const rdcarray<VkPushConstantRange> &push = layout.pushRanges;
@@ -286,18 +294,64 @@ struct VulkanQuadOverdrawCallback : public VulkanActionCallback
       pipestate.shaderObjects[4] = GetResID(shad.shad);
       pipestate.graphics.lastBoundSet = shad.descSet;
       pipestate.graphics.pipeline = ResourceId();
+
       RDCASSERT(pipestate.graphics.descSets.size() >= shad.descSet);
-      pipestate.graphics.descSets.resize(shad.descSet + 1);
-      pipestate.graphics.descSets[shad.descSet].pipeLayout = GetResID(shad.pipeLayout);
-      pipestate.graphics.descSets[shad.descSet].descSet = GetResID(m_DescSet);
+      pipestate.graphics.descSets.resize_for_index(shad.descSet);
+      VulkanStatePipeline::DescriptorAndOffsets &descSet = pipestate.graphics.descSets[shad.descSet];
+
+      descSet.pipeLayout = GetResID(shad.pipeLayout);
+      if(descBuf)
+      {
+        descSet.descBufferEmbeddedSamplers = false;
+
+        for(uint32_t i = 0; i < pipestate.descBufs.size(); i++)
+        {
+          if(pipestate.descBufs[i].usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+          {
+            descSet.descBufferIdx = i;
+            ResourceId id;
+            uint64_t ignored = 0;
+            m_pDriver->GetResIDFromAddr(pipestate.descBufs[i].address, id, ignored);
+            descSet.descBufferOffset = m_pDriver->GetDebugManager()->GetBufferInfo(id).size;
+            break;
+          }
+        }
+      }
+      else
+      {
+        descSet.descSet = GetResID(m_DescSet);
+      }
     }
     else
     {
       pipestate.graphics.pipeline = GetResID(pipe.pipe);
+
       RDCASSERT(pipestate.graphics.descSets.size() >= pipe.descSet);
-      pipestate.graphics.descSets.resize(pipe.descSet + 1);
-      pipestate.graphics.descSets[pipe.descSet].pipeLayout = GetResID(pipe.pipeLayout);
-      pipestate.graphics.descSets[pipe.descSet].descSet = GetResID(m_DescSet);
+      pipestate.graphics.descSets.resize_for_index(pipe.descSet);
+      VulkanStatePipeline::DescriptorAndOffsets &descSet = pipestate.graphics.descSets[pipe.descSet];
+
+      descSet.pipeLayout = GetResID(pipe.pipeLayout);
+      if(descBuf)
+      {
+        descSet.descBufferEmbeddedSamplers = false;
+
+        for(uint32_t i = 0; i < pipestate.descBufs.size(); i++)
+        {
+          if(pipestate.descBufs[i].usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+          {
+            descSet.descBufferIdx = i;
+            ResourceId id;
+            uint64_t ignored = 0;
+            m_pDriver->GetResIDFromAddr(pipestate.descBufs[i].address, id, ignored);
+            descSet.descBufferOffset = m_pDriver->GetDebugManager()->GetBufferInfo(id).size;
+            break;
+          }
+        }
+      }
+      else
+      {
+        descSet.descSet = GetResID(m_DescSet);
+      }
     }
 
     // modify dynamic state
@@ -405,6 +459,7 @@ struct VulkanQuadOverdrawCallback : public VulkanActionCallback
   WrappedVulkan *m_pDriver;
   VkDescriptorSetLayout m_DescSetLayout;
   VkDescriptorSet m_DescSet;
+  VkDescriptorSetLayout m_DescBufLayout;
   const rdcarray<uint32_t> &m_Events;
   bool m_Multiview;
 
@@ -3057,10 +3112,48 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
 
       m_pDriver->ReplayLog(0, events[0], eReplay_WithoutDraw);
 
+      // fill descriptor here so that initial contents doesn't overwrite it
+      if(m_pDriver->DescriptorBuffers())
+      {
+        VkDescriptorGetInfoEXT info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+            NULL,
+        };
+
+        VkDescriptorImageInfo imginfo = {};
+        info.type = write.descriptorType;
+        info.data.pStorageImage = &imdesc;
+
+        VkDeviceSize offs = 0;
+        vt->GetDescriptorSetLayoutBindingOffsetEXT(Unwrap(m_Device),
+                                                   Unwrap(m_Overlay.m_QuadDescBufLayout), 0, &offs);
+        uint32_t size = m_pDriver->DescriptorDataSize(info.type);
+        vt->GetDescriptorEXT(Unwrap(m_Device), &info, size,
+                             ((byte *)m_Overlay.m_QuadDescriptor.Map()) + offs);
+        m_Overlay.m_QuadDescriptor.Unmap();
+
+        cmd = m_pDriver->GetNextCmd();
+
+        vkr = vt->BeginCommandBuffer(Unwrap(cmd), &beginInfo);
+        CHECK_VKR(m_pDriver, vkr);
+
+        // since we don't know which resource descriptor buffers the application is going to use when,
+        // we copy our descriptor into the end of every single one so it will be available no matter what
+        m_pDriver->CopyInternalDescriptor(Unwrap(cmd), m_Overlay.m_QuadDescriptor.UnwrappedBuffer(),
+                                          size);
+
+        vkr = vt->EndCommandBuffer(Unwrap(cmd));
+        CHECK_VKR(m_pDriver, vkr);
+
+        m_pDriver->SubmitCmds();
+        m_pDriver->FlushQ();
+      }
+
       {
         // declare callback struct here
         VulkanQuadOverdrawCallback cb(m_pDriver, m_Overlay.m_QuadDescSetLayout,
-                                      m_Overlay.m_QuadDescSet, events, multiviewMask > 0);
+                                      m_Overlay.m_QuadDescSet, m_Overlay.m_QuadDescBufLayout,
+                                      events, multiviewMask > 0);
 
         m_pDriver->ReplayLog(events.front(), events.back(), eReplay_Full);
 

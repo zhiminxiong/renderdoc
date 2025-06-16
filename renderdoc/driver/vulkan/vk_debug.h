@@ -114,6 +114,7 @@ public:
   VkImageLayout GetImageLayout(ResourceId image, VkImageAspectFlagBits aspect, uint32_t mip,
                                uint32_t slice);
 
+  const VulkanCreationInfo::Buffer &GetBufferInfo(ResourceId img) const;
   const VulkanCreationInfo::Image &GetImageInfo(ResourceId img) const;
   const VulkanCreationInfo::ImageView &GetImageViewInfo(ResourceId imgView) const;
   const VulkanCreationInfo::Pipeline &GetPipelineInfo(ResourceId pipe) const;

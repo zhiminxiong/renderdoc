@@ -72,7 +72,8 @@ static void create(WrappedVulkan *driver, const char *objName, const int line, V
 
 static void create(WrappedVulkan *driver, const char *objName, const int line,
                    VkDescriptorSetLayout *descLayout,
-                   std::initializer_list<VkDescriptorSetLayoutBinding> bindings)
+                   std::initializer_list<VkDescriptorSetLayoutBinding> bindings,
+                   VkDescriptorSetLayoutCreateFlags flags = 0)
 {
   VkDescriptorSetLayoutCreateInfo descsetLayoutInfo = {
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -81,6 +82,8 @@ static void create(WrappedVulkan *driver, const char *objName, const int line,
       (uint32_t)bindings.size(),
       bindings.begin(),
   };
+
+  descsetLayoutInfo.flags = flags;
 
   VkResult vkr =
       driver->vkCreateDescriptorSetLayout(driver->GetDev(), &descsetLayoutInfo, NULL, descLayout);
@@ -1760,6 +1763,13 @@ uint32_t VulkanReplay::PickVertex(uint32_t eventId, int32_t width, int32_t heigh
   }
 
   return ret;
+}
+
+const VulkanCreationInfo::Buffer &VulkanDebugManager::GetBufferInfo(ResourceId img) const
+{
+  auto it = m_pDriver->m_CreationInfo.m_Buffer.find(img);
+  RDCASSERT(it != m_pDriver->m_CreationInfo.m_Buffer.end());
+  return it->second;
 }
 
 const VulkanCreationInfo::Image &VulkanDebugManager::GetImageInfo(ResourceId img) const
@@ -4467,6 +4477,17 @@ void VulkanReplay::OverlayRendering::Init(WrappedVulkan *driver, VkDescriptorPoo
                     {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, NULL},
                 });
 
+  if(driver->DescriptorBuffers())
+  {
+    CREATE_OBJECT(m_QuadDescBufLayout,
+                  {
+                      {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, NULL},
+                  },
+                  VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT);
+
+    m_QuadDescriptor.Create(driver, driver->GetDev(), MaxDescriptorSize, 1, 0);
+  }
+
   CREATE_OBJECT(m_TriSizeDescSetLayout,
                 {
                     {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_ALL, NULL},
@@ -4909,9 +4930,12 @@ void VulkanReplay::OverlayRendering::Destroy(WrappedVulkan *driver)
   driver->vkDestroyRenderPass(driver->GetDev(), NoDepthRP, NULL);
 
   driver->vkDestroyDescriptorSetLayout(driver->GetDev(), m_QuadDescSetLayout, NULL);
+  driver->vkDestroyDescriptorSetLayout(driver->GetDev(), m_QuadDescBufLayout, NULL);
   driver->vkDestroyPipelineLayout(driver->GetDev(), m_QuadResolvePipeLayout, NULL);
   for(size_t i = 0; i < ARRAY_COUNT(m_QuadResolvePipeline); i++)
     driver->vkDestroyPipeline(driver->GetDev(), m_QuadResolvePipeline[i], NULL);
+
+  m_QuadDescriptor.Destroy();
 
   driver->vkDestroyPipelineLayout(driver->GetDev(), m_DepthResolvePipeLayout, NULL);
   driver->vkDestroyDescriptorSetLayout(driver->GetDev(), m_DepthCopyDescSetLayout, NULL);

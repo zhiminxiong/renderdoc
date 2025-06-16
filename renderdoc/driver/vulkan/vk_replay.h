@@ -735,9 +735,11 @@ private:
     GPUBuffer m_CheckerUBO;
 
     VkDescriptorSetLayout m_QuadDescSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_QuadDescBufLayout = VK_NULL_HANDLE;
     VkDescriptorSet m_QuadDescSet = VK_NULL_HANDLE;
     VkPipelineLayout m_QuadResolvePipeLayout = VK_NULL_HANDLE;
     VkPipeline m_QuadResolvePipeline[8] = {VK_NULL_HANDLE};
+    GPUBuffer m_QuadDescriptor;
 
     VkDescriptorSetLayout m_DepthCopyDescSetLayout = VK_NULL_HANDLE;
     VkDescriptorSet m_DepthCopyDescSet = VK_NULL_HANDLE;

@@ -1935,6 +1935,9 @@ bool WrappedVulkan::Serialise_vkCreateBuffer(SerialiserType &ser, VkDevice devic
       m_DeviceAddressResources.IDs.push_back(GetResID(buf));
     }
 
+    if(patchedusage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+      m_ResourceDescBuffers.push_back(GetResID(buf));
+
     if(CreateInfo.flags &
        (VK_BUFFER_CREATE_SPARSE_BINDING_BIT | VK_BUFFER_CREATE_SPARSE_RESIDENCY_BIT))
     {

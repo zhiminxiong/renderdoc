@@ -529,6 +529,7 @@ private:
   bool m_NULLDescriptorPatternSaved = false;
   bool m_IgnoreLayoutForDescriptors = false;
   uint32_t m_ResourceDescriptorBufferReserveSize = 0;
+  rdcarray<ResourceId> m_ResourceDescBuffers;
   std::unordered_map<ResourceId, ResourceId> m_InlineBuffers;
 
   bool m_SeparateDepthStencil = false;
@@ -1204,6 +1205,8 @@ private:
                                        rdcarray<VkResourceRecord *> &accelerationStructures);
   void CaptureQueueSubmit(VkQueue queue, const rdcarray<VkCommandBuffer> &commandBuffers,
                           VkFence fence);
+
+  void CopyInternalDescriptor(VkCommandBuffer unwrappedCmdBuf, VkBuffer unwrappedSrc, uint32_t size);
 
   CommandBufferNode *BuildSubmitTree(ResourceId cmdId, uint32_t curEvent,
                                      CommandBufferNode *rootNode = NULL);

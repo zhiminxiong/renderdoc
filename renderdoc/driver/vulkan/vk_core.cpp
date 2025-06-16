@@ -4079,6 +4079,21 @@ bool WrappedVulkan::ContextProcessChunk(ReadSerialiser &ser, VulkanChunk chunk)
   return true;
 }
 
+void WrappedVulkan::CopyInternalDescriptor(VkCommandBuffer unwrappedCmdBuf, VkBuffer unwrappedSrc,
+                                           uint32_t size)
+{
+  VkBufferCopy bufCopy = {};
+  bufCopy.size = size;
+
+  for(ResourceId id : m_ResourceDescBuffers)
+  {
+    VkBuffer dst = Unwrap(GetResourceManager()->GetCurrentHandle<VkBuffer>(id));
+    bufCopy.dstOffset = m_CreationInfo.m_Buffer[id].size;
+
+    ObjDisp(m_Device)->CmdCopyBuffer(unwrappedCmdBuf, unwrappedSrc, dst, 1, &bufCopy);
+  }
+}
+
 bool WrappedVulkan::ProcessChunk(ReadSerialiser &ser, VulkanChunk chunk)
 {
   switch(chunk)
