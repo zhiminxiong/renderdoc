@@ -1893,6 +1893,13 @@ bool WrappedVulkan::Serialise_vkCreateBuffer(SerialiserType &ser, VkDevice devic
 
     VkBufferCreateInfo patched = CreateInfo;
 
+    // inflate all resource descriptor buffers by 2 descriptors, so that we have room for internal
+    // descriptors wherever they are bound
+    if(CreateInfo.usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+    {
+      patched.size += m_ResourceDescriptorBufferReserveSize;
+    }
+
     byte *tempMem = GetTempMemory(GetNextPatchSize(patched.pNext));
 
     UnwrapNextChain(m_State, "VkBufferCreateInfo", tempMem, (VkBaseInStructure *)&patched);
@@ -1976,6 +1983,13 @@ VkResult WrappedVulkan::vkCreateBuffer(VkDevice device, const VkBufferCreateInfo
 
   if(IsCaptureMode(m_State))
     adjusted_info.flags |= DefaultBufferCreateFlags();
+
+  // inflate all resource descriptor buffers by 2 descriptors, so that we have room for internal
+  // descriptors wherever they are bound
+  if(adjusted_info.usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+  {
+    adjusted_info.size += m_ResourceDescriptorBufferReserveSize;
+  }
 
   SetBufferUsageFlags(&adjusted_info, adjusted_usage);
 

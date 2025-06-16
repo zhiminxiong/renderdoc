@@ -4341,6 +4341,24 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
       RDCASSERT(m_DescriptorBufferProperties.samplerCaptureReplayDescriptorDataSize <=
                 FixedOpaqueDescriptorCaptureSize);
 
+      uint32_t maxResourceDescriptorSize = 0;
+#define CALC_MAX_SIZE(prop)   \
+  maxResourceDescriptorSize = \
+      RDCMAX(maxResourceDescriptorSize, (uint32_t)m_DescriptorBufferProperties.prop);
+
+      CALC_MAX_SIZE(storageImageDescriptorSize);
+      CALC_MAX_SIZE(sampledImageDescriptorSize);
+      CALC_MAX_SIZE(robustUniformTexelBufferDescriptorSize);
+      CALC_MAX_SIZE(robustStorageTexelBufferDescriptorSize);
+      CALC_MAX_SIZE(robustUniformBufferDescriptorSize);
+      CALC_MAX_SIZE(robustStorageBufferDescriptorSize);
+      CALC_MAX_SIZE(inputAttachmentDescriptorSize);
+      CALC_MAX_SIZE(accelerationStructureDescriptorSize);
+
+      m_ResourceDescriptorBufferReserveSize =
+          AlignUp(maxResourceDescriptorSize * 2,
+                  (uint32_t)m_DescriptorBufferProperties.descriptorBufferOffsetAlignment);
+
       m_IgnoreLayoutForDescriptors = descBufFeats->descriptorBufferImageLayoutIgnored != VK_FALSE;
     }
 
@@ -5007,6 +5025,24 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
                 FixedOpaqueDescriptorCaptureSize);
       RDCASSERT(m_DescriptorBufferProperties.samplerCaptureReplayDescriptorDataSize <=
                 FixedOpaqueDescriptorCaptureSize);
+
+      uint32_t maxResourceDescriptorSize = 0;
+#define CALC_MAX_SIZE(prop)   \
+  maxResourceDescriptorSize = \
+      RDCMAX(maxResourceDescriptorSize, (uint32_t)m_DescriptorBufferProperties.prop);
+
+      CALC_MAX_SIZE(storageImageDescriptorSize);
+      CALC_MAX_SIZE(sampledImageDescriptorSize);
+      CALC_MAX_SIZE(robustUniformTexelBufferDescriptorSize);
+      CALC_MAX_SIZE(robustStorageTexelBufferDescriptorSize);
+      CALC_MAX_SIZE(robustUniformBufferDescriptorSize);
+      CALC_MAX_SIZE(robustStorageBufferDescriptorSize);
+      CALC_MAX_SIZE(inputAttachmentDescriptorSize);
+      CALC_MAX_SIZE(accelerationStructureDescriptorSize);
+
+      m_ResourceDescriptorBufferReserveSize =
+          AlignUp(maxResourceDescriptorSize * 2,
+                  (uint32_t)m_DescriptorBufferProperties.descriptorBufferOffsetAlignment);
 
       m_IgnoreLayoutForDescriptors = descBufFeatures->descriptorBufferImageLayoutIgnored != VK_FALSE;
 

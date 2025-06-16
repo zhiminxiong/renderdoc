@@ -897,6 +897,33 @@ void WrappedVulkan::vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevi
         descBufferProperties->robustUniformTexelBufferDescriptorSize;
     descBufferProperties->storageTexelBufferDescriptorSize =
         descBufferProperties->robustStorageTexelBufferDescriptorSize;
+
+    // we also may need to shrink some range/address space limits to allow us to expand buffers. We
+    // checked that this should be valid at extension filter time
+
+    // calculate the maximum descriptor size according to the spec
+    size_t maxResourceDescriptorSize = 0;
+#define CALC_MAX_SIZE(prop) \
+  maxResourceDescriptorSize = RDCMAX(maxResourceDescriptorSize, descBufferProperties->prop);
+
+    CALC_MAX_SIZE(storageImageDescriptorSize);
+    CALC_MAX_SIZE(sampledImageDescriptorSize);
+    CALC_MAX_SIZE(robustUniformTexelBufferDescriptorSize);
+    CALC_MAX_SIZE(robustStorageTexelBufferDescriptorSize);
+    CALC_MAX_SIZE(robustUniformBufferDescriptorSize);
+    CALC_MAX_SIZE(robustStorageBufferDescriptorSize);
+    CALC_MAX_SIZE(inputAttachmentDescriptorSize);
+    CALC_MAX_SIZE(accelerationStructureDescriptorSize);
+
+    VkDeviceSize reservedDescriptorSize = AlignUp(
+        maxResourceDescriptorSize * 2, descBufferProperties->descriptorBufferOffsetAlignment);
+
+    descBufferProperties->maxResourceDescriptorBufferRange -= reservedDescriptorSize;
+
+    descBufferProperties->descriptorBufferAddressSpaceSize -=
+        ExpectedMaxNumDescriptorBuffers * reservedDescriptorSize;
+    descBufferProperties->resourceDescriptorBufferAddressSpaceSize -=
+        ExpectedMaxNumDescriptorBuffers * reservedDescriptorSize;
   }
 }
 

@@ -917,6 +917,9 @@ DECLARE_REFLECTION_STRUCT(DescriptorSetSlot);
 
 constexpr uint64_t FixedOpaqueDescriptorCaptureSize = 16;
 constexpr uint64_t MaxDescriptorSize = 256;
+// used for calculating how much address space to reserve if it's small and we're worried about
+// expanding descriptor buffers
+constexpr uint32_t ExpectedMaxNumDescriptorBuffers = 100;
 
 uint32_t DescriptorDataSize(const VkPhysicalDeviceDescriptorBufferPropertiesEXT &descSizes,
                             VkDescriptorType type);

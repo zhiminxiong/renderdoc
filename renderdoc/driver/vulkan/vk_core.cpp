@@ -2187,8 +2187,9 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           CHECK_PROP_SIZE(inputAttachmentDescriptorSize, MaxDescriptorSize);
           CHECK_PROP_SIZE(accelerationStructureDescriptorSize, MaxDescriptorSize);
 
-          // we don't expect any world where descriptor buffer is available but descriptor indexing
-          // doesn't support robust update after bind, but require it anyway as we force robustness on
+          // we don't expect any world where descriptor buffer is available but descriptor
+          // indexing doesn't support robust update after bind, but require it anyway as we
+          // force robustness on
           VkPhysicalDeviceDescriptorIndexingProperties descIndexingProps = {
               VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES,
           };
@@ -2202,6 +2203,75 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
               RDCWARN(
                   "VkPhysicalDeviceDescriptorIndexingProperties.robustBufferAccessUpdateAfterBind "
                   "is false, can't support capture of VK_EXT_descriptor_buffer");
+            }
+            return true;
+          }
+
+          // calculate the maximum descriptor size according to the spec
+          size_t maxResourceDescriptorSize = 0;
+#define CALC_MAX_SIZE(prop) \
+  maxResourceDescriptorSize = RDCMAX(maxResourceDescriptorSize, descProps.prop);
+
+          CALC_MAX_SIZE(storageImageDescriptorSize);
+          CALC_MAX_SIZE(sampledImageDescriptorSize);
+          CALC_MAX_SIZE(robustUniformTexelBufferDescriptorSize);
+          CALC_MAX_SIZE(robustStorageTexelBufferDescriptorSize);
+          CALC_MAX_SIZE(robustUniformBufferDescriptorSize);
+          CALC_MAX_SIZE(robustStorageBufferDescriptorSize);
+          CALC_MAX_SIZE(inputAttachmentDescriptorSize);
+          CALC_MAX_SIZE(accelerationStructureDescriptorSize);
+
+          // guess worst-case size of a descriptor set with 2 descriptors
+          VkDeviceSize reservedDescriptorSize =
+              AlignUp(maxResourceDescriptorSize * 2, descProps.descriptorBufferOffsetAlignment);
+
+          // finally we need to ensure we have enough room to hopefully expand every resource
+          // descriptor buffer a bit without blowing up available address space. we assume that
+          // making room for a certain number of buffers is more than enough - anyone making more
+          // than that is hopefully making buffers that are a much smaller fraction of the address space
+
+          // if the range is so small that we can't shrink the limit to give ourselves room and
+          // remain legal, that's a problem. We need to be able to expand each buffer by a bit
+          if(descProps.maxResourceDescriptorBufferRange - reservedDescriptorSize <
+             ((1 << 20) - (1 << 15)) * maxResourceDescriptorSize)
+          {
+            if(!filterWarned)
+            {
+              RDCWARN(
+                  "VkPhysicalDeviceDescriptorIndexingProperties buffer range of %llx is too "
+                  "small for maxResourceDescriptorSize %zu, can't support capture of "
+                  "VK_EXT_descriptor_buffer",
+                  descProps.maxResourceDescriptorBufferRange, maxResourceDescriptorSize);
+            }
+            return true;
+          }
+
+          const VkDeviceSize addrSpaceSize =
+              RDCMIN(descProps.descriptorBufferAddressSpaceSize,
+                     descProps.resourceDescriptorBufferAddressSpaceSize);
+
+          // an example set of close-to-problem limits here would be: 128MB (0x8000000) addr space
+          // with 64MB resource buffer range (0x4000000)
+
+          // the spec requires that the resource buffer range must be at least enough for ~1
+          // million (2^20-2^15 = 1015808) descriptors so as long as that's still satisfied if we
+          // reduce the max range by a bit, we're fine. In practice most implementations have
+          // plenty of address space and those that are more constrained have a max range that's
+          // power-of-two rather than the minimum ~1 million so we have plenty scope to remove.
+
+          // if the address space can't be shrunk by enough for 100 buffers to each have a couple
+          // of descriptors that's also a problem - this is a heuristic, and it could break if the
+          // user perfectly subdivided a shrunken address space into 101 buffers as then our
+          // expansion would cause things to explode. We don't expect that to be a problem though.
+          if(addrSpaceSize - ExpectedMaxNumDescriptorBuffers * reservedDescriptorSize < (1 << 27))
+          {
+            if(!filterWarned)
+            {
+              RDCWARN(
+                  "VkPhysicalDeviceDescriptorIndexingProperties resource address space size of "
+                  "%llx is too small for maxResourceDescriptorSize %zu, can't support capture of "
+                  "VK_EXT_descriptor_buffer",
+                  addrSpaceSize, maxResourceDescriptorSize);
             }
             return true;
           }

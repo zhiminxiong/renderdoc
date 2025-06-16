@@ -528,6 +528,7 @@ private:
 
   bool m_NULLDescriptorPatternSaved = false;
   bool m_IgnoreLayoutForDescriptors = false;
+  uint32_t m_ResourceDescriptorBufferReserveSize = 0;
   std::unordered_map<ResourceId, ResourceId> m_InlineBuffers;
 
   bool m_SeparateDepthStencil = false;
