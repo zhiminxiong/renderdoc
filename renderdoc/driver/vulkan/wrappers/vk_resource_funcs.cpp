@@ -1893,11 +1893,14 @@ bool WrappedVulkan::Serialise_vkCreateBuffer(SerialiserType &ser, VkDevice devic
 
     VkBufferCreateInfo patched = CreateInfo;
 
-    // inflate all resource descriptor buffers by 2 descriptors, so that we have room for internal
-    // descriptors wherever they are bound
-    if(CreateInfo.usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+    // inflate all resource descriptor buffers, so that we have room for internal
+    // descriptors wherever they are bound. We only do this once at the point of original capturing
+    // - one we have captured and are then self-capturing we re-use the same reservation space to
+    // ensure we don't keep trying to add more and more reservation
+    if(patchedusage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
     {
-      patched.size += m_ResourceDescriptorBufferReserveSize;
+      if(!m_InitParams.DescriptorsReserved)
+        patched.size += m_ResourceDescriptorBufferReserveSize;
     }
 
     byte *tempMem = GetTempMemory(GetNextPatchSize(patched.pNext));
@@ -1987,11 +1990,14 @@ VkResult WrappedVulkan::vkCreateBuffer(VkDevice device, const VkBufferCreateInfo
   if(IsCaptureMode(m_State))
     adjusted_info.flags |= DefaultBufferCreateFlags();
 
-  // inflate all resource descriptor buffers by 2 descriptors, so that we have room for internal
-  // descriptors wherever they are bound
-  if(adjusted_info.usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
+  // inflate all resource descriptor buffers, so that we have room for internal
+  // descriptors wherever they are bound. We only do this once at the point of original capturing -
+  // one we have captured and are then self-capturing we re-use the same reservation space to ensure
+  // we don't keep trying to add more and more reservation
+  if(adjusted_usage & VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT)
   {
-    adjusted_info.size += m_ResourceDescriptorBufferReserveSize;
+    if(!m_InitParams.DescriptorsReserved)
+      adjusted_info.size += m_ResourceDescriptorBufferReserveSize;
   }
 
   SetBufferUsageFlags(&adjusted_info, adjusted_usage);

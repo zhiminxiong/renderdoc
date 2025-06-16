@@ -4409,6 +4409,19 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
       }
 
       EstimateDescriptorFormats();
+
+      // indicate to any self-capture that we have reserved the descriptors
+      if(ObjDisp(m_Device)->SetDebugUtilsObjectTagEXT)
+      {
+        VkDebugUtilsObjectTagInfoEXT tagInfo = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_TAG_INFO_EXT};
+        tagInfo.objectType = VK_OBJECT_TYPE_INSTANCE;
+        tagInfo.objectHandle = uint64_t(Unwrap(m_Instance));
+        tagInfo.tagName = RENDERDOC_DescriptorsReservation_UUID;
+        tagInfo.tagSize = 0;
+        tagInfo.pTag = NULL;
+
+        vkr = ObjDisp(m_Device)->SetDebugUtilsObjectTagEXT(Unwrap(m_Device), &tagInfo);
+      }
     }
 
     APIProps.vendor = GetDriverInfo().Vendor();

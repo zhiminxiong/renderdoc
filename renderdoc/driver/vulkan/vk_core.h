@@ -53,11 +53,15 @@ struct VkInitParams
   rdcarray<rdcstr> Extensions;
   ResourceId InstanceID;
 
+  // indicates that the 'application' has pre-reserved our descriptors - for self-capture. Prevents
+  // us from getting into a loop of ever-increasing reservations and failing to allocate.
+  bool DescriptorsReserved = false;
+
   // remember to update this function if you add more members
   uint64_t GetSerialiseSize();
 
   // check if a frame capture section version is supported
-  static const uint64_t CurrentVersion = 0x16;
+  static const uint64_t CurrentVersion = 0x17;
   static bool IsSupportedVersion(uint64_t ver);
 };
 

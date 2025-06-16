@@ -433,6 +433,10 @@ bool VkInitParams::IsSupportedVersion(uint64_t ver)
   if(ver == CurrentVersion)
     return true;
 
+  // 0x16 -> 0x17 - added indication of reserved descriptors
+  if(ver == 0x16)
+    return true;
+
   // 0x15 -> 0x16 - added support for acceleration structures
   if(ver == 0x15)
     return true;
@@ -1012,6 +1016,10 @@ void DoSerialise(SerialiserType &ser, VkInitParams &el)
   SERIALISE_MEMBER(Layers);
   SERIALISE_MEMBER(Extensions).Important();
   SERIALISE_MEMBER(InstanceID).TypedAs("VkInstance"_lit);
+  if(ser.VersionAtLeast(0x17))
+    SERIALISE_MEMBER(DescriptorsReserved);
+  else
+    SERIALISE_MEMBER_EMPTY(DescriptorsReserved);
 }
 
 INSTANTIATE_SERIALISE_TYPE(VkInitParams);

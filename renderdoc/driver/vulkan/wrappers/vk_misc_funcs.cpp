@@ -2642,6 +2642,11 @@ VkResult WrappedVulkan::vkSetDebugUtilsObjectTagEXT(VkDevice device,
     {
       m_CurrentVRBackbuffer = data.record->GetResourceID();
     }
+    else if(pTagInfo->tagName == RENDERDOC_DescriptorsReservation_UUID &&
+            pTagInfo->objectType == VK_OBJECT_TYPE_INSTANCE)
+    {
+      m_InitParams.DescriptorsReserved = true;
+    }
     else if(ObjDisp(device)->SetDebugUtilsObjectTagEXT)
     {
       VkDebugUtilsObjectTagInfoEXT unwrapped = *pTagInfo;
