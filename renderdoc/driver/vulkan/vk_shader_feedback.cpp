@@ -45,6 +45,27 @@ RDOC_CONFIG(uint32_t, Vulkan_Debug_PrintfBufferSize, 64 * 1024,
 static const uint32_t ShaderStageHeaderBitShift = 28U;
 static const uint32_t ShaderFeedbackReservedBindings = 1;
 
+VkDescriptorType MakeVkDescriptorType(DescriptorType type, bool inputAttachment)
+{
+  switch(type)
+  {
+    case DescriptorType::Unknown: return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    case DescriptorType::Buffer: return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    case DescriptorType::ConstantBuffer: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case DescriptorType::Sampler: return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case DescriptorType::ImageSampler: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    case DescriptorType::Image:
+      return inputAttachment ? VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case DescriptorType::TypedBuffer: return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+    case DescriptorType::ReadWriteImage: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case DescriptorType::ReadWriteTypedBuffer: return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+    case DescriptorType::ReadWriteBuffer: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case DescriptorType::AccelerationStructure:
+      return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+  }
+  return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+}
+
 struct BindKey
 {
   bool operator<(const BindKey &o) const
@@ -59,9 +80,6 @@ struct BindKey
 
   ShaderStage stage;
   ShaderBindIndex index;
-
-  // unused as key, here for convenience when looking up bindings
-  uint32_t arraySize;
 };
 
 struct BindData
@@ -1564,6 +1582,7 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
   ShaderReflection *stageRefls[NumShaderStages] = {};
 
   {
+    const rdcarray<VulkanRenderState::DescriptorBuffer> &descBufs = state.descBufs;
     const rdcarray<VulkanStatePipeline::DescriptorAndOffsets> &descSets =
         (result.compute ? state.compute.descSets : state.graphics.descSets);
 
@@ -1571,33 +1590,23 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
     for(size_t set = 0; set < pipeInfo.descSetLayouts.size(); set++)
       descLayouts.push_back(&creationInfo.m_DescSetLayout[pipeInfo.descSetLayouts[set]]);
 
-    auto processBinding = [this, &descLayouts, &descSets, &feedbackData](
-                              ShaderStage stage, DescriptorType type, uint16_t index,
-                              uint32_t bindset, uint32_t bind, uint32_t arraySize) {
+    auto processBinding = [this, &descLayouts, &descBufs, &descSets, &feedbackData](
+                              ShaderStage stage, DescriptorType type, bool inputAttachment,
+                              uint16_t index, uint32_t bindset, uint32_t bind, uint32_t arraySize) {
       // only process array bindings
       if(arraySize <= 1)
         return;
 
       BindKey key;
       key.stage = stage;
-      key.arraySize = arraySize;
       key.index.category = CategoryForDescriptorType(type);
       key.index.index = index;
       key.index.arrayElement = 0;
 
       if(bindset >= descLayouts.size() || !descLayouts[bindset] || bindset >= descSets.size() ||
-         descSets[bindset].descSet == ResourceId())
+         !descSets[bindset].IsBound())
       {
         RDCERR("Invalid set %u referenced by %s shader", bindset, ToStr(key.stage).c_str());
-        return;
-      }
-
-      ResourceId descSet = descSets[bindset].descSet;
-
-      if(bind >= descLayouts[bindset]->bindings.size())
-      {
-        RDCERR("Invalid binding %u in set %u referenced by %s shader", bind, bindset,
-               ToStr(key.stage).c_str());
         return;
       }
 
@@ -1610,26 +1619,55 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
         return;
       }
 
-      if(descLayouts[bindset]->bindings[bind].variableSize)
-      {
-        auto it = m_pDriver->m_DescriptorSetState.find(descSet);
-        if(it != m_pDriver->m_DescriptorSetState.end())
-          arraySize = it->second.data.variableDescriptorCount;
-      }
-      else if(arraySize == ~0U)
-      {
-        // if the array was unbounded, clamp it to the size of the descriptor set
-        arraySize = descLayouts[bindset]->bindings[bind].descriptorCount;
-      }
-
       DescriptorAccess access;
       access.stage = key.stage;
       access.type = type;
       access.index = index;
-      access.descriptorStore = m_pDriver->GetResourceManager()->GetOriginalID(descSet);
-      access.byteOffset =
-          descLayouts[bindset]->bindings[bind].elemOffset + descLayouts[bindset]->inlineByteSize;
-      access.byteSize = 1;
+
+      if(descSets[bindset].descSet == ResourceId())
+      {
+        ResourceId id;
+        uint64_t offs = 0;
+        m_pDriver->GetResIDFromAddr(descBufs[descSets[bindset].descBufferIdx].address, id, offs);
+        access.descriptorStore = m_pDriver->GetResourceManager()->GetOriginalID(id);
+        access.byteOffset += uint32_t(offs + descSets[bindset].descBufferOffset) +
+                             descLayouts[bindset]->bindings[bind].elemOffset;
+        access.byteSize = m_pDriver->DescriptorDataSize(MakeVkDescriptorType(type, inputAttachment));
+
+        if(descLayouts[bindset]->bindings[bind].variableSize || arraySize == ~0U)
+        {
+          arraySize = uint32_t((m_pDriver->m_CreationInfo.m_Buffer[id].size - access.byteOffset) /
+                               access.byteSize);
+        }
+      }
+      else
+      {
+        ResourceId descSet = descSets[bindset].descSet;
+
+        if(bind >= descLayouts[bindset]->bindings.size())
+        {
+          RDCERR("Invalid binding %u in set %u referenced by %s shader", bind, bindset,
+                 ToStr(key.stage).c_str());
+          return;
+        }
+
+        if(descLayouts[bindset]->bindings[bind].variableSize)
+        {
+          auto it = m_pDriver->m_DescriptorSetState.find(descSet);
+          if(it != m_pDriver->m_DescriptorSetState.end())
+            arraySize = it->second.data.variableDescriptorCount;
+        }
+        else if(arraySize == ~0U)
+        {
+          // if the array was unbounded, clamp it to the size of the descriptor set
+          arraySize = descLayouts[bindset]->bindings[bind].descriptorCount;
+        }
+
+        access.descriptorStore = m_pDriver->GetResourceManager()->GetOriginalID(descSet);
+        access.byteOffset =
+            descLayouts[bindset]->bindings[bind].elemOffset + descLayouts[bindset]->inlineByteSize;
+        access.byteSize = 1;
+      }
 
       feedbackData.offsetMap[key] = {feedbackData.feedbackStorageSize, arraySize, access};
 
@@ -1644,25 +1682,26 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
       stageRefls[(uint32_t)sh.refl->stage] = sh.refl;
 
       for(uint32_t i = 0; i < sh.refl->constantBlocks.size(); i++)
-        processBinding(sh.refl->stage, DescriptorType::ConstantBuffer, i & 0xffff,
+        processBinding(sh.refl->stage, DescriptorType::ConstantBuffer, false, i & 0xffff,
                        sh.refl->constantBlocks[i].fixedBindSetOrSpace,
                        sh.refl->constantBlocks[i].fixedBindNumber,
                        sh.refl->constantBlocks[i].bindArraySize);
 
       for(uint32_t i = 0; i < sh.refl->samplers.size(); i++)
-        processBinding(sh.refl->stage, DescriptorType::Sampler, i & 0xffff,
+        processBinding(sh.refl->stage, DescriptorType::Sampler, false, i & 0xffff,
                        sh.refl->samplers[i].fixedBindSetOrSpace,
                        sh.refl->samplers[i].fixedBindNumber, sh.refl->samplers[i].bindArraySize);
 
       for(uint32_t i = 0; i < sh.refl->readOnlyResources.size(); i++)
-        processBinding(sh.refl->stage, sh.refl->readOnlyResources[i].descriptorType, i & 0xffff,
+        processBinding(sh.refl->stage, sh.refl->readOnlyResources[i].descriptorType,
+                       sh.refl->readOnlyResources[i].isInputAttachment, i & 0xffff,
                        sh.refl->readOnlyResources[i].fixedBindSetOrSpace,
                        sh.refl->readOnlyResources[i].fixedBindNumber,
                        sh.refl->readOnlyResources[i].bindArraySize);
 
       for(uint32_t i = 0; i < sh.refl->readWriteResources.size(); i++)
-        processBinding(sh.refl->stage, sh.refl->readWriteResources[i].descriptorType, i & 0xffff,
-                       sh.refl->readWriteResources[i].fixedBindSetOrSpace,
+        processBinding(sh.refl->stage, sh.refl->readWriteResources[i].descriptorType, false,
+                       i & 0xffff, sh.refl->readWriteResources[i].fixedBindSetOrSpace,
                        sh.refl->readWriteResources[i].fixedBindNumber,
                        sh.refl->readWriteResources[i].bindArraySize);
     }
@@ -1805,7 +1844,7 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
         result.access.push_back(access);
       }
 
-      access.byteOffset++;
+      access.byteOffset += access.byteSize;
     }
   }
 
