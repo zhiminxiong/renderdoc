@@ -143,6 +143,15 @@ struct VulkanActionTreeNode
 
   rdcarray<ResourceId> executedCmds;
 
+  struct DeferredResourceUsage
+  {
+    uint32_t descBufVersionIdx;
+    ResourceId pipeline;
+    ResourceId shaderObjects[NumShaderStages];
+    rdcarray<VulkanStatePipeline::DescriptorAndOffsets> descSets;
+  };
+  rdcarray<DeferredResourceUsage> deferredResourceUsage;
+
   VulkanActionTreeNode &operator=(const ActionDescription &a)
   {
     *this = VulkanActionTreeNode(a);
@@ -840,6 +849,11 @@ private:
     uint32_t eventCount;             // how many events are in this cmd buffer, for quick skipping
     uint32_t curEventID;             // current event ID while reading or executing
     uint32_t actionCount;            // similar to above
+
+    // the index in m_DescriptorBufferVersions for the current GPUBuffer containing the descriptor buffer snapshot
+    uint32_t descBufVersionIdx = ~0U;
+    // when multiple buffers are bound, the offsets of each in the single GPUBuffer where they are
+    rdcarray<uint64_t> descBufOffsets;
   };
 
   uint64_t m_FakePushSetID = 0;
@@ -1071,6 +1085,9 @@ private:
   // immutable creation data
   VulkanCreationInfo m_CreationInfo;
 
+  rdcarray<GPUBuffer> m_DescriptorBufferVersions;
+  void VersionDescriptorBuffers(VkCommandBuffer cmd);
+
   std::map<ResourceId, rdcarray<EventUsage>> m_ResourceUses;
   std::map<uint32_t, EventFlags> m_EventFlags;
   rdcarray<ResourceId> m_FeedbackRPs;
@@ -1239,9 +1256,21 @@ private:
   void AddEvent();
 
   void AddUsage(VulkanActionTreeNode &actionNode, rdcarray<DebugMessage> &debugMessages);
+
+  void AddUsageForDescriptorSets(VulkanActionTreeNode &actionNode,
+                                 rdcarray<DebugMessage> &debugMessages);
   void AddUsageForDescriptorSetBind(VulkanActionTreeNode &actionNode,
                                     rdcarray<DebugMessage> &debugMessages, uint32_t bindset,
                                     uint32_t bind, ResourceUsage usage);
+  void AddUsageForDescriptorBuffers(VulkanActionTreeNode &actionNode,
+                                    rdcarray<DebugMessage> &debugMessages,
+                                    const VulkanActionTreeNode::DeferredResourceUsage &def);
+  void AddUsageForDescriptorBufferBind(VulkanActionTreeNode &actionNode,
+                                       rdcarray<DebugMessage> &debugMessages,
+                                       const VulkanActionTreeNode::DeferredResourceUsage &def,
+                                       byte *descriptorBytes, size_t descriptorSize,
+                                       DescriptorType type, uint32_t bindset, uint32_t bind,
+                                       ResourceUsage usage);
   void AddUsageForDescriptor(VulkanActionTreeNode &actionNode, const DescriptorSetSlot &slot,
                              ResourceUsage usage);
 

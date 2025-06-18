@@ -106,6 +106,7 @@ typedef VkPhysicalDeviceBufferDeviceAddressFeatures VkPhysicalDeviceBufferDevice
 
 ResourceFormat MakeResourceFormat(VkFormat fmt);
 VkFormat MakeVkFormat(ResourceFormat fmt);
+VkDescriptorType MakeVkDescriptorType(DescriptorType type, bool inputAttachment);
 Topology MakePrimitiveTopology(VkPrimitiveTopology Topo, uint32_t patchControlPoints);
 VkPrimitiveTopology MakeVkPrimitiveTopology(Topology Topo);
 AddressMode MakeAddressMode(VkSamplerAddressMode addr);

@@ -45,6 +45,7 @@ struct VulkanStatePipeline
   struct DescriptorAndOffsets
   {
     ResourceId pipeLayout;
+    bool push = false;
 
     // if descriptor set bound
     ResourceId descSet;

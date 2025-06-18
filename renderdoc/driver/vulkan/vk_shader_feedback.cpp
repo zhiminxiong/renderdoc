@@ -45,27 +45,6 @@ RDOC_CONFIG(uint32_t, Vulkan_Debug_PrintfBufferSize, 64 * 1024,
 static const uint32_t ShaderStageHeaderBitShift = 28U;
 static const uint32_t ShaderFeedbackReservedBindings = 1;
 
-VkDescriptorType MakeVkDescriptorType(DescriptorType type, bool inputAttachment)
-{
-  switch(type)
-  {
-    case DescriptorType::Unknown: return VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    case DescriptorType::Buffer: return VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    case DescriptorType::ConstantBuffer: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    case DescriptorType::Sampler: return VK_DESCRIPTOR_TYPE_SAMPLER;
-    case DescriptorType::ImageSampler: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    case DescriptorType::Image:
-      return inputAttachment ? VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case DescriptorType::TypedBuffer: return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-    case DescriptorType::ReadWriteImage: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    case DescriptorType::ReadWriteTypedBuffer: return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-    case DescriptorType::ReadWriteBuffer: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case DescriptorType::AccelerationStructure:
-      return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-  }
-  return VK_DESCRIPTOR_TYPE_MAX_ENUM;
-}
-
 struct BindKey
 {
   bool operator<(const BindKey &o) const

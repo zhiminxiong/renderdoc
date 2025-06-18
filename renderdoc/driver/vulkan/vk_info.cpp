@@ -1016,17 +1016,8 @@ void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderRef
        VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
     {
       access.descriptorStore = VulkanCreationInfo::descriptorBufferStorage[bind.fixedBindSetOrSpace];
-      if(bind.isInputAttachment)
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
-      else if(bind.hasSampler)
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-      else if(bind.isTexture)
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-      else if(bind.descriptorType == DescriptorType::AccelerationStructure)
-        access.byteSize =
-            resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
-      else
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER);
+      access.byteSize = resourceMan->DescriptorDataSize(
+          MakeVkDescriptorType(bind.descriptorType, bind.isInputAttachment));
 
       // we are only handling non-arrays here
       access.byteOffset = setLayout->bindings[bind.fixedBindNumber].elemOffset;
@@ -1073,12 +1064,8 @@ void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderRef
        VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
     {
       access.descriptorStore = VulkanCreationInfo::descriptorBufferStorage[bind.fixedBindSetOrSpace];
-      if(bind.isTexture)
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-      else if(bind.descriptorType == DescriptorType::ReadWriteTypedBuffer)
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER);
-      else
-        access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+      access.byteSize =
+          resourceMan->DescriptorDataSize(MakeVkDescriptorType(bind.descriptorType, false));
 
       // we are only handling non-arrays here
       access.byteOffset = setLayout->bindings[bind.fixedBindNumber].elemOffset;
