@@ -123,6 +123,13 @@ struct ShaderUniformParameters
   float minlod;
 };
 
+#if defined(RELEASE)
+#define CHECK_DEVICE_THREAD()
+#else
+#define CHECK_DEVICE_THREAD() \
+  RDCASSERTMSG("API Wrapper function called from non-device thread!", IsDeviceThread());
+#endif    // #if defined(RELEASE)
+
 class VulkanAPIWrapper : public rdcspv::DebugAPIWrapper
 {
 public:
@@ -131,7 +138,8 @@ public:
       : m_DebugData(vk->GetReplay()->GetShaderDebugData()),
         m_Creation(creation),
         m_EventID(eid),
-        m_ShaderID(shadId)
+        m_ShaderID(shadId),
+        deviceThreadID(Threading::GetCurrentID())
   {
     m_pDriver = vk;
 
@@ -250,6 +258,7 @@ public:
 
   ~VulkanAPIWrapper()
   {
+    CHECK_DEVICE_THREAD();
     m_pDriver->FlushQ();
 
     VkDevice dev = m_pDriver->GetDev();
@@ -261,6 +270,7 @@ public:
 
   void ResetReplay()
   {
+    CHECK_DEVICE_THREAD();
     if(!m_ResourcesDirty)
     {
       VkMarkerRegion region("ResetReplay");
@@ -274,6 +284,7 @@ public:
   virtual void AddDebugMessage(MessageCategory c, MessageSeverity sv, MessageSource src,
                                rdcstr d) override
   {
+    CHECK_DEVICE_THREAD();
     m_pDriver->AddDebugMessage(c, sv, src, d);
   }
 
@@ -281,12 +292,14 @@ public:
 
   virtual uint64_t GetBufferLength(ShaderBindIndex bind) override
   {
+    CHECK_DEVICE_THREAD();
     return PopulateBuffer(bind).size();
   }
 
   virtual void ReadBufferValue(ShaderBindIndex bind, uint64_t offset, uint64_t byteSize,
                                void *dst) override
   {
+    CHECK_DEVICE_THREAD();
     const bytebuf &data = PopulateBuffer(bind);
 
     if(offset + byteSize <= data.size())
@@ -296,6 +309,7 @@ public:
   virtual void WriteBufferValue(ShaderBindIndex bind, uint64_t offset, uint64_t byteSize,
                                 const void *src) override
   {
+    CHECK_DEVICE_THREAD();
     bytebuf &data = PopulateBuffer(bind);
 
     if(offset + byteSize <= data.size())
@@ -304,6 +318,7 @@ public:
 
   virtual void ReadAddress(uint64_t address, uint64_t byteSize, void *dst) override
   {
+    CHECK_DEVICE_THREAD();
     size_t offset;
     const bytebuf &data = PopulateBuffer(address, offset);
     if(offset + byteSize <= data.size())
@@ -312,6 +327,7 @@ public:
 
   virtual void WriteAddress(uint64_t address, uint64_t byteSize, const void *src) override
   {
+    CHECK_DEVICE_THREAD();
     size_t offset;
     bytebuf &data = PopulateBuffer(address, offset);
     if(offset + byteSize <= data.size())
@@ -321,6 +337,7 @@ public:
   virtual bool ReadTexel(ShaderBindIndex imageBind, const ShaderVariable &coord, uint32_t sample,
                          ShaderVariable &output) override
   {
+    CHECK_DEVICE_THREAD();
     ImageData &data = PopulateImage(imageBind);
 
     if(data.width == 0)
@@ -437,6 +454,7 @@ public:
   virtual bool WriteTexel(ShaderBindIndex imageBind, const ShaderVariable &coord, uint32_t sample,
                           const ShaderVariable &input) override
   {
+    CHECK_DEVICE_THREAD();
     ImageData &data = PopulateImage(imageBind);
 
     if(data.width == 0)
@@ -547,6 +565,7 @@ public:
   virtual void FillInputValue(ShaderVariable &var, ShaderBuiltin builtin, uint32_t threadIndex,
                               uint32_t location, uint32_t component) override
   {
+    CHECK_DEVICE_THREAD();
     if(builtin != ShaderBuiltin::Undefined)
     {
       if(threadIndex < thread_builtins.size())
@@ -599,6 +618,7 @@ public:
 
   uint32_t GetThreadProperty(uint32_t threadIndex, rdcspv::ThreadProperty prop) override
   {
+    CHECK_DEVICE_THREAD();
     if(prop >= rdcspv::ThreadProperty::Count)
       return 0;
     if(threadIndex >= thread_props.size())
@@ -615,6 +635,7 @@ public:
                              const rdcspv::ImageOperandsAndParamDatas &operands,
                              ShaderVariable &output) override
   {
+    CHECK_DEVICE_THREAD();
     ShaderConstParameters constParams = {};
     ShaderUniformParameters uniformParams = {};
 
@@ -1426,6 +1447,7 @@ public:
   virtual bool CalculateMathOp(rdcspv::ThreadState &lane, rdcspv::GLSLstd450 op,
                                const rdcarray<ShaderVariable> &params, ShaderVariable &output) override
   {
+    CHECK_DEVICE_THREAD();
     RDCASSERT(params.size() <= 3, params.size());
 
     int floatSizeIdx = 0;
@@ -1566,6 +1588,9 @@ public:
 
   rdcarray<rdcfixedarray<uint32_t, arraydim<rdcspv::ThreadProperty>()>> thread_props;
 
+  uint64_t GetDeviceThreadID() const { return deviceThreadID; }
+  bool IsDeviceThread() const { return Threading::GetCurrentID() == GetDeviceThreadID(); }
+
 private:
   WrappedVulkan *m_pDriver = NULL;
   ShaderDebugData &m_DebugData;
@@ -1634,6 +1659,7 @@ private:
 
   const Descriptor &GetDescriptor(const rdcstr &access, ShaderBindIndex index, bool &valid)
   {
+    CHECK_DEVICE_THREAD();
     static Descriptor dummy;
 
     if(index.category == DescriptorCategory::Unknown)
@@ -1665,6 +1691,7 @@ private:
   const SamplerDescriptor &GetSamplerDescriptor(const rdcstr &access, ShaderBindIndex index,
                                                 bool &valid)
   {
+    CHECK_DEVICE_THREAD();
     static SamplerDescriptor dummy;
 
     if(index.category == DescriptorCategory::Unknown)
@@ -1695,6 +1722,7 @@ private:
 
   bytebuf &PopulateBuffer(uint64_t address, size_t &offs)
   {
+    CHECK_DEVICE_THREAD();
     // pick a non-overlapping bind namespace for direct pointer access
     ShaderBindIndex bind;
     ResourceId id;
@@ -1732,10 +1760,12 @@ private:
 
   bytebuf &PopulateBuffer(ShaderBindIndex bind)
   {
+    CHECK_DEVICE_THREAD();
     auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
     bytebuf &data = insertIt.first->second;
     if(insertIt.second)
     {
+      CHECK_DEVICE_THREAD();
       bool valid = true;
       const Descriptor &bufData = GetDescriptor("accessing buffer value", bind, valid);
       if(valid)
@@ -1763,10 +1793,12 @@ private:
 
   ImageData &PopulateImage(ShaderBindIndex bind)
   {
+    CHECK_DEVICE_THREAD();
     auto insertIt = imageCache.insert(std::make_pair(bind, ImageData()));
     ImageData &data = insertIt.first->second;
     if(insertIt.second)
     {
+      CHECK_DEVICE_THREAD();
       bool valid = true;
       const Descriptor &imgData = GetDescriptor("performing image load/store", bind, valid);
       if(valid)
@@ -1892,6 +1924,7 @@ private:
   VkPipeline MakePipe(const ShaderConstParameters &params, uint32_t floatBitSize, bool depthTex,
                       bool uintTex, bool sintTex)
   {
+    CHECK_DEVICE_THREAD();
     VkSpecializationMapEntry specMaps[sizeof(params) / sizeof(uint32_t)];
     for(size_t i = 0; i < ARRAY_COUNT(specMaps); i++)
     {
@@ -2099,6 +2132,7 @@ private:
 
   void GenerateMathShaderModule(rdcarray<uint32_t> &spirv, uint32_t floatBitSize)
   {
+    CHECK_DEVICE_THREAD();
     rdcspv::Editor editor(spirv);
 
     // create as SPIR-V 1.0 for best compatibility
@@ -2348,6 +2382,7 @@ private:
   void GenerateSamplingShaderModule(rdcarray<uint32_t> &spirv, bool depthTex, bool uintTex,
                                     bool sintTex)
   {
+    CHECK_DEVICE_THREAD();
     // this could be done as a glsl shader, but glslang has some bugs compiling the specialisation
     // constants, so we generate it by hand - which isn't too hard
 
@@ -3060,6 +3095,8 @@ private:
 
     editor.AddFunction(func);
   }
+
+  const uint64_t deviceThreadID;
 };
 
 enum class InputSpecConstant
