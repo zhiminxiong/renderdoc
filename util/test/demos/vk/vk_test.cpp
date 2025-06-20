@@ -1089,6 +1089,12 @@ void VulkanGraphicsTest::setName(VkFence obj, const std::string &name)
   setName(VK_OBJECT_TYPE_FENCE, (uint64_t)obj, name);
 }
 
+template <>
+void VulkanGraphicsTest::setName(VkAccelerationStructureKHR obj, const std::string &name)
+{
+  setName(VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR, (uint64_t)obj, name);
+}
+
 void VulkanGraphicsTest::setName(VkObjectType objType, uint64_t obj, const std::string &name)
 {
   if(vkSetDebugUtilsObjectNameEXT)

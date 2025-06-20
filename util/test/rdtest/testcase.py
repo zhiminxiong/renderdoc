@@ -861,7 +861,7 @@ class TestCase:
         trace = self.controller.DebugPixel(x, y, rd.DebugPixelInputs())
         if trace.debugger is None:
             self.controller.FreeTrace(trace)
-            raise TestFailureException(f"Pixel shader could not be debugged.")
+            raise TestFailureException(f"Pixel shader could not be debugged at {x},{y}.")
 
         _, variables = self.process_trace(trace)
         output = self.find_output_source_var(trace, rd.ShaderBuiltin.ColorOutput, 0)
@@ -871,7 +871,7 @@ class TestCase:
         try:
             self.check_pixel_value(pipe.GetOutputTargets()[0].resource, x, y, debugged.value.f32v[0:4])
         except TestFailureException as ex:
-            raise TestFailureException(f"Pixel shader did not debug correctly. {ex}")
+            raise TestFailureException(f"Pixel shader did not debug correctly at {x},{y}. {ex}")
 
         log.success(f"Pixel shader debugging at {x},{y} was successful")
 
