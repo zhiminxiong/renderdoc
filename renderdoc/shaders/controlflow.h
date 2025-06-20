@@ -60,6 +60,7 @@ public:
   uint32_t GetThreadCount() const { return (uint32_t)m_ThreadRefs.count(); }
   bool ContainsThread(ThreadIndex threadId) const;
   const rdcarray<ThreadReference> &GetThreadRefs() const { return m_ThreadRefs; }
+  int32_t GetId() const { return m_Id; }
   void SetDiverged(bool value)
   {
     m_Diverged = value;
@@ -89,7 +90,6 @@ public:
   bool IsAlive() const { return m_Alive; }
 
 private:
-  int32_t GetId() const { return m_Id; }
   void SetThreadExecutionPoint(ThreadIndex threadId, ExecutionPoint execPoint);
   bool Entangled(const Tangle &other) const;
   void AddThreadReference(const ThreadReference &threadRef)
