@@ -9631,7 +9631,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug(DebugAPIWrapper *apiWrapper)
       if(!tangle.IsAliveActive())
         continue;
 
-      rdcarray<ThreadReference> threadRefs = tangle.GetThreadRefs();
+      const rdcarray<ThreadReference> &threadRefs = tangle.GetThreadRefs();
       // calculate the current active thread mask from the threads in the tangle
       {
         // one bool per workgroup thread
