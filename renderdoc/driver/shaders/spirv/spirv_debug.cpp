@@ -534,10 +534,10 @@ ShaderVariable ThreadState::CalcDeriv(ThreadState::DerivDir dir, ThreadState::De
   if(quadNeighbours[0] == ~0U || quadNeighbours[1] == ~0U || quadNeighbours[2] == ~0U ||
      quadNeighbours[3] == ~0U)
   {
-    debugger.GetAPIWrapper()->AddDebugMessage(
-        MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
-        StringFormat::Fmt("Derivative calculation within non-quad on input %s",
-                          debugger.GetHumanName(val).c_str()));
+    debugger.AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
+                             MessageSource::RuntimeWarning,
+                             StringFormat::Fmt("Derivative calculation within non-quad on input %s",
+                                               debugger.GetHumanName(val).c_str()));
     return ShaderVariable("", 0.0f, 0.0f, 0.0f, 0.0f);
   }
 
@@ -625,7 +625,7 @@ ShaderVariable ThreadState::CalcDeriv(ThreadState::DerivDir dir, ThreadState::De
 
   if(a->Finished() || b->Finished())
   {
-    debugger.GetAPIWrapper()->AddDebugMessage(
+    debugger.AddDebugMessage(
         MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
         StringFormat::Fmt("Derivative calculation within non-uniform control flow on input %s",
                           debugger.GetHumanName(val).c_str()));

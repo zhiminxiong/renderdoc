@@ -281,11 +281,11 @@ public:
     m_ResourcesDirty = true;
   }
 
-  virtual void AddDebugMessage(MessageCategory c, MessageSeverity sv, MessageSource src,
-                               rdcstr d) override
+  virtual void AddDebugMessage(MessageCategory cat, MessageSeverity sev, MessageSource src,
+                               rdcstr desc) override
   {
     CHECK_DEVICE_THREAD();
-    m_pDriver->AddDebugMessage(c, sv, src, d);
+    m_pDriver->AddDebugMessage(cat, sev, src, desc);
   }
 
   virtual ResourceId GetShaderID() override { return m_ShaderID; }

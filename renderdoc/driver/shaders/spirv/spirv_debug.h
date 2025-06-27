@@ -394,6 +394,14 @@ struct LocalData
 Id ParseRawName(const rdcstr &name);
 rdcstr GetRawName(Id id);
 
+struct DebugMessage
+{
+  MessageCategory cat;
+  MessageSeverity sev;
+  MessageSource src;
+  rdcstr desc;
+};
+
 class Debugger : public Processor, public ShaderDebugger
 {
 public:
@@ -446,6 +454,7 @@ public:
   uint32_t GetSubgroupSize() const { return subgroupSize; }
   uint64_t GetDeviceThreadID() const { return deviceThreadID; }
   bool IsDeviceThread() const { return Threading::GetCurrentID() == GetDeviceThreadID(); }
+  void AddDebugMessage(MessageCategory cat, MessageSeverity sev, MessageSource src, rdcstr desc) const;
 private:
   virtual void PreParse(uint32_t maxId);
   virtual void PostParse();
@@ -560,6 +569,14 @@ private:
   rdcshaders::ControlFlow controlFlow;
 
   const ScopeData *GetScope(size_t offset) const;
+
+  void ClampScalars(const ShaderVariable &var, uint8_t &scalar0) const;
+  void ClampScalars(const ShaderVariable &var, uint8_t &scalar0, uint8_t &scalar1) const;
+
+  void ProcessQueuedDebugMessages();
+
+  mutable Threading::CriticalSection queuedDebugMessagesLock;
+  mutable rdcarray<DebugMessage> queuedDebugMessages;
 
   uint64_t deviceThreadID;
 };
