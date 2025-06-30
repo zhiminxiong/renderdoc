@@ -174,7 +174,12 @@ protected:
 
   bool isVisibleRow(int sourceRow) const
   {
-    const DebugMessage &msg = m_Ctx.DebugMessages()[sourceRow];
+    const rdcarray<DebugMessage> &debugMessages = m_Ctx.DebugMessages();
+
+    if(sourceRow >= debugMessages.count())
+      return false;
+
+    const DebugMessage &msg = debugMessages[sourceRow];
 
     if(m_HiddenSources.contains(msg.source))
       return false;
