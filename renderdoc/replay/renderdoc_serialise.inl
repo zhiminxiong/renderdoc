@@ -1616,7 +1616,7 @@ void DoSerialise(SerialiserType &ser, D3D12Pipe::RootParam &el)
   SERIALISE_MEMBER(heapByteOffset);
   SERIALISE_MEMBER(tableRanges);
 
-  SIZE_CHECK(152);
+  SIZE_CHECK(160);
 }
 
 template <typename SerialiserType>

@@ -997,6 +997,12 @@ public:
           if(row == 0)
             return col == 0 ? lit("Visibility") : ToQStr(param.visibility);
 
+          if(row == 1)
+            return col == 0 ? lit("Register Space") : Formatter::Format(param.space);
+
+          if(row == 2)
+            return col == 0 ? lit("Register") : Formatter::Format(param.reg);
+
           return QVariant();
         }
 
@@ -1178,7 +1184,7 @@ private:
   // the number of rows in a range before the descriptors: category, table offset, count
   static const int RangeFixedRowCount = 3;
   // visibility only
-  static const int DescParameterFixedRowCount = 1;
+  static const int DescParameterFixedRowCount = 3;
   // visibility, and 3 forms of interpretation of constants (float, decimal, hex)
   static const int ConstParameterFixedRowCount = 4;
   // 3 for space/reg/visibility, plus sampler properties
