@@ -1187,6 +1187,7 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
     GLenum attach = eGL_COLOR_ATTACHMENT0;
 
     bool layered = false;
+    bool msaa = false;
     bool cpuTransfer = false;
 
     if(srcTarget == eGL_TEXTURE_CUBE_MAP || srcTarget == eGL_TEXTURE_CUBE_MAP_ARRAY ||
@@ -1206,8 +1207,87 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
       GLenum fmt = eGL_NONE;
       GL.glGetTexLevelParameteriv(levelQueryType, 0, eGL_TEXTURE_INTERNAL_FORMAT, (GLint *)&fmt);
 
+      bool colorRenderable = true;
+
+      if(IsCompressedFormat(fmt))
+        colorRenderable = false;
+
+      if(fmt == eGL_RGB9_E5)
+        colorRenderable = false;
+
+      if(colorRenderable && IsGLES)
+      {
+        // before GLES 3 framebuffers basically weren't supported for the lack of formats you could
+        // use. We can turn some on based on extensions below
+        if(GLCoreVersion < 30)
+          colorRenderable = false;
+
+        // GLES randomly excludes an inconsistent set of formats
+        switch(fmt)
+        {
+          // case eGL_RGB8: // valid?!
+          case eGL_SRGB8:
+          case eGL_RGB8I:
+          case eGL_RGB8UI:
+          case eGL_RGB8_SNORM:
+
+          case eGL_RGB9_E5:
+
+          case eGL_RGB10:
+
+          case eGL_RGB16I:
+          case eGL_RGB16UI:
+
+          case eGL_RGB32F:
+          case eGL_RGB32I:
+          case eGL_RGB32UI: colorRenderable = false; break;
+          default: break;
+        }
+
+        // SRGB 1- and 2- channel formats aren't renderable
+        if(fmt == eGL_SR8_EXT || fmt == eGL_SRG8_EXT)
+          colorRenderable = false;
+
+        // some extensions are required for other formats
+        switch(fmt)
+        {
+          case eGL_R8_SNORM:
+          case eGL_RG8_SNORM:
+          case eGL_RGBA8_SNORM: colorRenderable = HasExt[EXT_render_snorm];
+
+          case eGL_R16_SNORM:
+          case eGL_RG16_SNORM:
+          case eGL_RGBA16_SNORM: colorRenderable = HasExt[EXT_render_snorm];
+
+          case eGL_R16F:
+          case eGL_RG16F:
+          case eGL_RGBA16F:
+            colorRenderable = HasExt[EXT_color_buffer_half_float] || HasExt[EXT_color_buffer_float];
+
+          case eGL_RGB16F: colorRenderable = HasExt[EXT_color_buffer_half_float];
+
+          case eGL_R32F:
+          case eGL_RG32F:
+          case eGL_RGBA32F:
+          case eGL_R11F_G11F_B10F: colorRenderable = HasExt[EXT_color_buffer_float];
+
+          case eGL_RGB10_A2:
+          case eGL_RGB10_A2UI: colorRenderable = (GLCoreVersion >= 30);
+
+          default: break;
+        }
+      }
+
+      // can't blit or CPU-read MSAA textures. we treat these as 'color-renderable' but we will just clear to black
+      if(srcTarget == eGL_TEXTURE_2D_MULTISAMPLE || srcTarget == eGL_TEXTURE_2D_MULTISAMPLE_ARRAY)
+      {
+        colorRenderable = true;
+        msaa = true;
+        RDCDEBUG("Can't support image copy emulation on MSAA images, clearing to black");
+      }
+
       // non-color-renderable formats have to go through this path even though they are not compressed
-      if(IsCompressedFormat(fmt) || fmt == eGL_RGB9_E5)
+      if(!colorRenderable)
       {
         // have to do this via CPU readback, there's no alternative for GPU copies
         cpuTransfer = true;
@@ -1332,6 +1412,8 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
       }
     }
 
+    GLfloat black[4] = {};
+
     if(cpuTransfer)
     {
       // nothing to do!
@@ -1348,8 +1430,16 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
       if(status != eGL_FRAMEBUFFER_COMPLETE)
         RDCERR("glCopyImageSubData emulation read FBO is %s", ToStr(status).c_str());
 
-      SafeBlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, dstX, dstY,
-                          dstX + srcWidth, dstY + srcHeight, mask, eGL_NEAREST);
+      if(msaa)
+      {
+        SafeClearFramebuffer(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+                             black, 0.0f, 0);
+      }
+      else
+      {
+        SafeBlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, dstX, dstY,
+                            dstX + srcWidth, dstY + srcHeight, mask, eGL_NEAREST);
+      }
     }
     else if(srcTarget == eGL_TEXTURE_CUBE_MAP)
     {
@@ -1381,8 +1471,16 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
             RDCERR("glCopyImageSubData emulation read FBO is %s for slice 0", ToStr(status).c_str());
         }
 
-        SafeBlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, dstX, dstY,
-                            dstX + srcWidth, dstY + srcHeight, mask, eGL_NEAREST);
+        if(msaa)
+        {
+          SafeClearFramebuffer(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+                               black, 0.0f, 0);
+        }
+        else
+        {
+          SafeBlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, dstX, dstY,
+                              dstX + srcWidth, dstY + srcHeight, mask, eGL_NEAREST);
+        }
       }
     }
     else
@@ -1405,8 +1503,16 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
             RDCERR("glCopyImageSubData emulation read FBO is %s for slice 0", ToStr(status).c_str());
         }
 
-        SafeBlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, dstX, dstY,
-                            dstX + srcWidth, dstY + srcHeight, mask, eGL_NEAREST);
+        if(msaa)
+        {
+          SafeClearFramebuffer(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+                               black, 0.0f, 0);
+        }
+        else
+        {
+          SafeBlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, dstX, dstY,
+                              dstX + srcWidth, dstY + srcHeight, mask, eGL_NEAREST);
+        }
       }
     }
   }

@@ -630,6 +630,7 @@ void GetCurrentBinding(GLuint curProg, ShaderReflection *refl, const ConstantBlo
 // pops state for only a single drawbuffer!
 void SafeBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0,
                          GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
+void SafeClearFramebuffer(GLbitfield clearMask, GLfloat rgba[4], GLfloat depth, GLint stencil);
 
 enum UniformType
 {
@@ -790,6 +791,8 @@ extern bool IsGLES;
   EXT_TO_CHECK(99, 99, EXT_texture_buffer)                       \
   /* OpenGL ES extensions */                                     \
   EXT_TO_CHECK(99, 32, EXT_color_buffer_float)                   \
+  EXT_TO_CHECK(99, 99, EXT_color_buffer_half_float)              \
+  EXT_TO_CHECK(99, 99, EXT_render_snorm)                         \
   EXT_TO_CHECK(99, 32, EXT_primitive_bounding_box)               \
   EXT_TO_CHECK(99, 32, OES_primitive_bounding_box)               \
   EXT_TO_CHECK(99, 32, OES_texture_border_color)                 \

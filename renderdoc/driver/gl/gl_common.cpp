@@ -1556,97 +1556,131 @@ GLuint GetBoundVertexBuffer(GLuint i)
   return buffer;
 }
 
-void SafeBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0,
-                         GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)
+struct SafeClearBlitState
 {
-  // only viewport 0's scissor should be used for blits, but Intel seems to require all scissors to
-  // be disabled. Since it's only a bit more work to disable them all, we push/pop all of them
+  SafeClearBlitState()
+  {
+    // only viewport 0's scissor should be used for blits, but Intel seems to require all scissors
+    // to be disabled. Since it's only a bit more work to disable them all, we push/pop all of them
+    GL.glGetIntegerv(eGL_MAX_VIEWPORTS, &maxViews);
+
+    // fetch current state
+    {
+      if(HasExt[ARB_viewport_array])
+      {
+        for(GLint v = 0; v < maxViews; v++)
+          scissorEnabled[v] = GL.glIsEnabledi(eGL_SCISSOR_TEST, v) != 0;
+      }
+      else
+      {
+        scissorEnabled[0] = GL.glIsEnabled(eGL_SCISSOR_TEST) != 0;
+      }
+
+      if(HasExt[EXT_draw_buffers2] || HasExt[ARB_draw_buffers_blend])
+        GL.glGetBooleani_v(eGL_COLOR_WRITEMASK, 0, ColorMask);
+      else
+        GL.glGetBooleanv(eGL_COLOR_WRITEMASK, ColorMask);
+
+      GL.glGetBooleanv(eGL_DEPTH_WRITEMASK, &DepthMask);
+
+      GL.glGetIntegerv(eGL_STENCIL_WRITEMASK, &StencilMask);
+      GL.glGetIntegerv(eGL_STENCIL_BACK_WRITEMASK, &StencilBackMask);
+    }
+
+    GL.glGetFloatv(eGL_COLOR_CLEAR_VALUE, ClearColor);
+    GL.glGetFloatv(eGL_DEPTH_CLEAR_VALUE, &ClearDepth);
+    GL.glGetIntegerv(eGL_STENCIL_CLEAR_VALUE, &ClearStencil);
+
+    // apply safe state
+    {
+      if(HasExt[ARB_viewport_array])
+      {
+        for(GLint v = 0; v < maxViews; v++)
+          GL.glDisablei(eGL_SCISSOR_TEST, v);
+      }
+      else
+      {
+        GL.glDisable(eGL_SCISSOR_TEST);
+      }
+
+      if(HasExt[EXT_draw_buffers2] || HasExt[ARB_draw_buffers_blend])
+        GL.glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+      else
+        GL.glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+      GL.glDepthMask(GL_TRUE);
+
+      GL.glStencilMaskSeparate(eGL_FRONT, 0xff);
+      GL.glStencilMaskSeparate(eGL_BACK, 0xff);
+    }
+  }
+
+  ~SafeClearBlitState()
+  {
+    // restore original state
+    {
+      if(HasExt[ARB_viewport_array])
+      {
+        for(GLint v = 0; v < maxViews; v++)
+        {
+          if(scissorEnabled[v])
+            GL.glEnablei(eGL_SCISSOR_TEST, v);
+          else
+            GL.glDisablei(eGL_SCISSOR_TEST, v);
+        }
+      }
+      else
+      {
+        if(scissorEnabled[0])
+          GL.glEnable(eGL_SCISSOR_TEST);
+        else
+          GL.glDisable(eGL_SCISSOR_TEST);
+      }
+
+      if(HasExt[EXT_draw_buffers2] || HasExt[ARB_draw_buffers_blend])
+        GL.glColorMaski(0, ColorMask[0], ColorMask[1], ColorMask[2], ColorMask[3]);
+      else
+        GL.glColorMask(ColorMask[0], ColorMask[1], ColorMask[2], ColorMask[3]);
+
+      GL.glDepthMask(DepthMask);
+
+      GL.glStencilMaskSeparate(eGL_FRONT, StencilMask);
+      GL.glStencilMaskSeparate(eGL_BACK, StencilBackMask);
+    }
+
+    GL.glClearColor(ClearColor[0], ClearColor[1], ClearColor[2], ClearColor[3]);
+    GL.glClearDepthf(ClearDepth);
+    GL.glClearStencil(ClearStencil);
+  }
+
   bool scissorEnabled[16] = {};
   GLboolean ColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
   GLboolean DepthMask = GL_TRUE;
   GLint StencilMask = 0xff, StencilBackMask = 0xff;
 
+  GLfloat ClearColor[4] = {};
+  GLfloat ClearDepth = 1.0f;
+  GLint ClearStencil = 0;
+
   GLint maxViews = 0;
-  GL.glGetIntegerv(eGL_MAX_VIEWPORTS, &maxViews);
+};
 
-  // fetch current state
-  {
-    if(HasExt[ARB_viewport_array])
-    {
-      for(GLint v = 0; v < maxViews; v++)
-        scissorEnabled[v] = GL.glIsEnabledi(eGL_SCISSOR_TEST, v) != 0;
-    }
-    else
-    {
-      scissorEnabled[0] = GL.glIsEnabled(eGL_SCISSOR_TEST) != 0;
-    }
-
-    if(HasExt[EXT_draw_buffers2] || HasExt[ARB_draw_buffers_blend])
-      GL.glGetBooleani_v(eGL_COLOR_WRITEMASK, 0, ColorMask);
-    else
-      GL.glGetBooleanv(eGL_COLOR_WRITEMASK, ColorMask);
-
-    GL.glGetBooleanv(eGL_DEPTH_WRITEMASK, &DepthMask);
-
-    GL.glGetIntegerv(eGL_STENCIL_WRITEMASK, &StencilMask);
-    GL.glGetIntegerv(eGL_STENCIL_BACK_WRITEMASK, &StencilBackMask);
-  }
-
-  // apply safe state
-  {
-    if(HasExt[ARB_viewport_array])
-    {
-      for(GLint v = 0; v < maxViews; v++)
-        GL.glDisablei(eGL_SCISSOR_TEST, v);
-    }
-    else
-    {
-      GL.glDisable(eGL_SCISSOR_TEST);
-    }
-
-    if(HasExt[EXT_draw_buffers2] || HasExt[ARB_draw_buffers_blend])
-      GL.glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    else
-      GL.glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-    GL.glDepthMask(GL_TRUE);
-
-    GL.glStencilMaskSeparate(eGL_FRONT, 0xff);
-    GL.glStencilMaskSeparate(eGL_BACK, 0xff);
-  }
+void SafeBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0,
+                         GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)
+{
+  SafeClearBlitState safe;
 
   GL.glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+}
 
-  // restore original state
-  {
-    if(HasExt[ARB_viewport_array])
-    {
-      for(GLint v = 0; v < maxViews; v++)
-      {
-        if(scissorEnabled[v])
-          GL.glEnablei(eGL_SCISSOR_TEST, v);
-        else
-          GL.glDisablei(eGL_SCISSOR_TEST, v);
-      }
-    }
-    else
-    {
-      if(scissorEnabled[0])
-        GL.glEnable(eGL_SCISSOR_TEST);
-      else
-        GL.glDisable(eGL_SCISSOR_TEST);
-    }
+void SafeClearFramebuffer(GLbitfield clearMask, GLfloat rgba[4], GLfloat depth, GLint stencil)
+{
+  SafeClearBlitState safe;
 
-    if(HasExt[EXT_draw_buffers2] || HasExt[ARB_draw_buffers_blend])
-      GL.glColorMaski(0, ColorMask[0], ColorMask[1], ColorMask[2], ColorMask[3]);
-    else
-      GL.glColorMask(ColorMask[0], ColorMask[1], ColorMask[2], ColorMask[3]);
-
-    GL.glDepthMask(DepthMask);
-
-    GL.glStencilMaskSeparate(eGL_FRONT, StencilMask);
-    GL.glStencilMaskSeparate(eGL_BACK, StencilBackMask);
-  }
+  GL.glClearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
+  GL.glClearDepthf(0.0f);
+  GL.glClearStencil(0);
+  GL.glClear(clearMask);
 }
 
 BufferCategory MakeBufferCategory(GLenum bufferTarget)
