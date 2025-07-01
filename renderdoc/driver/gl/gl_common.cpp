@@ -474,17 +474,47 @@ bool FetchEnabledExtensions()
 
 void DoVendorChecks(GLPlatform &platform, GLWindowingData context)
 {
-  const char *vendor = "";
-  const char *renderer = "";
-  const char *version = "";
+  enum DetectedVendor
+  {
+    Vendor_None = 0,
+    // zink doesn't have any specific cehcks but we treat it as a dedicated vendor to prevent it
+    // being detected as other vendors when it matches their strings
+    Vendor_Zink,
+    Vendor_Intel,
+    Vendor_Qualcomm,
+    Vendor_Count,
+  } detectedVendor = Vendor_None;
+
+  const char *detectedVendorNames[Vendor_Count] = {
+      "None",
+      "Zink",
+      "Intel",
+      "Qualcomm",
+  };
 
   if(GL.glGetString)
   {
-    vendor = (const char *)GL.glGetString(eGL_VENDOR);
-    renderer = (const char *)GL.glGetString(eGL_RENDERER);
-    version = (const char *)GL.glGetString(eGL_VERSION);
+    const char *vendor = (const char *)GL.glGetString(eGL_VENDOR);
+    const char *renderer = (const char *)GL.glGetString(eGL_RENDERER);
+    const char *version = (const char *)GL.glGetString(eGL_VERSION);
+
+    if(strstr(vendor, "Zink") || strstr(vendor, "zink") || strstr(renderer, "Zink") ||
+       strstr(renderer, "zink"))
+    {
+      detectedVendor = Vendor_Zink;
+    }
+    else if(!strcmp(vendor, "Intel") || !strcmp(vendor, "intel") || !strcmp(vendor, "INTEL"))
+    {
+      detectedVendor = Vendor_Intel;
+    }
+    else if(strstr(vendor, "Qualcomm") || strstr(vendor, "Adreno") ||
+            strstr(renderer, "Qualcomm") || strstr(renderer, "Adreno"))
+    {
+      detectedVendor = Vendor_Qualcomm;
+    }
 
     RDCLOG("Vendor checks for %u (%s / %s / %s)", GLCoreVersion, vendor, renderer, version);
+    RDCLOG("Detected vendor: %s", detectedVendorNames[detectedVendor]);
   }
 
   //////////////////////////////////////////////////////////
@@ -551,7 +581,7 @@ void DoVendorChecks(GLPlatform &platform, GLWindowingData context)
   // Intel seems to completely break everything if we even run this check, so we just
   // skip this check and assume the hack is enabled.
 
-  if(!strcmp(vendor, "Intel") || !strcmp(vendor, "intel") || !strcmp(vendor, "INTEL"))
+  if(detectedVendor == Vendor_Intel)
   {
     RDCWARN("Using super hack-on-a-hack to avoid glCopyImageSubData tests on intel.");
     VendorCheck[VendorCheck_AMD_copy_compressed_tinymips] = true;
@@ -781,10 +811,11 @@ void DoVendorChecks(GLPlatform &platform, GLWindowingData context)
   // Qualcomm's implementation of glCopyImageSubData is buggy on some drivers and can cause GPU
   // crashes or corrupted data. We force the initial state copies to happen via our emulation which
   // uses framebuffer blits.
-  if(strstr(vendor, "Qualcomm") || strstr(vendor, "Adreno") || strstr(renderer, "Qualcomm") ||
-     strstr(renderer, "Adreno"))
+  if(detectedVendor == Vendor_Qualcomm)
   {
     bool broken = true;
+
+    const char *version = (const char *)GL.glGetString(eGL_VERSION);
 
     // the bug should be fixed in version 325 and above
     const char *qualcommver = strstr(version, "V@");
