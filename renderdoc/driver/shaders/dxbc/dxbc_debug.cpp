@@ -1254,7 +1254,6 @@ void ThreadState::GetGroupsharedSrc(uint32_t gsmIndex, const uint32_t byteOffset
 
   const uint32_t regIndex = byteOffset / gsmStride;
   const uint32_t component = AlignUp4(byteOffset % gsmStride) / 4;
-  RDCASSERT((component + countBytes / sizeof(uint32_t)) <= 4, component, countBytes);
 
   uint32_t idx = program->GetRegisterIndex(TYPE_THREAD_GROUP_SHARED_MEMORY, gsmIndex);
   if(idx < variables.size())
@@ -1262,6 +1261,7 @@ void ThreadState::GetGroupsharedSrc(uint32_t gsmIndex, const uint32_t byteOffset
     const ShaderVariable &var = variables[idx].members[regIndex];
     if(gsmStride <= 16)
     {
+      RDCASSERT((component + countBytes / sizeof(uint32_t)) <= 4, component, countBytes);
       // if the stride is less than a float4, the groupshared storage is a simple array of N
       // float4 registers so we can just assign
       for(uint32_t i = 0; i < countBytes / sizeof(uint32_t); i++)
@@ -2681,9 +2681,10 @@ void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
             {
               // otherwise each entry in the groupshared storage array is a series of N
               // component-sized registers so unroll that here and copy into each's first component
-              RDCASSERT(gsmStride <= v->members[i].members.size(), gsmStride,
+              uint32_t countElems = gsmStride / sizeof(uint32_t);
+              RDCASSERT(countElems <= v->members[i].members.size(), countElems,
                         v->members[i].members.size());
-              for(uint32_t c = 0; c < gsmStride; c += sizeof(uint32_t))
+              for(uint32_t c = 0; c < countElems; ++c)
               {
                 memcpy(v->members[i].members[c].value.u32v.data(), data, sizeof(uint32_t));
 
