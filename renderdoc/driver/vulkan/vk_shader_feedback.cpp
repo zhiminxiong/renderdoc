@@ -1611,7 +1611,9 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
         access.descriptorStore = m_pDriver->GetResourceManager()->GetOriginalID(id);
         access.byteOffset += uint32_t(offs + descSets[bindset].descBufferOffset) +
                              descLayouts[bindset]->bindings[bind].elemOffset;
-        access.byteSize = m_pDriver->DescriptorDataSize(MakeVkDescriptorType(type, inputAttachment));
+        access.byteSize =
+            GetDescriptorSizeOfBind(m_pDriver->GetResourceManager(), descLayouts[bindset]->bindings,
+                                    descLayouts[bindset]->mutableBitmasks, bind);
 
         if(descLayouts[bindset]->bindings[bind].variableSize || arraySize == ~0U)
         {

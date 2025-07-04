@@ -2627,7 +2627,10 @@ rdcarray<Descriptor> VulkanReplay::GetDescriptors(ResourceId descriptorStore,
         }
         else
         {
-          m_pDriver->LookupDescriptor(descriptor, r.descriptorSize, r.type, tmp);
+          uint32_t size = m_pDriver->DescriptorDataSize(MakeVkDescriptorType(r.type, false));
+          // should not be larger, only smaller with mutable descriptors
+          RDCASSERT(size <= r.descriptorSize);
+          m_pDriver->LookupDescriptor(descriptor, size, r.type, tmp);
 
           FillDescriptor(ret[dst], tmp);
         }
@@ -2763,7 +2766,10 @@ rdcarray<SamplerDescriptor> VulkanReplay::GetSamplerDescriptors(ResourceId descr
         }
         else
         {
-          m_pDriver->LookupDescriptor(descriptor, r.descriptorSize, r.type, tmp);
+          uint32_t size = m_pDriver->DescriptorDataSize(MakeVkDescriptorType(r.type, false));
+          // should not be larger, only smaller with mutable descriptors
+          RDCASSERT(size <= r.descriptorSize);
+          m_pDriver->LookupDescriptor(descriptor, size, r.type, tmp);
 
           FillSamplerDescriptor(ret[dst], tmp);
         }

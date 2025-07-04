@@ -832,10 +832,31 @@ bool CreateDescriptorWritesForSlotData(WrappedVulkan *vk, rdcarray<VkWriteDescri
   return ret;
 }
 
-void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderReflection *refl,
-                                   ResourceId specStorage,
-                                   rdcarray<DescriptorAccess> &descriptorAccess,
-                                   rdcarray<const DescSetLayout *> setLayoutInfos)
+uint32_t GetDescriptorSizeOfBind(VulkanResourceManager *resourceMan,
+                                 const rdcarray<DescSetLayout::Binding> &bindings,
+                                 const rdcarray<uint64_t> &mutableBitmasks, uint32_t fixedBindNumber)
+{
+  if(bindings[fixedBindNumber].layoutDescType != VK_DESCRIPTOR_TYPE_MUTABLE_EXT)
+    return resourceMan->DescriptorDataSize(bindings[fixedBindNumber].layoutDescType);
+
+  uint64_t bitmask = mutableBitmasks[fixedBindNumber];
+  uint32_t ret = 0;
+
+  for(uint64_t m = 0; m < (uint64_t)DescriptorSlotType::Count; m++)
+  {
+    if(bitmask & (1ULL << m))
+    {
+      ret = RDCMAX(ret, resourceMan->DescriptorDataSize(convert(DescriptorSlotType(m))));
+    }
+  }
+
+  return ret;
+}
+
+static void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan,
+                                          ShaderReflection *refl, ResourceId specStorage,
+                                          rdcarray<DescriptorAccess> &descriptorAccess,
+                                          rdcarray<const DescSetLayout *> setLayoutInfos)
 {
   if(!refl)
     return;
@@ -912,7 +933,8 @@ void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderRef
         {
           access.descriptorStore =
               VulkanCreationInfo::descriptorBufferStorage[bind.fixedBindSetOrSpace];
-          access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+          access.byteSize = GetDescriptorSizeOfBind(
+              resourceMan, setLayout->bindings, setLayout->mutableBitmasks, bind.fixedBindNumber);
         }
 
         // we are only handling non-arrays here
@@ -963,7 +985,8 @@ void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderRef
        VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
     {
       access.descriptorStore = VulkanCreationInfo::descriptorBufferStorage[bind.fixedBindSetOrSpace];
-      access.byteSize = resourceMan->DescriptorDataSize(VK_DESCRIPTOR_TYPE_SAMPLER);
+      access.byteSize = GetDescriptorSizeOfBind(resourceMan, setLayout->bindings,
+                                                setLayout->mutableBitmasks, bind.fixedBindNumber);
 
       // we are only handling non-arrays here
       access.byteOffset = setLayout->bindings[bind.fixedBindNumber].elemOffset;
@@ -1016,8 +1039,8 @@ void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderRef
        VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
     {
       access.descriptorStore = VulkanCreationInfo::descriptorBufferStorage[bind.fixedBindSetOrSpace];
-      access.byteSize = resourceMan->DescriptorDataSize(
-          MakeVkDescriptorType(bind.descriptorType, bind.isInputAttachment));
+      access.byteSize = GetDescriptorSizeOfBind(resourceMan, setLayout->bindings,
+                                                setLayout->mutableBitmasks, bind.fixedBindNumber);
 
       // we are only handling non-arrays here
       access.byteOffset = setLayout->bindings[bind.fixedBindNumber].elemOffset;
@@ -1064,8 +1087,8 @@ void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan, ShaderRef
        VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
     {
       access.descriptorStore = VulkanCreationInfo::descriptorBufferStorage[bind.fixedBindSetOrSpace];
-      access.byteSize =
-          resourceMan->DescriptorDataSize(MakeVkDescriptorType(bind.descriptorType, false));
+      access.byteSize = GetDescriptorSizeOfBind(resourceMan, setLayout->bindings,
+                                                setLayout->mutableBitmasks, bind.fixedBindNumber);
 
       // we are only handling non-arrays here
       access.byteOffset = setLayout->bindings[bind.fixedBindNumber].elemOffset;
