@@ -24,6 +24,7 @@
 
 #include "spirv_debug.h"
 #include "common/formatting.h"
+#include "common/threading.h"
 #include "core/settings.h"
 #include "replay/common/var_dispatch_helpers.h"
 #include "spirv_op_helpers.h"
@@ -307,7 +308,17 @@ void AssignValue(ShaderVariable &dst, const ShaderVariable &src)
     AssignValue(dst.members[i], src.members[i]);
 }
 
-Debugger::Debugger()
+#if defined(RELEASE)
+#define CHECK_DEBUGGER_THREAD() \
+  do                            \
+  {                             \
+  } while((void)0, 0)
+#else
+#define CHECK_DEBUGGER_THREAD() \
+  RDCASSERTMSG("Debugger function called from non-device thread!", IsDeviceThread());
+#endif    // #if defined(RELEASE)
+
+Debugger::Debugger() : deviceThreadID(Threading::GetCurrentID())
 {
 }
 
@@ -3179,6 +3190,7 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
   std::function<void(uint64_t offset, uint64_t size, void *dst)> pointerReadCallback;
   if(IsPhysicalPointer(ptr))
   {
+    CHECK_DEBUGGER_THREAD();
     if(checkPointerFlags(ptr, PointerFlags::DereferencedPhysical))
       typeId = getBufferTypeId(ptr);
     else
@@ -3209,6 +3221,7 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
     const ShaderVariable *inner = getPointer(ptr);
     if(inner->type == VarType::ReadWriteResource && checkPointerFlags(*inner, PointerFlags::SSBO))
     {
+      CHECK_DEBUGGER_THREAD();
       typeId = getBufferTypeId(ptr);
       byteOffset = getByteOffset(ptr);
       bind = inner->GetBindIndex();
@@ -3496,6 +3509,7 @@ void Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &va
 
   if(pointerWriteCallback)
   {
+    CHECK_DEBUGGER_THREAD();
     auto writeCallback = [pointerWriteCallback](const ShaderVariable &var, const Decorations &dec,
                                                 const DataType &type, uint64_t offset,
                                                 const rdcstr &) {
@@ -4500,6 +4514,12 @@ void Debugger::RegisterOp(Iter it)
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
+DebugAPIWrapper *Debugger::GetAPIWrapper()
+{
+  CHECK_DEBUGGER_THREAD();
+  return apiWrapper;
+}
 };    // namespace rdcspv
 
 #if ENABLED(ENABLE_UNIT_TESTS)

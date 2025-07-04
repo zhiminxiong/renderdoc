@@ -437,13 +437,15 @@ public:
   void WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &val);
   ShaderVariable MakeCompositePointer(const ShaderVariable &base, Id id, rdcarray<uint32_t> &indices);
 
-  DebugAPIWrapper *GetAPIWrapper() { return apiWrapper; }
+  DebugAPIWrapper *GetAPIWrapper();
   uint32_t GetNumInstructions() { return (uint32_t)instructionOffsets.size(); }
   GlobalState GetGlobal() { return global; }
   const rdcarray<Id> &GetLiveGlobals() { return liveGlobals; }
   ThreadState &GetActiveLane() { return workgroup[activeLaneIndex]; }
   const ThreadState &GetActiveLane() const { return workgroup[activeLaneIndex]; }
   uint32_t GetSubgroupSize() const { return subgroupSize; }
+  uint64_t GetDeviceThreadID() const { return deviceThreadID; }
+  bool IsDeviceThread() const { return Threading::GetCurrentID() == GetDeviceThreadID(); }
 private:
   virtual void PreParse(uint32_t maxId);
   virtual void PostParse();
@@ -558,6 +560,8 @@ private:
   rdcshaders::ControlFlow controlFlow;
 
   const ScopeData *GetScope(size_t offset) const;
+
+  uint64_t deviceThreadID;
 };
 
 // this does a 'safe' value assignment, by doing parallel depth-first iteration of both variables
