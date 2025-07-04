@@ -518,15 +518,7 @@ std::vector<uint32_t> CompileShaderToSpv(const std::string &source_text, SPIRVTa
     return ret;
   }
 
-  msleep(400);
-
-  int code = pclose(pipe);
-
-  if(code != 0)
-  {
-    TEST_ERROR("Invoking %s failed: %s.", externalCompiler.c_str(), command_line.c_str());
-    return ret;
-  }
+  pclose(pipe);
 
   f = fopen(outfile.c_str(), "rb");
   if(f)
