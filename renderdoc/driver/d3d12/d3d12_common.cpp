@@ -59,16 +59,42 @@ D3D12MarkerRegion::~D3D12MarkerRegion()
     D3D12MarkerRegion::End(queue);
 }
 
-void D3D12MarkerRegion::Begin(ID3D12GraphicsCommandList *list, const rdcstr &marker)
+UINT MakeMarkerText(bool begin, const rdcstr &marker, bytebuf &storage)
 {
-  if(list)
+  // DRED needs encoded PIX markers, blerch
+  if(D3D12_Debug_EnableDRED())
+  {
+    uint64_t header[3] = {
+        begin ? (2ULL << 10) : (8ULL << 10),    // begin or set event
+        0,                                      // no colour
+        (8ULL << 55) | (1ULL << 54),            // 8 copy chunk size, ANSI
+    };
+    storage.resize(sizeof(header) + AlignUp(marker.size() + 1, sizeof(uint64_t)));
+    memcpy(storage.data(), header, sizeof(header));
+    memcpy(storage.data() + sizeof(header), marker.data(), marker.size());
+
+    return PIX_EVENT_PIX3BLOB_VERSION;
+  }
+  else
   {
     // Some debuggers (but not all) will assume the event string is null-terminated, and
     // display one less character than specified by the size. Append a space to pad the
     // output without visibly changing the event marker for other debuggers.
     rdcwstr text = StringFormat::UTF82Wide(marker + " ");
-    UINT size = UINT(text.length() * sizeof(wchar_t));
-    list->BeginEvent(0, text.c_str(), size);
+    storage.resize(text.length() * sizeof(wchar_t));
+    memcpy(storage.data(), text.data(), storage.size());
+
+    return 0;
+  }
+}
+
+void D3D12MarkerRegion::Begin(ID3D12GraphicsCommandList *list, const rdcstr &marker)
+{
+  if(list)
+  {
+    bytebuf storage;
+    UINT meta = MakeMarkerText(true, marker, storage);
+    list->BeginEvent(meta, storage.data(), (UINT)storage.byteSize());
   }
 }
 
@@ -76,9 +102,9 @@ void D3D12MarkerRegion::Begin(ID3D12CommandQueue *queue, const rdcstr &marker)
 {
   if(queue)
   {
-    rdcwstr text = StringFormat::UTF82Wide(marker + " ");
-    UINT size = UINT(text.length() * sizeof(wchar_t));
-    queue->BeginEvent(0, text.c_str(), size);
+    bytebuf storage;
+    UINT meta = MakeMarkerText(true, marker, storage);
+    queue->BeginEvent(meta, storage.data(), (UINT)storage.byteSize());
   }
 }
 
@@ -86,9 +112,9 @@ void D3D12MarkerRegion::Set(ID3D12GraphicsCommandList *list, const rdcstr &marke
 {
   if(list)
   {
-    rdcwstr text = StringFormat::UTF82Wide(marker + " ");
-    UINT size = UINT(text.length() * sizeof(wchar_t));
-    list->SetMarker(0, text.c_str(), size);
+    bytebuf storage;
+    UINT meta = MakeMarkerText(false, marker, storage);
+    list->SetMarker(meta, storage.data(), (UINT)storage.byteSize());
   }
 }
 
@@ -96,9 +122,9 @@ void D3D12MarkerRegion::Set(ID3D12CommandQueue *queue, const rdcstr &marker)
 {
   if(queue)
   {
-    rdcwstr text = StringFormat::UTF82Wide(marker + " ");
-    UINT size = UINT(text.length() * sizeof(wchar_t));
-    queue->SetMarker(0, text.c_str(), size);
+    bytebuf storage;
+    UINT meta = MakeMarkerText(false, marker, storage);
+    queue->SetMarker(meta, storage.data(), (UINT)storage.byteSize());
   }
 }
 
