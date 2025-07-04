@@ -929,7 +929,7 @@ void D3D11PipelineStateViewer::addCBufferRow(const Descriptor &descriptor, uint3
   bool filledSlot = descriptor.resource != ResourceId();
   if(showNode(usedSlot, filledSlot))
   {
-    ulong length = 0;
+    uint64_t length = 0;
     int numvars = shaderBind ? shaderBind->variables.count() : 0;
     uint32_t bytesize = shaderBind ? shaderBind->byteSize : 0;
 
@@ -937,6 +937,8 @@ void D3D11PipelineStateViewer::addCBufferRow(const Descriptor &descriptor, uint3
 
     if(buf)
       length = buf->length;
+
+    length = qMin(length, descriptor.byteSize);
 
     QString slotname = QString::number(reg);
 

@@ -13,9 +13,28 @@ class D3D11_Parameter_Zoo(rdtest.TestCase):
         action = self.find_action("Draw")
         self.check(action is not None)
         self.controller.SetFrameEvent(action.eventId, False)
-        
+     
         pipe: rd.PipeState = self.controller.GetPipelineState()
 
+        v = pipe.GetViewport(0)
+
+        stage = rd.ShaderStage.Pixel
+        cbuf = pipe.GetConstantBlock(stage, 0, 0).descriptor
+
+        self.check_eq(cbuf.byteSize, 0)
+
+        self.check_triangle()
+
+        self.check_debug_pixel(int(0.5 * v.width), int(0.5 * v.height))
+  
+        var_check = rdtest.ConstantBufferChecker(
+            self.controller.GetCBufferVariableContents(pipe.GetGraphicsPipelineObject(),
+                                                       pipe.GetShader(stage), stage,
+                                                       pipe.GetShaderEntryPoint(stage), 0,
+                                                       cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
+
+        var_check.check('cbuf_zero').rows(1).cols(4).value([0.0, 0.0, 0.0, 0.0])
+ 
         tex = rd.TextureDisplay()
         tex.overlay = rd.DebugOverlay.Drawcall
         tex.resourceId = pipe.GetOutputTargets()[0].resource
@@ -28,8 +47,6 @@ class D3D11_Parameter_Zoo(rdtest.TestCase):
         out.Display()
 
         overlay_id = out.GetDebugOverlayTexID()
-
-        v = pipe.GetViewport(0)
 
         self.check_pixel_value(overlay_id, int(0.5 * v.width), int(0.5 * v.height), [0.8, 0.1, 0.8, 1.0],
                                eps=1.0 / 256.0)

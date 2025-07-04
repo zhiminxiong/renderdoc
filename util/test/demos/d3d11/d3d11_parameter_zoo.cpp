@@ -30,6 +30,27 @@ RD_TEST(D3D11_Parameter_Zoo, D3D11GraphicsTest)
       "General tests of parameters known to cause problems - e.g. optional values that should be "
       "ignored, edge cases, special values, etc.";
 
+  std::string pixel = R"EOSHADER(
+
+struct v2f
+{
+	float4 pos : SV_POSITION;
+	float4 col : COLOR0;
+	float2 uv : TEXCOORD0;
+};
+
+cbuffer cbuf : register(b0)
+{
+  float4 cbuf_zero;
+};
+
+float4 main(v2f IN) : SV_Target0
+{
+	return IN.col + cbuf_zero;
+}
+
+)EOSHADER";
+
   int main()
   {
     // initialise, create window, create device, etc
@@ -37,12 +58,15 @@ RD_TEST(D3D11_Parameter_Zoo, D3D11GraphicsTest)
       return 3;
 
     ID3DBlobPtr vsblob = Compile(D3DDefaultVertex, "main", "vs_4_0");
-    ID3DBlobPtr psblob = Compile(D3DDefaultPixel, "main", "ps_4_0");
+    ID3DBlobPtr psblob = Compile(pixel, "main", "ps_4_0");
 
     CreateDefaultInputLayout(vsblob);
 
     ID3D11VertexShaderPtr vs = CreateVS(vsblob);
     ID3D11PixelShaderPtr ps = CreatePS(psblob);
+
+    float whiteData[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    ID3D11BufferPtr cb = MakeBuffer().Constant().Data(whiteData);
 
     ID3D11BufferPtr vb = MakeBuffer().Vertex().Data(DefaultTri);
 
@@ -162,6 +186,9 @@ RD_TEST(D3D11_Parameter_Zoo, D3D11GraphicsTest)
       SetRasterState(raster);
 
       ctx->OMSetRenderTargets(1, &bbRTV.GetInterfacePtr(), NULL);
+
+      UINT zero = 0;
+      ctx1->PSSetConstantBuffers1(0, 1, &cb.GetInterfacePtr(), &zero, &zero);
 
       ctx->Draw(3, 0);
 

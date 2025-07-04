@@ -1424,8 +1424,10 @@ void AddCBuffersToGlobalState(const DXBCBytecode::Program &program, D3D11DebugMa
     {
       DXBCDebug::BindingSlot slot(i, 0);
       cbufData.clear();
-      debugManager.GetBufferData(shader.ConstantBuffers[i], shader.CBOffsets[i] * sizeof(Vec4f),
-                                 shader.CBCounts[i] * sizeof(Vec4f), cbufData);
+      // GetBufferData returns the whole buffer if we pass a length of 0, so skip explicitly
+      if(shader.CBCounts[i] > 0)
+        debugManager.GetBufferData(shader.ConstantBuffers[i], shader.CBOffsets[i] * sizeof(Vec4f),
+                                   shader.CBCounts[i] * sizeof(Vec4f), cbufData);
 
       AddCBufferToGlobalState(program, global, sourceVars, refl, slot, cbufData);
     }

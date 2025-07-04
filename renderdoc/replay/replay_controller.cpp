@@ -1754,7 +1754,8 @@ rdcarray<ShaderVariable> ReplayController::GetCBufferVariableContents(
     buffer = m_pDevice->GetLiveID(buffer);
     if(buffer != ResourceId())
     {
-      m_pDevice->GetBufferData(buffer, offset, length, data);
+      if(length > 0)
+        m_pDevice->GetBufferData(buffer, offset, length, data);
       FatalErrorCheck();
     }
   }
