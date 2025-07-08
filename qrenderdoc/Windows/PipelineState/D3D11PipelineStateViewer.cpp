@@ -1993,8 +1993,17 @@ void D3D11PipelineStateViewer::setState()
   {
     ui->depthEnabled->setPixmap(tick);
     ui->depthFunc->setText(ToQStr(state.outputMerger.depthStencilState.depthFunction));
-    ui->depthWrite->setPixmap(state.outputMerger.depthStencilState.depthWrites ? tick : cross);
-    ui->depthWrite->setText(QString());
+
+    if(state.outputMerger.depthReadOnly)
+    {
+      ui->depthWrite->setPixmap(QPixmap());
+      ui->depthWrite->setText(tr("Read-Only DSV"));
+    }
+    else
+    {
+      ui->depthWrite->setPixmap(state.outputMerger.depthStencilState.depthWrites ? tick : cross);
+      ui->depthWrite->setText(QString());
+    }
   }
   else
   {
@@ -2007,8 +2016,18 @@ void D3D11PipelineStateViewer::setState()
   ui->stencilEnabled->setPixmap(state.outputMerger.depthStencilState.stencilEnable ? tick : cross);
   m_Common.SetStencilLabelValue(
       ui->stencilReadMask, (uint8_t)state.outputMerger.depthStencilState.frontFace.compareMask);
-  m_Common.SetStencilLabelValue(ui->stencilWriteMask,
-                                (uint8_t)state.outputMerger.depthStencilState.frontFace.writeMask);
+
+  if(state.outputMerger.stencilReadOnly)
+  {
+    ui->stencilWriteMask->setText(tr("Read-Only DSV"));
+    ui->stencilWriteMask->setToolTip(QString());
+  }
+  else
+  {
+    m_Common.SetStencilLabelValue(
+        ui->stencilWriteMask, (uint8_t)state.outputMerger.depthStencilState.frontFace.writeMask);
+  }
+
   m_Common.SetStencilLabelValue(ui->stencilRef,
                                 (uint8_t)state.outputMerger.depthStencilState.frontFace.reference);
 
