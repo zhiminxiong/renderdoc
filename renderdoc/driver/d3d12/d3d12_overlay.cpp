@@ -2210,6 +2210,12 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
         }
       }
 
+      if(dsViewDesc.Flags & D3D12_DSV_FLAG_READ_ONLY_DEPTH)
+        psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+      if(dsViewDesc.Flags & D3D12_DSV_FLAG_READ_ONLY_STENCIL)
+        psoDesc.DepthStencilState.FrontFace.StencilWriteMask =
+            psoDesc.DepthStencilState.BackFace.StencilWriteMask = 0;
+
       RDCEraseEl(psoDesc.RTVFormats.RTFormats);
       psoDesc.RTVFormats.RTFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
       psoDesc.RTVFormats.NumRenderTargets = 1;

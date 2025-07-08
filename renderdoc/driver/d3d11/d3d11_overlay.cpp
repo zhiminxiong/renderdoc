@@ -1570,6 +1570,10 @@ ResourceId D3D11Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
         d.FrontFace = cur.FrontFace;
         d.BackFace = cur.BackFace;
       }
+      if(dsViewDesc.Flags & D3D11_DSV_READ_ONLY_DEPTH)
+        d.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+      if(dsViewDesc.Flags & D3D11_DSV_READ_ONLY_STENCIL)
+        d.StencilWriteMask = 0;
 
       SAFE_RELEASE(os);
       hr = m_pDevice->CreateDepthStencilState(&d, &os);
