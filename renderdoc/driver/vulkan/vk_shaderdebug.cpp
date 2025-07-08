@@ -755,18 +755,31 @@ public:
 
         if(buffer)
         {
-          const VulkanCreationInfo::BufferView &bufViewProps =
-              m_Creation.m_BufferView[GetResID(bufferView)];
-
-          VkDeviceSize size = bufViewProps.size;
-
-          if(size == VK_WHOLE_SIZE)
+          VkDeviceSize size;
+          VkFormat format;
+          if(bufferView == VK_NULL_HANDLE)
           {
-            const VulkanCreationInfo::Buffer &bufProps = m_Creation.m_Buffer[bufViewProps.buffer];
-            size = bufProps.size - bufViewProps.offset;
+            // descriptor buffer case - there is no buffer view so read directly out of the determined descriptor
+            format = MakeVkFormat(bufferViewDescriptor.format);
+            // size is not allowed to be VK_WHOLE_SIZE
+            size = bufferViewDescriptor.byteSize;
+          }
+          else
+          {
+            const VulkanCreationInfo::BufferView &bufViewProps =
+                m_Creation.m_BufferView[GetResID(bufferView)];
+
+            size = bufViewProps.size;
+            format = bufViewProps.format;
+
+            if(size == VK_WHOLE_SIZE)
+            {
+              const VulkanCreationInfo::Buffer &bufProps = m_Creation.m_Buffer[bufViewProps.buffer];
+              size = bufProps.size - bufViewProps.offset;
+            }
           }
 
-          setUintComp(output, 0, uint32_t(size / GetByteSize(1, 1, 1, bufViewProps.format, 0)));
+          setUintComp(output, 0, uint32_t(size / GetByteSize(1, 1, 1, format, 0)));
         }
 
         return true;
@@ -1238,6 +1251,33 @@ public:
 
     if(buffer)
     {
+      if(bufferView == VK_NULL_HANDLE)
+      {
+        // descriptor buffer, must create our own
+
+        BufViewKey key = {bufferViewDescriptor.resource, bufferViewDescriptor.byteOffset,
+                          bufferViewDescriptor.byteSize, MakeVkFormat(bufferViewDescriptor.format)};
+
+        bufferView = m_SampleBufViews[key];
+        if(bufferView == VK_NULL_HANDLE)
+        {
+          VkBufferViewCreateInfo viewInfo = {
+              VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+              NULL,
+              0,
+              m_pDriver->GetResourceManager()->GetLiveHandle<VkBuffer>(bufferViewDescriptor.resource),
+              key.format,
+              bufferViewDescriptor.byteOffset,
+              bufferViewDescriptor.byteSize,
+          };
+
+          VkResult vkr = m_pDriver->vkCreateBufferView(dev, &viewInfo, NULL, &bufferView);
+          CHECK_VKR(m_pDriver, vkr);
+
+          m_SampleBufViews[key] = bufferView;
+        }
+      }
+
       writeSets[1].pTexelBufferView = UnwrapPtr(bufferView);
       writeSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
     }
@@ -1535,6 +1575,29 @@ private:
   rdcarray<SamplerDescriptor> m_SamplerDescriptors;
 
   std::map<ResourceId, VkImageView> m_SampleViews;
+  struct BufViewKey
+  {
+    ResourceId buf;
+    VkDeviceSize offs, size;
+    VkFormat format;
+    bool operator==(const BufViewKey &o) const
+    {
+      return buf == o.buf && offs == o.offs && size == o.size && format == o.format;
+    }
+    bool operator<(const BufViewKey &o) const
+    {
+      if(buf != o.buf)
+        return buf < o.buf;
+      if(offs != o.offs)
+        return offs < o.offs;
+      if(size != o.size)
+        return size < o.size;
+      if(format != o.format)
+        return format < o.format;
+      return false;
+    }
+  };
+  rdcflatmap<BufViewKey, VkBufferView> m_SampleBufViews;
 
   typedef rdcpair<ResourceId, float> SamplerBiasKey;
   std::map<SamplerBiasKey, VkSampler> m_BiasSamplers;
@@ -1715,17 +1778,37 @@ private:
         if(imgData.type == DescriptorType::TypedBuffer ||
            imgData.type == DescriptorType::ReadWriteTypedBuffer)
         {
-          const VulkanCreationInfo::BufferView &viewProps =
-              m_Creation.m_BufferView[m_pDriver->GetResourceManager()->GetLiveID(imgData.view)];
-          const VulkanCreationInfo::Buffer &bufferProps = m_Creation.m_Buffer[viewProps.buffer];
+          VkFormat format;
+          VkDeviceSize byteWidth;
+          VkDeviceSize offset;
+          ResourceId buffer;
 
-          data.fmt = MakeResourceFormat(viewProps.format);
-          data.texelSize = (uint32_t)GetByteSize(1, 1, 1, viewProps.format, 0);
+          if(imgData.view == ResourceId())
+          {
+            // descriptor buffer, no buffer view
+            buffer = imgData.resource;
+            offset = imgData.byteOffset;
+            format = MakeVkFormat(imgData.format);
+            byteWidth = imgData.byteSize;
+          }
+          else
+          {
+            const VulkanCreationInfo::BufferView &viewProps =
+                m_Creation.m_BufferView[m_pDriver->GetResourceManager()->GetLiveID(imgData.view)];
+            buffer = viewProps.buffer;
+            offset = viewProps.offset;
+            format = viewProps.format;
+            byteWidth = viewProps.size;
+          }
+
+          const VulkanCreationInfo::Buffer &bufferProps = m_Creation.m_Buffer[buffer];
 
           // width in bytes, either from the view or from the remainder of the buffer
-          VkDeviceSize byteWidth = viewProps.size;
-          if(viewProps.size == VK_WHOLE_SIZE)
-            byteWidth = bufferProps.size - viewProps.offset;
+          if(byteWidth == VK_WHOLE_SIZE)
+            byteWidth = bufferProps.size - offset;
+
+          data.fmt = MakeResourceFormat(format);
+          data.texelSize = (uint32_t)GetByteSize(1, 1, 1, format, 0);
 
           // convert to a texel width, rounding down as per spec (only possible from VK_WHOLE_SIZE)
           data.width = uint32_t(byteWidth / data.texelSize);
@@ -1735,8 +1818,8 @@ private:
           data.samplePitch = data.slicePitch = data.rowPitch = data.width * data.texelSize;
 
           m_pDriver->GetReplay()->GetBufferData(
-              m_pDriver->GetResourceManager()->GetLiveID(imgData.resource), viewProps.offset,
-              data.rowPitch, data.bytes);
+              m_pDriver->GetResourceManager()->GetLiveID(imgData.resource), offset, data.rowPitch,
+              data.bytes);
         }
         else if(imgData.view != ResourceId())
         {
