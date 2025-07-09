@@ -174,7 +174,8 @@ void main()
   // j - rays
 #elif TEST == 10
   // inline UBO, named 'descbuf' instead of k to match resource name
-  Color = descbuf.data[1] + descbuf.data[2];
+  // we don't do a robustness check because inline UBOs don't provide bounds checking
+  Color = descbuf.data[1];
 #elif TEST == 11
   Color = textureLod(sampler2D(e, l), uv, 0.0);
 #elif TEST == 12
