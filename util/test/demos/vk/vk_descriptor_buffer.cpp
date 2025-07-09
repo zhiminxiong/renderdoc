@@ -91,7 +91,11 @@ layout(set = 3, binding = 1, std140) uniform mm
 
 layout(set = 3, binding = 2) uniform sampler2D n[100];
 
-layout(set = 3, binding = 3, std140) uniform oo
+#ifdef RAYS
+layout(set = 3, binding = 3) uniform accelerationStructureEXT u[100];
+#endif
+
+layout(set = 3, binding = 4, std140) uniform oo
 {
   vec4 data[90];
 } o[];
@@ -145,6 +149,12 @@ void main()
 #elif RAYS == 2
   blue = 1.0f;
   rayQueryInitializeEXT(query, t_as[60], gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, pos, tmin, direction.xyz, 1.0);
+#elif RAYS == 3
+  blue = 0.2f;
+  rayQueryInitializeEXT(query, u[20], gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, pos, tmin, direction.xyz, 1.0);
+#elif RAYS == 4
+  blue = 0.0f;
+  rayQueryInitializeEXT(query, u[31], gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, pos, tmin, direction.xyz, 1.0);
 #endif
   rayQueryProceedEXT(query);
 
@@ -565,28 +575,31 @@ void main()
 
     bool rays = hasExt(VK_KHR_RAY_QUERY_EXTENSION_NAME);
 
-    VkDescriptorSetLayout singlesetlayout = createDescriptorSetLayout(vkh::DescriptorSetLayoutCreateInfo(
-        {
-            {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+    VkDescriptorType asDescType =
+        rays ? VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
-            {11, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-            {12, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+    VkDescriptorSetLayout singlesetlayout =
+        createDescriptorSetLayout(vkh::DescriptorSetLayoutCreateInfo(
+            {
+                {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
 
-            {21, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-            {22, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-            {23, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {11, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {12, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
 
-            {31, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {21, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {22, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {23, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
 
-            {41, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {31, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
 
-            {51, rays ? VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-             1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {41, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
 
-            {61, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK, 32, VK_SHADER_STAGE_FRAGMENT_BIT},
-        },
-        VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT));
+                {51, asDescType, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+
+                {61, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK, 32, VK_SHADER_STAGE_FRAGMENT_BIT},
+            },
+            VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT));
 
     VkDescriptorSetLayout samplayout = createDescriptorSetLayout(vkh::DescriptorSetLayoutCreateInfo(
         {
@@ -595,6 +608,7 @@ void main()
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT));
 
     VkDescriptorBindingFlagsEXT bindFlags[] = {
+        0,
         0,
         0,
         VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT,
@@ -611,7 +625,8 @@ void main()
             {
                 {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100, VK_SHADER_STAGE_FRAGMENT_BIT},
                 {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100, VK_SHADER_STAGE_FRAGMENT_BIT},
-                {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000000, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {3, asDescType, 100, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000000, VK_SHADER_STAGE_FRAGMENT_BIT},
             },
             VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
             .next(&descFlags));
@@ -900,6 +915,24 @@ void main()
 
         tests.push_back(createGraphicsPipeline(pipeCreateInfo));
       }
+
+      pipeCreateInfo.stages[1] = CompileShaderModule(header +
+                                                         "\n"
+                                                         "#extension GL_EXT_ray_query : enable\n"
+                                                         " #define RAYS 3 \n" +
+                                                         pixel,
+                                                     ShaderLang::glsl, ShaderStage::frag, "main");
+
+      tests.push_back(createGraphicsPipeline(pipeCreateInfo));
+
+      pipeCreateInfo.stages[1] = CompileShaderModule(header +
+                                                         "\n"
+                                                         "#extension GL_EXT_ray_query : enable\n"
+                                                         " #define RAYS 4 \n" +
+                                                         pixel,
+                                                     ShaderLang::glsl, ShaderStage::frag, "main");
+
+      tests.push_back(createGraphicsPipeline(pipeCreateInfo));
     }
 
     VkImageView e = MakeTestImage("e", Vec4f(1.0f, 0.0f, 0.0f, 1.0f));
@@ -914,6 +947,7 @@ void main()
     AllocatedBuffer tlasBuffer;
     VkAccelerationStructureKHR j;
     VkAccelerationStructureKHR t_as_60;
+    VkAccelerationStructureKHR u_20;
     if(rays)
     {
       Vec3f vertices[] = {
@@ -1082,7 +1116,7 @@ void main()
 
       tlasBuffer = AllocatedBuffer(
           this,
-          vkh::BufferCreateInfo(tlasBuildSizesInfo.accelerationStructureSize * 2 + 0x1000,
+          vkh::BufferCreateInfo(tlasBuildSizesInfo.accelerationStructureSize + 0x2000,
                                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR),
           VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}));
@@ -1101,10 +1135,15 @@ void main()
       CHECK_VKR(vkCreateAccelerationStructureKHR(device, &tlasCreateInfo, VK_NULL_HANDLE, &t_as_60));
       setName(t_as_60, "t_as_60");
 
+      tlasCreateInfo.offset = 0x2000;
+
+      CHECK_VKR(vkCreateAccelerationStructureKHR(device, &tlasCreateInfo, VK_NULL_HANDLE, &u_20));
+      setName(u_20, "u_20");
+
       AllocatedBuffer tlasScratchBuffer(
           this,
           vkh::BufferCreateInfo(
-              tlasBuildSizesInfo.buildScratchSize * 2 + 0x1000,
+              tlasBuildSizesInfo.buildScratchSize + 0x2000,
               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR),
           VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}));
 
@@ -1119,6 +1158,9 @@ void main()
         vkCmdBuildAccelerationStructuresKHR(cmd, 1, &tlasBuildGeometryInfo, &asBuildRangeInfos);
         tlasBuildGeometryInfo.dstAccelerationStructure = t_as_60;
         tlasBuildGeometryInfo.scratchData.deviceAddress = tlasScratchBuffer.address + 0x1000;
+        vkCmdBuildAccelerationStructuresKHR(cmd, 1, &tlasBuildGeometryInfo, &asBuildRangeInfos);
+        tlasBuildGeometryInfo.dstAccelerationStructure = u_20;
+        tlasBuildGeometryInfo.scratchData.deviceAddress = tlasScratchBuffer.address + 0x2000;
         vkCmdBuildAccelerationStructuresKHR(cmd, 1, &tlasBuildGeometryInfo, &asBuildRangeInfos);
         CHECK_VKR(vkEndCommandBuffer(cmd));
         Submit(99, 99, {cmd});
@@ -1245,9 +1287,12 @@ void main()
     FillDescriptor(arraysetlayout, {2, 41}, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, n_41_samp,
                    VK_NULL_HANDLE);
 
+    FillDescriptor(arraysetlayout, {3, 20}, u_20);
+    FillDescriptor(arraysetlayout, {3, 31}, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+
     MakeTestBuffer("o_40", 0xf10, Vec4f(25.0f, 26.0f, 27.0f, 28.0f));
-    FillDescriptor(arraysetlayout, {3, 40}, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0xf00, 256);
-    FillDescriptor(arraysetlayout, {3, 51}, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    FillDescriptor(arraysetlayout, {4, 40}, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0xf00, 256);
+    FillDescriptor(arraysetlayout, {4, 51}, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
     //////////////  set 2  ////////////////
     ////////////// mutable ////////////////
@@ -1378,6 +1423,8 @@ void main()
     }
 
     vkDestroyAccelerationStructureKHR(device, j, NULL);
+    vkDestroyAccelerationStructureKHR(device, t_as_60, NULL);
+    vkDestroyAccelerationStructureKHR(device, u_20, NULL);
     vkDestroyAccelerationStructureKHR(device, blas, NULL);
     descbuf.unmap();
     if(sampbuf.address)
