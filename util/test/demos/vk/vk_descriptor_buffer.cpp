@@ -1103,7 +1103,7 @@ void main()
       AllocatedBuffer tlasScratchBuffer(
           this,
           vkh::BufferCreateInfo(
-              tlasBuildSizesInfo.buildScratchSize,
+              tlasBuildSizesInfo.buildScratchSize * 2 + 0x1000,
               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR),
           VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}));
 
@@ -1117,6 +1117,7 @@ void main()
         CHECK_VKR(vkBeginCommandBuffer(cmd, vkh::CommandBufferBeginInfo()));
         vkCmdBuildAccelerationStructuresKHR(cmd, 1, &tlasBuildGeometryInfo, &asBuildRangeInfos);
         tlasBuildGeometryInfo.dstAccelerationStructure = t_as_60;
+        tlasBuildGeometryInfo.scratchData.deviceAddress = tlasScratchBuffer.address + 0x1000;
         vkCmdBuildAccelerationStructuresKHR(cmd, 1, &tlasBuildGeometryInfo, &asBuildRangeInfos);
         CHECK_VKR(vkEndCommandBuffer(cmd));
         Submit(99, 99, {cmd});
