@@ -198,8 +198,14 @@ void main()
 #elif TEST == 21
   Color = textureLod(sampler2D(e, r), uv, 0.0);
 #elif TEST == 22
+
+#if defined(MUTABLE_SAMP)
   Color = textureLod(sampler2D(t_tex[20], t_samp[10]), uv, 0.0);
-#elif TEST == 23
+#else
+  Color = textureLod(sampler2D(t_tex[20], r), uv, 0.0);
+#endif
+
+#elif TEST == 23 && defined(MUTABLE_COMB)
   Color = texture(t_comb[30], uv);
 #elif TEST == 24
   Color = t_ubo[40].data[1] + t_ubo[40].data[79];
@@ -366,13 +372,10 @@ void main()
 
   bool mutableSet = false;
 
-  const VkDescriptorType mutableTypes[6] = {
-      VK_DESCRIPTOR_TYPE_SAMPLER,
+  std::vector<VkDescriptorType> mutableTypes = {
       VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
   };
 
   size_t DescSize(VkDescriptorType type)
@@ -612,9 +615,72 @@ void main()
             VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
             .next(&descFlags));
 
+    bool mutableComb = false, mutableAS = false, mutableSamp = false;
+
+    {
+      VkDescriptorType queryTypes[2] = {
+          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          VK_DESCRIPTOR_TYPE_SAMPLER,
+      };
+      VkMutableDescriptorTypeListEXT mutableList = {
+          2,
+          queryTypes,
+      };
+      VkMutableDescriptorTypeCreateInfoEXT mutableTypeInfo = {
+          VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT,
+          NULL,
+          1,
+          &mutableList,
+      };
+
+      std::vector<VkDescriptorSetLayoutBinding> bindings = {
+          {0, VK_DESCRIPTOR_TYPE_MUTABLE_EXT, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      };
+      VkDescriptorSetLayoutCreateInfo createInfo =
+          vkh::DescriptorSetLayoutCreateInfo(
+              bindings, VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+              .next(&mutableTypeInfo);
+
+      VkDescriptorSetLayoutSupport support = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_SUPPORT};
+
+      queryTypes[1] = VK_DESCRIPTOR_TYPE_SAMPLER;
+      vkGetDescriptorSetLayoutSupport(device, &createInfo, &support);
+      mutableSamp = support.supported != VK_FALSE;
+      if(mutableSamp)
+      {
+        mutableTypes.push_back(VK_DESCRIPTOR_TYPE_SAMPLER);
+        header += "#define MUTABLE_SAMP 1\n";
+
+        TEST_LOG("Mutable samplers are supported");
+      }
+
+      queryTypes[1] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      vkGetDescriptorSetLayoutSupport(device, &createInfo, &support);
+      mutableComb = support.supported != VK_FALSE;
+      if(mutableComb)
+      {
+        mutableTypes.push_back(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        header += "#define MUTABLE_COMB 1\n";
+
+        TEST_LOG("Mutable combined image/samplers are supported");
+      }
+
+      if(rays)
+      {
+        queryTypes[1] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        vkGetDescriptorSetLayoutSupport(device, &createInfo, &support);
+        mutableAS = support.supported != VK_FALSE;
+        if(mutableAS)
+        {
+          mutableTypes.push_back(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+          TEST_LOG("Mutable ASs are supported");
+        }
+      }
+    }
+
     VkMutableDescriptorTypeListEXT mutableList = {
-        ARRAY_COUNT(mutableTypes),
-        mutableTypes,
+        uint32_t(mutableTypes.size()),
+        mutableTypes.data(),
     };
     VkMutableDescriptorTypeCreateInfoEXT mutableTypeInfo = {
         VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT,
@@ -822,14 +888,17 @@ void main()
 
       tests.push_back(createGraphicsPipeline(pipeCreateInfo));
 
-      pipeCreateInfo.stages[1] = CompileShaderModule(header +
-                                                         "\n"
-                                                         "#extension GL_EXT_ray_query : enable\n"
-                                                         " #define RAYS 2 \n" +
-                                                         pixel,
-                                                     ShaderLang::glsl, ShaderStage::frag, "main");
+      if(mutableAS)
+      {
+        pipeCreateInfo.stages[1] = CompileShaderModule(header +
+                                                           "\n"
+                                                           "#extension GL_EXT_ray_query : enable\n"
+                                                           " #define RAYS 2 \n" +
+                                                           pixel,
+                                                       ShaderLang::glsl, ShaderStage::frag, "main");
 
-      tests.push_back(createGraphicsPipeline(pipeCreateInfo));
+        tests.push_back(createGraphicsPipeline(pipeCreateInfo));
+      }
     }
 
     VkImageView e = MakeTestImage("e", Vec4f(1.0f, 0.0f, 0.0f, 1.0f));
