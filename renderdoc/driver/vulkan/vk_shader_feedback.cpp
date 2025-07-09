@@ -374,6 +374,9 @@ void AnnotateShader(const ShaderReflection &refl, const SPIRVPatchData &patchDat
   // store the maximum slot we can use, for clamping outputs to avoid writing out of bounds
   rdcspv::Id maxSlotID = targetIndexWidth == 64 ? editor.AddConstantImmediate<uint64_t>(maxSlot)
                                                 : editor.AddConstantImmediate<uint32_t>(maxSlot);
+  rdcspv::Id maxSlotByteOffsetID =
+      targetIndexWidth == 64 ? editor.AddConstantImmediate<uint64_t>(maxSlot * sizeof(uint32_t))
+                             : editor.AddConstantImmediate<uint32_t>(maxSlot * sizeof(uint32_t));
 
   rdcspv::Id maxPrintfWordOffset =
       editor.AddConstantImmediate<uint32_t>(Vulkan_Debug_PrintfBufferSize() / sizeof(uint32_t));
@@ -1409,17 +1412,6 @@ void AnnotateShader(const ShaderReflection &refl, const SPIRVPatchData &patchDat
             }
           }
 
-          // clamp the index to the maximum slot. If the user is reading out of bounds, don't write
-          // out of bounds.
-          {
-            rdcspv::Id clampedtype =
-                editor.DeclareType(rdcspv::Scalar(rdcspv::Op::TypeInt, targetIndexWidth, false));
-            index = editor.AddOperation(
-                it, rdcspv::OpGLSL450(clampedtype, editor.MakeId(), glsl450,
-                                      rdcspv::GLSLstd450::UMin, {index, maxSlotID}));
-            it++;
-          }
-
           rdcspv::Id bufptr;
 
           if(IsBDA(storageMode))
@@ -1438,6 +1430,17 @@ void AnnotateShader(const ShaderReflection &refl, const SPIRVPatchData &patchDat
                 it, rdcspv::OpIAdd(indexOffsetType, editor.MakeId(), varIt->second, shiftedindex));
             it++;
 
+            // clamp the offset address to the maximum byte offset. If the user is reading out of
+            // bounds, don't write out of bounds.
+            {
+              rdcspv::Id clampedtype =
+                  editor.DeclareType(rdcspv::Scalar(rdcspv::Op::TypeInt, targetIndexWidth, false));
+              offsetaddr = editor.AddOperation(
+                  it, rdcspv::OpGLSL450(clampedtype, editor.MakeId(), glsl450,
+                                        rdcspv::GLSLstd450::UMin, {offsetaddr, maxSlotByteOffsetID}));
+              it++;
+            }
+
             // make a pointer out of it
             // uint32_t *bufptr = (uint32_t *)(ptr + offsetaddr)
             bufptr = MakeOffsettedPointer<uintvulkanmax_t>(
@@ -1453,6 +1456,17 @@ void AnnotateShader(const ShaderReflection &refl, const SPIRVPatchData &patchDat
             rdcspv::Id ssboindex = editor.AddOperation(
                 it, rdcspv::OpIAdd(uint32Type, editor.MakeId(), index, varIt->second));
             it++;
+
+            // clamp the ssboindex to the maximum slot. If the user is reading out of bounds, don't
+            // write out of bounds.
+            {
+              rdcspv::Id clampedtype =
+                  editor.DeclareType(rdcspv::Scalar(rdcspv::Op::TypeInt, targetIndexWidth, false));
+              ssboindex = editor.AddOperation(
+                  it, rdcspv::OpGLSL450(clampedtype, editor.MakeId(), glsl450,
+                                        rdcspv::GLSLstd450::UMin, {ssboindex, maxSlotID}));
+              it++;
+            }
 
             // accesschain to get the pointer we'll atomic into.
             // accesschain is 0 to access rtarray (first member) then ssboindex for array index
