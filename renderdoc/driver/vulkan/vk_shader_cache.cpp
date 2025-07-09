@@ -145,7 +145,8 @@ static const BuiltinShaderConfig builtinShaders[] = {
     BuiltinShaderConfig(BuiltinShader::DepthCopyFS, EmbeddedResource(glsl_depth_copy_frag),
                         rdcspv::ShaderStage::Fragment, FeatureCheck::FragmentStores),
     BuiltinShaderConfig(BuiltinShader::DepthCopyMSFS, EmbeddedResource(glsl_depth_copyms_frag),
-                        rdcspv::ShaderStage::Fragment, FeatureCheck::FragmentStores),
+                        rdcspv::ShaderStage::Fragment,
+                        FeatureCheck::SampleShading | FeatureCheck::FragmentStores),
 };
 
 RDCCOMPILE_ASSERT(ARRAY_COUNT(builtinShaders) == arraydim<BuiltinShader>(),
