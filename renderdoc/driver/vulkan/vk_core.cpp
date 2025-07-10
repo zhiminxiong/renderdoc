@@ -6206,7 +6206,19 @@ void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSiz
 
         // exit silently, may be unknown descriptor format which would spam
         if(view == ResourceId())
+        {
+          // check if this is a NULL descriptor, in which case we've identified correctly!
+          // only works if we don't need to care about the layout
+          if(m_IgnoreLayoutForDescriptors &&
+             m_DescriptorLookup.nullPatterns[(uint32_t)convert(info.type)] ==
+                 bytebuf(descriptorBytes, descriptorSize))
+          {
+            data = {};
+            data.SetImageSampler(info.type, ResourceId(), ResourceId(), VK_IMAGE_LAYOUT_GENERAL);
+            return;
+          }
           break;
+        }
 
         rdcarray<VkImageLayout> layouts;
 
@@ -6267,6 +6279,20 @@ void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSiz
         if(address == 0)
         {
           // exit silently, may be unknown descriptor format which would spam
+          // check if this is a NULL descriptor, in which case we've identified correctly!
+          // can't work for texel buffers that may have a format encoded
+          if(type != DescriptorType::TypedBuffer && type != DescriptorType::ReadWriteTypedBuffer &&
+             m_DescriptorLookup.nullPatterns[(uint32_t)convert(info.type)] ==
+                 bytebuf(descriptorBytes, descriptorSize))
+          {
+            data = {};
+            if(type == DescriptorType::AccelerationStructure)
+              data.SetAccelerationStructure(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+                                            VK_NULL_HANDLE);
+            else
+              data.SetBuffer(info.type, ResourceId(), 0, 0, VK_FORMAT_UNDEFINED);
+            return;
+          }
           break;
         }
         else
@@ -6754,6 +6780,11 @@ void WrappedVulkan::GetFinalBufferParameters(byte *descriptorBytes, size_t descr
 void WrappedVulkan::RegisterDescriptor(const bytebuf &key, const DescriptorSetSlot &data)
 {
   m_DescriptorLookup.fallback.insert(key, data);
+
+  // only register NULL patterns for non-sampler types
+  if(data.type != DescriptorSlotType::Sampler &&
+     data.type != DescriptorSlotType::CombinedImageSampler && data.resource == ResourceId())
+    m_DescriptorLookup.nullPatterns[(uint32_t)data.type] = key;
 
   // store unique texel buffer formats used, expecting this to be small and it will help descriptor lookups
   if(data.type == DescriptorSlotType::UniformTexelBuffer ||

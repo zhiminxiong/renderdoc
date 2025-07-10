@@ -494,6 +494,8 @@ private:
 
     uint32_t combinedSamplerOffset = 0;
 
+    bytebuf nullPatterns[size_t(DescriptorSlotType::Count)];
+
     // overall lookup of all descriptors by bytes, fallback in case any others don't work - we
     // expect this to always hit
     rdcbytetrie<DescriptorTrieNode> fallback;
