@@ -158,6 +158,9 @@ private:
 
     void SetPrefix(const Key &k)
     {
+      if(IsLeaf() && k.size > GetPrefixLength())
+        RDCERR("Expanding prefix on leaf - invalid");
+
       // prefix stored immediately after this structure for both node and leaf
       byte *prefix = (byte *)(this + 1);
       // use memmove to account for prefix shrinking in place
@@ -488,11 +491,18 @@ private:
         promoted->SetPrefix(leaf->GetPrefix());
         promoted->SetValue(std::move(leaf->GetValue()));
 
-        // re-use the leaf later. Since we just promoted this to a node we know it will have no
-        // children, so below we are going to hit the case of the next byte having no child and we
-        // can put this leaf there.
-        leaf->RemoveValue();
-        leaf->SetPrefix(searchAfter);
+        // re-use the leaf later if it has enough prefix space. Since we just promoted this to a
+        // node we know it will have no children, so below we are going to hit the case of the next
+        // byte having no child and we can put this leaf there.
+        if(leaf->GetPrefixLength() >= searchAfter.size)
+        {
+          leaf->RemoveValue();
+          leaf->SetPrefix(searchAfter);
+        }
+        else
+        {
+          leaf = MakeLeaf(searchAfter);
+        }
 
         root = promoted;
 

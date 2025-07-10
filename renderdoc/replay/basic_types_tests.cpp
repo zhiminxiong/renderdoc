@@ -2593,6 +2593,8 @@ TEST_CASE("Test rdcbytetrie type", "[basictypes][rdcbytetrie]")
         {{2, 1, 1}, TrieValue(5)},
         //
         {{2, 1, 6}, TrieValue(6)},
+        //
+        {{2, 1, 6, 9, 9}, TrieValue(7)},
     };
     bytebuf d = {1, 3};
 
