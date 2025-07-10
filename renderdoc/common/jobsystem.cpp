@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 #include <math.h>
+#include "formatting.h"
 #include "threading.h"
 
 namespace Threading
@@ -215,6 +216,7 @@ bool RunJobIfReady(Threading::JobSystem::Job *curJob)
 
 void WorkerThread(JobWorker &worker)
 {
+  Threading::SetCurrentThreadName(StringFormat::Fmt("JobWorker %02u", (uint32_t)worker.idx));
   // outer loop until shutdown
   while(true)
   {
