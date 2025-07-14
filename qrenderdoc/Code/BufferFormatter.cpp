@@ -177,7 +177,7 @@ static QString MakeIdentifierName(const rdcstr &name)
 }
 
 void BufferFormatter::EstimatePackingRules(Packing::Rules &pack, ResourceId shader,
-                                           const ShaderConstant &constant)
+                                           const ShaderConstant &constant, uint32_t knownVecAlignment)
 {
   // see if this constant violates any of the packing rules we are currently checking for.
   // We can't *prove* a rule is followed just from one example, we can only see if it is never
@@ -241,6 +241,12 @@ void BufferFormatter::EstimatePackingRules(Packing::Rules &pack, ResourceId shad
       // if the vector crosses a 16-byte boundary, vectors can straddle them
       if(low16b != high16b)
         pack.vector_straddle_16b = true;
+
+      // if we have determined earlier that a struct array may misalign the vector's base alignment, we are straddling
+      if(vecSize >= 3 && knownVecAlignment < 16)
+        pack.vector_straddle_16b = true;
+      else if(vecSize == 2 && knownVecAlignment < 8)
+        pack.vector_straddle_16b = true;
     }
 
     if(!pack.tight_arrays && matSize > 1)
@@ -265,23 +271,42 @@ void BufferFormatter::EstimatePackingRules(Packing::Rules &pack, ResourceId shad
       pack.tight_arrays = true;
   }
 
-  EstimatePackingRules(pack, shader, constant.type.members);
+  // handle the case where a structs array stride may need to pessimise its members' alignments.
+  //
+  // e.g. struct foo { float4 a; float b; } is technically naturally aligned, but if foo bar[]; has
+  // a stride of 20 that means that bar[1].a will not be aligned anymore and will be straddling a
+  // boundary - we must detect that
+  if(constant.type.baseType == VarType::Struct)
+  {
+    uint32_t structVecAlign = constant.type.arrayByteStride % 16;
+    if(structVecAlign == 8)
+      knownVecAlignment = qMin(knownVecAlignment, 8U);
+    else if(structVecAlign == 4 || structVecAlign == 12)
+      knownVecAlignment = qMin(knownVecAlignment, 4U);
+    else if(structVecAlign == 2 || structVecAlign == 6 || structVecAlign == 10 || structVecAlign == 14)
+      knownVecAlignment = qMin(knownVecAlignment, 2U);
+    else if(structVecAlign != 0)
+      knownVecAlignment = 1;
+  }
+
+  EstimatePackingRules(pack, shader, constant.type.members, knownVecAlignment);
 }
 
 void BufferFormatter::EstimatePackingRules(Packing::Rules &pack, ResourceId shader,
-                                           const rdcarray<ShaderConstant> &members)
+                                           const rdcarray<ShaderConstant> &members,
+                                           uint32_t knownVecAlignment)
 {
   for(size_t i = 0; i < members.size(); i++)
   {
     // check this constant
-    EstimatePackingRules(pack, shader, members[i]);
+    EstimatePackingRules(pack, shader, members[i], knownVecAlignment);
 
     // when pointers are in use, follow the type and estimate with those too
     if(members[i].type.pointerTypeID != ~0U)
     {
       const ShaderConstantType &ptrType =
           PointerTypeRegistry::GetTypeDescriptor(shader, members[i].type.pointerTypeID);
-      EstimatePackingRules(pack, shader, ptrType.members);
+      EstimatePackingRules(pack, shader, ptrType.members, knownVecAlignment);
     }
 
     // check for trailing array/struct use
@@ -327,7 +352,8 @@ Packing::Rules BufferFormatter::EstimatePackingRules(ResourceId shader,
   else
     pack = Packing::std140;
 
-  EstimatePackingRules(pack, shader, members);
+  // without more information we must assume all vectors are naturally aligned
+  EstimatePackingRules(pack, shader, members, 16);
 
   // only return a 'real' ruleset. Don't revert to individually setting rules if we can help it
   // since that's a mess. The worst case is if someone is really using a custom packing format then
@@ -4171,6 +4197,28 @@ float trail_test;
 float3x4 a;
 float trail_test;
 
+struct struct_misaligned_by_array
+{
+  float4 a;
+  float b;
+  // will have padding such that a is aligned in next array element
+};
+
+struct outer_struct
+{
+  float4 a;
+  struct_misaligned_by_array b;
+};
+
+struct outer_struct2
+{
+  float4 a;
+  outer_struct b;
+};
+
+struct_misaligned_by_array a[4];
+outer_struct2 a[4];
+
 )");
     ParsedFormat tmp = BufferFormatter::ParseFormatString(tmpFormat, 1024 * 1024, true);
 
@@ -4325,6 +4373,20 @@ float trail_test;
   SECTION("trailing matrix overlap")
   {
     members[25].byteOffset = members[24].byteOffset + 64 - 4;
+    pack = BufferFormatter::EstimatePackingRules(ResourceId(), members);
+    CHECK((pack == Packing::Scalar));
+  }
+
+  SECTION("struct vector member misaligned by array stride")
+  {
+    members[26].type.arrayByteStride = 20;
+    pack = BufferFormatter::EstimatePackingRules(ResourceId(), members);
+    CHECK((pack == Packing::Scalar));
+  }
+
+  SECTION("nested struct vector member misaligned by array stride")
+  {
+    members[27].type.arrayByteStride = 52;
     pack = BufferFormatter::EstimatePackingRules(ResourceId(), members);
     CHECK((pack == Packing::Scalar));
   }
