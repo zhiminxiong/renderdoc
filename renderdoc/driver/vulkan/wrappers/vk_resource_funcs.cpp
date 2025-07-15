@@ -370,6 +370,28 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
 
       m_CreationInfo.m_Memory[live].Init(GetResourceManager(), m_CreationInfo, &AllocateInfo);
 
+      if(m_CreationInfo.m_Memory[live].opaqueAddr != 0)
+      {
+        VkDeviceMemoryOpaqueCaptureAddressInfo getInfo = {
+            VK_STRUCTURE_TYPE_DEVICE_MEMORY_OPAQUE_CAPTURE_ADDRESS_INFO,
+            NULL,
+            Unwrap(mem),
+        };
+
+        uint64_t opaque =
+            ObjDisp(device)->GetDeviceMemoryOpaqueCaptureAddress(Unwrap(device), &getInfo);
+
+        if(m_CreationInfo.m_Memory[live].opaqueAddr != opaque)
+        {
+          SET_ERROR_RESULT(
+              m_FailedReplayResult, ResultCode::APIReplayFailed,
+              "Allocating memory failed, opaque address 0x%llx has changed on replay to 0x%llx."
+              "This is illegal and indicates a potential driver bug.",
+              m_CreationInfo.m_Memory[live].opaqueAddr, opaque);
+          return false;
+        }
+      }
+
       VkMemoryDedicatedAllocateInfo *dedicated = (VkMemoryDedicatedAllocateInfo *)FindNextStruct(
           &AllocateInfo, VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO);
       if(dedicated && dedicated->buffer == VK_NULL_HANDLE && dedicated->image == VK_NULL_HANDLE)

@@ -2293,6 +2293,15 @@ void VulkanCreationInfo::Memory::Init(VulkanResourceManager *resourceMan, Vulkan
 {
   memoryTypeIndex = pAllocInfo->memoryTypeIndex;
   allocSize = wholeMemBufSize = pAllocInfo->allocationSize;
+
+  const VkMemoryOpaqueCaptureAddressAllocateInfo *memoryDeviceAddress =
+      (const VkMemoryOpaqueCaptureAddressAllocateInfo *)FindNextStruct(
+          pAllocInfo, VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO);
+
+  if(memoryDeviceAddress)
+  {
+    opaqueAddr = memoryDeviceAddress->opaqueCaptureAddress;
+  }
 }
 
 void VulkanCreationInfo::Memory::SimplifyBindings()

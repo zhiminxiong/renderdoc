@@ -579,6 +579,8 @@ struct VulkanCreationInfo
 
     VkBuffer wholeMemBuf;
 
+    VkDeviceAddress opaqueAddr;
+
     enum MemoryBinding
     {
       None = 0x0,
