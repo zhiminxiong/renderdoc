@@ -513,6 +513,9 @@ void main(void)
 
     vkDeviceWaitIdle(device);
 
+    vkDestroyQueryPool(device, compactedPool, NULL);
+    vkDestroyQueryPool(device, serialisedPool, NULL);
+
     vkDestroyAccelerationStructureKHR(device, newBlas, NULL);
     vkDestroyAccelerationStructureKHR(device, tlas, NULL);
     vkDestroyAccelerationStructureKHR(device, blas, NULL);
