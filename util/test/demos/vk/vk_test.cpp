@@ -1874,11 +1874,11 @@ void AllocatedImage::free()
 }
 
 AllocatedBuffer::AllocatedBuffer(VulkanGraphicsTest *test, const VkBufferCreateInfo &bufInfo,
-                                 const VmaAllocationCreateInfo &allocInfo)
+                                 const VmaAllocationCreateInfo &allocInfo, uint32_t alignment)
 {
   this->test = test;
   allocator = test->allocator;
-  vmaCreateBuffer(allocator, &bufInfo, &allocInfo, &buffer, &alloc, NULL);
+  vmaCreateBufferWithAlignment(allocator, &bufInfo, &allocInfo, alignment, &buffer, &alloc, NULL);
 
   test->bufferAllocs[buffer] = alloc;
 

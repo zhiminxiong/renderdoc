@@ -165,10 +165,10 @@ void main(void)
 
     AllocatedBuffer blasVertexBuffer(
         this, vkh::BufferCreateInfo(vertexBufferSize, blasInputBufferUsageFlags),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}), 4);
     AllocatedBuffer blasIndexBuffer(
         this, vkh::BufferCreateInfo(indexBufferSize, blasInputBufferUsageFlags),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}), 4);
 
     blasVertexBuffer.upload(vertices, vertexBufferSize);
     blasIndexBuffer.upload(indices, indexBufferSize);
@@ -238,7 +238,7 @@ void main(void)
         vkh::BufferCreateInfo(
             blasBuildSizesInfo.buildScratchSize,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}), 256);
 
     blasBuildGeometryInfo.scratchData.deviceAddress = blasScratchBuffer.address;
     blasBuildGeometryInfo.dstAccelerationStructure = blas;
@@ -268,7 +268,7 @@ void main(void)
         vkh::BufferCreateInfo(asInstanceSize,
                               VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}), 16);
     instancesBuffer.upload(&asInstance, asInstanceSize);
 
     VkAccelerationStructureGeometryKHR tlasGeometry = {
@@ -317,7 +317,7 @@ void main(void)
         vkh::BufferCreateInfo(
             tlasBuildSizesInfo.buildScratchSize,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}), 256);
 
     tlasBuildGeometryInfo.scratchData.deviceAddress = tlasScratchBuffer.address;
     tlasBuildGeometryInfo.dstAccelerationStructure = tlas;
@@ -358,12 +358,12 @@ void main(void)
         this,
         vkh::BufferCreateInfo(vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}), 4);
     AllocatedBuffer trisIndexBuffer(
         this,
         vkh::BufferCreateInfo(
             indexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
-        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}));
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}), 4);
 
     trisVertexBuffer.upload(vertices);
     trisIndexBuffer.upload(indices);

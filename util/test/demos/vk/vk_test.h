@@ -45,7 +45,7 @@ struct AllocatedBuffer
 
   AllocatedBuffer() {}
   AllocatedBuffer(VulkanGraphicsTest *test, const VkBufferCreateInfo &bufInfo,
-                  const VmaAllocationCreateInfo &allocInfo);
+                  const VmaAllocationCreateInfo &allocInfo, uint32_t alignment = 1);
 
   void free();
 
