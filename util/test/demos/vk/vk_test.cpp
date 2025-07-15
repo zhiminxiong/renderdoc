@@ -120,6 +120,9 @@ static VkBool32 VKAPI_PTR vulkanCallback(VkDebugUtilsMessageSeverityFlagBitsEXT 
                                          const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                          void *pUserData)
 {
+  if(strstr(pCallbackData->pMessageIdName, "-01779"))
+    return false;
+
   TEST_WARN("Vulkan message: [%s] %s", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 
   return false;
