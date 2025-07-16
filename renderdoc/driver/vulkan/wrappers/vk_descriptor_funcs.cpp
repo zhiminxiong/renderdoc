@@ -479,6 +479,20 @@ VkResult WrappedVulkan::vkCreateDescriptorSetLayout(VkDevice device,
                                                     VkDescriptorSetLayout *pSetLayout)
 {
   VkDescriptorSetLayoutCreateInfo unwrapped = UnwrapInfo(pCreateInfo);
+
+  if(m_DescriptorBuffers &&
+     (unwrapped.flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT))
+  {
+    for(uint32_t b = 0; b < unwrapped.bindingCount; b++)
+    {
+      VkDescriptorSetLayoutBinding &bind = (VkDescriptorSetLayoutBinding &)unwrapped.pBindings[b];
+      if(b == 0 || (bind.stageFlags & VK_SHADER_STAGE_VERTEX_BIT))
+      {
+        bind.stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+      }
+    }
+  }
+
   VkResult ret;
   SERIALISE_TIME_CALL(ret = ObjDisp(device)->CreateDescriptorSetLayout(Unwrap(device), &unwrapped,
                                                                        NULL, pSetLayout));
