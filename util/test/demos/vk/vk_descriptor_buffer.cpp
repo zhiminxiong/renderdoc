@@ -1265,7 +1265,10 @@ void main()
 
     FillDescriptor(singlesetlayout, 41, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, i_samp, i_tex);
 
-    FillDescriptor(singlesetlayout, 51, j);
+    if(rays)
+    {
+      FillDescriptor(singlesetlayout, 51, j);
+    }
 
     VkDeviceSize inlineOffset = 0;
     vkGetDescriptorSetLayoutBindingOffsetEXT(device, singlesetlayout, 61, &inlineOffset);
@@ -1287,8 +1290,11 @@ void main()
     FillDescriptor(arraysetlayout, {2, 41}, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, n_41_samp,
                    VK_NULL_HANDLE);
 
-    FillDescriptor(arraysetlayout, {3, 20}, u_20);
-    FillDescriptor(arraysetlayout, {3, 31}, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+    if(rays)
+    {
+      FillDescriptor(arraysetlayout, {3, 20}, u_20);
+      FillDescriptor(arraysetlayout, {3, 31}, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+    }
 
     MakeTestBuffer("o_40", 0xf10, Vec4f(25.0f, 26.0f, 27.0f, 28.0f));
     FillDescriptor(arraysetlayout, {4, 40}, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0xf00, 256);
@@ -1310,7 +1316,10 @@ void main()
     MakeTestBuffer("t_ssbo_50", 0x710, Vec4f(33.0f, 34.0f, 35.0f, 36.0f));
     FillDescriptor(mutablelayout, {0, 50}, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0x700, 256);
 
-    FillDescriptor(mutablelayout, {0, 60}, t_as_60);
+    if(rays)
+    {
+      FillDescriptor(mutablelayout, {0, 60}, t_as_60);
+    }
 
     mutableSet = false;
 
