@@ -865,4 +865,11 @@ struct VulkanCreationInfo
     m_DescUpdateTemplate.erase(id);
     m_Queue.erase(id);
   }
+  const PipelineLayout &GetPipelineLayoutInfo(ResourceId rp) const;
+  const DescSetLayout &GetDescSetLayout(ResourceId dsl) const;
+  const Buffer &GetBufferInfo(ResourceId buf) const;
+  const BufferView &GetBufferViewInfo(ResourceId bufView) const;
+  const Image &GetImageInfo(ResourceId img) const;
+  const ImageView &GetImageViewInfo(ResourceId imgView) const;
+  const Sampler &GetSamplerInfo(ResourceId samp) const;
 };

@@ -1853,16 +1853,12 @@ const VulkanCreationInfo::Buffer &VulkanDebugManager::GetBufferInfo(ResourceId i
 
 const VulkanCreationInfo::Image &VulkanDebugManager::GetImageInfo(ResourceId img) const
 {
-  auto it = m_pDriver->m_CreationInfo.m_Image.find(img);
-  RDCASSERT(it != m_pDriver->m_CreationInfo.m_Image.end());
-  return it->second;
+  return m_pDriver->m_CreationInfo.GetImageInfo(img);
 }
 
 const VulkanCreationInfo::ImageView &VulkanDebugManager::GetImageViewInfo(ResourceId imgView) const
 {
-  auto it = m_pDriver->m_CreationInfo.m_ImageView.find(imgView);
-  RDCASSERT(it != m_pDriver->m_CreationInfo.m_ImageView.end());
-  return it->second;
+  return m_pDriver->m_CreationInfo.GetImageViewInfo(imgView);
 }
 
 const VulkanCreationInfo::Pipeline &VulkanDebugManager::GetPipelineInfo(ResourceId pipe) const
@@ -1902,9 +1898,7 @@ const VulkanCreationInfo::RenderPass &VulkanDebugManager::GetRenderPassInfo(Reso
 
 const VulkanCreationInfo::PipelineLayout &VulkanDebugManager::GetPipelineLayoutInfo(ResourceId rp) const
 {
-  auto it = m_pDriver->m_CreationInfo.m_PipelineLayout.find(rp);
-  RDCASSERT(it != m_pDriver->m_CreationInfo.m_PipelineLayout.end());
-  return it->second;
+  return m_pDriver->m_CreationInfo.GetPipelineLayoutInfo(rp);
 }
 
 const VulkanCreationInfo::AccelerationStructure &VulkanDebugManager::GetAccelerationStructureInfo(
@@ -1917,9 +1911,7 @@ const VulkanCreationInfo::AccelerationStructure &VulkanDebugManager::GetAccelera
 
 const DescSetLayout &VulkanDebugManager::GetDescSetLayout(ResourceId dsl) const
 {
-  auto it = m_pDriver->m_CreationInfo.m_DescSetLayout.find(dsl);
-  RDCASSERT(it != m_pDriver->m_CreationInfo.m_DescSetLayout.end());
-  return it->second;
+  return m_pDriver->m_CreationInfo.GetDescSetLayout(dsl);
 }
 
 const WrappedVulkan::DescriptorSetInfo &VulkanDebugManager::GetDescSetInfo(ResourceId ds) const
