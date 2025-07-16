@@ -2316,11 +2316,12 @@ void ReplayController::FetchPipelineState(uint32_t eventId)
     {
       if(store != ResourceId())
       {
+        store = m_pDevice->GetLiveID(store);
         descs.append(m_pDevice->GetDescriptors(store, ranges));
         samps.append(m_pDevice->GetSamplerDescriptors(store, ranges));
       }
 
-      store = m_pDevice->GetLiveID(acc.descriptorStore);
+      store = acc.descriptorStore;
       ranges.clear();
     }
 
@@ -2340,6 +2341,7 @@ void ReplayController::FetchPipelineState(uint32_t eventId)
 
   if(store != ResourceId())
   {
+    store = m_pDevice->GetLiveID(store);
     descs.append(m_pDevice->GetDescriptors(store, ranges));
     samps.append(m_pDevice->GetSamplerDescriptors(store, ranges));
   }
