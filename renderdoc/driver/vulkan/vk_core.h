@@ -521,6 +521,8 @@ private:
     // unique image layouts. In case image layout affects the descriptor bits
     rdcarray<VkImageLayout> generalImageLayouts;
     rdcarray<VkImageLayout> depthImageLayouts;
+
+    Threading::CriticalSection lock;
   };
   DescriptorLookups m_DescriptorLookup;
 

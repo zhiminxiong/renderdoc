@@ -29,6 +29,10 @@
 RDOC_DEBUG_CONFIG(bool, Vulkan_Debug_AllowDescriptorSetReuse, true,
                   "Allow the re-use of descriptor sets via vkResetDescriptorPool.");
 
+RDOC_CONFIG(
+    uint32_t, Vulkan_Debug_DangerousDescriptorSerialisation, 0,
+    "DANGEROUS, MAY CAUSE CAPTURE FAILURES: Disable serialising plain untyped buffer descriptors.");
+
 template <>
 VkDescriptorSetLayoutCreateInfo WrappedVulkan::UnwrapInfo(const VkDescriptorSetLayoutCreateInfo *info)
 {
@@ -2145,18 +2149,40 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
         // logic can be done in common
         if(pDescriptorInfo->data.pUniformBuffer)
         {
-          ResourceId id;
-          uint64_t offs = 0;
-          GetResIDFromAddr(pDescriptorInfo->data.pUniformBuffer->address, id, offs);
-
-          dstRecord = GetResourceManager()->GetResourceRecord(id);
-
           VkFormat fmt = VK_FORMAT_UNDEFINED;
           if(pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
              pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
           {
             fmt = pDescriptorInfo->data.pUniformTexelBuffer->format;
           }
+
+          if(Vulkan_Debug_DangerousDescriptorSerialisation() == 122333)
+          {
+            if(pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
+               pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+            {
+              dstRecord = NULL;
+              break;
+            }
+            // serialise any one random descriptor per unique format so the tracking on replay still works
+            if(pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
+               pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+            {
+              SCOPED_LOCK(m_DescriptorLookup.lock);
+              if(m_DescriptorLookup.texelFormats.contains(fmt))
+              {
+                dstRecord = NULL;
+                break;
+              }
+              m_DescriptorLookup.texelFormats.push_back(fmt);
+            }
+          }
+
+          ResourceId id;
+          uint64_t offs = 0;
+          GetResIDFromAddr(pDescriptorInfo->data.pUniformBuffer->address, id, offs);
+
+          dstRecord = GetResourceManager()->GetResourceRecord(id);
 
           DescriptorUniquenessKey descKey(offs, pDescriptorInfo->data.pUniformBuffer->range, fmt);
 
