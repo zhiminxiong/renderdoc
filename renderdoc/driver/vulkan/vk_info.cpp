@@ -2343,7 +2343,7 @@ void VulkanCreationInfo::Buffer::Init(VulkanResourceManager *resourceMan, Vulkan
                                       const VkBufferCreateInfo *pCreateInfo,
                                       VkMemoryRequirements origMrq)
 {
-  usage = pCreateInfo->usage;
+  usage = GetBufferUsageFlags(pCreateInfo);
   size = pCreateInfo->size;
   gpuAddress = 0;
 
