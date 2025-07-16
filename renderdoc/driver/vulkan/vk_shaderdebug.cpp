@@ -208,7 +208,7 @@ public:
           continue;
 
         const VulkanCreationInfo::PipelineLayout &pipeLayoutInfo =
-            m_Creation.m_PipelineLayout[srcData.pipeLayout];
+            m_Creation.GetPipelineLayoutInfo(srcData.pipeLayout);
 
         ResourceId setOrig = m_pDriver->GetResourceManager()->GetOriginalID(sourceSet);
 
@@ -218,7 +218,7 @@ public:
         for(size_t b = 0; b < bindStorage.binds.size(); b++)
         {
           const DescSetLayout::Binding &layoutBind =
-              m_Creation.m_DescSetLayout[pipeLayoutInfo.descSetLayouts[i]].bindings[b];
+              m_Creation.GetDescSetLayout(pipeLayoutInfo.descSetLayouts[i]).bindings[b];
 
           if(layoutBind.layoutDescType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC &&
              layoutBind.layoutDescType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
@@ -652,8 +652,12 @@ public:
 
     // promote view to Array view
 
-    const VulkanCreationInfo::ImageView &viewProps = m_Creation.m_ImageView[GetResID(view)];
-    const VulkanCreationInfo::Image &imageProps = m_Creation.m_Image[viewProps.image];
+    VulkanCreationInfo::ImageView defaultViewProps;
+    VulkanCreationInfo::Image defaultImageProps;
+    const VulkanCreationInfo::ImageView &viewProps =
+        buffer ? defaultViewProps : m_Creation.GetImageViewInfo(GetResID(view));
+    const VulkanCreationInfo::Image &imageProps =
+        buffer ? defaultImageProps : m_Creation.GetImageInfo(viewProps.image);
 
     const bool depthTex = IsDepthOrStencilFormat(viewProps.format);
 
@@ -767,14 +771,15 @@ public:
           else
           {
             const VulkanCreationInfo::BufferView &bufViewProps =
-                m_Creation.m_BufferView[GetResID(bufferView)];
+                m_Creation.GetBufferViewInfo(GetResID(bufferView));
 
             size = bufViewProps.size;
             format = bufViewProps.format;
 
             if(size == VK_WHOLE_SIZE)
             {
-              const VulkanCreationInfo::Buffer &bufProps = m_Creation.m_Buffer[bufViewProps.buffer];
+              const VulkanCreationInfo::Buffer &bufProps =
+                  m_Creation.GetBufferInfo(bufViewProps.buffer);
               size = bufProps.size - bufViewProps.offset;
             }
           }
@@ -840,7 +845,7 @@ public:
         auto insertIt = m_BiasSamplers.insert(std::make_pair(key, VkSampler()));
         if(insertIt.second)
         {
-          const VulkanCreationInfo::Sampler &samplerProps = m_Creation.m_Sampler[key.first];
+          const VulkanCreationInfo::Sampler &samplerProps = m_Creation.GetSamplerInfo(key.first);
 
           VkSamplerCreateInfo sampInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
           sampInfo.magFilter = samplerProps.magFilter;
@@ -1564,7 +1569,7 @@ public:
 private:
   WrappedVulkan *m_pDriver = NULL;
   ShaderDebugData &m_DebugData;
-  VulkanCreationInfo &m_Creation;
+  const VulkanCreationInfo &m_Creation;
 
   bool m_ResourcesDirty = false;
   uint32_t m_EventID;
@@ -1793,15 +1798,15 @@ private:
           }
           else
           {
-            const VulkanCreationInfo::BufferView &viewProps =
-                m_Creation.m_BufferView[m_pDriver->GetResourceManager()->GetLiveID(imgData.view)];
+            const VulkanCreationInfo::BufferView &viewProps = m_Creation.GetBufferViewInfo(
+                m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
             buffer = viewProps.buffer;
             offset = viewProps.offset;
             format = viewProps.format;
             byteWidth = viewProps.size;
           }
 
-          const VulkanCreationInfo::Buffer &bufferProps = m_Creation.m_Buffer[buffer];
+          const VulkanCreationInfo::Buffer &bufferProps = m_Creation.GetBufferInfo(buffer);
 
           // width in bytes, either from the view or from the remainder of the buffer
           if(byteWidth == VK_WHOLE_SIZE)
@@ -1824,8 +1829,8 @@ private:
         else if(imgData.view != ResourceId())
         {
           const VulkanCreationInfo::ImageView &viewProps =
-              m_Creation.m_ImageView[m_pDriver->GetResourceManager()->GetLiveID(imgData.view)];
-          const VulkanCreationInfo::Image &imageProps = m_Creation.m_Image[viewProps.image];
+              m_Creation.GetImageViewInfo(m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
+          const VulkanCreationInfo::Image &imageProps = m_Creation.GetImageInfo(viewProps.image);
 
           uint32_t mip = viewProps.range.baseMipLevel;
 
@@ -5585,8 +5590,7 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
     ResourceId rp = state.GetRenderPass();
     if(rp != ResourceId())
     {
-      const VulkanCreationInfo::RenderPass &rpInfo =
-          m_pDriver->GetDebugManager()->GetRenderPassInfo(rp);
+      const VulkanCreationInfo::RenderPass &rpInfo = GetDebugManager()->GetRenderPassInfo(rp);
       for(auto it = rpInfo.subpasses.begin(); it != rpInfo.subpasses.end(); ++it)
       {
         if(it->multiviews.isEmpty())
