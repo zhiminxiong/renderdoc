@@ -329,39 +329,39 @@ void Debugger::Parse(const rdcarray<uint32_t> &spirvWords)
   Processor::Parse(spirvWords);
 }
 
-Iter Debugger::GetIterForInstruction(uint32_t inst)
+ConstIter Debugger::GetIterForInstruction(uint32_t inst) const
 {
-  return Iter(m_SPIRV, instructionOffsets[inst]);
+  return ConstIter(m_SPIRV, instructionOffsets[inst]);
 }
 
-uint32_t Debugger::GetInstructionForIter(Iter it)
+uint32_t Debugger::GetInstructionForIter(ConstIter it) const
 {
   return instructionOffsets.indexOf(it.offs());
 }
 
-uint32_t Debugger::GetInstructionForFunction(Id id)
+uint32_t Debugger::GetInstructionForFunction(Id id) const
 {
   return instructionOffsets.indexOf(functions[id].begin);
 }
 
-uint32_t Debugger::GetInstructionForLabel(Id id)
+uint32_t Debugger::GetInstructionForLabel(Id id) const
 {
   uint32_t ret = labelInstruction[id];
   RDCASSERT(ret);
   return ret;
 }
 
-const rdcspv::DataType &Debugger::GetType(Id typeId)
+const rdcspv::DataType &Debugger::GetType(Id typeId) const
 {
   return dataTypes[typeId];
 }
 
-const rdcspv::DataType &Debugger::GetTypeForId(Id ssaId)
+const rdcspv::DataType &Debugger::GetTypeForId(Id ssaId) const
 {
   return dataTypes[idTypes[ssaId]];
 }
 
-const Decorations &Debugger::GetDecorations(Id typeId)
+const Decorations &Debugger::GetDecorations(Id typeId) const
 {
   return decorations[typeId];
 }
@@ -1772,7 +1772,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   return ret;
 }
 
-void Debugger::FillCallstack(ThreadState &thread, ShaderDebugState &state)
+void Debugger::FillCallstack(ThreadState &thread, ShaderDebugState &state) const
 {
   rdcarray<Id> funcs;
   thread.FillCallstack(funcs);
@@ -1793,7 +1793,7 @@ void Debugger::FillCallstack(ThreadState &thread, ShaderDebugState &state)
   }
 }
 
-void Debugger::FillDebugSourceVars(rdcarray<InstructionSourceInfo> &instInfo)
+void Debugger::FillDebugSourceVars(rdcarray<InstructionSourceInfo> &instInfo) const
 {
   for(InstructionSourceInfo &i : instInfo)
   {
@@ -2459,7 +2459,7 @@ void Debugger::FillDebugSourceVars(rdcarray<InstructionSourceInfo> &instInfo)
   }
 }
 
-void Debugger::FillDefaultSourceVars(rdcarray<InstructionSourceInfo> &instInfo)
+void Debugger::FillDefaultSourceVars(rdcarray<InstructionSourceInfo> &instInfo) const
 {
   rdcarray<SourceVariableMapping> sourceVars;
   rdcarray<Id> debugVars;
@@ -2475,7 +2475,7 @@ void Debugger::FillDefaultSourceVars(rdcarray<InstructionSourceInfo> &instInfo)
 
     size_t offs = instructionOffsets[i.instruction];
 
-    Iter it(m_SPIRV, offs);
+    ConstIter it(m_SPIRV, offs);
 
     OpDecoder opdata(it);
 
@@ -2884,7 +2884,7 @@ ShaderVariable Debugger::MakePointerVariable(Id id, const ShaderVariable *v, uin
 }
 
 ShaderVariable Debugger::MakeCompositePointer(const ShaderVariable &base, Id id,
-                                              rdcarray<uint32_t> &indices)
+                                              rdcarray<uint32_t> &indices) const
 {
   const ShaderVariable *leaf = &base;
 
@@ -3621,12 +3621,15 @@ void Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &va
   }
 }
 
-rdcstr Debugger::GetHumanName(Id id)
+rdcstr Debugger::GetHumanName(Id id) const
 {
-  // see if we have a dynamic name assigned (to disambiguate), if so use that
-  auto it = dynamicNames.find(id);
-  if(it != dynamicNames.end())
-    return it->second;
+  {
+    SCOPED_READLOCK(dynamicNamesLock);
+    // see if we have a dynamic name assigned (to disambiguate), if so use that
+    auto it = dynamicNames.find(id);
+    if(it != dynamicNames.end())
+      return it->second;
+  }
 
   // otherwise try the string first
   rdcstr name = strings[id];
@@ -3638,20 +3641,26 @@ rdcstr Debugger::GetHumanName(Id id)
   rdcstr basename = name;
 
   // otherwise check to see if it's been used before. If so give it a new name
-  int alias = 2;
-  while(usedNames.find(name) != usedNames.end())
   {
-    name = basename + "@" + ToStr(alias);
-    alias++;
+    SCOPED_READLOCK(dynamicNamesLock);
+    int alias = 2;
+    while(usedNames.find(name) != usedNames.end())
+    {
+      name = basename + "@" + ToStr(alias);
+      alias++;
+    }
   }
 
-  usedNames.insert(name);
-  dynamicNames[id] = name;
+  {
+    SCOPED_WRITELOCK(dynamicNamesLock);
+    usedNames.insert(name);
+    dynamicNames[id] = name;
+  }
 
   return name;
 }
 
-void Debugger::AllocateVariable(Id id, Id typeId, ShaderVariable &outVar)
+void Debugger::AllocateVariable(Id id, Id typeId, ShaderVariable &outVar) const
 {
   // allocs should always be pointers
   RDCASSERT(dataTypes[typeId].type == DataType::PointerType);
@@ -4514,7 +4523,7 @@ void Debugger::RegisterOp(Iter it)
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-DebugAPIWrapper *Debugger::GetAPIWrapper()
+DebugAPIWrapper *Debugger::GetAPIWrapper() const
 {
   CHECK_DEBUGGER_THREAD();
   return apiWrapper;

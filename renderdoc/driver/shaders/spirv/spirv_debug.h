@@ -422,18 +422,18 @@ public:
 
   rdcarray<ShaderDebugState> ContinueDebug();
 
-  Iter GetIterForInstruction(uint32_t inst);
-  uint32_t GetInstructionForIter(Iter it);
-  uint32_t GetInstructionForFunction(Id id);
-  uint32_t GetInstructionForLabel(Id id);
-  const DataType &GetType(Id typeId);
-  const DataType &GetTypeForId(Id ssaId);
-  const Decorations &GetDecorations(Id typeId);
+  ConstIter GetIterForInstruction(uint32_t inst) const;
+  uint32_t GetInstructionForIter(ConstIter it) const;
+  uint32_t GetInstructionForFunction(Id id) const;
+  uint32_t GetInstructionForLabel(Id id) const;
+  const DataType &GetType(Id typeId) const;
+  const DataType &GetTypeForId(Id ssaId) const;
+  const Decorations &GetDecorations(Id typeId) const;
   bool IsDebugExtInstSet(Id id) const;
   bool HasDebugInfo() const { return m_DebugInfo.valid; }
   bool InDebugScope(uint32_t inst) const;
-  rdcstr GetHumanName(Id id);
-  void AllocateVariable(Id id, Id typeId, ShaderVariable &outVar);
+  rdcstr GetHumanName(Id id) const;
+  void AllocateVariable(Id id, Id typeId, ShaderVariable &outVar) const;
 
   ShaderVariable ReadFromPointer(const ShaderVariable &v) const;
   ShaderVariable GetPointerValue(const ShaderVariable &v) const;
@@ -449,12 +449,13 @@ public:
 
   bool ArePointersAndEqual(const ShaderVariable &a, const ShaderVariable &b) const;
   void WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &val);
-  ShaderVariable MakeCompositePointer(const ShaderVariable &base, Id id, rdcarray<uint32_t> &indices);
+  ShaderVariable MakeCompositePointer(const ShaderVariable &base, Id id,
+                                      rdcarray<uint32_t> &indices) const;
 
-  DebugAPIWrapper *GetAPIWrapper();
-  uint32_t GetNumInstructions() { return (uint32_t)instructionOffsets.size(); }
-  GlobalState GetGlobal() { return global; }
-  const rdcarray<Id> &GetLiveGlobals() { return liveGlobals; }
+  DebugAPIWrapper *GetAPIWrapper() const;
+  uint32_t GetNumInstructions() const { return (uint32_t)instructionOffsets.size(); }
+  GlobalState GetGlobal() const { return global; }
+  const rdcarray<Id> &GetLiveGlobals() const { return liveGlobals; }
   ThreadState &GetActiveLane() { return workgroup[activeLaneIndex]; }
   const ThreadState &GetActiveLane() const { return workgroup[activeLaneIndex]; }
   uint32_t GetSubgroupSize() const { return subgroupSize; }
@@ -479,9 +480,9 @@ private:
 
   void MakeSignatureNames(const rdcarray<SPIRVInterfaceAccess> &sigList, rdcarray<rdcstr> &sigNames);
 
-  void FillCallstack(ThreadState &thread, ShaderDebugState &state);
-  void FillDebugSourceVars(rdcarray<InstructionSourceInfo> &instInfo);
-  void FillDefaultSourceVars(rdcarray<InstructionSourceInfo> &instInfo);
+  void FillCallstack(ThreadState &thread, ShaderDebugState &state) const;
+  void FillDebugSourceVars(rdcarray<InstructionSourceInfo> &instInfo) const;
+  void FillDefaultSourceVars(rdcarray<InstructionSourceInfo> &instInfo) const;
 
   /////////////////////////////////////////////////////////
   // debug data
@@ -539,8 +540,9 @@ private:
 
   rdcarray<size_t> instructionOffsets;
 
-  std::set<rdcstr> usedNames;
-  std::map<Id, rdcstr> dynamicNames;
+  mutable std::set<rdcstr> usedNames;
+  mutable Threading::RWLock dynamicNamesLock;
+  mutable std::map<Id, rdcstr> dynamicNames;
 
   struct
   {

@@ -193,7 +193,7 @@ void ThreadState::FillCallstack(rdcarray<Id> &funcs)
 
 void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
 {
-  Iter it = debugger.GetIterForInstruction(nextInstruction);
+  ConstIter it = debugger.GetIterForInstruction(nextInstruction);
 
   RDCASSERT(OpDecoder(it).op == Op::Function);
 
@@ -255,7 +255,7 @@ void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
   it++;
 
   size_t numVars = 0;
-  Iter varCounter = it;
+  ConstIter varCounter = it;
   while(OpDecoder(varCounter).op == Op::Variable || OpDecoder(varCounter).op == Op::Line ||
         OpDecoder(varCounter).op == Op::NoLine)
   {
@@ -664,7 +664,7 @@ void ThreadState::JumpToLabel(Id target)
   nextInstruction = labelInstruction + 1;
 
   // if jumping to an empty unconditional loop header, continue to the loop block
-  Iter it = debugger.GetIterForInstruction(nextInstruction);
+  ConstIter it = debugger.GetIterForInstruction(nextInstruction);
   if(it.opcode() == Op::LoopMerge)
   {
     OpLoopMerge merge(it);
@@ -717,7 +717,7 @@ void ThreadState::SkipIgnoredInstructions()
   // in pixel shaders, but otherwise skip them.
   while(true)
   {
-    Iter it = debugger.GetIterForInstruction(nextInstruction);
+    ConstIter it = debugger.GetIterForInstruction(nextInstruction);
     rdcspv::Op op = it.opcode();
     if(op == Op::Line || op == Op::NoLine || op == Op::Undef)
     {
@@ -795,7 +795,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 {
   m_State = state;
 
-  Iter it = debugger.GetIterForInstruction(nextInstruction);
+  ConstIter it = debugger.GetIterForInstruction(nextInstruction);
   nextInstruction++;
   diverged = false;
   enteredPoints.clear();
