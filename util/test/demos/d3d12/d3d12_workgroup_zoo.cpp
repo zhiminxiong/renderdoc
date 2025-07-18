@@ -35,9 +35,12 @@ RD_TEST(D3D12_Workgroup_Zoo, D3D12GraphicsTest)
 cbuffer rootconsts : register(b0)
 {
   uint root_test;
+  uint root_two;
 }
 
-#define IsTest(x) (root_test == x)
+uint GetTest() { return root_test; }
+
+#define IsTest(x) (GetTest() == x)
 
 )EOSHADER";
 
@@ -46,17 +49,26 @@ cbuffer rootconsts : register(b0)
 RWStructuredBuffer<float4> outbuf : register(u0);
 
 static uint3 tid;
+static uint flatId;
 
 groupshared uint4 gsmUint4[1024];
 
-void SetOutput(float4 data)
+void SetOutput(float4 val)
 {
-  outbuf[root_test * 1024 + tid.y * GROUP_SIZE_X + tid.x] = data;
+  outbuf[root_test * 1024 + tid.y * GROUP_SIZE_X + tid.x] = val;
+}
+
+void Init(float4 val)
+{
+  flatId = WaveGetLaneIndex();
+  gsmUint4[flatId].xyz = tid;
+  gsmUint4[flatId].z = tid.x;
+  SetOutput(val);
 }
 
 )EOSHADER";
 
-  const std::string comp = compCommon + R"EOSHADER(
+  const std::string testShader = compCommon + R"EOSHADER(
 
 float4 funcD(uint id)
 {
@@ -130,19 +142,18 @@ float4 ComplexPartialReconvergence(uint id)
 void main(uint3 inTid : SV_DispatchThreadID)
 {
   tid = inTid;
-  float4 data = 0.0f.xxxx;
-  uint id = WaveGetLaneIndex();
-  gsmUint4[id] = id.xxxx;
-  SetOutput(data);
+  float4 testResult = 0.0f.xxxx;
+  Init(testResult);
+  uint id = flatId;
 
   if(IsTest(0))
   {
-    data.x = id;
+    testResult.x = id;
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(1))
   {
-    data.x = WaveActiveSum(id);
+    testResult.x = WaveActiveSum(id);
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(2))
@@ -151,35 +162,35 @@ void main(uint3 inTid : SV_DispatchThreadID)
     if (id < 10)
     {
         // active threads 0-9
-        data.x = WaveActiveSum(id);
+        testResult.x = WaveActiveSum(id);
 
         if ((id % 2) == 0)
-          data.y = WaveActiveSum(id);
+          testResult.y = WaveActiveSum(id);
         else
-          data.y = WaveActiveSum(id);
+          testResult.y = WaveActiveSum(id);
 
-        data.x += WaveActiveSum(id);
+        testResult.x += WaveActiveSum(id);
     }
     else
     {
         // active threads 10...
-        data.x = WaveActiveSum(id);
+        testResult.x = WaveActiveSum(id);
     }
-    data.y = WaveActiveSum(id);
+    testResult.y = WaveActiveSum(id);
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(3))
   {
     // Converged threads calling a function 
-    data = funcTest(id);
-    data.y = WaveActiveSum(id);
+    testResult = funcTest(id);
+    testResult.y = WaveActiveSum(id);
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(4))
   {
     // Converged threads calling a function which has a nested function call in it
-    data = nestedFunc(id);
-    data.y = WaveActiveSum(id);
+    testResult = nestedFunc(id);
+    testResult.y = WaveActiveSum(id);
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(5))
@@ -187,13 +198,13 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Diverged threads calling the same function
     if (id < 10)
     {
-      data = funcD(id);
+      testResult = funcD(id);
     }
     else
     {
-      data = funcD(id);
+      testResult = funcD(id);
     }
-    data.y = WaveActiveSum(id);
+    testResult.y = WaveActiveSum(id);
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(6))
@@ -201,13 +212,13 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Diverged threads calling the same function which has a nested function call in it
     if (id < 10)
     {
-      data = funcA(id);
+      testResult = funcA(id);
     }
     else
     {
-      data = funcB(id);
+      testResult = funcB(id);
     }
-    data.y = WaveActiveSum(id);
+    testResult.y = WaveActiveSum(id);
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(7))
@@ -215,37 +226,99 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Diverged threads which early exit
     if (id < 10)
     {
-      data.x = WaveActiveSum(id+10);
-      SetOutput(data);
+      testResult.x = WaveActiveSum(id+10);
+      SetOutput(testResult);
       return;
     }
-    data.x = WaveActiveSum(id);
+    testResult.x = WaveActiveSum(id);
   }
   else if(IsTest(8))
   {
      // Loops with different number of iterations per thread
     for (uint i = 0; i < id; i++)
     {
-      data.x += WaveActiveSum(id);
+      testResult.x += WaveActiveSum(id);
     }
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(9))
   {
     // Query functions : unit tests
-    data.x = float(WaveGetLaneCount());
-    data.y = float(WaveGetLaneIndex());
-    data.z = float(WaveIsFirstLane());
+    testResult.x = float(WaveGetLaneCount());
+    testResult.y = float(WaveGetLaneIndex());
+    testResult.z = float(WaveIsFirstLane());
     AllMemoryBarrierWithGroupSync();
   }
   else if(IsTest(10))
   {
-    data = ComplexPartialReconvergence(id);
+    testResult = ComplexPartialReconvergence(id);
 
     AllMemoryBarrierWithGroupSync();
   }
 
-  SetOutput(data);
+  SetOutput(testResult);
+}
+
+)EOSHADER";
+
+  const std::string perfShader = compCommon + R"EOSHADER(
+
+[numthreads(GROUP_SIZE_X, GROUP_SIZE_Y, GROUP_SIZE_Z)]
+void main(uint3 inTid : SV_DispatchThreadID)
+{
+  tid = inTid;
+  float4 testResult = 0.0f.xxxx;
+  Init(testResult);
+  uint id = flatId;
+
+  // TEST CASES:
+  // 0: GPU math : loops 100
+  // 1: CPU math : loops 100
+  // 2: GPU math : loops 200
+  // 3: CPU math : loops 200
+  // 4: GPU math : loops 400
+  // 5: CPU math : loops 400
+  // 6: GPU math : loops 5000
+  // 7: CPU math : loops 5000
+  bool useCpu = GetTest() & 0x1;
+
+  uint count = 0;
+  {
+    uint temp = GetTest() >> 1;
+    if(temp == 0)
+      count = 100U; 
+    if(temp == 1)
+      count = 200U; 
+    if(temp == 2)
+      count = 400U; 
+    if(temp == 3)
+      count = 5000U; 
+  }
+
+  if(useCpu)
+  {
+    for (uint i = 0; i < count; ++i)
+    {
+       gsmUint4[id].x += i;
+       gsmUint4[id].y += i * i;
+       testResult.x = testResult.x * testResult.x;
+       testResult.x += dot(gsmUint4[id], gsmUint4[id]);
+    }
+  }
+  else
+  {
+    for (uint i = 0; i < count; ++i)
+    {
+       gsmUint4[id].x += i;
+       gsmUint4[id].y += i * i;
+       testResult.x = pow(testResult.x, float(root_two));
+       testResult.x += dot(gsmUint4[id], gsmUint4[id]);
+    }
+  }
+
+  AllMemoryBarrierWithGroupSync();
+
+  SetOutput(testResult);
 }
 
 )EOSHADER";
@@ -268,51 +341,49 @@ void main(uint3 inTid : SV_DispatchThreadID)
     if(!Init())
       return 3;
 
-    ID3D12RootSignaturePtr sig = MakeSig({constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0, 1),
+    ID3D12RootSignaturePtr sig = MakeSig({constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0, 2),
                                           uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0)});
 
-    const uint32_t imgDim = 128;
-
-    ID3D12ResourcePtr fltTex = MakeTexture(DXGI_FORMAT_R32G32B32A32_FLOAT, imgDim, imgDim)
-                                   .RTV()
-                                   .InitialState(D3D12_RESOURCE_STATE_RENDER_TARGET);
-    fltTex->SetName(L"fltTex");
-    D3D12_CPU_DESCRIPTOR_HANDLE fltRTV = MakeRTV(fltTex).CreateCPU(0);
-    D3D12_GPU_DESCRIPTOR_HANDLE fltSRV = MakeSRV(fltTex).CreateGPU(8);
-
     int32_t numCompTests = 0;
-
     size_t pos = 0;
     while(pos != std::string::npos)
     {
-      pos = comp.find("IsTest(", pos);
+      pos = testShader.find("IsTest(", pos);
       if(pos == std::string::npos)
         break;
       pos += sizeof("IsTest(") - 1;
-      numCompTests = std::max(numCompTests, atoi(comp.c_str() + pos) + 1);
+      numCompTests = std::max(numCompTests, atoi(testShader.c_str() + pos) + 1);
     }
 
-    struct
+    const int32_t countPerfTests = 8;
+
+    struct CompSize
     {
-      int x, y;
-    } compsize[] = {
-        {70, 1},
+      int x, y, z;
     };
-    std::string comppipe_name[ARRAY_COUNT(compsize)];
-    ID3D12PipelineStatePtr comppipe[ARRAY_COUNT(compsize)];
+    CompSize compsizes[] = {
+        {70, 1, 1},
+    };
+    std::string comppipe_name[ARRAY_COUNT(compsizes)];
+    ID3D12PipelineStatePtr testPipes[ARRAY_COUNT(compsizes)];
+    ID3D12PipelineStatePtr perfPipes[ARRAY_COUNT(compsizes)];
 
     std::string defines;
 
-    for(int i = 0; i < ARRAY_COUNT(comppipe); i++)
+    for(int i = 0; i < ARRAY_COUNT(compsizes); i++)
     {
       std::string sizedefine;
-      sizedefine = fmt::format("#define GROUP_SIZE_X {}\n#define GROUP_SIZE_Y {}\n", compsize[i].x,
-                               compsize[i].y);
-      comppipe_name[i] = fmt::format("{}x{}", compsize[i].x, compsize[i].y);
+      sizedefine =
+          fmt::format("#define GROUP_SIZE_X {}\n#define GROUP_SIZE_Y {}\n#define GROUP_SIZE_Z {}",
+                      compsizes[i].x, compsizes[i].y, compsizes[i].z);
+      comppipe_name[i] = fmt::format("{}x{}x{}", compsizes[i].x, compsizes[i].y, compsizes[i].z);
 
-      comppipe[i] =
-          MakePSO().RootSig(sig).CS(Compile(defines + sizedefine + comp, "main", "cs_6_0"));
-      comppipe[i]->SetName(UTF82Wide(comppipe_name[i]).c_str());
+      testPipes[i] =
+          MakePSO().RootSig(sig).CS(Compile(defines + sizedefine + testShader, "main", "cs_6_0"));
+      testPipes[i]->SetName(UTF82Wide(comppipe_name[i]).c_str());
+      perfPipes[i] =
+          MakePSO().RootSig(sig).CS(Compile(defines + sizedefine + perfShader, "main", "cs_6_0"));
+      perfPipes[i]->SetName(UTF82Wide(comppipe_name[i]).c_str());
     }
 
     ID3D12ResourcePtr bufOut = MakeBuffer().Size(sizeof(Vec4f) * 1024 * numCompTests).UAV();
@@ -337,7 +408,7 @@ void main(uint3 inTid : SV_DispatchThreadID)
 
       pushMarker(cmd, "Compute Tests");
 
-      for(size_t p = 0; p < ARRAY_COUNT(comppipe); p++)
+      for(size_t p = 0; p < ARRAY_COUNT(testPipes); p++)
       {
         ResourceBarrier(cmd);
 
@@ -347,7 +418,7 @@ void main(uint3 inTid : SV_DispatchThreadID)
         ResourceBarrier(cmd);
         pushMarker(cmd, comppipe_name[p]);
 
-        cmd->SetPipelineState(comppipe[p]);
+        cmd->SetPipelineState(testPipes[p]);
         cmd->SetComputeRootSignature(sig);
         cmd->SetComputeRootUnorderedAccessView(1, bufOut->GetGPUVirtualAddress());
 
@@ -355,6 +426,52 @@ void main(uint3 inTid : SV_DispatchThreadID)
         {
           cmd->SetComputeRoot32BitConstant(0, i, 0);
           cmd->Dispatch(2, 1, 1);
+        }
+
+        popMarker(cmd);
+      }
+
+      popMarker(cmd);
+
+      pushMarker(cmd, "Perf Tests");
+
+      for(size_t p = 0; p < ARRAY_COUNT(testPipes); p++)
+      {
+        ResourceBarrier(cmd);
+
+        UINT zero[4] = {};
+        cmd->ClearUnorderedAccessViewUint(uavgpu, uavcpu, bufOut, zero, 0, NULL);
+
+        ResourceBarrier(cmd);
+        pushMarker(cmd, comppipe_name[p]);
+
+        cmd->SetPipelineState(perfPipes[p]);
+        cmd->SetComputeRootSignature(sig);
+        cmd->SetComputeRootUnorderedAccessView(1, bufOut->GetGPUVirtualAddress());
+
+        for(int i = 0; i < countPerfTests; ++i)
+        {
+          bool useCpu = (i & 0x1);
+          int count = 0;
+          {
+            int temp = i >> 1;
+            if(temp == 0)
+              count = 100U;
+            if(temp == 1)
+              count = 200U;
+            if(temp == 2)
+              count = 400U;
+            if(temp == 3)
+              count = 5000U;
+          }
+          std::string perfTestName =
+              fmt::format("{} Iterations {} Math", count, useCpu ? "CPU" : "GPU");
+          pushMarker(cmd, perfTestName);
+          int two = 2;
+          cmd->SetComputeRoot32BitConstant(0, i, 0);
+          cmd->SetComputeRoot32BitConstant(0, two, 1);
+          cmd->Dispatch(2, 1, 1);
+          popMarker(cmd);
         }
 
         popMarker(cmd);

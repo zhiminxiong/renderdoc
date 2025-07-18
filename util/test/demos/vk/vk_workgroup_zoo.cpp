@@ -61,13 +61,19 @@ RD_TEST(VK_Workgroup_Zoo, VulkanGraphicsTest)
 layout(push_constant) uniform PushData
 {
   uint test;
+  uint two;
 } push;
 
-#define IsTest(x) (push.test == x)
+uint GetTest() { return push.test; }
+
+#define IsTest(x) (GetTest() == x)
 
 )EOSHADER";
 
-  const std::string comp = common + R"EOSHADER(
+  const std::string compCommon = common + R"EOSHADER(
+
+uvec3 tid;
+uint flatId;
 
 shared uvec4 gsmUint4[1024];
 
@@ -80,7 +86,25 @@ layout(binding = 0, std430) buffer outbuftype {
   Output data[COMP_TESTS];
 } outbuf;
 
-layout(local_size_x = GROUP_SIZE_X, local_size_y = GROUP_SIZE_Y, local_size_z = 1) in;
+layout(local_size_x = GROUP_SIZE_X, local_size_y = GROUP_SIZE_Y, local_size_z = GROUP_SIZE_Z) in;
+
+void SetOutput(vec4 val)
+{
+  outbuf.data[push.test].vals[gl_LocalInvocationID.y * GROUP_SIZE_X + gl_LocalInvocationID.x] = val;
+}
+
+void Init(vec4 val)
+{
+  tid = gl_GlobalInvocationID;
+  flatId = gl_SubgroupInvocationID;
+  gsmUint4[flatId].xyz = tid;
+  gsmUint4[flatId].z = tid.x;
+  SetOutput(val);
+}
+
+)EOSHADER";
+
+  const std::string testShader = compCommon + R"EOSHADER(
 
 vec4 funcD(uint id)
 {
@@ -122,26 +146,20 @@ vec4 funcTest(uint id)
   }
 }
 
-void SetOutput(vec4 data)
-{
-  outbuf.data[push.test].vals[gl_LocalInvocationID.y * GROUP_SIZE_X + gl_LocalInvocationID.x] = data;
-}
-
 void main()
 {
-  vec4 data = vec4(0);
-  uint id = gl_SubgroupInvocationID;
-  gsmUint4[id] = id.xxxx;
-  SetOutput(data);
+  vec4 testResult = vec4(0);
+  Init(testResult);
+  uint id = flatId;
 
   if(IsTest(0))
   {
-    data.x = id;
+    testResult.x = id;
     barrier();
   }
   else if(IsTest(1))
   {
-    data.x = subgroupAdd(id);
+    testResult.x = subgroupAdd(id);
     barrier();
   }
   else if(IsTest(2))
@@ -150,35 +168,35 @@ void main()
     if (id < 10)
     {
         // active threads 0-9
-        data.x = subgroupAdd(id);
+        testResult.x = subgroupAdd(id);
 
         if ((id % 2) == 0)
-          data.y = subgroupAdd(id);
+          testResult.y = subgroupAdd(id);
         else
-          data.y = subgroupAdd(id);
+          testResult.y = subgroupAdd(id);
 
-        data.x += subgroupAdd(id);
+        testResult.x += subgroupAdd(id);
     }
     else
     {
         // active threads 10...
-        data.x = subgroupAdd(id);
+        testResult.x = subgroupAdd(id);
     }
-    data.y = subgroupAdd(id);
+    testResult.y = subgroupAdd(id);
     barrier();
   }
   else if(IsTest(3))
   {
     // Converged threads calling a function 
-    data = funcTest(id);
-    data.y = subgroupAdd(id);
+    testResult = funcTest(id);
+    testResult.y = subgroupAdd(id);
     barrier();
   }
   else if(IsTest(4))
   {
     // Converged threads calling a function which has a nested function call in it
-    data = nestedFunc(id);
-    data.y = subgroupAdd(id);
+    testResult = nestedFunc(id);
+    testResult.y = subgroupAdd(id);
     barrier();
   }
   else if(IsTest(5))
@@ -186,13 +204,13 @@ void main()
     // Diverged threads calling the same function
     if (id < 10)
     {
-      data = funcD(id);
+      testResult = funcD(id);
     }
     else
     {
-      data = funcD(id);
+      testResult = funcD(id);
     }
-    data.y = subgroupAdd(id);
+    testResult.y = subgroupAdd(id);
     barrier();
   }
   else if(IsTest(6))
@@ -200,13 +218,13 @@ void main()
     // Diverged threads calling the same function which has a nested function call in it
     if (id < 10)
     {
-      data = funcA(id);
+      testResult = funcA(id);
     }
     else
     {
-      data = funcB(id);
+      testResult = funcB(id);
     }
-    data.y = subgroupAdd(id);
+    testResult.y = subgroupAdd(id);
     barrier();
   }
   else if(IsTest(7))
@@ -214,32 +232,92 @@ void main()
     // Diverged threads which early exit
     if (id < 10)
     {
-      data.x = subgroupAdd(id+10);
-      SetOutput(data);
+      testResult.x = subgroupAdd(id+10);
+      SetOutput(testResult);
       return;
     }
-    data.x = subgroupAdd(id);
+    testResult.x = subgroupAdd(id);
   }
   else if(IsTest(8))
   {
      // Loops with different number of iterations per thread
     for (uint i = 0; i < id; i++)
     {
-      data.x += subgroupAdd(id);
+      testResult.x += subgroupAdd(id);
     }
     barrier();
   }
   else if(IsTest(9))
   {
     // Query functions : unit tests
-    data.x = float(gl_SubgroupSize);
-    data.y = float(gl_SubgroupInvocationID);
-    data.z = float(subgroupElect());
+    testResult.x = float(gl_SubgroupSize);
+    testResult.y = float(gl_SubgroupInvocationID);
+    testResult.z = float(subgroupElect());
 
     barrier();
   }
 
-  SetOutput(data);
+  SetOutput(testResult);
+}
+
+)EOSHADER";
+
+  const std::string perfShader = compCommon + R"EOSHADER(
+
+void main()
+{
+  vec4 testResult = vec4(0);
+  Init(testResult);
+  uint id = flatId;
+
+  // TEST CASES:
+  // 0: GPU math : loops 100
+  // 1: CPU math : loops 100
+  // 2: GPU math : loops 200
+  // 3: CPU math : loops 200
+  // 4: GPU math : loops 400
+  // 5: CPU math : loops 400
+  // 6: GPU math : loops 5000
+  // 7: CPU math : loops 5000
+  bool useCpu = ((GetTest() & 1) == 1) ? true : false;
+
+  uint count = 0;
+  {
+    uint temp = GetTest() >> 1;
+    if(temp == 0)
+      count = 100U; 
+    if(temp == 1)
+      count = 200U; 
+    if(temp == 2)
+      count = 400U; 
+    if(temp == 3)
+      count = 5000U; 
+  }
+
+  if(useCpu)
+  {
+    for (uint i = 0; i < count; ++i)
+    {
+       gsmUint4[id].x += i;
+       gsmUint4[id].y += i * i;
+       testResult.x = testResult.x * testResult.x;
+       testResult.x += dot(gsmUint4[id], gsmUint4[id]);
+    }
+  }
+  else
+  {
+    for (uint i = 0; i < count; ++i)
+    {
+       gsmUint4[id].x += i;
+       gsmUint4[id].y += i * i;
+       testResult.x = pow(testResult.x, float(push.two));
+       testResult.x += dot(gsmUint4[id], gsmUint4[id]);
+    }
+  }
+
+  barrier();
+
+  SetOutput(testResult);
 }
 
 )EOSHADER";
@@ -290,7 +368,7 @@ void main()
     }));
 
     VkPipelineLayout layout = createPipelineLayout(vkh::PipelineLayoutCreateInfo(
-        {setlayout}, {vkh::PushConstantRange(VK_SHADER_STAGE_ALL, 0, 4)}));
+        {setlayout}, {vkh::PushConstantRange(VK_SHADER_STAGE_ALL, 0, 8)}));
 
     std::map<std::string, std::string> macros;
 
@@ -299,12 +377,14 @@ void main()
     size_t pos = 0;
     while(pos != std::string::npos)
     {
-      pos = comp.find("IsTest(", pos);
+      pos = testShader.find("IsTest(", pos);
       if(pos == std::string::npos)
         break;
       pos += sizeof("IsTest(") - 1;
-      numCompTests = std::max(numCompTests, atoi(comp.c_str() + pos) + 1);
+      numCompTests = std::max(numCompTests, atoi(testShader.c_str() + pos) + 1);
     }
+
+    const int32_t countPerfTests = 8;
 
     if(ops & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
       macros["FEAT_SHUFFLE"] = "1";
@@ -332,18 +412,27 @@ void main()
       macros["FEAT_ROTATE_CLUSTERED"] = "0";
 
     std::string comppipe_name[1];
-    VkPipeline comppipe[1];
+    VkPipeline compPipes[1];
     uint32_t countPipes = 0;
+    VkPipeline perfPipes[1];
+    uint32_t countPerfPipes = 0;
 
     macros["COMP_TESTS"] = fmt::format("{}", numCompTests);
 
     macros["GROUP_SIZE_X"] = "70";
     macros["GROUP_SIZE_Y"] = "1";
-    comppipe_name[countPipes] = "70x1";
-    comppipe[countPipes] = createComputePipeline(vkh::ComputePipelineCreateInfo(
-        layout, CompileShaderModule(comp, ShaderLang::glsl, ShaderStage::comp, "main", macros,
+    macros["GROUP_SIZE_Z"] = "1";
+    comppipe_name[countPipes] = "70x1x1";
+
+    compPipes[countPipes] = createComputePipeline(vkh::ComputePipelineCreateInfo(
+        layout, CompileShaderModule(testShader, ShaderLang::glsl, ShaderStage::comp, "main", macros,
                                     SPIRVTarget::vulkan11)));
     ++countPipes;
+
+    perfPipes[0] = createComputePipeline(vkh::ComputePipelineCreateInfo(
+        layout, CompileShaderModule(perfShader, ShaderLang::glsl, ShaderStage::comp, "main", macros,
+                                    SPIRVTarget::vulkan11)));
+    ++countPerfPipes;
 
     AllocatedBuffer bufout(
         this,
@@ -388,13 +477,62 @@ void main()
 
         pushMarker(cmd, comppipe_name[p]);
 
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, comppipe[p]);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, compPipes[p]);
         vkh::cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, {set}, {});
 
         for(int i = 0; i < numCompTests; i++)
         {
           vkh::cmdPushConstants(cmd, layout, i);
           vkCmdDispatch(cmd, 2, 1, 1);
+        }
+
+        popMarker(cmd);
+      }
+
+      popMarker(cmd);
+
+      pushMarker(cmd, "Perf Tests");
+
+      for(size_t p = 0; p < countPerfPipes; p++)
+      {
+        vkh::cmdPipelineBarrier(
+            cmd, {},
+            {vkh::BufferMemoryBarrier(VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                      bufout.buffer, 0, sizeof(Vec4f) * 1024 * numCompTests)});
+
+        vkCmdFillBuffer(cmd, bufout.buffer, 0, sizeof(Vec4f) * 1024 * numCompTests, 0);
+
+        vkh::cmdPipelineBarrier(
+            cmd, {},
+            {vkh::BufferMemoryBarrier(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                                      bufout.buffer, 0, sizeof(Vec4f) * 1024 * numCompTests)});
+
+        pushMarker(cmd, comppipe_name[p]);
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, perfPipes[p]);
+        vkh::cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, {set}, {});
+
+        for(int i = 0; i < countPerfTests; i++)
+        {
+          bool useCpu = (i & 0x1);
+          int count = 0;
+          {
+            int temp = i >> 1;
+            if(temp == 0)
+              count = 100U;
+            if(temp == 1)
+              count = 200U;
+            if(temp == 2)
+              count = 400U;
+            if(temp == 3)
+              count = 5000U;
+          }
+          std::string perfTestName =
+              fmt::format("{} Iterations {} Math", count, useCpu ? "CPU" : "GPU");
+          pushMarker(cmd, perfTestName);
+          vkh::cmdPushConstants(cmd, layout, i);
+          vkCmdDispatch(cmd, 2, 1, 1);
+          popMarker(cmd);
         }
 
         popMarker(cmd);

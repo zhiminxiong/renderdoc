@@ -151,39 +151,39 @@ layout(binding = 0, std430) buffer outbuftype {
 
 layout(local_size_x = GROUP_SIZE_X, local_size_y = GROUP_SIZE_Y, local_size_z = 1) in;
 
-void SetOutput(vec4 data)
+void SetOutput(vec4 val)
 {
-  outbuf.data[push.test].vals[gl_LocalInvocationID.y * GROUP_SIZE_X + gl_LocalInvocationID.x] = data;
+  outbuf.data[push.test].vals[gl_LocalInvocationID.y * GROUP_SIZE_X + gl_LocalInvocationID.x] = val;
 }
 void main()
 {
-  vec4 data = vec4(0);
+  vec4 testResult = vec4(0);
   uint id = gl_SubgroupInvocationID;
-  SetOutput(data);
+  SetOutput(testResult);
 
   if(IsTest(0))
   {
     // Query functions : unit tests
-    data.x = float(gl_SubgroupSize);
-    data.y = float(gl_SubgroupInvocationID);
-    data.z = float(subgroupElect());
+    testResult.x = float(gl_SubgroupSize);
+    testResult.y = float(gl_SubgroupInvocationID);
+    testResult.z = float(subgroupElect());
   }
   else if(IsTest(1))
   {
     // Vote functions : unit tests
-    data.x = float(subgroupAny(id*2 > id+10));
-    data.y = float(subgroupAll(id < gl_SubgroupSize));
+    testResult.x = float(subgroupAny(id*2 > id+10));
+    testResult.y = float(subgroupAll(id < gl_SubgroupSize));
     if (id > 10)
     {
-      data.z = float(subgroupAll(id > 10));
+      testResult.z = float(subgroupAll(id > 10));
       uvec4 ballot = subgroupBallot(id > 20);
-      data.w = bitCount(ballot.x) + bitCount(ballot.y) + bitCount(ballot.z) + bitCount(ballot.w);
+      testResult.w = bitCount(ballot.x) + bitCount(ballot.y) + bitCount(ballot.z) + bitCount(ballot.w);
     }
     else
     {
-      data.z = float(subgroupAll(id > 3));
+      testResult.z = float(subgroupAll(id > 3));
       uvec4 ballot = subgroupBallot(id > 4);
-      data.w = bitCount(ballot.x) + bitCount(ballot.y) + bitCount(ballot.z) + bitCount(ballot.w);
+      testResult.w = bitCount(ballot.x) + bitCount(ballot.y) + bitCount(ballot.z) + bitCount(ballot.w);
     }
   }
   else if(IsTest(2))
@@ -191,10 +191,10 @@ void main()
     // Broadcast functions : unit tests
     if (id >= 2 && id <= 20)
     {
-      data.x = subgroupBroadcastFirst(id);
-      data.y = subgroupBroadcast(id, 5);
-      data.z = subgroupShuffle(id, id);
-      data.w = subgroupShuffle(data.x, 2+id%3);
+      testResult.x = subgroupBroadcastFirst(id);
+      testResult.y = subgroupBroadcast(id, 5);
+      testResult.z = subgroupShuffle(id, id);
+      testResult.w = subgroupShuffle(testResult.x, 2+id%3);
     }
   }
   else if(IsTest(3))
@@ -203,20 +203,20 @@ void main()
     if (id >= 2 && id <= 20)
     {
       uvec4 bits = subgroupBallot(id > 4);
-      data.x = subgroupBallotExclusiveBitCount(bits);
+      testResult.x = subgroupBallotExclusiveBitCount(bits);
       bits = subgroupBallot(id > 10);
-      data.y = subgroupBallotExclusiveBitCount(bits);
-      data.z = subgroupExclusiveAdd(data.x);
-      data.w = subgroupExclusiveMul(1 + data.y);
+      testResult.y = subgroupBallotExclusiveBitCount(bits);
+      testResult.z = subgroupExclusiveAdd(testResult.x);
+      testResult.w = subgroupExclusiveMul(1 + testResult.y);
     }
     else
     {
       uvec4 bits = subgroupBallot(id > 23);
-      data.x = subgroupBallotExclusiveBitCount(bits);
+      testResult.x = subgroupBallotExclusiveBitCount(bits);
       bits = subgroupBallot(id < 1);
-      data.y = subgroupBallotExclusiveBitCount(bits);
-      data.z = subgroupExclusiveAdd(data.x);
-      data.w = subgroupExclusiveAdd(data.y);
+      testResult.y = subgroupBallotExclusiveBitCount(bits);
+      testResult.z = subgroupExclusiveAdd(testResult.x);
+      testResult.w = subgroupExclusiveAdd(testResult.y);
     }
   }
   else if(IsTest(4))
@@ -224,10 +224,10 @@ void main()
     // Reduction functions : unit tests
     if (id >= 2 && id <= 20)
     {
-      data.x = float(subgroupMax(id));
-      data.y = float(subgroupMin(id));
-      data.z = float(subgroupMul(id));
-      data.w = float(subgroupAdd(id));
+      testResult.x = float(subgroupMax(id));
+      testResult.y = float(subgroupMin(id));
+      testResult.z = float(subgroupMul(id));
+      testResult.w = float(subgroupAdd(id));
     }
   }
   else if(IsTest(5))
@@ -236,10 +236,10 @@ void main()
     if (id >= 2 && id <= 20)
     {
       uvec4 bits = subgroupBallot(id > 23);
-      data.x = float(subgroupBallotBitCount(bits));
-      data.y = float(subgroupAnd(id));
-      data.z = float(subgroupOr(id));
-      data.w = float(subgroupXor(id));
+      testResult.x = float(subgroupBallotBitCount(bits));
+      testResult.y = float(subgroupAnd(id));
+      testResult.z = float(subgroupOr(id));
+      testResult.w = float(subgroupXor(id));
     }
   }
   else if(IsTest(6))
@@ -247,13 +247,13 @@ void main()
     // Reduction functions : unit tests
     if (id > 13)
     {
-      data.x = float(subgroupAllEqual(id > 15));
-      data.y = float(subgroupAllEqual(id < 23));
-      data.z = float(subgroupAllEqual(id >= 25));
-      data.w = float(subgroupAllEqual(id >= 28));
+      testResult.x = float(subgroupAllEqual(id > 15));
+      testResult.y = float(subgroupAllEqual(id < 23));
+      testResult.z = float(subgroupAllEqual(id >= 25));
+      testResult.w = float(subgroupAllEqual(id >= 28));
     }
   }
-  SetOutput(data);
+  SetOutput(testResult);
 }
 
 )EOSHADER";

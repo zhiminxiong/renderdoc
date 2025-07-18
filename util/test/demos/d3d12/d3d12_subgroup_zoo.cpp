@@ -57,9 +57,9 @@ RWStructuredBuffer<float4> outbuf : register(u0);
 
 static uint3 tid;
 
-void SetOutput(float4 data)
+void SetOutput(float4 val)
 {
-  outbuf[root_test * 1024 + tid.y * GROUP_SIZE_X + tid.x] = data;
+  outbuf[root_test * 1024 + tid.y * GROUP_SIZE_X + tid.x] = val;
 }
 
 )EOSHADER";
@@ -176,7 +176,7 @@ float4 main(IN input) : SV_Target0
 [numthreads(GROUP_SIZE_X, GROUP_SIZE_Y, 1)]
 void main(uint3 inTid : SV_DispatchThreadID)
 {
-  float4 data = 0.0f.xxxx;
+  float4 testResult = 0.0f.xxxx;
   tid = inTid;
 
   uint id = WaveGetLaneIndex();
@@ -186,26 +186,26 @@ void main(uint3 inTid : SV_DispatchThreadID)
   if(IsTest(0))
   {
     // Query functions : unit tests
-    data.x = float(WaveGetLaneCount());
-    data.y = float(WaveGetLaneIndex());
-    data.z = float(WaveIsFirstLane());
+    testResult.x = float(WaveGetLaneCount());
+    testResult.y = float(WaveGetLaneIndex());
+    testResult.z = float(WaveIsFirstLane());
   }
   else if(IsTest(1))
   {
     // Vote functions : unit tests
-    data.x = float(WaveActiveAnyTrue(id*2 > id+10));
-    data.y = float(WaveActiveAllTrue(id < WaveGetLaneCount()));
+    testResult.x = float(WaveActiveAnyTrue(id*2 > id+10));
+    testResult.y = float(WaveActiveAllTrue(id < WaveGetLaneCount()));
     if (id > 10)
     {
-      data.z = float(WaveActiveAllTrue(id > 10));
+      testResult.z = float(WaveActiveAllTrue(id > 10));
       uint4 ballot = WaveActiveBallot(id > 20);
-      data.w = countbits(ballot.x) + countbits(ballot.y) + countbits(ballot.z) + countbits(ballot.w);
+      testResult.w = countbits(ballot.x) + countbits(ballot.y) + countbits(ballot.z) + countbits(ballot.w);
     }
     else
     {
-      data.z = float(WaveActiveAllTrue(id > 3));
+      testResult.z = float(WaveActiveAllTrue(id > 3));
       uint4 ballot = WaveActiveBallot(id > 4);
-      data.w = countbits(ballot.x) + countbits(ballot.y) + countbits(ballot.z) + countbits(ballot.w);
+      testResult.w = countbits(ballot.x) + countbits(ballot.y) + countbits(ballot.z) + countbits(ballot.w);
     }
   }
   else if(IsTest(2))
@@ -213,10 +213,10 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Broadcast functions : unit tests
     if (id >= 2 && id <= 20)
     {
-      data.x = WaveReadLaneFirst(id);
-      data.y = WaveReadLaneAt(id, 5);
-      data.z = WaveReadLaneAt(id, id);
-      data.w = WaveReadLaneAt(data.x, 2+id%3);
+      testResult.x = WaveReadLaneFirst(id);
+      testResult.y = WaveReadLaneAt(id, 5);
+      testResult.z = WaveReadLaneAt(id, id);
+      testResult.w = WaveReadLaneAt(testResult.x, 2+id%3);
     }
   }
   else if(IsTest(3))
@@ -224,17 +224,17 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Scan and Prefix functions : unit tests
     if (id >= 2 && id <= 20)
     {
-      data.x = WavePrefixCountBits(id > 4);
-      data.y = WavePrefixCountBits(id > 10);
-      data.z = WavePrefixSum(data.x);
-      data.w = WavePrefixProduct(1 + data.y);
+      testResult.x = WavePrefixCountBits(id > 4);
+      testResult.y = WavePrefixCountBits(id > 10);
+      testResult.z = WavePrefixSum(testResult.x);
+      testResult.w = WavePrefixProduct(1 + testResult.y);
     }
     else
     {
-      data.x = WavePrefixCountBits(id > 23);
-      data.y = WavePrefixCountBits(id < 1);
-      data.z = WavePrefixSum(data.x);
-      data.w = WavePrefixSum(data.y);
+      testResult.x = WavePrefixCountBits(id > 23);
+      testResult.y = WavePrefixCountBits(id < 1);
+      testResult.z = WavePrefixSum(testResult.x);
+      testResult.w = WavePrefixSum(testResult.y);
     }
   }
   else if(IsTest(4))
@@ -242,10 +242,10 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Reduction functions : unit tests
     if (id >= 2 && id <= 20)
     {
-      data.x = float(WaveActiveMax(id));
-      data.y = float(WaveActiveMin(id));
-      data.z = float(WaveActiveProduct(id));
-      data.w = float(WaveActiveSum(id));
+      testResult.x = float(WaveActiveMax(id));
+      testResult.y = float(WaveActiveMin(id));
+      testResult.z = float(WaveActiveProduct(id));
+      testResult.w = float(WaveActiveSum(id));
     }
   }
   else if(IsTest(5))
@@ -253,10 +253,10 @@ void main(uint3 inTid : SV_DispatchThreadID)
     // Reduction functions : unit tests
     if (id >= 2 && id <= 20)
     {
-      data.x = float(WaveActiveCountBits(id > 23));
-      data.y = float(WaveActiveBitAnd(id));
-      data.z = float(WaveActiveBitOr(id));
-      data.w = float(WaveActiveBitXor(id));
+      testResult.x = float(WaveActiveCountBits(id > 23));
+      testResult.y = float(WaveActiveBitAnd(id));
+      testResult.z = float(WaveActiveBitOr(id));
+      testResult.w = float(WaveActiveBitXor(id));
     }
   }
   else if(IsTest(6))
@@ -269,13 +269,13 @@ void main(uint3 inTid : SV_DispatchThreadID)
       bool3 test3 = bool3(test1, (id < 23), (id >= 25));
       bool4 test4 = bool4(test1, (id < 23), (id >= 25), (id >= 28));
 
-      data.x = float(WaveActiveAllEqual(test1).x);
-      data.y = float(WaveActiveAllEqual(test2).y);
-      data.z = float(WaveActiveAllEqual(test3).z);
-      data.w = float(WaveActiveAllEqual(test4).w);
+      testResult.x = float(WaveActiveAllEqual(test1).x);
+      testResult.y = float(WaveActiveAllEqual(test2).y);
+      testResult.z = float(WaveActiveAllEqual(test3).z);
+      testResult.w = float(WaveActiveAllEqual(test4).w);
     }
   }
-  SetOutput(data);
+  SetOutput(testResult);
 }
 
 )EOSHADER";
@@ -285,7 +285,7 @@ void main(uint3 inTid : SV_DispatchThreadID)
 [numthreads(GROUP_SIZE_X, GROUP_SIZE_Y, 1)]
 void main(uint3 inTid : SV_DispatchThreadID)
 {
-  float4 data = 0.0f.xxxx;
+  float4 testResult = 0.0f.xxxx;
   tid = inTid;
 
   uint id = WaveGetLaneIndex();
@@ -296,23 +296,23 @@ void main(uint3 inTid : SV_DispatchThreadID)
   {
     // SM6.5 functions : unit tests
     uint4 mask = WaveMatch(id);
-    data.x = countbits(mask.x) + countbits(mask.y) + countbits(mask.z) + countbits(mask.w);
+    testResult.x = countbits(mask.x) + countbits(mask.y) + countbits(mask.z) + countbits(mask.w);
     mask = WaveMatch(id%3 == 1);
-    data.y = countbits(mask.x) + countbits(mask.y) + countbits(mask.z) + countbits(mask.w);
+    testResult.y = countbits(mask.x) + countbits(mask.y) + countbits(mask.z) + countbits(mask.w);
     mask = WaveMatch(id%5 == 1);
-		data.z = WaveMultiPrefixSum(id, mask);
-		data.w = WaveMultiPrefixProduct(id, mask);
+		testResult.z = WaveMultiPrefixSum(id, mask);
+		testResult.w = WaveMultiPrefixProduct(id, mask);
   }
   if(IsTest(1))
   {
     // SM6.5 functions : unit tests
     uint4 mask = WaveMatch(id%7 == 1);
-		data.x = WaveMultiPrefixCountBits(id, mask);
-		data.y = WaveMultiPrefixBitAnd((id+7)*3, mask);
-		data.z = WaveMultiPrefixBitOr(id, mask);
-		data.w = WaveMultiPrefixBitXor(id, mask);
+		testResult.x = WaveMultiPrefixCountBits(id, mask);
+		testResult.y = WaveMultiPrefixBitAnd((id+7)*3, mask);
+		testResult.z = WaveMultiPrefixBitOr(id, mask);
+		testResult.w = WaveMultiPrefixBitXor(id, mask);
   }
-  SetOutput(data);
+  SetOutput(testResult);
 }
 
 )EOSHADER";
