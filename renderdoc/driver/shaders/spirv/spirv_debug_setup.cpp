@@ -3438,7 +3438,7 @@ bool Debugger::ArePointersAndEqual(const ShaderVariable &a, const ShaderVariable
   return false;
 }
 
-void Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &val)
+DeviceOpResult Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &val) const
 {
   // values for setting up pointer reads, either from a physical pointer or from an opaque pointer
   rdcspv::Id typeId;
@@ -3501,7 +3501,9 @@ void Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &va
 
   if(pointerWriteCallback)
   {
-    CHECK_DEBUGGER_THREAD();
+    if(!IsDeviceThread())
+      return DeviceOpResult::NeedsDevice;
+
     auto writeCallback = [pointerWriteCallback](const ShaderVariable &var, const Decorations &dec,
                                                 const DataType &type, uint64_t offset,
                                                 const rdcstr &) {
@@ -3567,7 +3569,7 @@ void Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &va
     WalkVariable<const ShaderVariable, false>(parentDecorations, dataTypes[typeId], byteOffset, val,
                                               rdcstr(), writeCallback);
 
-    return;
+    return DeviceOpResult::Succeeded;
   }
 
   ShaderVariable *storage = getPointer(ptr);
@@ -3612,6 +3614,7 @@ void Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &va
       copyComp(*storage, scalar0, val, 0);
     }
   }
+  return DeviceOpResult::Succeeded;
 }
 
 rdcstr Debugger::GetHumanName(Id id) const

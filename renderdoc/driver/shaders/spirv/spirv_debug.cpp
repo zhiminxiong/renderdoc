@@ -319,7 +319,7 @@ const ShaderVariable &ThreadState::GetSrc(Id id) const
   return ids[id];
 }
 
-void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
+DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
 {
   RDCASSERT(ids[pointer].type == VarType::GPUPointer);
 
@@ -329,7 +329,7 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
 
   if(!m_State)
   {
-    debugger.WriteThroughPointer(ids[pointer], val);
+    return debugger.WriteThroughPointer(ids[pointer], val);
   }
   else
   {
@@ -357,9 +357,10 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
       // if this is a write to a SSBO pointer, don't record any alias changes, just record a no-op
       // change to this pointer
       basechange.after = basechange.before = debugger.GetPointerValue(ids[pointer]);
+      if(debugger.WriteThroughPointer(var, val) == DeviceOpResult::NeedsDevice)
+        return DeviceOpResult::NeedsDevice;
       pendingDebugState.changes.push_back(basechange);
-      debugger.WriteThroughPointer(var, val);
-      return;
+      return DeviceOpResult::Succeeded;
     }
 
     rdcarray<ShaderVariableChange> changes;
@@ -377,7 +378,8 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
         changes[i].before = debugger.GetPointerValue(ids[id]);
     }
 
-    debugger.WriteThroughPointer(var, val);
+    if(debugger.WriteThroughPointer(var, val) == DeviceOpResult::NeedsDevice)
+      return DeviceOpResult::NeedsDevice;
 
     // now evaluate the value after
     for(size_t i = 0; i < pointers.size(); i++)
@@ -385,6 +387,14 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
       Id id = pointers[i];
       if(id != ptrid && live.contains(id))
         changes[i].after = debugger.GetPointerValue(ids[id]);
+    }
+
+    // For GSM memory update the global data as well as the local cache, do not send the changes to the UI
+    auto gsmPtrIt = gsmPointers.find(pointer);
+    if(gsmPtrIt != gsmPointers.end())
+    {
+      if(debugger.WriteThroughPointer(gsmPtrIt->second, val) == DeviceOpResult::NeedsDevice)
+        return DeviceOpResult::NeedsDevice;
     }
 
     // if the pointer we're writing is one of the aliased pointers, be sure we add it even if
@@ -425,12 +435,8 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
 
     for(size_t i = 0; i < pointers.size(); i++)
       lastWrite[pointers[i]] = m_State ? m_State->stepIndex : nextInstruction;
-
-    // For GSM memory update the global data as well as the local cache, do not send the changes to the UI
-    auto gsmPtrIt = gsmPointers.find(pointer);
-    if(gsmPtrIt != gsmPointers.end())
-      debugger.WriteThroughPointer(gsmPtrIt->second, val);
   }
+  return DeviceOpResult::Succeeded;
 }
 
 ShaderVariable ThreadState::ReadPointerValue(Id pointer)
@@ -836,7 +842,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       // ignore
       (void)store.memoryAccess;
 
-      WritePointerValue(store.pointer, GetSrc(store.object));
+      if(WritePointerValue(store.pointer, GetSrc(store.object)) == DeviceOpResult::NeedsDevice)
+        SetStepNeedsDeviceThread();
 
       break;
     }
@@ -848,7 +855,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       (void)copy.memoryAccess0;
       (void)copy.memoryAccess1;
 
-      WritePointerValue(copy.target, ReadPointerValue(copy.source));
+      if(WritePointerValue(copy.target, ReadPointerValue(copy.source)) == DeviceOpResult::NeedsDevice)
+        SetStepNeedsDeviceThread();
 
       break;
     }
@@ -4195,7 +4203,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       if(ptr.members.empty())
       {
-        WritePointerValue(store.pointer, value);
+        if(WritePointerValue(store.pointer, value) == DeviceOpResult::NeedsDevice)
+          SetStepNeedsDeviceThread();
       }
       else
       {
@@ -4224,7 +4233,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       if(ptr.members.empty())
       {
         result = ReadPointerValue(excg.pointer);
-        WritePointerValue(excg.pointer, value);
+        if(WritePointerValue(excg.pointer, value) == DeviceOpResult::NeedsDevice)
+          SetStepNeedsDeviceThread();
       }
       else
       {
@@ -4318,7 +4328,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       {
         if(ptr.members.empty())
         {
-          WritePointerValue(cmpexcg.pointer, value);
+          if(WritePointerValue(cmpexcg.pointer, value) == DeviceOpResult::NeedsDevice)
+            SetStepNeedsDeviceThread();
         }
         else
         {
@@ -4386,7 +4397,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       // write the new value
       if(ptr.members.empty())
       {
-        WritePointerValue(atomic.pointer, result);
+        if(WritePointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+          SetStepNeedsDeviceThread();
       }
       else
       {
@@ -4534,7 +4546,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       // write the new value
       if(ptr.members.empty())
       {
-        WritePointerValue(atomic.pointer, result);
+        if(WritePointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+          SetStepNeedsDeviceThread();
       }
       else
       {

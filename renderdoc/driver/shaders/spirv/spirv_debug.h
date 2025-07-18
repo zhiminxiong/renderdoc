@@ -335,7 +335,7 @@ struct ThreadState
   bool elected = false;
 
   const ShaderVariable &GetSrc(Id id) const;
-  void WritePointerValue(Id pointer, const ShaderVariable &val);
+  DeviceOpResult WritePointerValue(Id pointer, const ShaderVariable &val);
   ShaderVariable ReadPointerValue(Id pointer);
 
   void DebugBreak();
@@ -637,7 +637,7 @@ public:
   bool IsPhysicalPointer(const ShaderVariable &v) const;
 
   bool ArePointersAndEqual(const ShaderVariable &a, const ShaderVariable &b) const;
-  void WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &val);
+  DeviceOpResult WriteThroughPointer(ShaderVariable &ptr, const ShaderVariable &val) const;
   ShaderVariable MakeCompositePointer(const ShaderVariable &base, Id id,
                                       rdcarray<uint32_t> &indices) const;
 
