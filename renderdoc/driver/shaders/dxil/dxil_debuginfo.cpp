@@ -290,6 +290,8 @@ const Metadata *Program::GetDebugScopeParent(const DIBase *d) const
     return d->As<DILexicalBlock>()->scope;
   else if(d->type == DIBase::CompositeType)
     return d->As<DICompositeType>()->file;
+  else if(d->type == DIBase::Namespace)
+    return d->As<DINamespace>()->file;
 
   return NULL;
 }

@@ -9084,7 +9084,17 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
                   }
                 }
                 scopeMD = compType->scope;
-                break;
+              }
+              else if(dwarf->type == DIBase::Namespace)
+              {
+                const DINamespace *nameType = dwarf->As<DINamespace>();
+                const rdcstr *typeName = nameType->name;
+                if(typeName && !typeName->empty())
+                {
+                  if(!callstack.empty())
+                    callstack[0] = *typeName + "::" + callstack[0];
+                }
+                scopeMD = nameType->scope;
               }
               else
               {
