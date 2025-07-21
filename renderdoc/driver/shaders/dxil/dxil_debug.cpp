@@ -7451,6 +7451,57 @@ ScopedDebugData *Debugger::AddScopedDebugData(const DXIL::Metadata *scopeMD)
   return scope;
 }
 
+void Debugger::AddStructMembers(const DXIL::DICompositeType *structTypeData, TypeData &structType)
+{
+  if(structTypeData->type != DXIL::DIBase::Type::CompositeType)
+  {
+    RDCERR("Invalid dwarf struct type %s", ToStr(structTypeData->type).c_str());
+    return;
+  }
+
+  if(structTypeData->tag != DXIL::DW_TAG_structure_type &&
+     structTypeData->tag != DXIL::DW_TAG_class_type)
+  {
+    RDCERR("Invalid composite tag %s", ToStr(structTypeData->tag).c_str());
+    return;
+  }
+
+  const Metadata *elementsMD = structTypeData->elements;
+  size_t countMembers = elementsMD->children.size();
+  for(size_t i = 0; i < countMembers; ++i)
+  {
+    const Metadata *memberMD = elementsMD->children[i];
+    const DXIL::DIBase *memberBase = memberMD->dwarf;
+    // Ignore member functions
+    if(memberBase->type == DXIL::DIBase::Subprogram)
+      continue;
+    RDCASSERTEQUAL(memberBase->type, DXIL::DIBase::DerivedType);
+    // Ignore anything that isn't DIBase::DerivedType
+    if(memberBase->type != DXIL::DIBase::DerivedType)
+      continue;
+
+    const DXIL::DIDerivedType *member = memberBase->As<DIDerivedType>();
+    if(member->tag == DXIL::DW_TAG_inheritance)
+    {
+      const Metadata *parentMD = member->base;
+      const DXIL::DIBase *parentBase = parentMD->dwarf;
+      RDCASSERTEQUAL(parentBase->type, DXIL::DIBase::Type::CompositeType);
+      const DICompositeType *parentType = parentBase->As<DICompositeType>();
+      AddStructMembers(parentType, structType);
+      continue;
+    }
+    // Ignore any member tag that isn't DXIL::DW_TAG_member
+    if(member->tag != DXIL::DW_TAG_member)
+      continue;
+    AddDebugType(member->base);
+    RDCASSERT(member->name);
+    rdcstr memberName = member->name ? *member->name : "NULL";
+    structType.structMembers.push_back({memberName, member->base});
+    uint32_t offset = (uint32_t)member->offsetInBits / 8;
+    structType.memberOffsets.push_back(offset);
+  }
+}
+
 const TypeData &Debugger::AddDebugType(const DXIL::Metadata *typeMD)
 {
   {
@@ -7643,31 +7694,7 @@ const TypeData &Debugger::AddDebugType(const DXIL::Metadata *typeMD)
             RDCASSERT(!isVector && !isMatrix, isVector, isMatrix, typeData.name);
 
             typeData.type = VarType::Struct;
-            const Metadata *elementsMD = compositeType->elements;
-            size_t countMembers = elementsMD->children.size();
-            for(size_t i = 0; i < countMembers; ++i)
-            {
-              const Metadata *memberMD = elementsMD->children[i];
-              const DXIL::DIBase *memberBase = memberMD->dwarf;
-              // Ignore member functions
-              if(memberBase->type == DXIL::DIBase::Subprogram)
-                continue;
-              RDCASSERTEQUAL(memberBase->type, DXIL::DIBase::DerivedType);
-              // Ignore anything that isn't DIBase::DerivedType
-              if(memberBase->type != DXIL::DIBase::DerivedType)
-                continue;
-
-              const DXIL::DIDerivedType *member = memberBase->As<DIDerivedType>();
-              // Ignore any member tag that isn't DXIL::DW_TAG_member
-              if(member->tag != DXIL::DW_TAG_member)
-                continue;
-              AddDebugType(member->base);
-              RDCASSERT(member->name);
-              rdcstr memberName = member->name ? *member->name : "NULL";
-              typeData.structMembers.push_back({memberName, member->base});
-              uint32_t offset = (uint32_t)member->offsetInBits / 8;
-              typeData.memberOffsets.push_back(offset);
-            }
+            AddStructMembers(compositeType, typeData);
           }
           break;
         }

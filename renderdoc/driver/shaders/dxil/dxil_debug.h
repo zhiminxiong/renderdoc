@@ -612,6 +612,7 @@ private:
   ScopedDebugData *AddScopedDebugData(const DXIL::Metadata *scopeMD);
   ScopedDebugData *FindScopedDebugData(const DXIL::Metadata *md) const;
   const TypeData &AddDebugType(const DXIL::Metadata *typeMD);
+  void AddStructMembers(const DXIL::DICompositeType *structTypeData, TypeData &structType);
   void AddLocalVariable(const DXIL::SourceMappingInfo &srcMapping, uint32_t instructionIndex);
   void ParseDebugData();
 
