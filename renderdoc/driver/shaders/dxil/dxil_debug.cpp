@@ -8152,6 +8152,13 @@ void Debugger::ParseDebugData()
                       break;
                     }
                   }
+                  if(memberIndex >= rows)
+                  {
+                    RDCERR("Invalid memberIndex for source variable %s SSAID %s",
+                           mapping.sourceVarName.c_str(), mapping.debugVarSSAName.c_str());
+                    memberIndex = 0;
+                    byteOffset = 0;
+                  }
 
                   childType = &m_DebugInfo.types[typeWalk->structMembers[memberIndex].second];
 
@@ -8472,6 +8479,12 @@ void Debugger::ParseDebugData()
                 while(typeWalk && typeWalk->baseType != NULL && typeWalk->type == VarType::Unknown)
                   typeWalk = &m_DebugInfo.types[typeWalk->baseType];
 
+                if(typeWalk == NULL || typeWalk->baseType == NULL)
+                {
+                  RDCERR("Unexpected type source variable %s SSAID %s",
+                         mapping.sourceVarName.c_str(), mapping.debugVarSSAName.c_str());
+                  continue;
+                }
                 const TypeData &scalar = m_DebugInfo.types[typeWalk->baseType];
                 uint32_t elemCount = 1;
 
