@@ -114,11 +114,28 @@ struct TestStruct
   } anon;
 };
 
+struct TestGrand
+{
+  int3 i3;
+  int2 i2;
+};
+
+struct TestParent : TestGrand
+{
+  int4 i4;
+};
+
+struct TestChild : TestParent
+{
+  int i;
+};
+
 )EOSHADER";
 
   std::string testsBody = R"EOSHADER(
 
   TestStruct testStruct;
+  TestChild testChild;
 
   TEST_DEBUG_VECTOR_TYPE(int);
   TEST_DEBUG_VECTOR_TYPE(float);
@@ -131,6 +148,10 @@ struct TestStruct
   TEST_DEBUG_VAR_DECLARE(float1, bob, 3.0)
   TEST_DEBUG_VAR_SET(int4, testStruct.anon.a, 1)
   TEST_DEBUG_VAR_SET(int3, testStruct.anon.b, 2)
+  TEST_DEBUG_VAR_SET(int, testChild.i, 1)
+  TEST_DEBUG_VAR_SET(int2, testChild.i2, 2)
+  TEST_DEBUG_VAR_SET(int3, testChild.i3, 3)
+  TEST_DEBUG_VAR_SET(int4, testChild.i4, 4)
   // TEST_DEBUG_VAR_END
 
   if(testIndex == 0)
@@ -156,6 +177,13 @@ struct TestStruct
     testResult.y = intVal * 5;
     SET_DATA(testIndex, testResult);
     EARLY_RETURN;
+  }
+  else if(testIndex == 5)
+  {
+    testResult.x = testChild.i;
+    testResult.y = testChild.i2.x;
+    testResult.z = testChild.i3.y;
+    testResult.w = testChild.i4.z;
   }
   else
   {
