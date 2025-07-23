@@ -18,11 +18,28 @@ class D3D12_Execute_Indirect(rdtest.TestCase):
             raise rdtest.TestFailureException("No pixel history found")
         rdtest.log.success("Pixel History Worked")
 
+    def check_root_consts(self, expected: List[float]):
+        pipe: rd.PipeState = self.controller.GetPipelineState()
+        root_consts = pipe.GetConstantBlock(rd.ShaderStage.Vertex, 1, 0)
+        if root_consts is None:
+            raise rdtest.TestFailureException('rootConsts not found in pipeline state')
+        bytes = self.controller.GetBufferData(root_consts.descriptor.resource, 0, root_consts.descriptor.byteSize)   
+        self.check(len(bytes) == 16)  # 4 floats
+        data = struct.unpack("ffff", bytes)
+        for i in range(len(expected)):
+            if not rdtest.value_compare(expected[i], data[i]):
+                raise rdtest.TestFailureException(f'rootConsts[i] does not match expected:{expected[i]} got:{data[i]}')
+        rdtest.log.success("rootConsts is as expected")
+
     def check_capture(self):
         from_eid = self.find_action("Multiple draws").eventId
+        ei_eid = self.find_action("ExecuteIndirect", from_eid).eventId
+        self.controller.SetFrameEvent(ei_eid - 1, False)
+        self.check_root_consts([10.0, 9.0, 8.0, 7.0])
         for i in range(8):
             action = self.find_action("IndirectDraw", from_eid)
             self.controller.SetFrameEvent(action.eventId, False)
+            self.check_root_consts([123.0, 9.0, 8.0, 7.0])
 
             self.check_triangle(back=[0.0, 0.0, 0.0, 1.0])
 
