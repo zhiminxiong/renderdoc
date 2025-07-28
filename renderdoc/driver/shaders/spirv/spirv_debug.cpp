@@ -191,8 +191,12 @@ void ThreadState::FillCallstack(rdcarray<Id> &funcs)
     funcs.push_back(frame->function);
 }
 
+// Must run on the device thread for the active simulation thread
 void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
 {
+  if(m_State)
+    RDCASSERT(debugger.IsDeviceThread());
+
   ConstIter it = debugger.GetIterForInstruction(nextInstruction);
 
   RDCASSERT(OpDecoder(it).op == Op::Function);
@@ -532,11 +536,14 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
   }
 }
 
+// Must run on the device thread for the active simulation thread
 void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray<Id> &newLive)
 {
   // nothing to do if we aren't tracking into a state
   if(!m_State)
     return;
+
+  RDCASSERT(debugger.IsDeviceThread());
 
   // all oldLive (except globals) are going out of scope. all newLive (except globals) are coming
   // into scope
@@ -806,9 +813,13 @@ void ThreadState::SkipIgnoredInstructions()
   }
 }
 
+// Must run on the device thread for the active simulation thread
 void ThreadState::EnterEntryPoint(ShaderDebugState *state)
 {
   m_State = state;
+
+  if(m_State)
+    RDCASSERT(debugger.IsDeviceThread());
 
   EnterFunction({});
 
@@ -4105,6 +4116,13 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       // function. The second time we do have a return value so we process it and continue
       if(returnValue.name.empty())
       {
+        // for the active thread EnterFunction must be run on the device thread
+        if(m_State && !debugger.IsDeviceThread())
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
+
         // The instruction after a function call is defined to be a convergence point
         functionReturnPoint = nextInstruction;
         uint32_t returnInstruction = nextInstruction - 1;
@@ -4167,6 +4185,14 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       }
       else
       {
+        // for the active thread ProcessScopeChange must be run on the device thread
+        if(m_State && !debugger.IsDeviceThread())
+        {
+          callstack.push_back(exitingFrame);
+          SetStepNeedsDeviceThread();
+          break;
+        }
+
         returnValue.name = "<return value>";
         hasReturnValueData = false;
         if(opdata.op == Op::ReturnValue)
