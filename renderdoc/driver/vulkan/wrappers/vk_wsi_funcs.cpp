@@ -429,26 +429,6 @@ bool WrappedVulkan::Serialise_vkCreateSwapchainKHR(SerialiserType &ser, VkDevice
           GetGPULocalMemoryIndex(mrq.memoryTypeBits),
       };
 
-      VkMemoryDedicatedAllocateInfo dedicated = {
-          VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
-          NULL,
-          Unwrap(im),
-      };
-
-      // if the acceleration structures feature is enabled, we _must_ be on at least vulkan 1.1 (the
-      // extension requires it). Vulkan 1.1 unconditionally allows the use of dedicated image
-      // allocations without any feature bits (the original extension didn't have any either).
-      //
-      // we do this because without it, the extra memory allocation may be promoted to BDA by
-      // self-capturing and cause problems with address space clashes. We don't need the dedicated
-      // allocation but it avoids that behaviour as it may not be legal to query the address of a
-      // dedicated image memory allocation and in any case we know that it can't be legally used for
-      // BDA or AS backing memory
-      if(AccelerationStructures())
-      {
-        allocInfo.pNext = &dedicated;
-      }
-
       vkr = ObjDisp(device)->AllocateMemory(Unwrap(device), &allocInfo, NULL, &mem);
       CHECK_VKR(this, vkr);
 

@@ -1156,6 +1156,12 @@ VkDriverInfo::VkDriverInfo(const VkPhysicalDeviceProperties &physProps,
         RDCLOG("Enabling NV workaround for static pipeline force-bind to preserve state");
       nvidiaStaticPipelineRebindStates = true;
     }
+
+    // this is fixed in a windows version but we can't easily query that, so instead we are waiting
+    // for a driver-based workaround and apply the workaround ourselves in the meantime
+    if(active)
+      RDCLOG("Enabling NV workaround for unaligned BDA memory capture/replay");
+    nvidiaUnalignedBDAIssue = true;
   }
 
   if(driverProps.driverID == VK_DRIVER_ID_AMD_PROPRIETARY ||

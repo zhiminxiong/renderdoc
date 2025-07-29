@@ -374,6 +374,10 @@ public:
   // On Mali there are some known issues regarding acceleration structure serialisation to device
   // memory, for the affected driver versions we switch to the host command variants
   bool MaliBrokenASDeviceSerialisation() const { return maliBrokenASDeviceSerialisation; }
+  // on NV BDA capture/replay can sometimes fail for memory on certain windows versions. Although
+  // this is believed to be a windows bug currently, it only manifests on NV and a workaround will
+  // be arriving in later NV drivers, so for now we treat this as a driver bug.
+  bool NVUnalignedBDAIssue() const { return nvidiaUnalignedBDAIssue; }
 private:
   GPUVendor m_Vendor;
 
@@ -390,6 +394,7 @@ private:
   bool intelBrokenOcclusionQueries = false;
   bool nvidiaStaticPipelineRebindStates = false;
   bool maliBrokenASDeviceSerialisation = false;
+  bool nvidiaUnalignedBDAIssue = false;
 };
 
 struct DynamicRenderingLocalRead

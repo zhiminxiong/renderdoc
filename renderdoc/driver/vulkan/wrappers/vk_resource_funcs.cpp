@@ -348,6 +348,13 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
       return false;
     }
 
+    // apply workaround for presumed windows bug
+    if(GetDriverInfo().NVUnalignedBDAIssue())
+    {
+      // all memory allocations must be 64kB aligned. The rest of the workaround only applies during capture
+      patched.allocationSize = AlignUp(patched.allocationSize, VkDeviceSize(64 * 1024));
+    }
+
     VkResult ret = ObjDisp(device)->AllocateMemory(Unwrap(device), &patched, NULL, &mem);
 
     if(ret != VK_SUCCESS)
@@ -526,30 +533,22 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
   // will be bound against since there's no requirement for the buffer to be marked as BDA. This
   // means that when RT is enabled ALL MEMORY IN THE ENTIRE PROGRAM must be marked as BDA just in
   // case.
-  //
-  // we don't force this on for memory allocations that are going to be used for dedicated images
   bool forceBDA = false;
   if(IsCaptureMode(m_State) && AccelerationStructures())
   {
-    const VkMemoryDedicatedAllocateInfo *dedicated =
-        (const VkMemoryDedicatedAllocateInfo *)FindNextStruct(
-            pAllocateInfo, VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO);
-    if(dedicated == NULL || dedicated->image == VK_NULL_HANDLE)
-    {
-      // force BDA flag when creating, by adding the struct if needed
-      forceBDA = true;
+    // force BDA flag when creating, by adding the struct if needed
+    forceBDA = true;
 
-      if(memFlags)
-      {
-        memFlags->flags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-      }
-      else
-      {
-        rtForcedFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
-                              VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
-        rtForcedFlags.pNext = unwrapped.pNext;
-        unwrapped.pNext = &rtForcedFlags;
-      }
+    if(memFlags)
+    {
+      memFlags->flags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    }
+    else
+    {
+      rtForcedFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
+                            VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+      rtForcedFlags.pNext = unwrapped.pNext;
+      unwrapped.pNext = &rtForcedFlags;
     }
   }
 
@@ -571,6 +570,27 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
 
       if(imageRecord->resInfo->banDedicated)
         RemoveNextStruct(&unwrapped, VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO);
+    }
+  }
+
+  // apply workaround for presumed windows bug
+  if(GetDriverInfo().NVUnalignedBDAIssue())
+  {
+    const VkDeviceSize kb64 = 64 * 1024;
+    const VkDeviceSize mb2 = 2 * 1024 * 1024;
+
+    // all memory allocations must be 64kB aligned. We do this silently, not affecting the serialised size
+    unwrapped.allocationSize = AlignUp(unwrapped.allocationSize, kb64);
+
+    // <2 MB allocations must have an extra 64kB
+    if(unwrapped.allocationSize < mb2)
+    {
+      unwrapped.allocationSize += kb64;
+    }
+    else
+    {
+      // >= 2MB allocations must be aligned to 2MB
+      unwrapped.allocationSize = AlignUp(unwrapped.allocationSize, mb2);
     }
   }
 
