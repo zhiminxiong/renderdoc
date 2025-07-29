@@ -237,7 +237,8 @@ private:
 
   void PopulateCompileTools();
   void PopulateCompileToolParameters();
-  bool ProcessIncludeDirectives(QString &source, const rdcstrpairs &files);
+  bool ProcessIncludeDirectives(QString &source, const rdcstrpairs &files,
+                                const rdcarray<rdcstr> &exclude = {});
 
   void updateWindowTitle();
   void gotoSourceDebugging();

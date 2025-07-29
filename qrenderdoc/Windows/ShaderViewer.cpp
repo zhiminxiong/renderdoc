@@ -6273,7 +6273,8 @@ void ShaderViewer::PopulateCompileToolParameters()
   }
 }
 
-bool ShaderViewer::ProcessIncludeDirectives(QString &source, const rdcstrpairs &files)
+bool ShaderViewer::ProcessIncludeDirectives(QString &source, const rdcstrpairs &files,
+                                            const rdcarray<rdcstr> &exclude)
 {
   // try and match up #includes against the files that we have. This isn't always
   // possible as fxc only seems to include the source for files if something in
@@ -6334,11 +6335,25 @@ bool ShaderViewer::ProcessIncludeDirectives(QString &source, const rdcstrpairs &
     QString fileText;
 
     // look for exact match first
-    for(int i = 0; i < files.count(); i++)
+    for(const rdcstrpair &kv : files)
     {
-      if(QString(files[i].first) == fname)
+      if(QString(kv.first) == fname)
       {
-        fileText = files[i].second;
+        if(exclude.contains(kv.first))
+        {
+          fileText = QFormatStr("// not recursively including %1\n").arg(fname);
+        }
+        else
+        {
+          fileText = kv.second;
+
+          // recurse and do not allow this to be re-included. This assumes #pragma once / header
+          // guard behaviour to prevent recursion but allows the same file to be included multiple
+          // times in the same parent (if that's done intentionally)
+          rdcarray<rdcstr> childExclude = exclude;
+          childExclude.push_back(kv.first);
+          ProcessIncludeDirectives(fileText, files, childExclude);
+        }
         break;
       }
     }
@@ -6352,7 +6367,21 @@ bool ShaderViewer::ProcessIncludeDirectives(QString &source, const rdcstrpairs &
       {
         if(QFileInfo(kv.first).fileName().compare(search, Qt::CaseInsensitive) == 0)
         {
-          fileText = kv.second;
+          if(exclude.contains(kv.first))
+          {
+            fileText = QFormatStr("// not recursively including %1\n").arg(fname);
+          }
+          else
+          {
+            fileText = kv.second;
+
+            // recurse and do not allow this to be re-included. This assumes #pragma once / header
+            // guard behaviour to prevent recursion but allows the same file to be included multiple
+            // times in the same parent (if that's done intentionally)
+            rdcarray<rdcstr> childExclude = exclude;
+            childExclude.push_back(kv.first);
+            ProcessIncludeDirectives(fileText, files, childExclude);
+          }
           break;
         }
       }
