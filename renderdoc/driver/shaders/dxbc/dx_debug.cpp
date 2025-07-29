@@ -66,8 +66,12 @@ void GatherInputDataForInitialValues(const DXBC::DXBCContainer *dxbc, InputFetch
   nonfloatInputs.clear();
   inputVarNames.clear();
   fetcher.hlsl += "struct Inputs\n{\n";
-  rdcstr defines;
+  rdcstr defines, copyFunc;
   fetcher.laneDataBufferStride = 0;
+
+  copyFunc =
+      "void CopyInputs(out Inputs OUT, in Inputs IN) {\n"
+      "  OUT = (Inputs)0;\n";
 
   if(stageInputSig.empty() && dxbc->m_Type == DXBC::ShaderType::Pixel)
   {
@@ -322,7 +326,7 @@ void GatherInputDataForInitialValues(const DXBC::DXBCContainer *dxbc, InputFetch
     if(arrayLength > 0)
       inputVarNames[i] += StringFormat::Fmt("[%d]", RDCMAX(0, arrayIndex));
 
-    if(included)
+    if(included && sig.channelUsedMask != 0)
     {
       rdcarray<rdcstr> &outArray = sig.varType == VarType::Float ? floatInputs : nonfloatInputs;
       if(arrayLength == 0)
@@ -334,6 +338,8 @@ void GatherInputDataForInitialValues(const DXBC::DXBCContainer *dxbc, InputFetch
         for(int a = 0; a < arrayLength; a++)
           outArray.push_back(inputName + "[" + ToStr(a) + "]");
       }
+
+      copyFunc += StringFormat::Fmt("  OUT.%s = IN.%s;\n", inputName.c_str(), inputName.c_str());
     }
 
     fetcher.hlsl += ";\n";
@@ -366,7 +372,9 @@ void GatherInputDataForInitialValues(const DXBC::DXBCContainer *dxbc, InputFetch
     }
   }
 
-  fetcher.hlsl += "};\n\n" + defines;
+  copyFunc += "\n};\n\n";
+
+  fetcher.hlsl += "};\n\n" + defines + "\n\n" + copyFunc;
 }
 
 void CreateLegacyInputFetcher(const DXBC::DXBCContainer *dxbc, const InputFetcherConfig &cfg,
@@ -532,10 +540,10 @@ void ExtractInputs(Inputs IN
 
   // start off with just copying all the inputs to all the quad. For float inputs or uints that may
   // vary across the quad we will quadSwizzle them
-  HitBuffer[idx].lanes[0].IN = IN;
-  HitBuffer[idx].lanes[1].IN = IN;
-  HitBuffer[idx].lanes[2].IN = IN;
-  HitBuffer[idx].lanes[3].IN = IN;
+  CopyInputs(HitBuffer[idx].lanes[0].IN, IN);
+  CopyInputs(HitBuffer[idx].lanes[1].IN, IN);
+  CopyInputs(HitBuffer[idx].lanes[2].IN, IN);
+  CopyInputs(HitBuffer[idx].lanes[3].IN, IN);
 )";
 
   for(int q = 0; q < 4; q++)
@@ -1042,7 +1050,7 @@ void ExtractInputs(Inputs IN
         LaneBuffer[idx*MAXWAVESIZE+laneIndex].vs = vs;
         LaneBuffer[idx*MAXWAVESIZE+laneIndex].ps = ps;
         LaneBuffer[idx*MAXWAVESIZE+laneIndex].cs = cs;
-        LaneBuffer[idx*MAXWAVESIZE+laneIndex].IN = IN;
+        CopyInputs(LaneBuffer[idx*MAXWAVESIZE+laneIndex].IN, IN);
       }
     }
   }
