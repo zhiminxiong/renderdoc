@@ -1706,7 +1706,7 @@ private:
       return insertIt.first->second;
     }
     bind.arrayElement = (address - offs) & 0xFFFFFFFFU;
-    offs = ptrOffs;
+    offs = size_t(ptrOffs);
 
     auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
     bytebuf &data = insertIt.first->second;

@@ -2222,8 +2222,8 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           CALC_MAX_SIZE(accelerationStructureDescriptorSize);
 
           // guess worst-case size of a descriptor set with 2 descriptors
-          VkDeviceSize reservedDescriptorSize =
-              AlignUp(maxResourceDescriptorSize * 2, descProps.descriptorBufferOffsetAlignment);
+          VkDeviceSize reservedDescriptorSize = AlignUp(VkDeviceSize(maxResourceDescriptorSize * 2),
+                                                        descProps.descriptorBufferOffsetAlignment);
 
           // finally we need to ensure we have enough room to hopefully expand every resource
           // descriptor buffer a bit without blowing up available address space. we assume that

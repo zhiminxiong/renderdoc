@@ -627,20 +627,9 @@ void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSiz
   const size_t sampledSize = m_DescriptorBufferProperties.sampledImageDescriptorSize;
   const size_t samplerSize = m_DescriptorBufferProperties.samplerDescriptorSize;
 
-  union
-  {
-    VkDescriptorImageInfo imInfo;
-    VkDescriptorAddressInfoEXT bufinfo;
-    VkSampler sampler;
-  };
-
-  bufinfo = {};
-
   VkDescriptorGetInfoEXT info = {
       VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
   };
-
-  info.data.pUniformBuffer = &bufinfo;
 
   byte tempMem[256] = {};
   // start with the descriptor bytes in case the driver doesn't initialise them all. If this
@@ -661,7 +650,8 @@ void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSiz
 
           // verify that descriptor roundtrips that our detection was correct
           info.type = VK_DESCRIPTOR_TYPE_SAMPLER;
-          sampler = Unwrap(GetResourceManager()->GetCurrentHandle<VkSampler>(samp));
+          VkSampler sampler = Unwrap(GetResourceManager()->GetCurrentHandle<VkSampler>(samp));
+          info.data.pSampler = &sampler;
 
           ObjDisp(m_Device)->GetDescriptorEXT(Unwrap(m_Device), &info, descriptorSize, tempMem);
 
@@ -750,6 +740,9 @@ void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSiz
             layouts.append(m_DescriptorLookup.depthImageLayouts);
         }
 
+        VkDescriptorImageInfo imInfo = {};
+        info.data.pCombinedImageSampler = &imInfo;
+
         imInfo.sampler = Unwrap(GetResourceManager()->GetCurrentHandle<VkSampler>(samp));
         imInfo.imageView = Unwrap(GetResourceManager()->GetCurrentHandle<VkImageView>(view));
 
@@ -817,6 +810,9 @@ void WrappedVulkan::LookupDescriptor(byte *descriptorBytes, size_t descriptorSiz
         }
         else
         {
+          VkDescriptorAddressInfoEXT bufinfo = {};
+          info.data.pUniformBuffer = &bufinfo;
+
           if(type == DescriptorType::AccelerationStructure)
           {
             info.data.accelerationStructure = address;
@@ -3368,13 +3364,13 @@ bool WrappedVulkan::Serialise_vkGetDescriptorEXT(SerialiserType &ser, VkDevice d
     }
 
     bytebuf replayDescriptor;
-    replayDescriptor.resize(dataSize);
+    replayDescriptor.resize(size_t(dataSize));
 
     // verify the descriptor is bitwise identical
     ObjDisp(device)->GetDescriptorEXT(Unwrap(device), unwrappedInfo, (size_t)dataSize,
                                       replayDescriptor.data());
 
-    if(memcmp(replayDescriptor.data(), pDescriptor, dataSize) != 0)
+    if(memcmp(replayDescriptor.data(), pDescriptor, size_t(dataSize)) != 0)
     {
       rdcstr bitDifferences;
 

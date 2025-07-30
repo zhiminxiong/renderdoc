@@ -915,8 +915,9 @@ void WrappedVulkan::vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevi
     CALC_MAX_SIZE(inputAttachmentDescriptorSize);
     CALC_MAX_SIZE(accelerationStructureDescriptorSize);
 
-    VkDeviceSize reservedDescriptorSize = AlignUp(
-        maxResourceDescriptorSize * 2, descBufferProperties->descriptorBufferOffsetAlignment);
+    VkDeviceSize reservedDescriptorSize =
+        AlignUp(VkDeviceSize(maxResourceDescriptorSize * 2),
+                descBufferProperties->descriptorBufferOffsetAlignment);
 
     descBufferProperties->maxResourceDescriptorBufferRange -= reservedDescriptorSize;
 
