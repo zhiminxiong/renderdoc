@@ -64,4 +64,5 @@ private:
 
   QNetworkAccessManager *m_NetManager;
   QNetworkReply *m_Request = NULL;
+  bool m_Cancelled = false;
 };
