@@ -371,6 +371,14 @@ void D3D11Replay::FreeCustomShader(ResourceId id)
 
 rdcarray<EventUsage> D3D11Replay::GetUsage(ResourceId id)
 {
+  if(WrappedID3D11Buffer::m_BufferList.find(id) == WrappedID3D11Buffer::m_BufferList.end() &&
+     WrappedID3D11Texture1D::m_TextureList.find(id) == WrappedID3D11Texture1D::m_TextureList.end() &&
+     WrappedID3D11Texture2D1::m_TextureList.find(id) == WrappedID3D11Texture2D1::m_TextureList.end() &&
+     WrappedID3D11Texture3D1::m_TextureList.find(id) == WrappedID3D11Texture3D1::m_TextureList.end())
+  {
+    return {EventUsage(0, ResourceUsage::Unused)};
+  }
+
   return m_pDevice->GetImmediateContext()->GetUsage(id);
 }
 

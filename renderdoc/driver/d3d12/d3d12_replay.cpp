@@ -734,6 +734,11 @@ ResourceId D3D12Replay::GetLiveID(ResourceId id)
 
 rdcarray<EventUsage> D3D12Replay::GetUsage(ResourceId id)
 {
+  if(m_pDevice->GetResourceList().find(id) == m_pDevice->GetResourceList().end())
+  {
+    return {EventUsage(0, ResourceUsage::Unused)};
+  }
+
   return m_pDevice->GetQueue()->GetUsage(id);
 }
 

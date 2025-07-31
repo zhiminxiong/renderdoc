@@ -4281,6 +4281,14 @@ void GLReplay::SetProxyBufferData(ResourceId bufid, byte *data, size_t dataSize)
 
 rdcarray<EventUsage> GLReplay::GetUsage(ResourceId id)
 {
+  if((m_pDriver->m_Textures.find(id) == m_pDriver->m_Textures.end() ||
+      m_pDriver->m_Textures[id].resource.Namespace == eResUnknown) &&
+     (m_pDriver->m_Buffers.find(id) == m_pDriver->m_Buffers.end() ||
+      m_pDriver->m_Buffers[id].resource.Namespace == eResUnknown))
+  {
+    return {EventUsage(0, ResourceUsage::Unused)};
+  }
+
   return m_pDriver->GetUsage(id);
 }
 

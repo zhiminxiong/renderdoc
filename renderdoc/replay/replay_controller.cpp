@@ -529,7 +529,7 @@ rdcarray<EventUsage> ReplayController::GetUsage(ResourceId id)
 
   id = m_pDevice->GetLiveID(id);
   if(id == ResourceId())
-    return rdcarray<EventUsage>();
+    return {EventUsage(0, ResourceUsage::Unused)};
   return m_pDevice->GetUsage(id);
 }
 

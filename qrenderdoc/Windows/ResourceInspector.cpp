@@ -285,6 +285,7 @@ void ResourceInspector::Inspect(ResourceId id)
 
   ui->initChunks->setUpdatesEnabled(false);
   ui->resourceUsage->clear();
+  ui->resourceUsage->setEnabled(true);
 
   const SDFile &file = m_Ctx.GetStructuredFile();
   const ResourceDescription *desc = m_Ctx.GetResource(id);
@@ -303,21 +304,37 @@ void ResourceInspector::Inspect(ResourceId id)
 
       ui->resourceUsage->beginUpdate();
 
-      CombineUsageEvents(m_Ctx, usage, [this](uint32_t startEID, uint32_t endEID, ResourceUsage use) {
-        QString text;
+      if(usage.size() == 1 && usage[0].eventId == 0 && usage[0].usage == ResourceUsage::Unused)
+      {
+        ui->resourceUsage->setEnabled(false);
 
-        if(startEID == endEID)
-          text = QFormatStr("EID %1").arg(startEID);
-        else
-          text = QFormatStr("EID %1-%2").arg(startEID).arg(endEID);
+        ui->resourceUsage->addTopLevelItem(new RDTreeWidgetItem(
+            {QString(), tr("Resource usage not tracked for this type of resource")}));
+      }
+      else if(usage.empty())
+      {
+        ui->resourceUsage->addTopLevelItem(
+            new RDTreeWidgetItem({QString(), tr("No static usage observed for this resource")}));
+      }
+      else
+      {
+        CombineUsageEvents(
+            m_Ctx, usage, [this](uint32_t startEID, uint32_t endEID, ResourceUsage use) {
+              QString text;
 
-        RDTreeWidgetItem *item =
-            new RDTreeWidgetItem({text, ToQStr(use, m_Ctx.APIProps().pipelineType)});
-        item->setData(0, ResourceIdRole, QVariant(endEID));
-        item->setData(1, ResourceIdRole, QVariant(endEID));
+              if(startEID == endEID)
+                text = QFormatStr("EID %1").arg(startEID);
+              else
+                text = QFormatStr("EID %1-%2").arg(startEID).arg(endEID);
 
-        ui->resourceUsage->addTopLevelItem(item);
-      });
+              RDTreeWidgetItem *item =
+                  new RDTreeWidgetItem({text, ToQStr(use, m_Ctx.APIProps().pipelineType)});
+              item->setData(0, ResourceIdRole, QVariant(endEID));
+              item->setData(1, ResourceIdRole, QVariant(endEID));
+
+              ui->resourceUsage->addTopLevelItem(item);
+            });
+      }
 
       ui->resourceUsage->endUpdate();
     });
@@ -474,6 +491,7 @@ void ResourceInspector::OnCaptureClosed()
   ui->initChunks->clearInternalExpansions();
   ui->relatedResources->clear();
   ui->resourceUsage->clear();
+  ui->resourceUsage->setEnabled(true);
 }
 
 void ResourceInspector::OnEventChanged(uint32_t eventId)
@@ -560,7 +578,8 @@ void ResourceInspector::on_resourceListFilter_textChanged(const QString &text)
 void ResourceInspector::resource_doubleClicked(const QModelIndex &index)
 {
   ResourceId id = index.model()->data(index, ResourceIdRole).value<ResourceId>();
-  Inspect(id);
+  if(id != ResourceId())
+    Inspect(id);
 
   HighlightUsage();
 }
@@ -631,7 +650,8 @@ void ResourceInspector::on_viewContents_clicked()
 void ResourceInspector::on_resourceUsage_doubleClicked(const QModelIndex &index)
 {
   uint32_t eid = index.model()->data(index, ResourceIdRole).value<uint32_t>();
-  m_Ctx.SetEventID({}, eid, eid);
+  if(eid != 0)
+    m_Ctx.SetEventID({}, eid, eid);
 }
 
 void ResourceInspector::enterEvent(QEvent *event)
