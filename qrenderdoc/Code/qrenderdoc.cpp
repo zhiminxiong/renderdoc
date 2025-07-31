@@ -361,6 +361,10 @@ int main(int argc, char *argv[])
   hideOption(updateFailed);
   parser.addOption(updateFailed);
 
+  QCommandLineOption updateDoneAdmin(lit("updatedone_admin"));
+  hideOption(updateDoneAdmin);
+  parser.addOption(updateDoneAdmin);
+
   QCommandLineOption updateDone(lit("updatedone"));
   hideOption(updateDone);
   parser.addOption(updateDone);
@@ -413,9 +417,20 @@ int main(int argc, char *argv[])
 
   if(parser.isSet(updateDone))
   {
+    qInfo() << "Finishing update as user";
     updateApplied = true;
 
+    // the renderdoccmd updater that runs us is from the old version, so older versions might be
+    // running us as admin expecting the version number to be updated.
+    // if we're not running as admin, this will immediately exit
     RENDERDOC_UpdateInstalledVersionNumber();
+  }
+
+  if(parser.isSet(updateDoneAdmin))
+  {
+    qInfo() << "Finishing update as admin";
+    RENDERDOC_UpdateInstalledVersionNumber();
+    return 0;
   }
 
   QString remoteHost;
