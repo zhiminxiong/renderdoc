@@ -9723,7 +9723,16 @@ void DoSerialise(SerialiserType &ser, VkPhysicalDeviceDescriptorBufferDensityMap
                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_DENSITY_MAP_PROPERTIES_EXT);
   SerialiseNext(ser, el.sType, el.pNext);
 
-  SERIALISE_MEMBER(combinedImageSamplerDensityMapDescriptorSize);
+  // don't serialise size_t, otherwise capture/replay between different bit-ness won't work
+  {
+    uint64_t combinedImageSamplerDensityMapDescriptorSize =
+        el.combinedImageSamplerDensityMapDescriptorSize;
+    ser.Serialise("combinedImageSamplerDensityMapDescriptorSize"_lit,
+                  combinedImageSamplerDensityMapDescriptorSize);
+    if(ser.IsReading())
+      el.combinedImageSamplerDensityMapDescriptorSize =
+          (size_t)combinedImageSamplerDensityMapDescriptorSize;
+  }
 }
 
 template <>
@@ -9748,25 +9757,35 @@ void DoSerialise(SerialiserType &ser, VkPhysicalDeviceDescriptorBufferProperties
   SERIALISE_MEMBER(maxSamplerDescriptorBufferBindings);
   SERIALISE_MEMBER(maxEmbeddedImmutableSamplerBindings);
   SERIALISE_MEMBER(maxEmbeddedImmutableSamplers);
-  SERIALISE_MEMBER(bufferCaptureReplayDescriptorDataSize);
-  SERIALISE_MEMBER(imageCaptureReplayDescriptorDataSize);
-  SERIALISE_MEMBER(imageViewCaptureReplayDescriptorDataSize);
-  SERIALISE_MEMBER(samplerCaptureReplayDescriptorDataSize);
-  SERIALISE_MEMBER(accelerationStructureCaptureReplayDescriptorDataSize);
-  SERIALISE_MEMBER(samplerDescriptorSize);
-  SERIALISE_MEMBER(combinedImageSamplerDescriptorSize);
-  SERIALISE_MEMBER(sampledImageDescriptorSize);
-  SERIALISE_MEMBER(storageImageDescriptorSize);
-  SERIALISE_MEMBER(uniformTexelBufferDescriptorSize);
-  SERIALISE_MEMBER(robustUniformTexelBufferDescriptorSize);
-  SERIALISE_MEMBER(storageTexelBufferDescriptorSize);
-  SERIALISE_MEMBER(robustStorageTexelBufferDescriptorSize);
-  SERIALISE_MEMBER(uniformBufferDescriptorSize);
-  SERIALISE_MEMBER(robustUniformBufferDescriptorSize);
-  SERIALISE_MEMBER(storageBufferDescriptorSize);
-  SERIALISE_MEMBER(robustStorageBufferDescriptorSize);
-  SERIALISE_MEMBER(inputAttachmentDescriptorSize);
-  SERIALISE_MEMBER(accelerationStructureDescriptorSize);
+
+#define SERIALISE_MEMBER_SIZE_T(member)             \
+  {                                                 \
+    uint64_t member = el.member;                    \
+    ser.Serialise(STRING_LITERAL(#member), member); \
+    if(ser.IsReading())                             \
+      el.member = (size_t)member;                   \
+  }
+
+  SERIALISE_MEMBER_SIZE_T(bufferCaptureReplayDescriptorDataSize);
+  SERIALISE_MEMBER_SIZE_T(imageCaptureReplayDescriptorDataSize);
+  SERIALISE_MEMBER_SIZE_T(imageViewCaptureReplayDescriptorDataSize);
+  SERIALISE_MEMBER_SIZE_T(samplerCaptureReplayDescriptorDataSize);
+  SERIALISE_MEMBER_SIZE_T(accelerationStructureCaptureReplayDescriptorDataSize);
+  SERIALISE_MEMBER_SIZE_T(samplerDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(combinedImageSamplerDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(sampledImageDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(storageImageDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(uniformTexelBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(robustUniformTexelBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(storageTexelBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(robustStorageTexelBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(uniformBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(robustUniformBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(storageBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(robustStorageBufferDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(inputAttachmentDescriptorSize);
+  SERIALISE_MEMBER_SIZE_T(accelerationStructureDescriptorSize);
+
   SERIALISE_MEMBER(maxSamplerDescriptorBufferRange);
   SERIALISE_MEMBER(maxResourceDescriptorBufferRange);
   SERIALISE_MEMBER(samplerDescriptorBufferAddressSpaceSize);
