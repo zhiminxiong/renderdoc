@@ -92,9 +92,10 @@ void Editor::Prepare()
   // offsets by hand as addWords doesn't handle empty sections properly (it thinks we're inserting
   // into the later section by offset since the offsets overlap). That's why we're adding these
   // padding nops in the first place!
+  // Insert a nop at the start of the Types section to allow adding types at the start (after the nop)
   for(uint32_t s = 0; s < Section::Count; s++)
   {
-    if(m_Sections[s].startOffset == m_Sections[s].endOffset)
+    if((m_Sections[s].startOffset == m_Sections[s].endOffset) || (s == Section::Types))
     {
       m_SPIRV.insert(m_Sections[s].startOffset, OpNopWord);
       m_Sections[s].endOffset++;
@@ -158,6 +159,46 @@ Editor::~Editor()
   for(const Operation &op : m_DeferredConstants)
     AddConstant(op);
   m_DeferredConstants.clear();
+
+  rdcarray<Operation> vectorTypes;
+  // Capture all existing vector types
+  // Do this before scalar types because creating a vector declaration will also add the scalar type
+  rdcarray<Id> idsToRemove;
+  for(auto it = vectorTypeToId.begin(); it != vectorTypeToId.end(); ++it)
+  {
+    Id id = it->second;
+    idsToRemove.push_back(id);
+
+    Vector type(it->first);
+    Operation op = MakeDeclaration(type);
+    op[1] = id.value();
+    vectorTypes.push_back(op);
+  }
+
+  rdcarray<Operation> scalarTypes;
+  // Capture all existing scalar types
+  for(auto it = scalarTypeToId.begin(); it != scalarTypeToId.end(); ++it)
+  {
+    Id id = it->second;
+    idsToRemove.push_back(id);
+
+    Scalar type(it->first);
+    Operation op = MakeDeclaration(type);
+    op[1] = id.value();
+    scalarTypes.push_back(op);
+  }
+
+  // Remove existing scalar and vector types
+  for(Id id : idsToRemove)
+    Remove(GetID(id));
+
+  // Add vector then scalar types to ensure that vector types are declared after scalar types
+  // scalar and vector types are added to the start of the type section
+  for(const Operation &op : vectorTypes)
+    AddType(op);
+
+  for(const Operation &op : scalarTypes)
+    AddType(op);
 
   m_ExternalSPIRV.clear();
   m_ExternalSPIRV.reserve(m_SPIRV.size());
@@ -340,6 +381,12 @@ Id Editor::ImportExtInst(const char *setname)
 Id Editor::AddType(const Operation &op)
 {
   size_t offset = m_Sections[Section::Types].endOffset;
+
+  // scalar and vector types are added to the start of the type section (after the nop)
+  OpDecoder opdata(op.AsIter());
+  if(opdata.op == Op::TypeVoid || opdata.op == Op::TypeBool || opdata.op == Op::TypeInt ||
+     opdata.op == Op::TypeFloat || opdata.op == Op::TypeVector)
+    offset = m_Sections[Section::Types].startOffset + 1;
 
   Id id = Id::fromWord(op[1]);
   InsertOperation(op, offset);
@@ -1194,6 +1241,11 @@ void main() {
       // Functions
       {0x2a4, 0x374},
   };
+
+  // By default the editor will add a nop to the start of the Types section
+  offsets[rdcspv::Section::Types][1] += 4;
+  offsets[rdcspv::Section::Functions][0] += 4;
+  offsets[rdcspv::Section::Functions][1] += 4;
 
   SECTION("Check that SPIR-V is correct with no changes")
   {
