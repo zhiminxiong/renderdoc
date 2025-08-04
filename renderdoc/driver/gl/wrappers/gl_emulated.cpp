@@ -1253,26 +1253,27 @@ void APIENTRY _glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLev
         {
           case eGL_R8_SNORM:
           case eGL_RG8_SNORM:
-          case eGL_RGBA8_SNORM: colorRenderable = HasExt[EXT_render_snorm];
+          case eGL_RGBA8_SNORM: colorRenderable = HasExt[EXT_render_snorm]; break;
 
           case eGL_R16_SNORM:
           case eGL_RG16_SNORM:
-          case eGL_RGBA16_SNORM: colorRenderable = HasExt[EXT_render_snorm];
+          case eGL_RGBA16_SNORM: colorRenderable = HasExt[EXT_render_snorm]; break;
 
           case eGL_R16F:
           case eGL_RG16F:
           case eGL_RGBA16F:
             colorRenderable = HasExt[EXT_color_buffer_half_float] || HasExt[EXT_color_buffer_float];
+            break;
 
-          case eGL_RGB16F: colorRenderable = HasExt[EXT_color_buffer_half_float];
+          case eGL_RGB16F: colorRenderable = HasExt[EXT_color_buffer_half_float]; break;
 
           case eGL_R32F:
           case eGL_RG32F:
           case eGL_RGBA32F:
-          case eGL_R11F_G11F_B10F: colorRenderable = HasExt[EXT_color_buffer_float];
+          case eGL_R11F_G11F_B10F: colorRenderable = HasExt[EXT_color_buffer_float]; break;
 
           case eGL_RGB10_A2:
-          case eGL_RGB10_A2UI: colorRenderable = (GLCoreVersion >= 30);
+          case eGL_RGB10_A2UI: colorRenderable = (GLCoreVersion >= 30); break;
 
           default: break;
         }
