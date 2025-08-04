@@ -354,7 +354,7 @@ DOCUMENT(R"(Represents the component type of a channel in a texture or element i
 
 .. data:: SScaled
 
-  A signed scaled floating point value. This is converted from the input unsigned integer without
+  A signed scaled floating point value. This is converted from the input signed integer without
   any normalisation as with :data:`SNorm`, so the resulting values range from the minimum signed
   integer value ``-2^(N-1)`` to the maximum signed integer value ``2^(N-1) - 1``.
 
