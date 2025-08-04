@@ -272,6 +272,7 @@ private:
   using Processor::Parse;
   inline void addWords(size_t offs, size_t num) { addWords(offs, (int32_t)num); }
   void addWords(size_t offs, int32_t num);
+  void InsertOperation(const Operation &op, size_t offset);
 
   Operation MakeDeclaration(const Scalar &s);
   Operation MakeDeclaration(const Vector &v);

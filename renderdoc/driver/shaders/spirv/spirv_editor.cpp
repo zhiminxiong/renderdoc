@@ -211,6 +211,13 @@ void Editor::DecorateStorageBufferStruct(Id id)
   }
 }
 
+void Editor::InsertOperation(const Operation &op, size_t offset)
+{
+  op.insertInto(m_SPIRV, offset);
+  addWords(offset, op.size());
+  RegisterOp(Iter(m_SPIRV, offset));
+}
+
 void Editor::SetName(Id id, const rdcstr &name)
 {
   Operation op = OpName(id, name);
@@ -224,9 +231,7 @@ void Editor::SetName(Id id, const rdcstr &name)
       break;
   }
 
-  op.insertInto(m_SPIRV, it.offs());
-  RegisterOp(Iter(m_SPIRV, it.offs()));
-  addWords(it.offs(), op.size());
+  InsertOperation(op, it.offs());
 }
 
 void Editor::SetMemberName(Id id, uint32_t member, const rdcstr &name)
@@ -234,17 +239,13 @@ void Editor::SetMemberName(Id id, uint32_t member, const rdcstr &name)
   Operation op = OpMemberName(id, member, name);
 
   size_t offset = m_Sections[Section::DebugNames].endOffset;
-  op.insertInto(m_SPIRV, offset);
-  RegisterOp(Iter(m_SPIRV, offset));
-  addWords(offset, op.size());
+  InsertOperation(op, offset);
 }
 
 void Editor::AddDecoration(const Operation &op)
 {
   size_t offset = m_Sections[Section::Annotations].endOffset;
-  op.insertInto(m_SPIRV, offset);
-  RegisterOp(Iter(m_SPIRV, offset));
-  addWords(offset, op.size());
+  InsertOperation(op, offset);
 }
 
 void Editor::AddCapability(Capability cap)
@@ -255,9 +256,7 @@ void Editor::AddCapability(Capability cap)
 
   // insert the operation at the very start
   Operation op(Op::Capability, {(uint32_t)cap});
-  op.insertInto(m_SPIRV, FirstRealWord);
-  RegisterOp(Iter(m_SPIRV, FirstRealWord));
-  addWords(FirstRealWord, op.size());
+  InsertOperation(op, FirstRealWord);
 }
 
 bool Editor::HasCapability(Capability cap)
@@ -285,18 +284,13 @@ void Editor::AddExtension(const rdcstr &extension)
   memcpy(&uintName[0], extension.c_str(), sz);
 
   Operation op(Op::Extension, uintName);
-  op.insertInto(m_SPIRV, it.offs());
-  RegisterOp(it);
-  addWords(it.offs(), op.size());
+  InsertOperation(op, it.offs());
 }
 
 void Editor::AddExecutionMode(const Operation &mode)
 {
   size_t offset = m_Sections[Section::ExecutionMode].endOffset;
-
-  mode.insertInto(m_SPIRV, offset);
-  RegisterOp(Iter(m_SPIRV, offset));
-  addWords(offset, mode.size());
+  InsertOperation(mode, offset);
 }
 
 Id Editor::HasExtInst(const char *setname)
@@ -336,9 +330,7 @@ Id Editor::ImportExtInst(const char *setname)
   uintName.insert(0, ret.value());
 
   Operation op(Op::ExtInstImport, uintName);
-  op.insertInto(m_SPIRV, it.offs());
-  RegisterOp(it);
-  addWords(it.offs(), op.size());
+  InsertOperation(op, it.offs());
 
   extSets[ret] = setname;
 
@@ -350,9 +342,7 @@ Id Editor::AddType(const Operation &op)
   size_t offset = m_Sections[Section::Types].endOffset;
 
   Id id = Id::fromWord(op[1]);
-  op.insertInto(m_SPIRV, offset);
-  RegisterOp(Iter(m_SPIRV, offset));
-  addWords(offset, op.size());
+  InsertOperation(op, offset);
   return id;
 }
 
@@ -361,9 +351,7 @@ Id Editor::AddVariable(const Operation &op)
   size_t offset = m_Sections[Section::Variables].endOffset;
 
   Id id = Id::fromWord(op[2]);
-  op.insertInto(m_SPIRV, offset);
-  RegisterOp(Iter(m_SPIRV, offset));
-  addWords(offset, op.size());
+  InsertOperation(op, offset);
   return id;
 }
 
@@ -372,9 +360,7 @@ Id Editor::AddConstant(const Operation &op)
   size_t offset = m_Sections[Section::Constants].endOffset;
 
   Id id = Id::fromWord(op[2]);
-  op.insertInto(m_SPIRV, offset);
-  RegisterOp(Iter(m_SPIRV, offset));
-  addWords(offset, op.size());
+  InsertOperation(op, offset);
   return id;
 }
 
