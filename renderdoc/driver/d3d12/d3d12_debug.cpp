@@ -1104,6 +1104,9 @@ ID3D12Resource *D3D12DebugManager::MakeCBuffer(UINT64 size)
 
 void D3D12DebugManager::FillBuffer(ID3D12Resource *buf, size_t offset, const void *data, size_t size)
 {
+  if(!buf)
+    return;
+
   D3D12_RANGE range = {offset, offset + size};
   byte *ptr = NULL;
   HRESULT hr = buf->Map(0, &range, (void **)&ptr);
@@ -1191,6 +1194,11 @@ rdcpair<ID3D12Resource *, UINT64> D3D12DebugManager::PatchExecuteIndirect(
     UINT maxCount)
 {
   rdcarray<uint32_t> argOffsets;
+
+  if(!m_EIPatchBufferData)
+  {
+    return {argBuf, argBufOffset};
+  }
 
   WrappedID3D12CommandSignature *wrappedComSig = (WrappedID3D12CommandSignature *)comSig;
   uint32_t offset = 0;
@@ -2114,15 +2122,16 @@ void D3D12DebugManager::PrepareExecuteIndirectPatching(GPUAddressRangeTracker &o
     hr = m_pDevice->CreateCommittedResource(
         &heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, NULL,
         __uuidof(ID3D12Resource), (void **)&m_EIPatchScratchBuffer);
-    m_pDevice->RemoveReplayResource(GetResID(m_EIPatchScratchBuffer));
-
-    m_EIPatchScratchBuffer->SetName(L"m_EIPatchScratchBuffer");
 
     if(FAILED(hr))
     {
       RDCERR("Failed to create scratch buffer, HRESULT: %s", ToStr(hr).c_str());
       return;
     }
+
+    m_pDevice->RemoveReplayResource(GetResID(m_EIPatchScratchBuffer));
+
+    m_EIPatchScratchBuffer->SetName(L"m_EIPatchScratchBuffer");
   }
 }
 
