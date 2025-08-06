@@ -2292,8 +2292,12 @@ void D3D12RTManager::PrepareRayDispatchBuffer(GPUAddressRangeTracker *origAddres
                                D3D12GpuBufferHeapMemoryFlag::Default, lookupData.size(), 256,
                                &m_LookupBuffer);
 
-    memcpy(m_LookupBuffer->Map(), lookupData.data(), lookupData.size());
-    m_LookupBuffer->Unmap();
+    void *ptr = m_LookupBuffer ? m_LookupBuffer->Map() : NULL;
+    if(ptr)
+    {
+      memcpy(m_LookupBuffer->Map(), lookupData.data(), lookupData.size());
+      m_LookupBuffer->Unmap();
+    }
 
     D3D12_GPU_VIRTUAL_ADDRESS baseAddr = m_LookupBuffer->Address();
     m_LookupAddrs[0] = baseAddr + ObjectLookupOffset;
