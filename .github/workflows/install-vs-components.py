@@ -5,6 +5,8 @@
 
 import os
 import platform
+import sys
+import datetime
 from itertools import chain
 from subprocess import check_call, check_output
 
@@ -37,8 +39,12 @@ args = (
 )
 print(*args)
 
-# Should be run twice for some reason
-print("First run...")
-check_call(args)
-print("Second run...")
-check_call(args)
+# run 10 times because even running twice doesn't always work
+for i in range(10):
+    print("Run " + str(i))
+    print(datetime.datetime.now().time())
+    try:
+        check_call(args)
+    except:
+        print("Call error:" + str(sys.exc_info()))
+    print(datetime.datetime.now().time())
