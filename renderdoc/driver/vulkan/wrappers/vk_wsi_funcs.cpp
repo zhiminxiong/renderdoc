@@ -672,13 +672,6 @@ void WrappedVulkan::WrapAndProcessCreatedSwapchain(VkDevice device,
           VK_IMAGE_LAYOUT_UNDEFINED,
       };
 
-      if(pCreateInfo->imageSharingMode == VK_SHARING_MODE_CONCURRENT)
-      {
-        uint32_t *queueFamiles = (uint32_t *)pCreateInfo->pQueueFamilyIndices;
-        for(uint32_t q = 0; q < pCreateInfo->queueFamilyIndexCount; q++)
-          queueFamiles[q] = m_QueueRemapping[queueFamiles[q]][0].family;
-      }
-
       uint64_t memOffs = 0;
       uint32_t memIndices = ~0U;
       for(uint32_t i = 0; i < numSwapImages; i++)
