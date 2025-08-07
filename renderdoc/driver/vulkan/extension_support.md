@@ -221,8 +221,10 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_KHR_storage_buffer_storage_class`
 * `VK_KHR_surface_protected_capabilities`
 * `VK_KHR_surface`
+* `VK_KHR_surface_maintenance1`
 * `VK_KHR_swapchain_mutable_format`
 * `VK_KHR_swapchain`
+* `VK_KHR_swapchain_maintenance1`
 * `VK_KHR_synchronization2`
 * `VK_KHR_timeline_semaphore`
 * `VK_KHR_uniform_buffer_standard_layout`
@@ -264,9 +266,14 @@ KHR extensions will definitely be implemented at some point, though KHR extensio
 * `VK_KHR_maintenance6`
 * `VK_KHR_maintenance7`
 * `VK_KHR_maintenance8`
+* `VK_KHR_maintenance9`
 * `VK_KHR_map_memory2`
 * `VK_KHR_pipeline_binary`
+* `VK_KHR_present_id2`
+* `VK_KHR_present_mode_fifo_latest_ready`
+* `VK_KHR_present_wait2`
 * `VK_KHR_shader_bfloat16`
+* `VK_KHR_unified_image_layouts`
 
 ## KHR Portability
 
@@ -303,6 +310,7 @@ The portability subset is only relevant on mac, which is not a supported platfor
 * `VK_EXT_pipeline_protected_access`
 * `VK_EXT_pipeline_robustness`
 * `VK_EXT_present_mode_fifo_latest_ready`
+* `VK_EXT_shader_float8`
 * `VK_EXT_shader_module_identifier`
 * `VK_EXT_shader_replicated_composites`
 * `VK_EXT_shader_tile_image`
@@ -318,12 +326,15 @@ The portability subset is only relevant on mac, which is not a supported platfor
 
 ### ARM
 
+* `VK_ARM_data_graph`
+* `VK_ARM_format_pack`
 * `VK_ARM_pipeline_opacity_micromap`
 * `VK_ARM_rasterization_order_attachment_access`
 * `VK_ARM_render_pass_striped`
 * `VK_ARM_scheduling_controls`
 * `VK_ARM_shader_core_builtins`
 * `VK_ARM_shader_core_properties`
+* `VK_ARM_tensors`
 
 ### AMD
 
@@ -385,6 +396,7 @@ The portability subset is only relevant on mac, which is not a supported platfor
 * `VK_NV_displacement_micromap`
 * `VK_NV_display_stereo`
 * `VK_NV_extended_sparse_address_space`
+* `VK_NV_external_compute_queue`
 * `VK_NV_external_memory_rdma`
 * `VK_NV_fill_rectangle`
 * `VK_NV_fragment_coverage_to_color`
@@ -431,10 +443,12 @@ The portability subset is only relevant on mac, which is not a supported platfor
 ### Samsung
 
 * `VK_SEC_amigo_profiling`
+* `VK_SEC_pipeline_cache_incremental_mode`
 
 ### Valve
 
 * `VK_VALVE_descriptor_set_host_mapping`
+* `VK_VALVE_fragment_density_map_layered`
 
 ## WSI for other platforms
 
@@ -457,9 +471,11 @@ These are expected to never be implemented in their current form.
 * `VK_KHR_video_decode_h264`
 * `VK_KHR_video_decode_h265`
 * `VK_KHR_video_decode_queue`
+* `VK_KHR_video_decode_vp9`
 * `VK_KHR_video_encode_av1`
 * `VK_KHR_video_encode_h264`
 * `VK_KHR_video_encode_h265`
+* `VK_KHR_video_encode_intra_refresh`
 * `VK_KHR_video_encode_quantization_map`
 * `VK_KHR_video_encode_queue`
 * `VK_KHR_video_maintenance1`
@@ -474,6 +490,7 @@ These are expected to never be implemented in their current form.
 ### Deprecated / experimental / IHV / non-Vulkan
 
 * `VK_AMD_draw_indirect_count`
+* `VK_AMDX_dense_geometry_format`
 * `VK_AMDX_shader_enqueue`
 * `VK_GGP_frame_token`
 * `VK_GGP_stream_descriptor_surface`
@@ -488,3 +505,4 @@ These are expected to never be implemented in their current form.
 * `VK_NVX_binary_import`
 * `VK_NVX_multiview_per_view_attributes`
 * `VK_NVX_image_view_handle`
+* `VK_OHOS_surface`

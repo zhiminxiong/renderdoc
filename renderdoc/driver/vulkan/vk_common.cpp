@@ -1579,6 +1579,7 @@ void DescriptorSetSlot::SetDescriptor(WrappedVulkan *driver, const VkDescriptorG
     case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
     case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
     case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
     case VK_DESCRIPTOR_TYPE_MAX_ENUM:
       RDCERR("Invalid descriptor type passed to vkGetDescriptorEXT");
       break;

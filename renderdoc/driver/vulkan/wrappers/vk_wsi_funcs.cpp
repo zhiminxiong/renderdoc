@@ -922,7 +922,7 @@ VkResult WrappedVulkan::vkCreateSwapchainKHR(VkDevice device,
     createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
   // remove deferred allocation flag so we can process images immediately
-  createInfo.flags &= ~VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT;
+  createInfo.flags &= ~VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_KHR;
 
   createInfo.surface = Unwrap(createInfo.surface);
   createInfo.oldSwapchain = Unwrap(createInfo.oldSwapchain);
@@ -1021,8 +1021,8 @@ VkResult WrappedVulkan::vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR 
        next->sType != VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR &&
        next->sType != VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE &&
        next->sType != VK_STRUCTURE_TYPE_PRESENT_ID_KHR &&
-       next->sType != VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT &&
-       next->sType != VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT)
+       next->sType != VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR &&
+       next->sType != VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_KHR)
     {
       RDCWARN("Unsupported pNext structure in pPresentInfo: %s", ToStr(next->sType).c_str());
     }
@@ -1075,13 +1075,13 @@ VkResult WrappedVulkan::vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR 
     if(ids)
       ids->swapchainCount = 1;
 
-    VkSwapchainPresentFenceInfoEXT *fences = (VkSwapchainPresentFenceInfoEXT *)FindNextStruct(
-        &mutableInfo, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT);
+    VkSwapchainPresentFenceInfoKHR *fences = (VkSwapchainPresentFenceInfoKHR *)FindNextStruct(
+        &mutableInfo, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR);
     if(fences)
       fences->swapchainCount = 1;
 
-    VkSwapchainPresentModeInfoEXT *mode = (VkSwapchainPresentModeInfoEXT *)FindNextStruct(
-        &mutableInfo, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT);
+    VkSwapchainPresentModeInfoKHR *mode = (VkSwapchainPresentModeInfoKHR *)FindNextStruct(
+        &mutableInfo, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR);
     if(mode)
       mode->swapchainCount = 1;
 
@@ -1799,12 +1799,21 @@ VkResult WrappedVulkan::vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swap
   return ObjDisp(device)->WaitForPresentKHR(Unwrap(device), Unwrap(swapchain), presentId, timeout);
 }
 
+VkResult WrappedVulkan::vkReleaseSwapchainImagesKHR(VkDevice device,
+                                                    const VkReleaseSwapchainImagesInfoKHR *pReleaseInfo)
+{
+  VkReleaseSwapchainImagesInfoKHR releaseInfo = *pReleaseInfo;
+  releaseInfo.swapchain = Unwrap(releaseInfo.swapchain);
+  return ObjDisp(device)->ReleaseSwapchainImagesKHR(Unwrap(device), &releaseInfo);
+}
+
+// we can forward this straight on regardless, as our handling of dispatch tables means if only the
+// EXT is available it will go through to the EXT from the driver, and we would rather merge the
+// EXT/KHR paths and silently promote than keep them separate and maintain two paths.
 VkResult WrappedVulkan::vkReleaseSwapchainImagesEXT(VkDevice device,
                                                     const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo)
 {
-  VkReleaseSwapchainImagesInfoEXT releaseInfo = *pReleaseInfo;
-  releaseInfo.swapchain = Unwrap(releaseInfo.swapchain);
-  return ObjDisp(device)->ReleaseSwapchainImagesEXT(Unwrap(device), &releaseInfo);
+  return vkReleaseSwapchainImagesKHR(device, pReleaseInfo);
 }
 
 #ifdef VK_USE_PLATFORM_WIN32_KHR

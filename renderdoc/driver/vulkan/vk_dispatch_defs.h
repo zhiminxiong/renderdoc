@@ -280,11 +280,23 @@ struct VkInstDispatchTable
   PFN_vkGetPhysicalDeviceScreenPresentationSupportQNX GetPhysicalDeviceScreenPresentationSupportQNX;
 #endif // VK_USE_PLATFORM_SCREEN_QNX
 
+  // VK_ARM_tensors
+  PFN_vkGetPhysicalDeviceExternalTensorPropertiesARM GetPhysicalDeviceExternalTensorPropertiesARM;
+
   // VK_NV_optical_flow
   PFN_vkGetPhysicalDeviceOpticalFlowImageFormatsNV GetPhysicalDeviceOpticalFlowImageFormatsNV;
 
   // VK_NV_cooperative_vector
   PFN_vkGetPhysicalDeviceCooperativeVectorPropertiesNV GetPhysicalDeviceCooperativeVectorPropertiesNV;
+
+  // VK_ARM_data_graph
+  PFN_vkGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM GetPhysicalDeviceQueueFamilyDataGraphPropertiesARM;
+  PFN_vkGetPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM GetPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM;
+
+  // VK_OHOS_surface
+#ifdef VK_USE_PLATFORM_OHOS
+  PFN_vkCreateSurfaceOHOS CreateSurfaceOHOS;
+#endif // VK_USE_PLATFORM_OHOS
 
   // VK_NV_cooperative_matrix2
   PFN_vkGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV GetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV;
@@ -697,12 +709,18 @@ struct VkDevDispatchTable
   PFN_vkGetDeviceImageSubresourceLayoutKHR GetDeviceImageSubresourceLayoutKHR;
   PFN_vkGetImageSubresourceLayout2KHR GetImageSubresourceLayout2KHR;
 
+  // VK_KHR_present_wait2
+  PFN_vkWaitForPresent2KHR WaitForPresent2KHR;
+
   // VK_KHR_pipeline_binary
   PFN_vkCreatePipelineBinariesKHR CreatePipelineBinariesKHR;
   PFN_vkDestroyPipelineBinaryKHR DestroyPipelineBinaryKHR;
   PFN_vkGetPipelineKeyKHR GetPipelineKeyKHR;
   PFN_vkGetPipelineBinaryDataKHR GetPipelineBinaryDataKHR;
   PFN_vkReleaseCapturedPipelineDataKHR ReleaseCapturedPipelineDataKHR;
+
+  // VK_KHR_swapchain_maintenance1
+  PFN_vkReleaseSwapchainImagesKHR ReleaseSwapchainImagesKHR;
 
   // VK_KHR_line_rasterization
   PFN_vkCmdSetLineStippleKHR CmdSetLineStippleKHR;
@@ -1103,6 +1121,18 @@ struct VkDevDispatchTable
   PFN_vkCmdSetRepresentativeFragmentTestEnableNV CmdSetRepresentativeFragmentTestEnableNV;
   PFN_vkCmdSetCoverageReductionModeNV CmdSetCoverageReductionModeNV;
 
+  // VK_ARM_tensors
+  PFN_vkCreateTensorARM CreateTensorARM;
+  PFN_vkDestroyTensorARM DestroyTensorARM;
+  PFN_vkCreateTensorViewARM CreateTensorViewARM;
+  PFN_vkDestroyTensorViewARM DestroyTensorViewARM;
+  PFN_vkGetTensorMemoryRequirementsARM GetTensorMemoryRequirementsARM;
+  PFN_vkBindTensorMemoryARM BindTensorMemoryARM;
+  PFN_vkGetDeviceTensorMemoryRequirementsARM GetDeviceTensorMemoryRequirementsARM;
+  PFN_vkCmdCopyTensorARM CmdCopyTensorARM;
+  PFN_vkGetTensorOpaqueCaptureDescriptorDataARM GetTensorOpaqueCaptureDescriptorDataARM;
+  PFN_vkGetTensorViewOpaqueCaptureDescriptorDataARM GetTensorViewOpaqueCaptureDescriptorDataARM;
+
   // VK_EXT_shader_module_identifier
   PFN_vkGetShaderModuleIdentifierEXT GetShaderModuleIdentifierEXT;
   PFN_vkGetShaderModuleCreateInfoIdentifierEXT GetShaderModuleCreateInfoIdentifierEXT;
@@ -1137,6 +1167,17 @@ struct VkDevDispatchTable
   PFN_vkSetLatencyMarkerNV SetLatencyMarkerNV;
   PFN_vkGetLatencyTimingsNV GetLatencyTimingsNV;
   PFN_vkQueueNotifyOutOfBandNV QueueNotifyOutOfBandNV;
+
+  // VK_ARM_data_graph
+  PFN_vkCreateDataGraphPipelinesARM CreateDataGraphPipelinesARM;
+  PFN_vkCreateDataGraphPipelineSessionARM CreateDataGraphPipelineSessionARM;
+  PFN_vkGetDataGraphPipelineSessionBindPointRequirementsARM GetDataGraphPipelineSessionBindPointRequirementsARM;
+  PFN_vkGetDataGraphPipelineSessionMemoryRequirementsARM GetDataGraphPipelineSessionMemoryRequirementsARM;
+  PFN_vkBindDataGraphPipelineSessionMemoryARM BindDataGraphPipelineSessionMemoryARM;
+  PFN_vkDestroyDataGraphPipelineSessionARM DestroyDataGraphPipelineSessionARM;
+  PFN_vkCmdDispatchDataGraphARM CmdDispatchDataGraphARM;
+  PFN_vkGetDataGraphPipelineAvailablePropertiesARM GetDataGraphPipelineAvailablePropertiesARM;
+  PFN_vkGetDataGraphPipelinePropertiesARM GetDataGraphPipelinePropertiesARM;
 
   // VK_EXT_attachment_feedback_loop_dynamic_state
   PFN_vkCmdSetAttachmentFeedbackLoopEnableEXT CmdSetAttachmentFeedbackLoopEnableEXT;

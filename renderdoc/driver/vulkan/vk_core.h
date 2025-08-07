@@ -2980,6 +2980,10 @@ public:
   VkResult vkReleaseSwapchainImagesEXT(VkDevice device,
                                        const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo);
 
+  // VK_KHR_swapchain_maintenance1
+  VkResult vkReleaseSwapchainImagesKHR(VkDevice device,
+                                       const VkReleaseSwapchainImagesInfoKHR *pReleaseInfo);
+
   // VK_EXT_attachment_feedback_loop_dynamic_state
   IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetAttachmentFeedbackLoopEnableEXT,
                                 VkCommandBuffer commandBuffer, VkImageAspectFlags aspectMask);

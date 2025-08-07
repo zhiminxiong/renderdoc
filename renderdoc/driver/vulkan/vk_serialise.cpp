@@ -109,7 +109,7 @@ DECL_VKFLAG_EMPTY(VkPipelineVertexInputStateCreate);
 DECL_VKFLAG_EMPTY(VkPipelineViewportStateCreate);
 DECL_VKFLAG(VkQueryControl);
 DECL_VKFLAG(VkQueryPipelineStatistic);
-DECL_VKFLAG_EMPTY(VkQueryPoolCreate);
+DECL_VKFLAG(VkQueryPoolCreate);
 DECL_VKFLAG(VkQueryResult);
 DECL_VKFLAG(VkQueue);
 DECL_VKFLAG(VkRenderPassCreate);
@@ -162,8 +162,8 @@ DECL_VKFLAG_EXT(VkAccess, 2);
 DECL_VKFLAG_EXT(VkFormatFeature, 2);
 DECL_VKFLAG_EXT(VkGraphicsPipelineLibrary, EXT);
 DECL_VKFLAG(VkRendering);
-DECL_VKFLAG_EXT(VkPresentScaling, EXT);
-DECL_VKFLAG_EXT(VkPresentGravity, EXT);
+DECL_VKFLAG_EXT(VkPresentScaling, KHR);
+DECL_VKFLAG_EXT(VkPresentGravity, KHR);
 DECL_VKFLAG_EXT(VkAccelerationStructureCreate, KHR);
 DECL_VKFLAG_EXT(VkBuildAccelerationStructure, KHR);
 DECL_VKFLAG_EXT(VkGeometry, KHR);
@@ -912,24 +912,6 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,             \
                VkPipelineShaderStageRequiredSubgroupSizeCreateInfo)                                    \
                                                                                                        \
-  /* VK_EXT_surface_maintenance1 */                                                                    \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT, VkSurfacePresentModeEXT)                    \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT,                             \
-               VkSurfacePresentScalingCapabilitiesEXT)                                                 \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT,                               \
-               VkSurfacePresentModeCompatibilityEXT)                                                   \
-                                                                                                       \
-  /* VK_EXT_swapchain_maintenance1 */                                                                  \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,                 \
-               VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT)                                       \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_EXT, VkReleaseSwapchainImagesInfoEXT)   \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT, VkSwapchainPresentFenceInfoEXT)     \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,                              \
-               VkSwapchainPresentModesCreateInfoEXT)                                                   \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT, VkSwapchainPresentModeInfoEXT)       \
-  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT,                            \
-               VkSwapchainPresentScalingCreateInfoEXT)                                                 \
-                                                                                                       \
   /* VK_EXT_texel_buffer_alignment */                                                                  \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXEL_BUFFER_ALIGNMENT_FEATURES_EXT,                  \
                VkPhysicalDeviceTexelBufferAlignmentFeaturesEXT)                                        \
@@ -1459,6 +1441,13 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR,                              \
                VkSharedPresentSurfaceCapabilitiesKHR)                                                  \
                                                                                                        \
+  /* VK_KHR_surface_maintenance1 */                                                                    \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR, VkSurfacePresentModeKHR)                    \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_KHR,                             \
+               VkSurfacePresentScalingCapabilitiesKHR)                                                 \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_KHR,                               \
+               VkSurfacePresentModeCompatibilityKHR)                                                   \
+                                                                                                       \
   /* VK_KHR_surface_protected_capabilities */                                                          \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_SURFACE_PROTECTED_CAPABILITIES_KHR,                                   \
                VkSurfaceProtectedCapabilitiesKHR)                                                      \
@@ -1467,6 +1456,17 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, VkSwapchainCreateInfoKHR)                  \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, VkPresentInfoKHR)                                   \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR, VkAcquireNextImageInfoKHR)               \
+                                                                                                       \
+  /* VK_KHR_swapchain_maintenance1 */                                                                  \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,                 \
+               VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR)                                       \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_KHR, VkReleaseSwapchainImagesInfoKHR)   \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR, VkSwapchainPresentFenceInfoKHR)     \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_KHR,                              \
+               VkSwapchainPresentModesCreateInfoKHR)                                                   \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_KHR, VkSwapchainPresentModeInfoKHR)       \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR,                            \
+               VkSwapchainPresentScalingCreateInfoKHR)                                                 \
                                                                                                        \
   /* VK_KHR_synchronization2 */                                                                        \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2, VkMemoryBarrier2)                                   \
@@ -1558,24 +1558,49 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_IOS_SURFACE_CREATE_INFO_MVK)                                     \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK)                                   \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT)                                   \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_OH_SURFACE_CREATE_INFO_OHOS)                                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PRESENT_FRAME_TOKEN_GGP)                                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_SCREEN_SURFACE_CREATE_INFO_QNX)                                  \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_STREAM_DESCRIPTOR_SURFACE_CREATE_INFO_GGP)                       \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VI_SURFACE_CREATE_INFO_NN)                                       \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR)                                 \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR)                                   \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR)                                     \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR)                                    \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_SCREEN_SURFACE_CREATE_INFO_QNX)                                  \
                                                                                                        \
-  /* Vulkan 1.3 only, no extension */                                                                  \
+  /* Vulkan 1.4 only, no extension */                                                                  \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES)                             \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES)                           \
                                                                                                        \
+  /* VK_ARM_data_graph     */                                                                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_CREATE_INFO_ARM)                             \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_CREATE_INFO_ARM)                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_RESOURCE_INFO_ARM)                           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_CONSTANT_ARM)                                \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_MEMORY_REQUIREMENTS_INFO_ARM)        \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_BIND_DATA_GRAPH_PIPELINE_SESSION_MEMORY_INFO_ARM)                \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DATA_GRAPH_FEATURES_ARM)                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SHADER_MODULE_CREATE_INFO_ARM)               \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_PROPERTY_QUERY_RESULT_ARM)                   \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_INFO_ARM)                                    \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_COMPILER_CONTROL_CREATE_INFO_ARM)            \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_REQUIREMENTS_INFO_ARM)    \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_REQUIREMENT_ARM)          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_IDENTIFIER_CREATE_INFO_ARM)                  \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_DISPATCH_INFO_ARM)                           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DATA_GRAPH_PROCESSING_ENGINE_CREATE_INFO_ARM)                    \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_QUEUE_FAMILY_DATA_GRAPH_PROCESSING_ENGINE_PROPERTIES_ARM)        \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_QUEUE_FAMILY_DATA_GRAPH_PROPERTIES_ARM)                          \
+  PNEXT_UNSUPPORTED(                                                                                   \
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_QUEUE_FAMILY_DATA_GRAPH_PROCESSING_ENGINE_INFO_ARM)            \
+  PNEXT_UNSUPPORTED(                                                                                   \
+      VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_CONSTANT_TENSOR_SEMI_STRUCTURED_SPARSITY_INFO_ARM)         \
+                                                                                                       \
+  /* VK_ARM_format_pack     */                                                                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FORMAT_PACK_FEATURES_ARM)                        \
+                                                                                                       \
   /* VK_ARM_pipeline_opacity_micromap */                                                               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_OPACITY_MICROMAP_FEATURES_ARM)          \
-                                                                                                       \
-  /* VK_ARM_scheduling_controls */                                                                     \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DEVICE_QUEUE_SHADER_CORE_CONTROL_CREATE_INFO_ARM)                \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCHEDULING_CONTROLS_FEATURES_ARM)                \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCHEDULING_CONTROLS_PROPERTIES_ARM)              \
                                                                                                        \
   /* VK_ARM_render_pass_striped */                                                                     \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RENDER_PASS_STRIPED_FEATURES_ARM)                \
@@ -1584,12 +1609,43 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_RENDER_PASS_STRIPE_INFO_ARM)                                     \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_RENDER_PASS_STRIPE_SUBMIT_INFO_ARM)                              \
                                                                                                        \
+  /* VK_ARM_scheduling_controls */                                                                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DEVICE_QUEUE_SHADER_CORE_CONTROL_CREATE_INFO_ARM)                \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCHEDULING_CONTROLS_FEATURES_ARM)                \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCHEDULING_CONTROLS_PROPERTIES_ARM)              \
+                                                                                                       \
   /* VK_ARM_shader_core_builtins */                                                                    \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_BUILTINS_FEATURES_ARM)               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_BUILTINS_PROPERTIES_ARM)             \
                                                                                                        \
   /* VK_ARM_shader_core_properties */                                                                  \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_PROPERTIES_ARM)                      \
+                                                                                                       \
+  /* VK_ARM_tensors */                                                                                 \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_CREATE_INFO_ARM)                                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_VIEW_CREATE_INFO_ARM)                                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM)                                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_ARM)                                 \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_PROPERTIES_ARM)                           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_FORMAT_PROPERTIES_ARM)                                    \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM)                                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM)                             \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_MEMORY_BARRIER_ARM)                                       \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_FEATURES_ARM)                             \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DEVICE_TENSOR_MEMORY_REQUIREMENTS_ARM)                           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_COPY_TENSOR_INFO_ARM)                                            \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_COPY_ARM)                                                 \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_DEPENDENCY_INFO_ARM)                                      \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_TENSOR_ARM)                       \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_TENSOR_INFO_ARM)                        \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_EXTERNAL_TENSOR_PROPERTIES_ARM)                                  \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_TENSOR_CREATE_INFO_ARM)                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_TENSOR_FEATURES_ARM)           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_TENSOR_PROPERTIES_ARM)         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DESCRIPTOR_GET_TENSOR_INFO_ARM)                                  \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_CAPTURE_DESCRIPTOR_DATA_INFO_ARM)                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_TENSOR_VIEW_CAPTURE_DESCRIPTOR_DATA_INFO_ARM)                    \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_FRAME_BOUNDARY_TENSORS_ARM)                                      \
                                                                                                        \
   /* VK_AMD_anti_lag */                                                                                \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ANTI_LAG_FEATURES_AMD)                           \
@@ -1768,8 +1824,8 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES)                    \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_PROPERTIES)                  \
                                                                                                        \
-  /* VK_EXT_present_mode_fifo_latest_ready */                                                          \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT)     \
+  /* VK_EXT_shader_float8     */                                                                       \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT)                      \
                                                                                                        \
   /* VK_EXT_shader_module_identifier */                                                                \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MODULE_IDENTIFIER_FEATURES_EXT)           \
@@ -1832,6 +1888,16 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_PROPERTIES_KHR)               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR)                 \
                                                                                                        \
+  /* VK_KHR_present_id2     */                                                                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR)                           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR)                                                \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR)                       \
+                                                                                                       \
+  /* VK_KHR_present_wait2 */                                                                           \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR)                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR)                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR)                                         \
+                                                                                                       \
   /* VK_KHR_map_memory2 */                                                                             \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_MAP_INFO)                                                 \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO)                                               \
@@ -1860,6 +1926,11 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR)                      \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_BARRIER_ACCESS_FLAGS_3_KHR)                               \
                                                                                                        \
+  /* VK_KHR_maintenance9     */                                                                        \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR)                      \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_PROPERTIES_KHR)                    \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_QUEUE_FAMILY_OWNERSHIP_TRANSFER_PROPERTIES_KHR)                  \
+                                                                                                       \
   /* VK_KHR_pipeline_binary */                                                                         \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_BINARY_FEATURES_KHR)                    \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PIPELINE_BINARY_CREATE_INFO_KHR)                                 \
@@ -1872,8 +1943,15 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DEVICE_PIPELINE_BINARY_INTERNAL_CACHE_CONTROL_KHR)               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PIPELINE_BINARY_HANDLES_INFO_KHR)                                \
                                                                                                        \
+  /* VK_KHR_present_mode_fifo_latest_ready     */                                                      \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR)     \
+                                                                                                       \
   /* VK_KHR_shader_bfloat16 */                                                                         \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_BFLOAT16_FEATURES_KHR)                    \
+                                                                                                       \
+  /* VK_KHR_unified_image_layouts     */                                                               \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR)              \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_ATTACHMENT_FEEDBACK_LOOP_INFO_EXT)                               \
                                                                                                        \
   /* VK_KHR_video_decode_av1 */                                                                        \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_CAPABILITIES_KHR)                               \
@@ -1902,6 +1980,12 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR)                                           \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_CAPABILITIES_KHR)                                   \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_USAGE_INFO_KHR)                                     \
+                                                                                                       \
+  /* VK_KHR_video_decode_vp9         */                                                                \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_DECODE_VP9_FEATURES_KHR)                   \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_CAPABILITIES_KHR)                               \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PICTURE_INFO_KHR)                               \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PROFILE_INFO_KHR)                               \
                                                                                                        \
   /* VK_KHR_video_encode_av1 */                                                                        \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_CAPABILITIES_KHR)                               \
@@ -1976,6 +2060,13 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_QUALITY_LEVEL_INFO_KHR)                             \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_SESSION_PARAMETERS_GET_INFO_KHR)                    \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_SESSION_PARAMETERS_FEEDBACK_INFO_KHR)               \
+                                                                                                       \
+  /* VK_KHR_video_encode_intra_refresh     */                                                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_INTRA_REFRESH_CAPABILITIES_KHR)                     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_SESSION_INTRA_REFRESH_CREATE_INFO_KHR)              \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_ENCODE_INTRA_REFRESH_INFO_KHR)                             \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_REFERENCE_INTRA_REFRESH_INFO_KHR)                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_ENCODE_INTRA_REFRESH_FEATURES_KHR)         \
                                                                                                        \
   /* VK_KHR_video_maintenance1 */                                                                      \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_MAINTENANCE_1_FEATURES_KHR)                \
@@ -2260,6 +2351,9 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_AMIGO_PROFILING_FEATURES_SEC)                    \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_AMIGO_PROFILING_SUBMIT_INFO_SEC)                                 \
                                                                                                        \
+  /* VK_SEC_pipeline_cache_incremental_mode */                                                         \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CACHE_INCREMENTAL_MODE_FEATURES_SEC)    \
+                                                                                                       \
   /* VK_QCOM_image_processing */                                                                       \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_PROCESSING_FEATURES_QCOM)                  \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_PROCESSING_PROPERTIES_QCOM)                \
@@ -2325,8 +2419,10 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_BINDING_REFERENCE_VALVE)                          \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_HOST_MAPPING_INFO_VALVE)                   \
                                                                                                        \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_STREAM_DESCRIPTOR_SURFACE_CREATE_INFO_GGP)                       \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PRESENT_FRAME_TOKEN_GGP)
+  /* VK_VALVE_fragment_density_map_layered */                                                          \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_LAYERED_FEATURES_VALVE)     \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_LAYERED_PROPERTIES_VALVE)   \
+  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PIPELINE_FRAGMENT_DENSITY_MAP_LAYERED_CREATE_INFO_VALVE)
 
 static const rdcliteral pNextName = "pNext"_lit;
 static const rdcliteral pNextTypeName = "pNextType"_lit;
@@ -4695,44 +4791,44 @@ void Deserialise(const VkSwapchainDisplayNativeHdrCreateInfoAMD &el)
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSurfacePresentModeEXT &el)
+void DoSerialise(SerialiserType &ser, VkSurfacePresentModeKHR &el)
 {
-  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT);
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(presentMode);
 }
 
 template <>
-void Deserialise(const VkSurfacePresentModeEXT &el)
+void Deserialise(const VkSurfacePresentModeKHR &el)
 {
   DeserialiseNext(el.pNext);
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSurfacePresentScalingCapabilitiesEXT &el)
+void DoSerialise(SerialiserType &ser, VkSurfacePresentScalingCapabilitiesKHR &el)
 {
   RDCASSERT(ser.IsReading() ||
-            el.sType == VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT);
+            el.sType == VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
-  SERIALISE_MEMBER_VKFLAGS(VkPresentScalingFlagsEXT, supportedPresentScaling);
-  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsEXT, supportedPresentGravityX);
-  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsEXT, supportedPresentGravityY);
+  SERIALISE_MEMBER_VKFLAGS(VkPresentScalingFlagsKHR, supportedPresentScaling);
+  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsKHR, supportedPresentGravityX);
+  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsKHR, supportedPresentGravityY);
   SERIALISE_MEMBER(minScaledImageExtent);
   SERIALISE_MEMBER(maxScaledImageExtent);
 }
 
 template <>
-void Deserialise(const VkSurfacePresentScalingCapabilitiesEXT &el)
+void Deserialise(const VkSurfacePresentScalingCapabilitiesKHR &el)
 {
   DeserialiseNext(el.pNext);
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSurfacePresentModeCompatibilityEXT &el)
+void DoSerialise(SerialiserType &ser, VkSurfacePresentModeCompatibilityKHR &el)
 {
-  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT);
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(presentModeCount);
@@ -4740,32 +4836,32 @@ void DoSerialise(SerialiserType &ser, VkSurfacePresentModeCompatibilityEXT &el)
 }
 
 template <>
-void Deserialise(const VkSurfacePresentModeCompatibilityEXT &el)
+void Deserialise(const VkSurfacePresentModeCompatibilityKHR &el)
 {
   DeserialiseNext(el.pNext);
   delete[] el.pPresentModes;
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT &el)
+void DoSerialise(SerialiserType &ser, VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR &el)
 {
   RDCASSERT(ser.IsReading() ||
-            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT);
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(swapchainMaintenance1);
 }
 
 template <>
-void Deserialise(const VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT &el)
+void Deserialise(const VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR &el)
 {
   DeserialiseNext(el.pNext);
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkReleaseSwapchainImagesInfoEXT &el)
+void DoSerialise(SerialiserType &ser, VkReleaseSwapchainImagesInfoKHR &el)
 {
-  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_EXT);
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(swapchain);
@@ -4774,16 +4870,16 @@ void DoSerialise(SerialiserType &ser, VkReleaseSwapchainImagesInfoEXT &el)
 }
 
 template <>
-void Deserialise(const VkReleaseSwapchainImagesInfoEXT &el)
+void Deserialise(const VkReleaseSwapchainImagesInfoKHR &el)
 {
   DeserialiseNext(el.pNext);
   delete[] el.pImageIndices;
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSwapchainPresentFenceInfoEXT &el)
+void DoSerialise(SerialiserType &ser, VkSwapchainPresentFenceInfoKHR &el)
 {
-  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT);
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(swapchainCount);
@@ -4791,16 +4887,16 @@ void DoSerialise(SerialiserType &ser, VkSwapchainPresentFenceInfoEXT &el)
 }
 
 template <>
-void Deserialise(const VkSwapchainPresentFenceInfoEXT &el)
+void Deserialise(const VkSwapchainPresentFenceInfoKHR &el)
 {
   DeserialiseNext(el.pNext);
   delete[] el.pFences;
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSwapchainPresentModesCreateInfoEXT &el)
+void DoSerialise(SerialiserType &ser, VkSwapchainPresentModesCreateInfoKHR &el)
 {
-  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT);
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(presentModeCount);
@@ -4808,16 +4904,16 @@ void DoSerialise(SerialiserType &ser, VkSwapchainPresentModesCreateInfoEXT &el)
 }
 
 template <>
-void Deserialise(const VkSwapchainPresentModesCreateInfoEXT &el)
+void Deserialise(const VkSwapchainPresentModesCreateInfoKHR &el)
 {
   DeserialiseNext(el.pNext);
   delete[] el.pPresentModes;
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSwapchainPresentModeInfoEXT &el)
+void DoSerialise(SerialiserType &ser, VkSwapchainPresentModeInfoKHR &el)
 {
-  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT);
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
   SERIALISE_MEMBER(swapchainCount);
@@ -4825,26 +4921,26 @@ void DoSerialise(SerialiserType &ser, VkSwapchainPresentModeInfoEXT &el)
 }
 
 template <>
-void Deserialise(const VkSwapchainPresentModeInfoEXT &el)
+void Deserialise(const VkSwapchainPresentModeInfoKHR &el)
 {
   DeserialiseNext(el.pNext);
   delete[] el.pPresentModes;
 }
 
 template <typename SerialiserType>
-void DoSerialise(SerialiserType &ser, VkSwapchainPresentScalingCreateInfoEXT &el)
+void DoSerialise(SerialiserType &ser, VkSwapchainPresentScalingCreateInfoKHR &el)
 {
   RDCASSERT(ser.IsReading() ||
-            el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT);
+            el.sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR);
   SerialiseNext(ser, el.sType, el.pNext);
 
-  SERIALISE_MEMBER_VKFLAGS(VkPresentScalingFlagsEXT, scalingBehavior);
-  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsEXT, presentGravityX);
-  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsEXT, presentGravityY);
+  SERIALISE_MEMBER_VKFLAGS(VkPresentScalingFlagsKHR, scalingBehavior);
+  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsKHR, presentGravityX);
+  SERIALISE_MEMBER_VKFLAGS(VkPresentGravityFlagsKHR, presentGravityY);
 }
 
 template <>
-void Deserialise(const VkSwapchainPresentScalingCreateInfoEXT &el)
+void Deserialise(const VkSwapchainPresentScalingCreateInfoKHR &el)
 {
   DeserialiseNext(el.pNext);
 }
@@ -9899,6 +9995,7 @@ void DoSerialise(SerialiserType &ser, VkDescriptorGetInfoEXT &el)
     case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
     case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
     case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
     case VK_DESCRIPTOR_TYPE_MAX_ENUM:
       RDCERR("Invalid descriptor type in VkDescriptorGetInfoEXT");
       break;
@@ -13733,7 +13830,7 @@ INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSubgroupProperties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSubgroupSizeControlFeatures);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSubgroupSizeControlProperties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSurfaceInfo2KHR);
-INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSynchronization2Features);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceTexelBufferAlignmentFeaturesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceTexelBufferAlignmentProperties);
@@ -13809,7 +13906,7 @@ INSTANTIATE_SERIALISE_TYPE(VkRayTracingPipelineCreateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkRayTracingPipelineInterfaceCreateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkRayTracingShaderGroupCreateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkRefreshCycleDurationGOOGLE);
-INSTANTIATE_SERIALISE_TYPE(VkReleaseSwapchainImagesInfoEXT);
+INSTANTIATE_SERIALISE_TYPE(VkReleaseSwapchainImagesInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkRenderingAreaInfo);
 INSTANTIATE_SERIALISE_TYPE(VkRenderingAttachmentInfo);
 INSTANTIATE_SERIALISE_TYPE(VkRenderingAttachmentLocationInfo);
@@ -13861,17 +13958,17 @@ INSTANTIATE_SERIALISE_TYPE(VkSubresourceLayout2);
 INSTANTIATE_SERIALISE_TYPE(VkSurfaceCapabilities2EXT);
 INSTANTIATE_SERIALISE_TYPE(VkSurfaceCapabilities2KHR);
 INSTANTIATE_SERIALISE_TYPE(VkSurfaceFormat2KHR);
-INSTANTIATE_SERIALISE_TYPE(VkSurfacePresentModeCompatibilityEXT);
-INSTANTIATE_SERIALISE_TYPE(VkSurfacePresentModeEXT);
-INSTANTIATE_SERIALISE_TYPE(VkSurfacePresentScalingCapabilitiesEXT);
+INSTANTIATE_SERIALISE_TYPE(VkSurfacePresentModeCompatibilityKHR);
+INSTANTIATE_SERIALISE_TYPE(VkSurfacePresentModeKHR);
+INSTANTIATE_SERIALISE_TYPE(VkSurfacePresentScalingCapabilitiesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkSurfaceProtectedCapabilitiesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkSwapchainCounterCreateInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkSwapchainCreateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkSwapchainDisplayNativeHdrCreateInfoAMD);
-INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentFenceInfoEXT);
-INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentModeInfoEXT);
-INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentModesCreateInfoEXT);
-INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentScalingCreateInfoEXT);
+INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentFenceInfoKHR);
+INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentModeInfoKHR);
+INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentModesCreateInfoKHR);
+INSTANTIATE_SERIALISE_TYPE(VkSwapchainPresentScalingCreateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkTextureLODGatherFormatPropertiesAMD);
 INSTANTIATE_SERIALISE_TYPE(VkTimelineSemaphoreSubmitInfo);
 INSTANTIATE_SERIALISE_TYPE(VkValidationCacheCreateInfoEXT);

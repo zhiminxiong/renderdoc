@@ -527,6 +527,7 @@
   DeclExt(EXT_attachment_feedback_loop_layout);        \
   DeclExt(EXT_pageable_device_local_memory);           \
   DeclExt(EXT_swapchain_maintenance1);                 \
+  DeclExt(KHR_swapchain_maintenance1);                 \
   DeclExt(EXT_provoking_vertex);                       \
   DeclExt(EXT_attachment_feedback_loop_dynamic_state); \
   DeclExt(EXT_extended_dynamic_state3);                \
@@ -666,6 +667,7 @@
   CheckExt(EXT_attachment_feedback_loop_layout, VKXX);        \
   CheckExt(EXT_pageable_device_local_memory, VKXX);           \
   CheckExt(EXT_swapchain_maintenance1, VKXX);                 \
+  CheckExt(KHR_swapchain_maintenance1, VKXX);                 \
   CheckExt(EXT_provoking_vertex, VKXX);                       \
   CheckExt(EXT_nested_command_buffer, VKXX);                  \
   CheckExt(EXT_attachment_feedback_loop_dynamic_state, VKXX); \
@@ -966,6 +968,8 @@
   HookInitExtension(KHR_fragment_shading_rate, CmdSetFragmentShadingRateKHR);                        \
   HookInitExtension(EXT_pageable_device_local_memory, SetDeviceMemoryPriorityEXT);                   \
   HookInitExtension(EXT_swapchain_maintenance1, ReleaseSwapchainImagesEXT);                          \
+  HookInitExtension(KHR_swapchain_maintenance1, ReleaseSwapchainImagesKHR);                          \
+  HookInitExtensionEXTtoKHR(ReleaseSwapchainImages);                                                 \
   HookInitExtension(EXT_attachment_feedback_loop_dynamic_state,                                      \
                     CmdSetAttachmentFeedbackLoopEnableEXT);                                          \
   HookInitExtension(EXT_extended_dynamic_state3 || EXT_shader_object,                                \
@@ -1800,6 +1804,8 @@
               uint32_t, connectorId, VkDisplayKHR *, display);                                       \
   HookDefine2(VkResult, vkReleaseSwapchainImagesEXT, VkDevice, device,                               \
               const VkReleaseSwapchainImagesInfoEXT *, pReleaseInfo);                                \
+  HookDefine2(VkResult, vkReleaseSwapchainImagesKHR, VkDevice, device,                               \
+              const VkReleaseSwapchainImagesInfoKHR *, pReleaseInfo);                                \
   HookDefine2(void, vkCmdSetAttachmentFeedbackLoopEnableEXT, VkCommandBuffer, commandBuffer,         \
               VkImageAspectFlags, aspectMask);                                                       \
   HookDefine2(void, vkCmdSetAlphaToCoverageEnableEXT, VkCommandBuffer, commandBuffer, VkBool32,      \

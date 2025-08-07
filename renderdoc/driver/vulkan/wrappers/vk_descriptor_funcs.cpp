@@ -1608,6 +1608,7 @@ VkDescriptorGetInfoEXT WrappedVulkan::UnwrapInfo(const VkDescriptorGetInfoEXT *p
     case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
     case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
     case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+    case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
     case VK_DESCRIPTOR_TYPE_MAX_ENUM:
     {
       RDCERR("Invalid descriptor type %s", ToStr(ret.type).c_str());
@@ -3569,6 +3570,7 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
       case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
       case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
       case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+      case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
       case VK_DESCRIPTOR_TYPE_MAX_ENUM:
         RDCERR("Invalid descriptor type passed to vkGetDescriptorEXT");
         break;

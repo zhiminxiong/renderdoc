@@ -3204,8 +3204,8 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
       }
       END_PHYS_EXT_CHECK();
 
-      BEGIN_PHYS_EXT_CHECK(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT,
-                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT);
+      BEGIN_PHYS_EXT_CHECK(VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR,
+                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR);
       {
         CHECK_PHYS_EXT_FEATURE(swapchainMaintenance1);
       }
