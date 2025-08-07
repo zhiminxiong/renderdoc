@@ -327,6 +327,7 @@ VkResult WrappedVulkan::vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR 
         record->AddParent(swaprecord);
 
         record->resInfo = new ResourceInfo();
+        record->resInfo->parentResInfo = record->resInfo;
         record->resInfo->imageInfo = swaprecord->swapInfo->imageInfo;
 
         // note we add the chunk to the swap record, that way when the swapchain is created it will
