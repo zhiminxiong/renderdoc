@@ -191,6 +191,8 @@ public:
     uint32_t isFrontFace;
   } semantics;
 
+  DXBC::ShaderType GetType() { return program->GetShaderType(); }
+
   uint32_t nextInstruction;
   GlobalState &global;
   rdcarray<ShaderVariable> inputs;

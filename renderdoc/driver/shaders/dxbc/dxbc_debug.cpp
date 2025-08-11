@@ -5380,7 +5380,10 @@ rdcarray<ShaderDebugState> InterpretDebugger::ContinueDebug(DXBCDebug::DebugAPIW
     steps++;
   }
 
-  rdcarray<DXBCDebug::ThreadState> oldworkgroup = workgroup;
+  rdcarray<DXBCDebug::ThreadState> oldworkgroup;
+
+  if(active.GetType() == DXBC::ShaderType::Pixel)
+    oldworkgroup = workgroup;
 
   rdcarray<bool> activeMask;
 
@@ -5394,8 +5397,11 @@ rdcarray<ShaderDebugState> InterpretDebugger::ContinueDebug(DXBCDebug::DebugAPIW
     // set up the old workgroup so that cross-workgroup/cross-quad operations (e.g. DDX/DDY) get
     // consistent results even when we step the quad out of order. Otherwise if an operation reads
     // and writes from the same register we'd trash data needed for other workgroup elements.
-    for(size_t i = 0; i < oldworkgroup.size(); i++)
-      oldworkgroup[i].variables = workgroup[i].variables;
+    if(active.GetType() == DXBC::ShaderType::Pixel)
+    {
+      for(size_t i = 0; i < oldworkgroup.size(); i++)
+        oldworkgroup[i].variables = workgroup[i].variables;
+    }
 
     // calculate the current mask of which threads are active
     CalcActiveMask(activeMask);
