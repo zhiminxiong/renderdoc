@@ -1397,6 +1397,10 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES,                         \
                VkPhysicalDeviceShaderAtomicInt64Features)                                              \
                                                                                                        \
+  /* VK_KHR_shader_bfloat16 */                                                                         \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_BFLOAT16_FEATURES_KHR,                         \
+               VkPhysicalDeviceShaderBfloat16FeaturesKHR)                                              \
+                                                                                                       \
   /* VK_KHR_shader_clock */                                                                            \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR,                            \
                VkPhysicalDeviceShaderClockFeaturesKHR)                                                 \
@@ -1950,9 +1954,6 @@ SERIALISE_VK_HANDLES();
                                                                                                        \
   /* VK_KHR_present_mode_fifo_latest_ready     */                                                      \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR)     \
-                                                                                                       \
-  /* VK_KHR_shader_bfloat16 */                                                                         \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_BFLOAT16_FEATURES_KHR)                    \
                                                                                                        \
   /* VK_KHR_unified_image_layouts     */                                                               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR)              \
@@ -11423,6 +11424,24 @@ void Deserialise(const VkPhysicalDeviceShaderAtomicInt64Features &el)
 }
 
 template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDeviceShaderBfloat16FeaturesKHR &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_BFLOAT16_FEATURES_KHR);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(shaderBFloat16Type);
+  SERIALISE_MEMBER(shaderBFloat16DotProduct);
+  SERIALISE_MEMBER(shaderBFloat16CooperativeMatrix);
+}
+
+template <>
+void Deserialise(const VkPhysicalDeviceShaderBfloat16FeaturesKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, VkPhysicalDeviceScalarBlockLayoutFeatures &el)
 {
   RDCASSERT(ser.IsReading() ||
@@ -14114,6 +14133,7 @@ INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderAtomicFloat2FeaturesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderAtomicFloatFeaturesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderAtomicInt64Features);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderBfloat16FeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderClockFeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderCorePropertiesAMD);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures);

@@ -3517,6 +3517,15 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
           ext->descriptorBufferImageLayoutIgnored = VK_TRUE;
       }
       END_PHYS_EXT_CHECK();
+
+      BEGIN_PHYS_EXT_CHECK(VkPhysicalDeviceShaderBfloat16FeaturesKHR,
+                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_BFLOAT16_FEATURES_KHR);
+      {
+        CHECK_PHYS_EXT_FEATURE(shaderBFloat16Type);
+        CHECK_PHYS_EXT_FEATURE(shaderBFloat16DotProduct);
+        CHECK_PHYS_EXT_FEATURE(shaderBFloat16CooperativeMatrix);
+      }
+      END_PHYS_EXT_CHECK();
     }
 
     if(availFeatures.depthClamp)

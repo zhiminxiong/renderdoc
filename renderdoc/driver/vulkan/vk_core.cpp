@@ -1755,6 +1755,10 @@ static const VkExtensionProperties supportedExtensions[] = {
         VK_KHR_SHADER_ATOMIC_INT64_SPEC_VERSION,
     },
     {
+        VK_KHR_SHADER_BFLOAT16_EXTENSION_NAME,
+        VK_KHR_SHADER_BFLOAT16_SPEC_VERSION,
+    },
+    {
         VK_KHR_SHADER_CLOCK_EXTENSION_NAME,
         VK_KHR_SHADER_CLOCK_SPEC_VERSION,
     },

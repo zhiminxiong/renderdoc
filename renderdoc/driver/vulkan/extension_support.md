@@ -203,6 +203,7 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_KHR_sampler_ycbcr_conversion`
 * `VK_KHR_separate_depth_stencil_layouts`
 * `VK_KHR_shader_atomic_int64`
+* `VK_KHR_shader_bfloat16`
 * `VK_KHR_shader_clock`
 * `VK_KHR_shader_draw_parameters`
 * `VK_KHR_shader_expect_assume`
@@ -273,7 +274,6 @@ KHR extensions will definitely be implemented at some point, though KHR extensio
 * `VK_KHR_present_id2`
 * `VK_KHR_present_mode_fifo_latest_ready`
 * `VK_KHR_present_wait2`
-* `VK_KHR_shader_bfloat16`
 * `VK_KHR_unified_image_layouts`
 
 ## KHR Portability
