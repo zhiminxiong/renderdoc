@@ -3526,6 +3526,14 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
         CHECK_PHYS_EXT_FEATURE(shaderBFloat16CooperativeMatrix);
       }
       END_PHYS_EXT_CHECK();
+
+      BEGIN_PHYS_EXT_CHECK(VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR,
+                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR);
+      {
+        CHECK_PHYS_EXT_FEATURE(unifiedImageLayouts);
+        CHECK_PHYS_EXT_FEATURE(unifiedImageLayoutsVideo);
+      }
+      END_PHYS_EXT_CHECK();
     }
 
     if(availFeatures.depthClamp)

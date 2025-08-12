@@ -230,6 +230,7 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_KHR_swapchain_maintenance1`
 * `VK_KHR_synchronization2`
 * `VK_KHR_timeline_semaphore`
+* `VK_KHR_unified_image_layouts`
 * `VK_KHR_uniform_buffer_standard_layout`
 * `VK_KHR_variable_pointers`
 * `VK_KHR_vertex_attribute_divisor`
@@ -274,7 +275,6 @@ KHR extensions will definitely be implemented at some point, though KHR extensio
 * `VK_KHR_present_id2`
 * `VK_KHR_present_mode_fifo_latest_ready`
 * `VK_KHR_present_wait2`
-* `VK_KHR_unified_image_layouts`
 
 ## KHR Portability
 

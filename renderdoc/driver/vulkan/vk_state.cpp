@@ -136,6 +136,37 @@ void setupRenderingInfo(const VulkanRenderState::DynamicRendering &dynamicRender
 }
 }    // namespace
 
+void VulkanRenderState::DynamicRendering::CopyAttachmentNext(VkRenderingAttachmentInfo &info)
+{
+  void *newNext = NULL;
+
+  VkAttachmentFeedbackLoopInfoEXT *feedback = (VkAttachmentFeedbackLoopInfoEXT *)FindNextStruct(
+      &info, VK_STRUCTURE_TYPE_ATTACHMENT_FEEDBACK_LOOP_INFO_EXT);
+  if(feedback)
+  {
+    feedbacks.push_back(*feedback);
+    feedbacks.back().pNext = newNext;
+    newNext = &feedbacks.back();
+  }
+
+  // if other structs are added, they can be checked the same here and prepended to newNext in the same way
+
+  info.pNext = newNext;
+}
+
+void VulkanRenderState::DynamicRendering::CopyAttachmentNexts()
+{
+  // ensure we don't invalidate any pointers in the loop below, reserve enough space
+  feedbacks.clear();
+  feedbacks.reserve(color.size() + 2);
+
+  for(VkRenderingAttachmentInfo &info : color)
+    CopyAttachmentNext(info);
+
+  CopyAttachmentNext(depth);
+  CopyAttachmentNext(stencil);
+}
+
 VulkanRenderState::VulkanRenderState()
 {
   RDCEraseEl(ibuffer);

@@ -1514,6 +1514,11 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, VkSemaphoreWaitInfo)                             \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, VkSemaphoreSignalInfo)                         \
                                                                                                        \
+  /* VK_KHR_unified_image_layouts */                                                                   \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR,                   \
+               VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR)                                         \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_ATTACHMENT_FEEDBACK_LOOP_INFO_EXT, VkAttachmentFeedbackLoopInfoEXT)   \
+                                                                                                       \
   /* VK_KHR_uniform_buffer_standard_layout */                                                          \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES,              \
                VkPhysicalDeviceUniformBufferStandardLayoutFeatures)                                    \
@@ -1954,10 +1959,6 @@ SERIALISE_VK_HANDLES();
                                                                                                        \
   /* VK_KHR_present_mode_fifo_latest_ready     */                                                      \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR)     \
-                                                                                                       \
-  /* VK_KHR_unified_image_layouts     */                                                               \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR)              \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_ATTACHMENT_FEEDBACK_LOOP_INFO_EXT)                               \
                                                                                                        \
   /* VK_KHR_video_decode_av1 */                                                                        \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_CAPABILITIES_KHR)                               \
@@ -5382,6 +5383,38 @@ void DoSerialise(SerialiserType &ser, VkPhysicalDeviceVulkan13Properties &el)
 
 template <>
 void Deserialise(const VkPhysicalDeviceVulkan13Properties &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(unifiedImageLayouts);
+  SERIALISE_MEMBER(unifiedImageLayoutsVideo);
+}
+
+template <>
+void Deserialise(const VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkAttachmentFeedbackLoopInfoEXT &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_ATTACHMENT_FEEDBACK_LOOP_INFO_EXT);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(feedbackLoopEnable);
+}
+
+template <>
+void Deserialise(const VkAttachmentFeedbackLoopInfoEXT &el)
 {
   DeserialiseNext(el.pNext);
 }
@@ -13832,6 +13865,7 @@ INSTANTIATE_SERIALISE_TYPE(VkAcquireProfilingLockInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkApplicationInfo);
 INSTANTIATE_SERIALISE_TYPE(VkAttachmentDescription2);
 INSTANTIATE_SERIALISE_TYPE(VkAttachmentDescriptionStencilLayout);
+INSTANTIATE_SERIALISE_TYPE(VkAttachmentFeedbackLoopInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkAttachmentReference2);
 INSTANTIATE_SERIALISE_TYPE(VkAttachmentReferenceStencilLayout);
 INSTANTIATE_SERIALISE_TYPE(VkAttachmentSampleLocationsEXT);
@@ -14169,6 +14203,7 @@ INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceTimelineSemaphoreProperties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceToolProperties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceTransformFeedbackFeaturesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceTransformFeedbackPropertiesEXT);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceUniformBufferStandardLayoutFeatures);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceVariablePointersFeatures);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceVertexAttributeDivisorFeatures);

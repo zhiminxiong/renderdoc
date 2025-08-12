@@ -7392,6 +7392,8 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
           if(RenderingInfo.pStencilAttachment)
             renderstate.dynamicRendering.stencil = *RenderingInfo.pStencilAttachment;
 
+          renderstate.dynamicRendering.CopyAttachmentNexts();
+
           const VkRenderingFragmentDensityMapAttachmentInfoEXT *fragmentDensityAttachment =
               (const VkRenderingFragmentDensityMapAttachmentInfoEXT *)FindNextStruct(
                   &RenderingInfo,
@@ -7575,6 +7577,8 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
           renderstate.dynamicRendering.depth = *RenderingInfo.pDepthAttachment;
         if(RenderingInfo.pStencilAttachment)
           renderstate.dynamicRendering.stencil = *RenderingInfo.pStencilAttachment;
+
+        renderstate.dynamicRendering.CopyAttachmentNexts();
 
         const VkRenderingFragmentDensityMapAttachmentInfoEXT *fragmentDensityAttachment =
             (const VkRenderingFragmentDensityMapAttachmentInfoEXT *)FindNextStruct(
