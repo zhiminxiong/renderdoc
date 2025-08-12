@@ -191,7 +191,8 @@ static void StripUnwantedExtensions(rdcarray<rdcstr> &Extensions)
     // remove WSI-only extensions
     if(ext == "VK_GOOGLE_display_timing" || ext == "VK_KHR_display_swapchain" ||
        ext == "VK_EXT_display_control" || ext == "VK_KHR_present_id" ||
-       ext == "VK_KHR_present_wait" || ext == "VK_EXT_surface_maintenance1" ||
+       ext == "VK_KHR_present_wait" || ext == "VK_KHR_present_mode_fifo_latest_ready" ||
+       ext == "VK_EXT_present_mode_fifo_latest_ready" || ext == "VK_EXT_surface_maintenance1" ||
        ext == "VK_EXT_swapchain_maintenance1" || ext == "VK_EXT_hdr_metadata" ||
        ext == "VK_KHR_get_display_properties2")
       return true;
@@ -2242,14 +2243,16 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
       RDCLOG("Removed VK_EXT_private_data structs from vkCreateDevice pNext chain");
     }
 
-    bool present_id = false;
-    present_id |=
+    bool present_exts = false;
+    present_exts |=
         RemoveNextStruct(&createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR);
-    present_id |=
+    present_exts |=
         RemoveNextStruct(&createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR);
-    if(present_id)
+    present_exts |= RemoveNextStruct(
+        &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR);
+    if(present_exts)
     {
-      RDCLOG("Removed VK_KHR_present_id/wait structs from vkCreateDevice pNext chain");
+      RDCLOG("Removed VK_KHR_present_id/wait/latest_ready structs from vkCreateDevice pNext chain");
     }
 
     VkPhysicalDeviceFeatures enabledFeatures = {0};

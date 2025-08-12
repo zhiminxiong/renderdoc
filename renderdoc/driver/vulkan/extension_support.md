@@ -88,6 +88,7 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_EXT_pipeline_creation_cache_control`
 * `VK_EXT_pipeline_creation_feedback`
 * `VK_EXT_post_depth_coverage`
+* `VK_EXT_present_mode_fifo_latest_ready`
 * `VK_EXT_primitive_topology_list_restart`
 * `VK_EXT_primitives_generated_query`
 * `VK_EXT_private_data`
@@ -191,6 +192,7 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_KHR_pipeline_executable_properties`
 * `VK_KHR_pipeline_library`
 * `VK_KHR_present_id`
+* `VK_KHR_present_mode_fifo_latest_ready`
 * `VK_KHR_present_wait`
 * `VK_KHR_push_descriptor`
 * `VK_KHR_ray_query`
@@ -273,7 +275,6 @@ KHR extensions will definitely be implemented at some point, though KHR extensio
 * `VK_KHR_maintenance9`
 * `VK_KHR_pipeline_binary`
 * `VK_KHR_present_id2`
-* `VK_KHR_present_mode_fifo_latest_ready`
 * `VK_KHR_present_wait2`
 
 ## KHR Portability
@@ -309,7 +310,6 @@ The portability subset is only relevant on mac, which is not a supported platfor
 * `VK_EXT_pipeline_library_group_handles`
 * `VK_EXT_pipeline_protected_access`
 * `VK_EXT_pipeline_robustness`
-* `VK_EXT_present_mode_fifo_latest_ready`
 * `VK_EXT_shader_float8`
 * `VK_EXT_shader_module_identifier`
 * `VK_EXT_shader_replicated_composites`
