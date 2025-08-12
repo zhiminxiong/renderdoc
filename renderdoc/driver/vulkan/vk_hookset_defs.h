@@ -551,7 +551,8 @@
   DeclExt(KHR_maintenance5);                           \
   DeclExt(EXT_image_compression_control);              \
   DeclExt(EXT_image_compression_control_swapchain);    \
-  DeclExt(EXT_descriptor_buffer);
+  DeclExt(EXT_descriptor_buffer);                      \
+  DeclExt(KHR_map_memory2);
 
 // for simplicity and since the check itself is platform agnostic,
 // these aren't protected in platform defines
@@ -692,7 +693,8 @@
   CheckExt(KHR_maintenance5, VKXX);                           \
   CheckExt(EXT_image_compression_control, VKXX);              \
   CheckExt(EXT_image_compression_control_swapchain, VKXX);    \
-  CheckExt(EXT_descriptor_buffer, VKXX);
+  CheckExt(EXT_descriptor_buffer, VKXX);                      \
+  CheckExt(KHR_map_memory2, VKXX);
 
 #define HookInitVulkanInstanceExts_PhysDev()                                                         \
   HookInitExtension(KHR_surface, GetPhysicalDeviceSurfaceSupportKHR);                                \
@@ -1082,6 +1084,8 @@
   HookInitExtension(EXT_descriptor_buffer, GetImageViewOpaqueCaptureDescriptorDataEXT);              \
   HookInitExtension(EXT_descriptor_buffer, GetSamplerOpaqueCaptureDescriptorDataEXT);                \
   HookInitExtension(EXT_descriptor_buffer, GetAccelerationStructureOpaqueCaptureDescriptorDataEXT);  \
+  HookInitExtension(KHR_map_memory2, MapMemory2KHR);                                                 \
+  HookInitExtension(KHR_map_memory2, UnmapMemory2KHR);                                               \
   HookInitExtension_Device_Win32();                                                                  \
   HookInitExtension_Device_Linux();                                                                  \
   HookInitExtension_Device_Android();                                                                \
@@ -2032,6 +2036,10 @@
               const VkSamplerCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);                  \
   HookDefine3(VkResult, vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT, VkDevice, device,  \
               const VkAccelerationStructureCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);    \
+  HookDefine3(VkResult, vkMapMemory2KHR, VkDevice, device, const VkMemoryMapInfo *,                  \
+              pMemoryMapInfo, void **, ppData);                                                      \
+  HookDefine2(void, vkUnmapMemory2KHR, VkDevice, device, const VkMemoryUnmapInfo *,                  \
+              pMemoryUnmapInfo);                                                                     \
   HookDefine_Win32();                                                                                \
   HookDefine_Linux();                                                                                \
   HookDefine_Android();                                                                              \

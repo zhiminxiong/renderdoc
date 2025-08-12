@@ -985,8 +985,7 @@ void WrappedVulkan::vkFreeMemory(VkDevice device, VkDeviceMemory memory, const V
   ObjDisp(device)->FreeMemory(Unwrap(device), unwrappedMem, NULL);
 }
 
-VkResult WrappedVulkan::vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset,
-                                    VkDeviceSize size, VkMemoryMapFlags flags, void **ppData)
+VkDeviceSize AlignMapBoundaries(VkDeviceSize &offset, VkDeviceSize &size)
 {
   // ensure we always map on a 16-byte boundary. This is for our own purposes so we can
   // FindDiffRange against the mapped region. We adjust the pointer returned to the user but
@@ -998,97 +997,58 @@ VkResult WrappedVulkan::vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDevic
   // need to adjust the size so the end-point is still the same!
   size += misalignedOffset;
 
-  byte *realData = NULL;
-  VkResult ret = ObjDisp(device)->MapMemory(Unwrap(device), Unwrap(mem), offset, size, flags,
-                                            (void **)&realData);
+  return misalignedOffset;
+}
 
-  if(ret == VK_SUCCESS && realData)
+void WrappedVulkan::ProcessMap(VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size,
+                               void **ppData, byte *realData, VkDeviceSize misalignedOffset)
+{
+  ResourceId id = GetResID(memory);
+
+  if(IsCaptureMode(m_State))
   {
-    ResourceId id = GetResID(mem);
+    VkResourceRecord *memrecord = GetRecord(memory);
 
-    if(IsCaptureMode(m_State))
+    // must have map state, only non host visible memories have no map
+    // state, and they can't be mapped!
+    RDCASSERT(memrecord->memMapState);
+    MemMapState &state = *memrecord->memMapState;
+
+    // ensure size is valid
+    RDCASSERT(size == VK_WHOLE_SIZE || (size > 0 && offset + size <= memrecord->Length),
+              GetResID(memory), size, memrecord->Length);
+
+    // flush range offsets are relative to the start of the memory so keep mappedPtr at that
+    // basis. We'll only access within the mapped range
+    state.cpuReadPtr = state.mappedPtr = (byte *)realData - (size_t)offset;
+    state.refData = NULL;
+
+    state.mapOffset = offset;
+    state.mapSize = size == VK_WHOLE_SIZE ? (memrecord->Length - offset)
+                                          : RDCMIN(memrecord->Length - offset, size);
+
+    *ppData = realData + misalignedOffset;
+
+    if(state.mapCoherent)
     {
-      VkResourceRecord *memrecord = GetRecord(mem);
-
-      // must have map state, only non host visible memories have no map
-      // state, and they can't be mapped!
-      RDCASSERT(memrecord->memMapState);
-      MemMapState &state = *memrecord->memMapState;
-
-      // ensure size is valid
-      RDCASSERT(size == VK_WHOLE_SIZE || (size > 0 && offset + size <= memrecord->Length),
-                GetResID(mem), size, memrecord->Length);
-
-      // flush range offsets are relative to the start of the memory so keep mappedPtr at that
-      // basis. We'll only access within the mapped range
-      state.cpuReadPtr = state.mappedPtr = (byte *)realData - (size_t)offset;
-      state.refData = NULL;
-
-      state.mapOffset = offset;
-      state.mapSize = size == VK_WHOLE_SIZE ? (memrecord->Length - offset)
-                                            : RDCMIN(memrecord->Length - offset, size);
-
-      *ppData = realData + misalignedOffset;
-
-      if(state.mapCoherent)
-      {
-        SCOPED_LOCK(m_CoherentMapsLock);
-        m_CoherentMaps.push_back(memrecord);
-      }
-    }
-    else
-    {
-      *ppData = realData + misalignedOffset;
+      SCOPED_LOCK(m_CoherentMapsLock);
+      m_CoherentMaps.push_back(memrecord);
     }
   }
   else
   {
-    *ppData = NULL;
+    *ppData = realData + misalignedOffset;
   }
-
-  return ret;
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkUnmapMemory(SerialiserType &ser, VkDevice device,
-                                            VkDeviceMemory memory)
+bool WrappedVulkan::SerialiseUnmap(SerialiserType &ser, VkDeviceMemory memory, uint64_t MapOffset,
+                                   uint64_t MapSize, byte *MapData)
 {
-  SERIALISE_ELEMENT(device);
-  SERIALISE_ELEMENT(memory).Important();
-
-  uint64_t MapOffset = 0;
-  uint64_t MapSize = 0;
-  byte *MapData = NULL;
-
-  MemMapState *state = NULL;
-  if(IsCaptureMode(m_State))
-  {
-    state = GetRecord(memory)->memMapState;
-
-    MapOffset = state->mapOffset;
-    MapSize = state->mapSize;
-
-    MapData = (byte *)state->cpuReadPtr + MapOffset;
-  }
-
-  SERIALISE_ELEMENT(MapOffset).OffsetOrSize();
-  SERIALISE_ELEMENT(MapSize).OffsetOrSize();
-
   bool directStream = true;
 
   if(IsReplayingAndReading() && memory != VK_NULL_HANDLE)
   {
-    if(IsLoading(m_State))
-      m_ResourceUses[GetResID(memory)].push_back(EventUsage(m_RootEventID, ResourceUsage::CPUWrite));
-
-    VkResult vkr = ObjDisp(device)->MapMemory(Unwrap(device), Unwrap(memory), MapOffset, MapSize, 0,
-                                              (void **)&MapData);
-    if(vkr != VK_SUCCESS)
-    {
-      SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIReplayFailed,
-                       "Error mapping memory on replay, VkResult: %s", ToStr(vkr).c_str());
-      return false;
-    }
     if(!MapData)
     {
       SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIReplayFailed,
@@ -1096,6 +1056,9 @@ bool WrappedVulkan::Serialise_vkUnmapMemory(SerialiserType &ser, VkDevice device
       CHECK_VKR(this, VK_ERROR_MEMORY_MAP_FAILED);
       return false;
     }
+
+    if(IsLoading(m_State))
+      m_ResourceUses[GetResID(memory)].push_back(EventUsage(m_RootEventID, ResourceUsage::CPUWrite));
 
     const Intervals<VulkanCreationInfo::Memory::MemoryBinding> &bindings =
         m_CreationInfo.m_Memory[GetResID(memory)].bindings;
@@ -1169,16 +1132,15 @@ bool WrappedVulkan::Serialise_vkUnmapMemory(SerialiserType &ser, VkDevice device
     }
   }
 
-  if(IsReplayingAndReading() && MapData && memory != VK_NULL_HANDLE)
-    ObjDisp(device)->UnmapMemory(Unwrap(device), Unwrap(memory));
-
-  SERIALISE_CHECK_READ_ERRORS();
-
   return true;
 }
 
-void WrappedVulkan::vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
+void WrappedVulkan::ProcessUnmap(VkDevice device, VkDeviceMemory mem, const VkMemoryUnmapInfo *info)
 {
+  // if this is an Unmap2 call, mem will be unset so pull it from the info struct
+  if(mem == VK_NULL_HANDLE && info)
+    mem = info->memory;
+
   if(IsCaptureMode(m_State))
   {
     ResourceId id = GetResID(mem);
@@ -1222,16 +1184,18 @@ void WrappedVulkan::vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
         // coherent maps must always serialise all data on unmap, even if a flush was seen, because
         // unflushed data is *also* visible. This is a bit redundant since data is serialised here
         // and in any flushes, but that's the app's fault - the spec calls out flushing coherent
-        // maps
-        // as inefficient
+        // maps as inefficient
         // if the memory is not coherent, we must have a flush for every region written while it is
         // mapped, there is no implicit flush on unmap, so we follow the spec strictly on this.
         if(state.mapCoherent)
         {
           CACHE_THREAD_SERIALISER();
 
-          SCOPED_SERIALISE_CHUNK(VulkanChunk::vkUnmapMemory);
-          Serialise_vkUnmapMemory(ser, device, mem);
+          SCOPED_SERIALISE_CHUNK(info ? VulkanChunk::vkUnmapMemory2KHR : VulkanChunk::vkUnmapMemory);
+          if(info)
+            Serialise_vkUnmapMemory2KHR(ser, device, info);
+          else
+            Serialise_vkUnmapMemory(ser, device, mem);
 
           VkResourceRecord *record = GetRecord(mem);
 
@@ -1254,8 +1218,167 @@ void WrappedVulkan::vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
     FreeAlignedBuffer(state.refData);
     state.refData = NULL;
   }
+}
+
+VkResult WrappedVulkan::vkMapMemory(VkDevice device, VkDeviceMemory memory, VkDeviceSize offset,
+                                    VkDeviceSize size, VkMemoryMapFlags flags, void **ppData)
+{
+  VkDeviceSize misalignedOffset = AlignMapBoundaries(offset, size);
+
+  byte *realData = NULL;
+  VkResult ret = ObjDisp(device)->MapMemory(Unwrap(device), Unwrap(memory), offset, size, flags,
+                                            (void **)&realData);
+
+  if(ret == VK_SUCCESS && realData)
+  {
+    ProcessMap(memory, offset, size, ppData, realData, misalignedOffset);
+  }
+  else
+  {
+    *ppData = NULL;
+  }
+
+  return ret;
+}
+
+VkResult WrappedVulkan::vkMapMemory2KHR(VkDevice device, const VkMemoryMapInfo *pMemoryMapInfo,
+                                        void **ppData)
+{
+  VkMemoryMapInfo unwrapped = *pMemoryMapInfo;
+  unwrapped.memory = Unwrap(unwrapped.memory);
+
+  VkDeviceSize misalignedOffset = AlignMapBoundaries(unwrapped.offset, unwrapped.size);
+
+  byte *realData = NULL;
+  VkResult ret = ObjDisp(device)->MapMemory2KHR(Unwrap(device), &unwrapped, (void **)&realData);
+
+  if(ret == VK_SUCCESS && realData)
+  {
+    ProcessMap(pMemoryMapInfo->memory, unwrapped.offset, unwrapped.size, ppData, realData,
+               misalignedOffset);
+  }
+  else
+  {
+    *ppData = NULL;
+  }
+
+  return ret;
+}
+
+template <typename SerialiserType>
+bool WrappedVulkan::Serialise_vkUnmapMemory(SerialiserType &ser, VkDevice device,
+                                            VkDeviceMemory memory)
+{
+  SERIALISE_ELEMENT(device);
+  SERIALISE_ELEMENT(memory).Important();
+
+  uint64_t MapOffset = 0;
+  uint64_t MapSize = 0;
+  byte *MapData = NULL;
+
+  if(IsCaptureMode(m_State))
+  {
+    MemMapState *state = GetRecord(memory)->memMapState;
+
+    MapOffset = state->mapOffset;
+    MapSize = state->mapSize;
+
+    MapData = (byte *)state->cpuReadPtr + MapOffset;
+  }
+
+  SERIALISE_ELEMENT(MapOffset).OffsetOrSize();
+  SERIALISE_ELEMENT(MapSize).OffsetOrSize();
+
+  if(IsReplayingAndReading() && memory != VK_NULL_HANDLE)
+  {
+    VkResult vkr = ObjDisp(device)->MapMemory(Unwrap(device), Unwrap(memory), MapOffset, MapSize, 0,
+                                              (void **)&MapData);
+    if(vkr != VK_SUCCESS)
+    {
+      SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIReplayFailed,
+                       "Error mapping memory on replay, VkResult: %s", ToStr(vkr).c_str());
+      return false;
+    }
+  }
+
+  if(!SerialiseUnmap(ser, memory, MapOffset, MapSize, MapData))
+    return false;
+
+  if(IsReplayingAndReading() && MapData && memory != VK_NULL_HANDLE)
+    ObjDisp(device)->UnmapMemory(Unwrap(device), Unwrap(memory));
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  return true;
+}
+
+void WrappedVulkan::vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
+{
+  ProcessUnmap(device, mem, NULL);
 
   ObjDisp(device)->UnmapMemory(Unwrap(device), Unwrap(mem));
+}
+
+template <typename SerialiserType>
+bool WrappedVulkan::Serialise_vkUnmapMemory2KHR(SerialiserType &ser, VkDevice device,
+                                                const VkMemoryUnmapInfo *pMemoryUnmapInfo)
+{
+  SERIALISE_ELEMENT(device);
+  SERIALISE_ELEMENT_LOCAL(UnmapInfo, *pMemoryUnmapInfo).Important();
+
+  uint64_t MapOffset = 0;
+  uint64_t MapSize = 0;
+  byte *MapData = NULL;
+
+  if(IsCaptureMode(m_State))
+  {
+    MemMapState *state = GetRecord(UnmapInfo.memory)->memMapState;
+
+    MapOffset = state->mapOffset;
+    MapSize = state->mapSize;
+
+    MapData = (byte *)state->cpuReadPtr + MapOffset;
+  }
+
+  SERIALISE_ELEMENT(MapOffset).OffsetOrSize();
+  SERIALISE_ELEMENT(MapSize).OffsetOrSize();
+
+  if(IsReplayingAndReading() && UnmapInfo.memory != VK_NULL_HANDLE)
+  {
+    VkMemoryMapInfo mapInfo = {
+        VK_STRUCTURE_TYPE_MEMORY_MAP_INFO, NULL, 0, Unwrap(UnmapInfo.memory), MapOffset, MapSize,
+    };
+    VkResult vkr = ObjDisp(device)->MapMemory2KHR(Unwrap(device), &mapInfo, (void **)&MapData);
+    if(vkr != VK_SUCCESS)
+    {
+      SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIReplayFailed,
+                       "Error mapping memory on replay, VkResult: %s", ToStr(vkr).c_str());
+      return false;
+    }
+  }
+
+  if(!SerialiseUnmap(ser, UnmapInfo.memory, MapOffset, MapSize, MapData))
+    return false;
+
+  if(IsReplayingAndReading() && MapData && UnmapInfo.memory != VK_NULL_HANDLE)
+  {
+    VkMemoryUnmapInfo unwrapped = UnmapInfo;
+    unwrapped.memory = Unwrap(unwrapped.memory);
+    ObjDisp(device)->UnmapMemory2KHR(Unwrap(device), &unwrapped);
+  }
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  return true;
+}
+
+void WrappedVulkan::vkUnmapMemory2KHR(VkDevice device, const VkMemoryUnmapInfo *pMemoryUnmapInfo)
+{
+  ProcessUnmap(device, VK_NULL_HANDLE, pMemoryUnmapInfo);
+
+  VkMemoryUnmapInfo unwrapped = *pMemoryUnmapInfo;
+  unwrapped.memory = Unwrap(unwrapped.memory);
+  ObjDisp(device)->UnmapMemory2KHR(Unwrap(device), &unwrapped);
 }
 
 template <typename SerialiserType>
@@ -3929,3 +4052,6 @@ INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCreateAccelerationStructureKHR, VkDe
                                 const VkAccelerationStructureCreateInfoKHR *pCreateInfo,
                                 const VkAllocationCallbacks *,
                                 VkAccelerationStructureKHR *pAccelerationStructure);
+
+INSTANTIATE_FUNCTION_SERIALISED(void, vkUnmapMemory2KHR, VkDevice device,
+                                const VkMemoryUnmapInfo *pMemoryUnmapInfo);

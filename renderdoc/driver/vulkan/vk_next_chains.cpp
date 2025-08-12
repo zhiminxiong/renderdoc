@@ -831,6 +831,8 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
                 UnwrapInPlace(out->memory));                                                          \
   UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, VkMemoryDedicatedAllocateInfo,      \
                 UnwrapInPlace(out->buffer), UnwrapInPlace(out->image));                               \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MEMORY_MAP_INFO, VkMemoryMapInfo, UnwrapInPlace(out->memory));      \
+  UNWRAP_STRUCT(VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO, VkMemoryUnmapInfo, UnwrapInPlace(out->memory));  \
   UNWRAP_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR, VkPipelineInfoKHR,                               \
                 UnwrapInPlace(out->pipeline));                                                        \
   UNWRAP_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR, VkPipelineExecutableInfoKHR,          \
@@ -1063,10 +1065,8 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_MEMORY_GET_REMOTE_ADDRESS_INFO_NV:                                     \
   case VK_STRUCTURE_TYPE_MEMORY_GET_ZIRCON_HANDLE_INFO_FUCHSIA:                                 \
   case VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT:                                    \
-  case VK_STRUCTURE_TYPE_MEMORY_MAP_INFO:                                                       \
   case VK_STRUCTURE_TYPE_MEMORY_MAP_PLACED_INFO_EXT:                                            \
   case VK_STRUCTURE_TYPE_MEMORY_METAL_HANDLE_PROPERTIES_EXT:                                    \
-  case VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO:                                                     \
   case VK_STRUCTURE_TYPE_MEMORY_ZIRCON_HANDLE_PROPERTIES_FUCHSIA:                               \
   case VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT:                                               \
   case VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT:                                         \

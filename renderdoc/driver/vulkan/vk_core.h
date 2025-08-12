@@ -1739,9 +1739,17 @@ public:
   IMPLEMENT_FUNCTION_SERIALISED(void, vkFreeMemory, VkDevice device, VkDeviceMemory memory,
                                 const VkAllocationCallbacks *);
 
+  void ProcessMap(VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size, void **ppData,
+                  byte *realData, VkDeviceSize misalignedOffset);
+
   IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkMapMemory, VkDevice device, VkDeviceMemory memory,
                                 VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags,
                                 void **ppData);
+
+  template <typename SerialiserType>
+  bool SerialiseUnmap(SerialiserType &ser, VkDeviceMemory memory, uint64_t MapOffset,
+                      uint64_t MapSize, byte *MapData);
+  void ProcessUnmap(VkDevice device, VkDeviceMemory mem, const VkMemoryUnmapInfo *info);
 
   IMPLEMENT_FUNCTION_SERIALISED(void, vkUnmapMemory, VkDevice device, VkDeviceMemory memory);
 
@@ -3253,4 +3261,10 @@ public:
   IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindDescriptorBufferEmbeddedSamplersEXT,
                                 VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
                                 VkPipelineLayout layout, uint32_t set);
+
+  // VK_KHR_map_memory2
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkMapMemory2KHR, VkDevice device,
+                                const VkMemoryMapInfo *pMemoryMapInfo, void **ppData);
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkUnmapMemory2KHR, VkDevice device,
+                                const VkMemoryUnmapInfo *pMemoryUnmapInfo);
 };

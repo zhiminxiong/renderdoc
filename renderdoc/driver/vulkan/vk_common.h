@@ -1392,6 +1392,7 @@ enum class VulkanChunk : uint32_t
   vkCopyImageToMemory,
   vkCopyMemoryToImage,
   vkTransitionImageLayout,
+  vkUnmapMemory2KHR,
   Max,
 };
 
@@ -1618,10 +1619,12 @@ DECLARE_REFLECTION_STRUCT(VkMemoryDedicatedAllocateInfo);
 DECLARE_REFLECTION_STRUCT(VkMemoryDedicatedRequirements);
 DECLARE_REFLECTION_STRUCT(VkMemoryFdPropertiesKHR);
 DECLARE_REFLECTION_STRUCT(VkMemoryGetFdInfoKHR);
+DECLARE_REFLECTION_STRUCT(VkMemoryMapInfo);
 DECLARE_REFLECTION_STRUCT(VkMemoryOpaqueCaptureAddressAllocateInfo);
 DECLARE_REFLECTION_STRUCT(VkMemoryPriorityAllocateInfoEXT);
 DECLARE_REFLECTION_STRUCT(VkMemoryRequirements2);
 DECLARE_REFLECTION_STRUCT(VkMemoryToImageCopy);
+DECLARE_REFLECTION_STRUCT(VkMemoryUnmapInfo);
 DECLARE_REFLECTION_STRUCT(VkMultisampledRenderToSingleSampledInfoEXT);
 DECLARE_REFLECTION_STRUCT(VkMultisamplePropertiesEXT);
 DECLARE_REFLECTION_STRUCT(VkMutableDescriptorTypeCreateInfoEXT);
@@ -2108,10 +2111,12 @@ DECLARE_DESERIALISE_TYPE(VkMemoryDedicatedAllocateInfo);
 DECLARE_DESERIALISE_TYPE(VkMemoryDedicatedRequirements);
 DECLARE_DESERIALISE_TYPE(VkMemoryFdPropertiesKHR);
 DECLARE_DESERIALISE_TYPE(VkMemoryGetFdInfoKHR);
+DECLARE_DESERIALISE_TYPE(VkMemoryMapInfo);
 DECLARE_DESERIALISE_TYPE(VkMemoryOpaqueCaptureAddressAllocateInfo);
 DECLARE_DESERIALISE_TYPE(VkMemoryPriorityAllocateInfoEXT);
 DECLARE_DESERIALISE_TYPE(VkMemoryRequirements2);
 DECLARE_DESERIALISE_TYPE(VkMemoryToImageCopy);
+DECLARE_DESERIALISE_TYPE(VkMemoryUnmapInfo);
 DECLARE_DESERIALISE_TYPE(VkMultisampledRenderToSingleSampledInfoEXT);
 DECLARE_DESERIALISE_TYPE(VkMultisamplePropertiesEXT);
 DECLARE_DESERIALISE_TYPE(VkMutableDescriptorTypeCreateInfoEXT);
@@ -2694,8 +2699,10 @@ DECLARE_REFLECTION_ENUM(VkLineRasterizationMode);
 DECLARE_REFLECTION_ENUM(VkLogicOp);
 DECLARE_REFLECTION_ENUM(VkMemoryAllocateFlagBits);
 DECLARE_REFLECTION_ENUM(VkMemoryHeapFlagBits);
-DECLARE_REFLECTION_ENUM(VkMemoryPropertyFlagBits);
+DECLARE_REFLECTION_ENUM(VkMemoryMapFlagBits);
 DECLARE_REFLECTION_ENUM(VkMemoryOverallocationBehaviorAMD);
+DECLARE_REFLECTION_ENUM(VkMemoryPropertyFlagBits);
+DECLARE_REFLECTION_ENUM(VkMemoryUnmapFlagBits);
 DECLARE_REFLECTION_ENUM(VkObjectType);
 DECLARE_REFLECTION_ENUM(VkPerformanceCounterDescriptionFlagBitsKHR);
 DECLARE_REFLECTION_ENUM(VkPerformanceCounterScopeKHR);

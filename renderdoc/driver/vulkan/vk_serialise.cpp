@@ -91,6 +91,7 @@ DECL_VKFLAG(VkFramebufferCreate);
 DECL_VKFLAG(VkMemoryAllocate);
 DECL_VKFLAG(VkMemoryHeap);
 DECL_VKFLAG(VkMemoryMap);
+DECL_VKFLAG(VkMemoryUnmap);
 DECL_VKFLAG(VkMemoryProperty);
 DECL_VKFLAG(VkPeerMemoryFeature);
 DECL_VKFLAG(VkPipelineCacheCreate);
@@ -1283,6 +1284,10 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES,                             \
                VkPhysicalDeviceMaintenance5Properties)                                                 \
                                                                                                        \
+  /* VK_KHR_map_memory2 */                                                                             \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_MAP_INFO, VkMemoryMapInfo)                                     \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO, VkMemoryUnmapInfo)                                 \
+                                                                                                       \
   /* VK_EXT_multisampled_render_to_single_sampled */                                                   \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT,                       \
                VkMultisampledRenderToSingleSampledInfoEXT)                                             \
@@ -1901,10 +1906,6 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR)                         \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR)                     \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR)                                         \
-                                                                                                       \
-  /* VK_KHR_map_memory2 */                                                                             \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_MAP_INFO)                                                 \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO)                                               \
                                                                                                        \
   /* VK_KHR_maintenance6 */                                                                            \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES)                          \
@@ -4577,6 +4578,40 @@ void DoSerialise(SerialiserType &ser, VkMappedMemoryRange &el)
 
 template <>
 void Deserialise(const VkMappedMemoryRange &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkMemoryMapInfo &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_MEMORY_MAP_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkMemoryMapFlags, flags);
+  SERIALISE_MEMBER(memory).Important();
+  SERIALISE_MEMBER(offset).OffsetOrSize();
+  SERIALISE_MEMBER(size).OffsetOrSize();
+}
+
+template <>
+void Deserialise(const VkMemoryMapInfo &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkMemoryUnmapInfo &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkMemoryUnmapFlags, flags);
+  SERIALISE_MEMBER(memory).Important();
+}
+
+template <>
+void Deserialise(const VkMemoryUnmapInfo &el)
 {
   DeserialiseNext(el.pNext);
 }
@@ -13938,10 +13973,12 @@ INSTANTIATE_SERIALISE_TYPE(VkMemoryDedicatedAllocateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryDedicatedRequirements);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryFdPropertiesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryGetFdInfoKHR);
+INSTANTIATE_SERIALISE_TYPE(VkMemoryMapInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryOpaqueCaptureAddressAllocateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryPriorityAllocateInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryRequirements2);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryToImageCopy);
+INSTANTIATE_SERIALISE_TYPE(VkMemoryUnmapInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMultisampledRenderToSingleSampledInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkMultisamplePropertiesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkMutableDescriptorTypeCreateInfoEXT);
