@@ -3267,4 +3267,10 @@ public:
                                 const VkMemoryMapInfo *pMemoryMapInfo, void **ppData);
   IMPLEMENT_FUNCTION_SERIALISED(void, vkUnmapMemory2KHR, VkDevice device,
                                 const VkMemoryUnmapInfo *pMemoryUnmapInfo);
+
+  // VK_KHR_present_wait2
+
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkWaitForPresent2KHR, VkDevice device,
+                                VkSwapchainKHR swapchain,
+                                const VkPresentWait2InfoKHR *pPresentWait2Info);
 };

@@ -192,8 +192,10 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_KHR_pipeline_executable_properties`
 * `VK_KHR_pipeline_library`
 * `VK_KHR_present_id`
+* `VK_KHR_present_id2`
 * `VK_KHR_present_mode_fifo_latest_ready`
 * `VK_KHR_present_wait`
+* `VK_KHR_present_wait2`
 * `VK_KHR_push_descriptor`
 * `VK_KHR_ray_query`
 * `VK_KHR_ray_tracing_maintenance1`
@@ -274,8 +276,6 @@ KHR extensions will definitely be implemented at some point, though KHR extensio
 * `VK_KHR_maintenance8`
 * `VK_KHR_maintenance9`
 * `VK_KHR_pipeline_binary`
-* `VK_KHR_present_id2`
-* `VK_KHR_present_wait2`
 
 ## KHR Portability
 

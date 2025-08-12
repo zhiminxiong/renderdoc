@@ -1015,6 +1015,7 @@ VkResult WrappedVulkan::vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR 
        next->sType != VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR &&
        next->sType != VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE &&
        next->sType != VK_STRUCTURE_TYPE_PRESENT_ID_KHR &&
+       next->sType != VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR &&
        next->sType != VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR &&
        next->sType != VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_KHR)
     {
@@ -1069,6 +1070,11 @@ VkResult WrappedVulkan::vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR 
     if(ids)
       ids->swapchainCount = 1;
 
+    VkPresentId2KHR *ids2 =
+        (VkPresentId2KHR *)FindNextStruct(&mutableInfo, VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR);
+    if(ids2)
+      ids2->swapchainCount = 1;
+
     VkSwapchainPresentFenceInfoKHR *fences = (VkSwapchainPresentFenceInfoKHR *)FindNextStruct(
         &mutableInfo, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR);
     if(fences)
@@ -1092,6 +1098,8 @@ VkResult WrappedVulkan::vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR 
         regions->pRegions++;
       if(ids)
         ids->pPresentIds++;
+      if(ids2)
+        ids2->pPresentIds++;
       if(times)
         times->pTimes++;
       if(fences)
@@ -1791,6 +1799,12 @@ VkResult WrappedVulkan::vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swap
                                             uint64_t presentId, uint64_t timeout)
 {
   return ObjDisp(device)->WaitForPresentKHR(Unwrap(device), Unwrap(swapchain), presentId, timeout);
+}
+
+VkResult WrappedVulkan::vkWaitForPresent2KHR(VkDevice device, VkSwapchainKHR swapchain,
+                                             const VkPresentWait2InfoKHR *pPresentWait2Info)
+{
+  return ObjDisp(device)->WaitForPresent2KHR(Unwrap(device), Unwrap(swapchain), pPresentWait2Info);
 }
 
 VkResult WrappedVulkan::vkReleaseSwapchainImagesKHR(VkDevice device,

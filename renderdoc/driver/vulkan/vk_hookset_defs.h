@@ -552,7 +552,8 @@
   DeclExt(EXT_image_compression_control);              \
   DeclExt(EXT_image_compression_control_swapchain);    \
   DeclExt(EXT_descriptor_buffer);                      \
-  DeclExt(KHR_map_memory2);
+  DeclExt(KHR_map_memory2);                            \
+  DeclExt(KHR_present_wait2);
 
 // for simplicity and since the check itself is platform agnostic,
 // these aren't protected in platform defines
@@ -694,7 +695,8 @@
   CheckExt(EXT_image_compression_control, VKXX);              \
   CheckExt(EXT_image_compression_control_swapchain, VKXX);    \
   CheckExt(EXT_descriptor_buffer, VKXX);                      \
-  CheckExt(KHR_map_memory2, VKXX);
+  CheckExt(KHR_map_memory2, VKXX);                            \
+  CheckExt(KHR_present_wait2, VKXX);
 
 #define HookInitVulkanInstanceExts_PhysDev()                                                         \
   HookInitExtension(KHR_surface, GetPhysicalDeviceSurfaceSupportKHR);                                \
@@ -1086,6 +1088,7 @@
   HookInitExtension(EXT_descriptor_buffer, GetAccelerationStructureOpaqueCaptureDescriptorDataEXT);  \
   HookInitExtension(KHR_map_memory2, MapMemory2KHR);                                                 \
   HookInitExtension(KHR_map_memory2, UnmapMemory2KHR);                                               \
+  HookInitExtension(KHR_present_wait, WaitForPresent2KHR);                                           \
   HookInitExtension_Device_Win32();                                                                  \
   HookInitExtension_Device_Linux();                                                                  \
   HookInitExtension_Device_Android();                                                                \
@@ -2040,6 +2043,8 @@
               pMemoryMapInfo, void **, ppData);                                                      \
   HookDefine2(void, vkUnmapMemory2KHR, VkDevice, device, const VkMemoryUnmapInfo *,                  \
               pMemoryUnmapInfo);                                                                     \
+  HookDefine3(VkResult, vkWaitForPresent2KHR, VkDevice, device, VkSwapchainKHR, swapchain,           \
+              const VkPresentWait2InfoKHR *, pPresentWait2Info);                                     \
   HookDefine_Win32();                                                                                \
   HookDefine_Linux();                                                                                \
   HookDefine_Android();                                                                              \
