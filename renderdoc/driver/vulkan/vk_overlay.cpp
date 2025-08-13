@@ -623,9 +623,12 @@ void VulkanDebugManager::PatchLineStripIndexBuffer(const ActionDescription *acti
       readSizeBytes = RDCMIN(readSizeBytes, maxSubrangeBytes);
     }
 
-    GetBufferData(rs.ibuffer.buf,
-                  rs.ibuffer.offs + uint64_t(action->indexOffset) * rs.ibuffer.bytewidth,
-                  readSizeBytes, indices);
+    if(rs.ibuffer.buf == ResourceId())
+      indices.resize(readSizeBytes);
+    else
+      GetBufferData(rs.ibuffer.buf,
+                    rs.ibuffer.offs + uint64_t(action->indexOffset) * rs.ibuffer.bytewidth,
+                    readSizeBytes, indices);
 
     if(rs.ibuffer.bytewidth == 4)
       idx32 = (uint32_t *)indices.data();

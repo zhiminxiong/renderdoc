@@ -1687,6 +1687,10 @@ static const VkExtensionProperties supportedExtensions[] = {
         VK_KHR_MAINTENANCE_5_SPEC_VERSION,
     },
     {
+        VK_KHR_MAINTENANCE_6_EXTENSION_NAME,
+        VK_KHR_MAINTENANCE_6_SPEC_VERSION,
+    },
+    {
         VK_KHR_MAP_MEMORY_2_EXTENSION_NAME,
         VK_KHR_MAP_MEMORY_2_SPEC_VERSION,
     },
@@ -4685,6 +4689,19 @@ bool WrappedVulkan::ProcessChunk(ReadSerialiser &ser, VulkanChunk chunk)
 
     case VulkanChunk::vkUnmapMemory2KHR:
       return Serialise_vkUnmapMemory2KHR(ser, VK_NULL_HANDLE, VK_NULL_HANDLE);
+
+    case VulkanChunk::vkCmdBindDescriptorSets2KHR:
+      return Serialise_vkCmdBindDescriptorSets2KHR(ser, VK_NULL_HANDLE, NULL);
+    case VulkanChunk::vkCmdPushConstants2KHR:
+      return Serialise_vkCmdPushConstants2KHR(ser, VK_NULL_HANDLE, NULL);
+    case VulkanChunk::vkCmdBindDescriptorBufferEmbeddedSamplers2EXT:
+      return Serialise_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT(ser, VK_NULL_HANDLE, NULL);
+    case VulkanChunk::vkCmdSetDescriptorBufferOffsets2EXT:
+      return Serialise_vkCmdSetDescriptorBufferOffsets2EXT(ser, VK_NULL_HANDLE, NULL);
+    case VulkanChunk::vkCmdPushDescriptorSet2KHR:
+      return Serialise_vkCmdPushDescriptorSet2KHR(ser, VK_NULL_HANDLE, NULL);
+    case VulkanChunk::vkCmdPushDescriptorSetWithTemplate2KHR:
+      return Serialise_vkCmdPushDescriptorSetWithTemplate2KHR(ser, VK_NULL_HANDLE, NULL);
 
     // chunks that are reserved but not yet serialised
     case VulkanChunk::vkResetCommandPool:

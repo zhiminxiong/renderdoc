@@ -1393,6 +1393,12 @@ enum class VulkanChunk : uint32_t
   vkCopyMemoryToImage,
   vkTransitionImageLayout,
   vkUnmapMemory2KHR,
+  vkCmdBindDescriptorSets2KHR,
+  vkCmdPushConstants2KHR,
+  vkCmdBindDescriptorBufferEmbeddedSamplers2EXT,
+  vkCmdSetDescriptorBufferOffsets2EXT,
+  vkCmdPushDescriptorSet2KHR,
+  vkCmdPushDescriptorSetWithTemplate2KHR,
   Max,
 };
 
@@ -1463,10 +1469,13 @@ DECLARE_REFLECTION_STRUCT(VkAttachmentReferenceStencilLayout);
 DECLARE_REFLECTION_STRUCT(VkAttachmentSampleLocationsEXT);
 DECLARE_REFLECTION_STRUCT(VkBindBufferMemoryDeviceGroupInfo);
 DECLARE_REFLECTION_STRUCT(VkBindBufferMemoryInfo);
+DECLARE_REFLECTION_STRUCT(VkBindDescriptorBufferEmbeddedSamplersInfoEXT)
+DECLARE_REFLECTION_STRUCT(VkBindDescriptorSetsInfoKHR)
 DECLARE_REFLECTION_STRUCT(VkBindImageMemoryDeviceGroupInfo);
 DECLARE_REFLECTION_STRUCT(VkBindImageMemoryInfo);
 DECLARE_REFLECTION_STRUCT(VkBindImageMemorySwapchainInfoKHR);
 DECLARE_REFLECTION_STRUCT(VkBindImagePlaneMemoryInfo);
+DECLARE_REFLECTION_STRUCT(VkBindMemoryStatusKHR)
 DECLARE_REFLECTION_STRUCT(VkBindSparseInfo);
 DECLARE_REFLECTION_STRUCT(VkBlitImageInfo2);
 DECLARE_REFLECTION_STRUCT(VkBufferCaptureDescriptorDataInfoEXT);
@@ -1715,6 +1724,8 @@ DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance4Features);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance4Properties);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance5Features);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance5Properties);
+DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance6FeaturesKHR);
+DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance6PropertiesKHR);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMemoryBudgetPropertiesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMemoryPriorityFeaturesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMemoryProperties2);
@@ -1805,8 +1816,8 @@ DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceUniformBufferStandardLayoutFeatures);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVariablePointersFeatures);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVertexAttributeDivisorFeatures);
-DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVertexAttributeDivisorProperties);
+DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVulkan11Features);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceVulkan11Properties);
@@ -1862,6 +1873,9 @@ DECLARE_REFLECTION_STRUCT(VkPresentTimesInfoGOOGLE);
 DECLARE_REFLECTION_STRUCT(VkPresentWait2InfoKHR);
 DECLARE_REFLECTION_STRUCT(VkPrivateDataSlotCreateInfo);
 DECLARE_REFLECTION_STRUCT(VkProtectedSubmitInfo);
+DECLARE_REFLECTION_STRUCT(VkPushConstantsInfoKHR)
+DECLARE_REFLECTION_STRUCT(VkPushDescriptorSetInfoKHR)
+DECLARE_REFLECTION_STRUCT(VkPushDescriptorSetWithTemplateInfoKHR)
 DECLARE_REFLECTION_STRUCT(VkQueryPoolCreateInfo);
 DECLARE_REFLECTION_STRUCT(VkQueryPoolPerformanceCreateInfoKHR);
 DECLARE_REFLECTION_STRUCT(VkQueueFamilyGlobalPriorityProperties);
@@ -1876,8 +1890,8 @@ DECLARE_REFLECTION_STRUCT(VkRenderingAttachmentInfo);
 DECLARE_REFLECTION_STRUCT(VkRenderingAttachmentLocationInfo);
 DECLARE_REFLECTION_STRUCT(VkRenderingFragmentDensityMapAttachmentInfoEXT);
 DECLARE_REFLECTION_STRUCT(VkRenderingFragmentShadingRateAttachmentInfoKHR);
-DECLARE_REFLECTION_STRUCT(VkRenderingInputAttachmentIndexInfo);
 DECLARE_REFLECTION_STRUCT(VkRenderingInfo);
+DECLARE_REFLECTION_STRUCT(VkRenderingInputAttachmentIndexInfo);
 DECLARE_REFLECTION_STRUCT(VkRenderPassAttachmentBeginInfo);
 DECLARE_REFLECTION_STRUCT(VkRenderPassBeginInfo);
 DECLARE_REFLECTION_STRUCT(VkRenderPassCreateInfo);
@@ -1902,6 +1916,7 @@ DECLARE_REFLECTION_STRUCT(VkSemaphoreSignalInfo);
 DECLARE_REFLECTION_STRUCT(VkSemaphoreSubmitInfo);
 DECLARE_REFLECTION_STRUCT(VkSemaphoreTypeCreateInfo);
 DECLARE_REFLECTION_STRUCT(VkSemaphoreWaitInfo);
+DECLARE_REFLECTION_STRUCT(VkSetDescriptorBufferOffsetsInfoEXT)
 DECLARE_REFLECTION_STRUCT(VkShaderCreateInfoEXT);
 DECLARE_REFLECTION_STRUCT(VkShaderModuleCreateInfo);
 DECLARE_REFLECTION_STRUCT(VkShaderModuleValidationCacheCreateInfoEXT);
@@ -1968,10 +1983,13 @@ DECLARE_DESERIALISE_TYPE(VkAttachmentReferenceStencilLayout);
 DECLARE_DESERIALISE_TYPE(VkAttachmentSampleLocationsEXT);
 DECLARE_DESERIALISE_TYPE(VkBindBufferMemoryDeviceGroupInfo);
 DECLARE_DESERIALISE_TYPE(VkBindBufferMemoryInfo);
+DECLARE_DESERIALISE_TYPE(VkBindDescriptorBufferEmbeddedSamplersInfoEXT)
+DECLARE_DESERIALISE_TYPE(VkBindDescriptorSetsInfoKHR)
 DECLARE_DESERIALISE_TYPE(VkBindImageMemoryDeviceGroupInfo);
 DECLARE_DESERIALISE_TYPE(VkBindImageMemoryInfo);
 DECLARE_DESERIALISE_TYPE(VkBindImageMemorySwapchainInfoKHR);
 DECLARE_DESERIALISE_TYPE(VkBindImagePlaneMemoryInfo);
+DECLARE_DESERIALISE_TYPE(VkBindMemoryStatusKHR)
 DECLARE_DESERIALISE_TYPE(VkBindSparseInfo);
 DECLARE_DESERIALISE_TYPE(VkBlitImageInfo2);
 DECLARE_DESERIALISE_TYPE(VkBufferCaptureDescriptorDataInfoEXT);
@@ -2214,6 +2232,8 @@ DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance4Features);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance4Properties);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance5Features);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance5Properties);
+DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance6FeaturesKHR);
+DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance6PropertiesKHR);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMemoryBudgetPropertiesEXT);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMemoryPriorityFeaturesEXT);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMemoryProperties2);
@@ -2360,6 +2380,9 @@ DECLARE_DESERIALISE_TYPE(VkPresentTimesInfoGOOGLE);
 DECLARE_DESERIALISE_TYPE(VkPresentWait2InfoKHR);
 DECLARE_DESERIALISE_TYPE(VkPrivateDataSlotCreateInfo);
 DECLARE_DESERIALISE_TYPE(VkProtectedSubmitInfo);
+DECLARE_DESERIALISE_TYPE(VkPushConstantsInfoKHR)
+DECLARE_DESERIALISE_TYPE(VkPushDescriptorSetInfoKHR)
+DECLARE_DESERIALISE_TYPE(VkPushDescriptorSetWithTemplateInfoKHR)
 DECLARE_DESERIALISE_TYPE(VkQueryPoolCreateInfo);
 DECLARE_DESERIALISE_TYPE(VkQueryPoolPerformanceCreateInfoKHR);
 DECLARE_DESERIALISE_TYPE(VkQueueFamilyGlobalPriorityProperties);
@@ -2398,6 +2421,7 @@ DECLARE_DESERIALISE_TYPE(VkSemaphoreSignalInfo);
 DECLARE_DESERIALISE_TYPE(VkSemaphoreSubmitInfo);
 DECLARE_DESERIALISE_TYPE(VkSemaphoreTypeCreateInfo);
 DECLARE_DESERIALISE_TYPE(VkSemaphoreWaitInfo);
+DECLARE_DESERIALISE_TYPE(VkSetDescriptorBufferOffsetsInfoEXT)
 DECLARE_DESERIALISE_TYPE(VkShaderCreateInfoEXT);
 DECLARE_DESERIALISE_TYPE(VkShaderModuleCreateInfo);
 DECLARE_DESERIALISE_TYPE(VkShaderModuleValidationCacheCreateInfoEXT);

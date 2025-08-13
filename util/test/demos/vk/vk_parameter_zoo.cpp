@@ -291,7 +291,8 @@ void main()
     optDevExts.push_back(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME);
     optDevExts.push_back(VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME);
     optDevExts.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-    optDevExts.push_back(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
+    optDevExts.push_back(VK_KHR_MAINTENANCE_2_EXTENSION_NAME);
+    optDevExts.push_back(VK_KHR_MAINTENANCE_6_EXTENSION_NAME);
     optDevExts.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
     optDevExts.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
     optDevExts.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
@@ -299,6 +300,17 @@ void main()
     optDevExts.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
 
     VulkanGraphicsTest::Prepare(argc, argv);
+
+    static VkPhysicalDeviceMaintenance6Features maint6Feats = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES,
+    };
+
+    if(hasExt(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
+    {
+      maint6Feats.maintenance6 = VK_TRUE;
+      maint6Feats.pNext = (void *)devInfoNext;
+      devInfoNext = &maint6Feats;
+    }
 
     static VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timeline = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR,
@@ -478,6 +490,7 @@ void main()
     bool KHR_timeline_semaphore =
         std::find(devExts.begin(), devExts.end(), VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) !=
         devExts.end();
+    bool KHR_maintenance6 = hasExt(VK_KHR_MAINTENANCE_6_EXTENSION_NAME);
 
     if(physProperties.apiVersion >= VK_MAKE_VERSION(1, 2, 0))
     {
@@ -1878,7 +1891,37 @@ void main()
         vkh::cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, asm_layout, 1,
                                    {empty_descset}, {});
 
-        setMarker(cmd, "ASM Draw");
+        setMarker(cmd, "ASM Draw 1");
+        vkCmdDraw(cmd, 4, 1, 0, 0);
+
+        setMarker(cmd, "ASM Draw 2");
+        if(KHR_maintenance6)
+        {
+          VkBindDescriptorSetsInfoKHR descBindInfo = {
+              VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO_KHR,
+          };
+          // even if we don't specify fragment bit this still counts as covering all graphics stages
+          descBindInfo.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+          descBindInfo.descriptorSetCount = 1;
+          descBindInfo.dynamicOffsetCount = 0;
+          descBindInfo.firstSet = 0;
+          descBindInfo.pDescriptorSets = &asm_descset;
+          descBindInfo.layout = asm_layout;
+
+          VkPushConstantsInfoKHR pushConstInfo = {
+              VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO_KHR,
+          };
+
+          // even if we don't specify fragment bit this still counts as covering all graphics stages
+          pushConstInfo.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+          pushConstInfo.layout = asm_layout;
+          pushConstInfo.offset = 0;
+          pushConstInfo.size = 4;
+          pushConstInfo.pValues = &idx;
+
+          vkCmdBindDescriptorSets2KHR(cmd, &descBindInfo);
+          vkCmdPushConstants2KHR(cmd, &pushConstInfo);
+        }
         vkCmdDraw(cmd, 4, 1, 0, 0);
 
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);

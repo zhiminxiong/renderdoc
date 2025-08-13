@@ -549,6 +549,7 @@
   DeclExt(KHR_shader_subgroup_uniform_control_flow);   \
   DeclExt(KHR_ray_tracing_maintenance1);               \
   DeclExt(KHR_maintenance5);                           \
+  DeclExt(KHR_maintenance6);                           \
   DeclExt(EXT_image_compression_control);              \
   DeclExt(EXT_image_compression_control_swapchain);    \
   DeclExt(EXT_descriptor_buffer);                      \
@@ -692,6 +693,7 @@
   CheckExt(KHR_shader_subgroup_uniform_control_flow, VKXX);   \
   CheckExt(KHR_ray_tracing_maintenance1, VKXX);               \
   CheckExt(KHR_maintenance5, VKXX);                           \
+  CheckExt(KHR_maintenance6, VKXX);                           \
   CheckExt(EXT_image_compression_control, VKXX);              \
   CheckExt(EXT_image_compression_control_swapchain, VKXX);    \
   CheckExt(EXT_descriptor_buffer, VKXX);                      \
@@ -1073,6 +1075,13 @@
   HookInitExtension(KHR_maintenance5, GetDeviceImageSubresourceLayoutKHR);                           \
   HookInitExtension(KHR_maintenance5, GetImageSubresourceLayout2KHR);                                \
   HookInitExtension(KHR_maintenance5, GetRenderingAreaGranularityKHR);                               \
+  HookInitExtension(KHR_maintenance6, CmdBindDescriptorSets2KHR);                                    \
+  HookInitExtension(KHR_maintenance6, CmdPushConstants2KHR);                                         \
+  HookInitExtension(KHR_maintenance6 &&EXT_descriptor_buffer,                                        \
+                    CmdBindDescriptorBufferEmbeddedSamplers2EXT);                                    \
+  HookInitExtension(KHR_maintenance6 &&EXT_descriptor_buffer, CmdSetDescriptorBufferOffsets2EXT);    \
+  HookInitExtension(KHR_maintenance6 &&KHR_push_descriptor, CmdPushDescriptorSet2KHR);               \
+  HookInitExtension(KHR_maintenance6 &&KHR_push_descriptor, CmdPushDescriptorSetWithTemplate2KHR);   \
   HookInitExtension(EXT_image_compression_control || EXT_host_image_copy,                            \
                     GetImageSubresourceLayout2EXT);                                                  \
   HookInitExtension(EXT_descriptor_buffer, CmdBindDescriptorBufferEmbeddedSamplersEXT);              \
@@ -2045,6 +2054,19 @@
               pMemoryUnmapInfo);                                                                     \
   HookDefine3(VkResult, vkWaitForPresent2KHR, VkDevice, device, VkSwapchainKHR, swapchain,           \
               const VkPresentWait2InfoKHR *, pPresentWait2Info);                                     \
+  HookDefine2(void, vkCmdBindDescriptorSets2KHR, VkCommandBuffer, commandBuffer,                     \
+              const VkBindDescriptorSetsInfo *, pBindDescriptorSetsInfo);                            \
+  HookDefine2(void, vkCmdPushConstants2KHR, VkCommandBuffer, commandBuffer,                          \
+              const VkPushConstantsInfo *, pPushConstantsInfo);                                      \
+  HookDefine2(void, vkCmdPushDescriptorSet2KHR, VkCommandBuffer, commandBuffer,                      \
+              const VkPushDescriptorSetInfo *, pPushDescriptorSetInfo);                              \
+  HookDefine2(void, vkCmdPushDescriptorSetWithTemplate2KHR, VkCommandBuffer, commandBuffer,          \
+              const VkPushDescriptorSetWithTemplateInfo *, pPushDescriptorSetWithTemplateInfo);      \
+  HookDefine2(void, vkCmdSetDescriptorBufferOffsets2EXT, VkCommandBuffer, commandBuffer,             \
+              const VkSetDescriptorBufferOffsetsInfoEXT *, pSetDescriptorBufferOffsetsInfo);         \
+  HookDefine2(void, vkCmdBindDescriptorBufferEmbeddedSamplers2EXT, VkCommandBuffer, commandBuffer,   \
+              const VkBindDescriptorBufferEmbeddedSamplersInfoEXT *,                                 \
+              pBindDescriptorBufferEmbeddedSamplersInfo);                                            \
   HookDefine_Win32();                                                                                \
   HookDefine_Linux();                                                                                \
   HookDefine_Android();                                                                              \

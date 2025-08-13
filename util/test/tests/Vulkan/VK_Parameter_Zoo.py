@@ -166,56 +166,57 @@ class VK_Parameter_Zoo(rdtest.TestCase):
 
         rdtest.log.success("RenderDoc tool was listed as available")
 
-        action = self.find_action("ASM Draw")
+        for variant in [1, 2]:
+            action = self.find_action(f"ASM Draw {variant}")
 
-        self.check(action is not None)
+            self.check(action is not None)
 
-        action = action.next
+            action = action.next
 
-        self.controller.SetFrameEvent(action.eventId, False)
+            self.controller.SetFrameEvent(action.eventId, False)
 
-        pipe = self.controller.GetPipelineState()
+            pipe = self.controller.GetPipelineState()
 
-        ro = pipe.GetReadOnlyResources(rd.ShaderStage.Vertex)
-        access = pipe.GetDescriptorAccess()
+            ro = pipe.GetReadOnlyResources(rd.ShaderStage.Vertex)
+            access = pipe.GetDescriptorAccess()
 
-        self.check_eq(len(ro), 1)
+            self.check_eq(len(ro), 1)
 
-        if not (rd.DescriptorType.Image, 0, 1) in [(a.type, a.index, a.arrayElement) for a in access]:
-            raise rdtest.TestFailureException(
-                f"Graphics bind 0[1] isn't the accessed descriptor {str(rd.DumpObject(access))}")
+            if not (rd.DescriptorType.Image, 0, 1) in [(a.type, a.index, a.arrayElement) for a in access]:
+                raise rdtest.TestFailureException(
+                    f"Graphics bind 0[1] isn't the accessed descriptor {str(rd.DumpObject(access))}")
 
-        vkpipe: rd.VKState = self.controller.GetVulkanPipelineState()
-        self.check(len(vkpipe.viewportScissor.viewportScissors) == 0)
+            vkpipe: rd.VKState = self.controller.GetVulkanPipelineState()
+            self.check(len(vkpipe.viewportScissor.viewportScissors) == 0)
 
-        postvs_data = self.get_postvs(action, rd.MeshDataStage.VSOut, 0, action.numIndices)
+            postvs_data = self.get_postvs(action, rd.MeshDataStage.VSOut, 0, action.numIndices)
 
-        postvs_ref = {
-            0: {
-                'vtx': 0,
-                'idx': 0,
-                '_Position': [-1.0, 1.0, 0.0, 1.0],
-            },
-            1: {
-                'vtx': 1,
-                'idx': 1,
-                '_Position': [1.0, 1.0, 0.0, 1.0],
-            },
-            2: {
-                'vtx': 2,
-                'idx': 2,
-                '_Position': [-1.0, -1.0, 0.0, 1.0],
-            },
-            3: {
-                'vtx': 3,
-                'idx': 3,
-                '_Position': [1.0, -1.0, 0.0, 1.0],
-            },
-        }
+            postvs_ref = {
+                0: {
+                    'vtx': 0,
+                    'idx': 0,
+                    '_Position': [-1.0, 1.0, 0.0, 1.0],
+                },
+                1: {
+                    'vtx': 1,
+                    'idx': 1,
+                    '_Position': [1.0, 1.0, 0.0, 1.0],
+                },
+                2: {
+                    'vtx': 2,
+                    'idx': 2,
+                    '_Position': [-1.0, -1.0, 0.0, 1.0],
+                },
+                3: {
+                    'vtx': 3,
+                    'idx': 3,
+                    '_Position': [1.0, -1.0, 0.0, 1.0],
+                },
+            }
 
-        self.check_mesh_data(postvs_ref, postvs_data)
+            self.check_mesh_data(postvs_ref, postvs_data)
 
-        rdtest.log.success("ASM Draw is as expected")
+            rdtest.log.success(f"ASM Draw {variant} is as expected")
 
         inline_ubo_actions = [
             self.find_action("Inline UBO Draw"),

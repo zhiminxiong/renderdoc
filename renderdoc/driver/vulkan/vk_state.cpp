@@ -793,6 +793,20 @@ void VulkanRenderState::BindDynamicState(WrappedVulkan *vk, VkCommandBuffer cmd)
           Unwrap(cmd), Unwrap(vk->GetResourceManager()->GetCurrentHandle<VkBuffer>(ibuffer.buf)),
           ibuffer.offs, type);
   }
+  else if(vk->Maintenance6())
+  {
+    VkIndexType type = VK_INDEX_TYPE_UINT16;
+    if(ibuffer.bytewidth == 4)
+      type = VK_INDEX_TYPE_UINT32;
+    else if(ibuffer.bytewidth == 1)
+      type = VK_INDEX_TYPE_UINT8;
+
+    if(vk->Maintenance5() && ibuffer.size != VK_WHOLE_SIZE)
+      ObjDisp(cmd)->CmdBindIndexBuffer2KHR(Unwrap(cmd), VK_NULL_HANDLE, ibuffer.offs, ibuffer.size,
+                                           type);
+    else
+      ObjDisp(cmd)->CmdBindIndexBuffer(Unwrap(cmd), VK_NULL_HANDLE, ibuffer.offs, type);
+  }
 
   if((vk->DynamicVertexInput() || vk->ShaderObject()) && dynamicStates[VkDynamicVertexInputEXT])
   {

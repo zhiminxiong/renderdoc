@@ -232,7 +232,8 @@ void main()
   void Prepare(int argc, char **argv)
   {
     devExts.push_back(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME);
-    devExts.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
+    devExts.push_back(VK_KHR_MAINTENANCE_1_EXTENSION_NAME);
+    devExts.push_back(VK_KHR_MAINTENANCE_6_EXTENSION_NAME);
     devExts.push_back(VK_EXT_INLINE_UNIFORM_BLOCK_EXTENSION_NAME);
     devExts.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
     devExts.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
@@ -294,6 +295,18 @@ void main()
 
     ycbcrFeats.pNext = (void *)devInfoNext;
     devInfoNext = &ycbcrFeats;
+
+    static VkPhysicalDeviceMaintenance6Features maint6Feats = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES,
+    };
+
+    getPhysFeatures2(&maint6Feats);
+
+    if(!maint6Feats.maintenance6)
+      Avail = "feature 'maintenance6' not available";
+
+    maint6Feats.pNext = (void *)devInfoNext;
+    devInfoNext = &maint6Feats;
 
     static VkPhysicalDeviceRobustness2FeaturesEXT robustFeats = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
@@ -1345,75 +1358,180 @@ void main()
 
       vkBeginCommandBuffer(cmd, vkh::CommandBufferBeginInfo());
 
-      vkCmdBindDescriptorBuffersEXT(cmd, numBufs, descBind);
+      VkImage swapimg;
 
-      // if we have a push buffer bind them all, if not bind starting from 1
-      uint32_t numSets = 4;
-      if(pushbuf.address)
-        numSets++;
-
-      vkCmdSetDescriptorBufferOffsetsEXT(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, numSets,
-                                         bufIdxs, setOffsets);
-      vkCmdBindDescriptorBufferEmbeddedSamplersEXT(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 5);
-
-      std::vector<VkDescriptorBufferInfo> pushBufInfos = {
-          vkh::DescriptorBufferInfo(pushbuf1.buffer, 0x200, 0x100)};
-      vkCmdPushDescriptorSetKHR(
-          cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 4, 1,
-          vkh::WriteDescriptorSet(VK_NULL_HANDLE, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, pushBufInfos));
-      pushBufInfos = {vkh::DescriptorBufferInfo(pushbuf2.buffer, 0x300, 0x100)};
-      vkCmdPushDescriptorSetKHR(
-          cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 4, 1,
-          vkh::WriteDescriptorSet(VK_NULL_HANDLE, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, pushBufInfos));
-
-      VkImage swapimg = StartUsingBackbuffer(cmd);
-
-      vkh::cmdPipelineBarrier(
-          cmd, {
-                   vkh::ImageMemoryBarrier(0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                           VK_IMAGE_LAYOUT_GENERAL, input.image),
-               });
-
-      vkh::cmdClearImage(cmd, input.image, vkh::ClearColorValue(1.0f, 0.5f, 0.0f, 1.0f));
-
-      vkh::cmdPipelineBarrier(
-          cmd, {
-                   vkh::ImageMemoryBarrier(
-                       VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, input.image),
-               });
-
-      vkCmdBeginRenderPass(cmd,
-                           vkh::RenderPassBeginInfo(renderPass, framebuffer, mainWindow->scissor,
-                                                    {vkh::ClearValue(0.2f, 0.2f, 0.2f, 1.0f)}),
-                           VK_SUBPASS_CONTENTS_INLINE);
-
-      mainWindow->setViewScissor(cmd);
-
-      float sqSize = float(screenHeight) / ceilf(sqrtf((float)tests.size()));
-
-      float x = 0.0f, y = 0.0f;
-
-      for(size_t t = 0; t < tests.size(); t++)
+      // normal calls
       {
-        VkViewport v = {x, y, sqSize, sqSize, 0.0f, 1.0f};
-        vkh::cmdPushConstants(cmd, layout, VK_SHADER_STAGE_FRAGMENT_BIT,
-                              Vec4f(sqSize, (float)texSize, x, y));
-        vkCmdSetViewport(cmd, 0, 1, &v);
-        setMarker(cmd, "Test " + std::to_string(t));
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tests[t]);
-        vkCmdDraw(cmd, 4, 1, 0, 0);
+        vkCmdBindDescriptorBuffersEXT(cmd, numBufs, descBind);
 
-        x += sqSize;
+        // if we have a push buffer bind them all, if not bind starting from 1
+        uint32_t numSets = 4;
+        if(pushbuf.address)
+          numSets++;
 
-        if(x + sqSize >= (float)screenWidth)
+        vkCmdSetDescriptorBufferOffsetsEXT(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, numSets,
+                                           bufIdxs, setOffsets);
+        vkCmdBindDescriptorBufferEmbeddedSamplersEXT(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 5);
+
+        std::vector<VkDescriptorBufferInfo> pushBufInfos = {
+            vkh::DescriptorBufferInfo(pushbuf1.buffer, 0x200, 0x100)};
+        vkCmdPushDescriptorSetKHR(
+            cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 4, 1,
+            vkh::WriteDescriptorSet(VK_NULL_HANDLE, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                    pushBufInfos));
+        pushBufInfos = {vkh::DescriptorBufferInfo(pushbuf2.buffer, 0x300, 0x100)};
+        vkCmdPushDescriptorSetKHR(
+            cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 4, 1,
+            vkh::WriteDescriptorSet(VK_NULL_HANDLE, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                    pushBufInfos));
+
+        swapimg = StartUsingBackbuffer(cmd);
+
+        vkh::cmdPipelineBarrier(
+            cmd,
+            {
+                vkh::ImageMemoryBarrier(0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                        VK_IMAGE_LAYOUT_GENERAL, input.image),
+            });
+
+        vkh::cmdClearImage(cmd, input.image, vkh::ClearColorValue(1.0f, 0.5f, 0.0f, 1.0f));
+
+        vkh::cmdPipelineBarrier(
+            cmd, {
+                     vkh::ImageMemoryBarrier(
+                         VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+                         VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, input.image),
+                 });
+
+        vkCmdBeginRenderPass(cmd,
+                             vkh::RenderPassBeginInfo(renderPass, framebuffer, mainWindow->scissor,
+                                                      {vkh::ClearValue(0.2f, 0.2f, 0.2f, 1.0f)}),
+                             VK_SUBPASS_CONTENTS_INLINE);
+
+        mainWindow->setViewScissor(cmd);
+
+        float sqSize = float(screenHeight) / ceilf(sqrtf((float)tests.size()));
+
+        float x = 0.0f, y = 0.0f;
+
+        for(size_t t = 0; t < tests.size(); t++)
         {
-          x = 0.0f;
-          y += sqSize;
-        }
-      }
+          VkViewport v = {x, y, sqSize, sqSize, 0.0f, 1.0f};
+          vkh::cmdPushConstants(cmd, layout, VK_SHADER_STAGE_FRAGMENT_BIT,
+                                Vec4f(sqSize, (float)texSize, x, y));
+          vkCmdSetViewport(cmd, 0, 1, &v);
+          setMarker(cmd, "Normal Test " + std::to_string(t));
+          vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tests[t]);
+          vkCmdDraw(cmd, 4, 1, 0, 0);
 
-      vkCmdEndRenderPass(cmd);
+          x += sqSize;
+
+          if(x + sqSize >= (float)screenWidth)
+          {
+            x = 0.0f;
+            y += sqSize;
+          }
+        }
+
+        vkCmdEndRenderPass(cmd);
+      }
+      vkEndCommandBuffer(cmd);
+
+      Submit(0, 2, {cmd});
+
+      cmd = GetCommandBuffer();
+
+      vkBeginCommandBuffer(cmd, vkh::CommandBufferBeginInfo());
+
+      // maint 6 calls
+      {
+        vkCmdBindDescriptorBuffersEXT(cmd, numBufs, descBind);
+
+        // if we have a push buffer bind them all, if not bind starting from 1
+        uint32_t numSets = 4;
+        if(pushbuf.address)
+          numSets++;
+
+        VkSetDescriptorBufferOffsetsInfoEXT setInfo = {
+            VK_STRUCTURE_TYPE_SET_DESCRIPTOR_BUFFER_OFFSETS_INFO_EXT,
+        };
+
+        // user could cover multiple pipeline layouts, ensure that works
+        // even if we don't specify fragment bit this still counts as covering all graphics stages
+        setInfo.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+        setInfo.layout = layout;
+        setInfo.firstSet = 0;
+        setInfo.setCount = numSets;
+        setInfo.pBufferIndices = bufIdxs;
+        setInfo.pOffsets = setOffsets;
+
+        vkCmdSetDescriptorBufferOffsets2EXT(cmd, &setInfo);
+
+        VkBindDescriptorBufferEmbeddedSamplersInfoEXT embedInfo = {
+            VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_BUFFER_EMBEDDED_SAMPLERS_INFO_EXT,
+        };
+
+        embedInfo.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+        embedInfo.layout = layout;
+        embedInfo.set = 5;
+
+        vkCmdBindDescriptorBufferEmbeddedSamplers2EXT(cmd, &embedInfo);
+
+        VkPushDescriptorSetInfo pushInfo = {
+            VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO,
+        };
+
+        VkWriteDescriptorSet write;
+
+        pushInfo.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+        pushInfo.descriptorWriteCount = 1;
+        pushInfo.pDescriptorWrites = &write;
+        pushInfo.layout = layout;
+        pushInfo.set = 4;
+
+        std::vector<VkDescriptorBufferInfo> pushBufInfos = {
+            vkh::DescriptorBufferInfo(pushbuf1.buffer, 0x200, 0x100)};
+        write = vkh::WriteDescriptorSet(VK_NULL_HANDLE, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                        pushBufInfos);
+
+        vkCmdPushDescriptorSet2KHR(cmd, &pushInfo);
+        pushBufInfos = {vkh::DescriptorBufferInfo(pushbuf2.buffer, 0x300, 0x100)};
+        write = vkh::WriteDescriptorSet(VK_NULL_HANDLE, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                        pushBufInfos);
+        vkCmdPushDescriptorSet2KHR(cmd, &pushInfo);
+
+        vkCmdBeginRenderPass(cmd,
+                             vkh::RenderPassBeginInfo(renderPass, framebuffer, mainWindow->scissor,
+                                                      {vkh::ClearValue(0.2f, 0.2f, 0.2f, 1.0f)}),
+                             VK_SUBPASS_CONTENTS_INLINE);
+
+        mainWindow->setViewScissor(cmd);
+
+        float sqSize = float(screenHeight) / ceilf(sqrtf((float)tests.size()));
+
+        float x = 0.0f, y = 0.0f;
+
+        for(size_t t = 0; t < tests.size(); t++)
+        {
+          VkViewport v = {x, y, sqSize, sqSize, 0.0f, 1.0f};
+          vkh::cmdPushConstants(cmd, layout, VK_SHADER_STAGE_FRAGMENT_BIT,
+                                Vec4f(sqSize, (float)texSize, x, y));
+          vkCmdSetViewport(cmd, 0, 1, &v);
+          setMarker(cmd, "Maint6 Test " + std::to_string(t));
+          vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tests[t]);
+          vkCmdDraw(cmd, 4, 1, 0, 0);
+
+          x += sqSize;
+
+          if(x + sqSize >= (float)screenWidth)
+          {
+            x = 0.0f;
+            y += sqSize;
+          }
+        }
+
+        vkCmdEndRenderPass(cmd);
+      }
 
       vkh::cmdPipelineBarrier(
           cmd, {
@@ -1428,7 +1546,8 @@ void main()
 
       vkEndCommandBuffer(cmd);
 
-      SubmitAndPresent({cmd});
+      Submit(1, 2, {cmd});
+      Present();
     }
 
     vkDestroyAccelerationStructureKHR(device, j, NULL);

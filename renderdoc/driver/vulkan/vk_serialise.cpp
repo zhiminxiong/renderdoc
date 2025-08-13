@@ -1284,6 +1284,24 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES,                             \
                VkPhysicalDeviceMaintenance5Properties)                                                 \
                                                                                                        \
+  /* VK_KHR_maintenance6 */                                                                            \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES,                               \
+               VkPhysicalDeviceMaintenance6FeaturesKHR)                                                \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_PROPERTIES,                             \
+               VkPhysicalDeviceMaintenance6PropertiesKHR)                                              \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS, VkBindMemoryStatusKHR)                            \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO, VkBindDescriptorSetsInfoKHR)               \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO, VkPushConstantsInfoKHR)                          \
+  /* VK_KHR_push_descriptor interactions */                                                            \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO, VkPushDescriptorSetInfoKHR)                 \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_WITH_TEMPLATE_INFO,                               \
+               VkPushDescriptorSetWithTemplateInfoKHR)                                                 \
+  /* VK_EXT_descriptor_buffer interactions */                                                          \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_SET_DESCRIPTOR_BUFFER_OFFSETS_INFO_EXT,                               \
+               VkSetDescriptorBufferOffsetsInfoEXT)                                                    \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_BUFFER_EMBEDDED_SAMPLERS_INFO_EXT,                    \
+               VkBindDescriptorBufferEmbeddedSamplersInfoEXT)                                          \
+                                                                                                       \
   /* VK_KHR_map_memory2 */                                                                             \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_MAP_INFO, VkMemoryMapInfo)                                     \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO, VkMemoryUnmapInfo)                                 \
@@ -1923,19 +1941,6 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR)                               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_PROPERTIES_KHR)               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR)                 \
-                                                                                                       \
-  /* VK_KHR_maintenance6 */                                                                            \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES)                          \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_PROPERTIES)                        \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS)                                              \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO)                                       \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO)                                             \
-  /* VK_KHR_push_descriptor interactions */                                                            \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO)                                        \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_WITH_TEMPLATE_INFO)                          \
-  /* VK_EXT_descriptor_buffer interactions */                                                          \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_SET_DESCRIPTOR_BUFFER_OFFSETS_INFO_EXT)                          \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_BUFFER_EMBEDDED_SAMPLERS_INFO_EXT)               \
                                                                                                        \
   /* VK_KHR_maintenance7 */                                                                            \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_7_FEATURES_KHR)                      \
@@ -13623,6 +13628,178 @@ void Deserialise(const VkPhysicalDeviceMaintenance5Properties &el)
 }
 
 template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDeviceMaintenance6FeaturesKHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(maintenance6);
+}
+
+template <>
+void Deserialise(const VkPhysicalDeviceMaintenance6FeaturesKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDeviceMaintenance6PropertiesKHR &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_PROPERTIES);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(blockTexelViewCompatibleMultipleLayers);
+  SERIALISE_MEMBER(maxCombinedImageSamplerDescriptorCount);
+  SERIALISE_MEMBER(fragmentShadingRateClampCombinerInputs);
+}
+
+template <>
+void Deserialise(const VkPhysicalDeviceMaintenance6PropertiesKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkBindMemoryStatusKHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  // this is only used during capture for the application, serialise as empty
+  SERIALISE_MEMBER_OPT_EMPTY(pResult);
+}
+
+template <>
+void Deserialise(const VkBindMemoryStatusKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkBindDescriptorSetsInfoKHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkShaderStageFlags, stageFlags).Important();
+  SERIALISE_MEMBER(layout);
+  SERIALISE_MEMBER(firstSet);
+  SERIALISE_MEMBER(descriptorSetCount).Important();
+  SERIALISE_MEMBER_ARRAY(pDescriptorSets, descriptorSetCount).Important();
+  SERIALISE_MEMBER(dynamicOffsetCount);
+  SERIALISE_MEMBER_ARRAY(pDynamicOffsets, dynamicOffsetCount);
+}
+
+template <>
+void Deserialise(const VkBindDescriptorSetsInfoKHR &el)
+{
+  DeserialiseNext(el.pNext);
+  delete[] el.pDescriptorSets;
+  delete[] el.pDynamicOffsets;
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPushConstantsInfoKHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(layout);
+  SERIALISE_MEMBER_VKFLAGS(VkShaderStageFlags, stageFlags).Important();
+  SERIALISE_MEMBER(offset);
+  SERIALISE_MEMBER(size).Important();
+  SERIALISE_MEMBER_ARRAY(pValues, size);
+}
+
+template <>
+void Deserialise(const VkPushConstantsInfoKHR &el)
+{
+  DeserialiseNext(el.pNext);
+  FreeAlignedBuffer((byte *)el.pValues);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPushDescriptorSetInfoKHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkShaderStageFlags, stageFlags).Important();
+  SERIALISE_MEMBER(layout);
+  SERIALISE_MEMBER(set).Important();
+  SERIALISE_MEMBER(descriptorWriteCount).Important();
+  SERIALISE_MEMBER_ARRAY(pDescriptorWrites, descriptorWriteCount);
+}
+
+template <>
+void Deserialise(const VkPushDescriptorSetInfoKHR &el)
+{
+  DeserialiseNext(el.pNext);
+  delete[] el.pDescriptorWrites;
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPushDescriptorSetWithTemplateInfoKHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_WITH_TEMPLATE_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(descriptorUpdateTemplate);
+  SERIALISE_MEMBER(layout);
+  SERIALISE_MEMBER(set).Important();
+  // decoded during capture and serialised separately as a series of writes, as with other template
+  // functions SERIALISE_MEMBER_ARRAY(pData, ???);
+  SERIALISE_MEMBER_ARRAY_EMPTY(pData);
+}
+
+template <>
+void Deserialise(const VkPushDescriptorSetWithTemplateInfoKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkSetDescriptorBufferOffsetsInfoEXT &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_SET_DESCRIPTOR_BUFFER_OFFSETS_INFO_EXT);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkShaderStageFlags, stageFlags).Important();
+  SERIALISE_MEMBER(layout);
+  SERIALISE_MEMBER(firstSet);
+  SERIALISE_MEMBER(setCount).Important();
+  SERIALISE_MEMBER_ARRAY(pBufferIndices, setCount);
+  SERIALISE_MEMBER_ARRAY(pOffsets, setCount);
+}
+
+template <>
+void Deserialise(const VkSetDescriptorBufferOffsetsInfoEXT &el)
+{
+  DeserialiseNext(el.pNext);
+  delete[] el.pBufferIndices;
+  delete[] el.pOffsets;
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkBindDescriptorBufferEmbeddedSamplersInfoEXT &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_BUFFER_EMBEDDED_SAMPLERS_INFO_EXT);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkShaderStageFlags, stageFlags).Important();
+  SERIALISE_MEMBER(layout);
+  SERIALISE_MEMBER(set).Important();
+}
+
+template <>
+void Deserialise(const VkBindDescriptorBufferEmbeddedSamplersInfoEXT &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, VkImageCompressionControlEXT &el)
 {
   RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT);
@@ -13987,10 +14164,13 @@ INSTANTIATE_SERIALISE_TYPE(VkAttachmentReferenceStencilLayout);
 INSTANTIATE_SERIALISE_TYPE(VkAttachmentSampleLocationsEXT);
 INSTANTIATE_SERIALISE_TYPE(VkBindBufferMemoryDeviceGroupInfo);
 INSTANTIATE_SERIALISE_TYPE(VkBindBufferMemoryInfo);
+INSTANTIATE_SERIALISE_TYPE(VkBindDescriptorBufferEmbeddedSamplersInfoEXT);
+INSTANTIATE_SERIALISE_TYPE(VkBindDescriptorSetsInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkBindImageMemoryDeviceGroupInfo);
 INSTANTIATE_SERIALISE_TYPE(VkBindImageMemoryInfo);
 INSTANTIATE_SERIALISE_TYPE(VkBindImageMemorySwapchainInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkBindImagePlaneMemoryInfo);
+INSTANTIATE_SERIALISE_TYPE(VkBindMemoryStatusKHR);
 INSTANTIATE_SERIALISE_TYPE(VkBindSparseInfo);
 INSTANTIATE_SERIALISE_TYPE(VkBlitImageInfo2);
 INSTANTIATE_SERIALISE_TYPE(VkBufferCaptureDescriptorDataInfoEXT);
@@ -14236,6 +14416,8 @@ INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance4Features);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance4Properties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance5Features);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance5Properties);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance6FeaturesKHR);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance6PropertiesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMemoryBudgetPropertiesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMemoryPriorityFeaturesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMemoryProperties2);
@@ -14382,6 +14564,9 @@ INSTANTIATE_SERIALISE_TYPE(VkPresentTimesInfoGOOGLE);
 INSTANTIATE_SERIALISE_TYPE(VkPresentWait2InfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPrivateDataSlotCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkProtectedSubmitInfo);
+INSTANTIATE_SERIALISE_TYPE(VkPushConstantsInfoKHR);
+INSTANTIATE_SERIALISE_TYPE(VkPushDescriptorSetInfoKHR);
+INSTANTIATE_SERIALISE_TYPE(VkPushDescriptorSetWithTemplateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkQueryPoolCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkQueryPoolPerformanceCreateInfoKHR);
 INSTANTIATE_SERIALISE_TYPE(VkQueueFamilyGlobalPriorityProperties);
@@ -14422,6 +14607,7 @@ INSTANTIATE_SERIALISE_TYPE(VkSemaphoreSignalInfo);
 INSTANTIATE_SERIALISE_TYPE(VkSemaphoreSubmitInfo);
 INSTANTIATE_SERIALISE_TYPE(VkSemaphoreTypeCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkSemaphoreWaitInfo);
+INSTANTIATE_SERIALISE_TYPE(VkSetDescriptorBufferOffsetsInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkShaderCreateInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkShaderModuleCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkShaderModuleValidationCacheCreateInfoEXT);

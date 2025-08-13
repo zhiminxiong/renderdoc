@@ -587,6 +587,7 @@ private:
   bool m_AccelerationStructures = false;
   bool m_ShaderObject = false;
   bool m_Maintenance5 = false;
+  bool m_Maintenance6 = false;
   bool m_DescriptorBuffers = false;
 
   uint32_t m_RTCaptureReplayHandleSize = 0;
@@ -1517,6 +1518,7 @@ public:
   bool AccelerationStructures() const { return m_AccelerationStructures; }
   bool ShaderObject() const { return m_ShaderObject; }
   bool Maintenance5() const { return m_Maintenance5; }
+  bool Maintenance6() const { return m_Maintenance6; }
   bool DescriptorBuffers() const { return m_DescriptorBuffers; }
   VulkanRenderState &GetRenderState() { return m_RenderState; }
   void SetActionCB(VulkanActionCallback *cb) { m_ActionCallback = cb; }
@@ -3273,4 +3275,23 @@ public:
   IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkWaitForPresent2KHR, VkDevice device,
                                 VkSwapchainKHR swapchain,
                                 const VkPresentWait2InfoKHR *pPresentWait2Info);
+
+  // VK_KHR_maintenance5
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindDescriptorSets2KHR, VkCommandBuffer commandBuffer,
+                                const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo);
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushConstants2KHR, VkCommandBuffer commandBuffer,
+                                const VkPushConstantsInfo *pPushConstantsInfo);
+  // VK_KHR_maintenance5+VK_EXT_descriptor_buffer
+  IMPLEMENT_FUNCTION_SERIALISED(
+      void, vkCmdBindDescriptorBufferEmbeddedSamplers2EXT, VkCommandBuffer commandBuffer,
+      const VkBindDescriptorBufferEmbeddedSamplersInfoEXT *pBindDescriptorBufferEmbeddedSamplersInfo);
+  IMPLEMENT_FUNCTION_SERIALISED(
+      void, vkCmdSetDescriptorBufferOffsets2EXT, VkCommandBuffer commandBuffer,
+      const VkSetDescriptorBufferOffsetsInfoEXT *pSetDescriptorBufferOffsetsInfo);
+  // VK_KHR_maintenance5+VK_KHR_push_descriptor
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet2KHR, VkCommandBuffer commandBuffer,
+                                const VkPushDescriptorSetInfo *pPushDescriptorSetInfo);
+  IMPLEMENT_FUNCTION_SERIALISED(
+      void, vkCmdPushDescriptorSetWithTemplate2KHR, VkCommandBuffer commandBuffer,
+      const VkPushDescriptorSetWithTemplateInfo *pPushDescriptorSetWithTemplateInfo);
 };
