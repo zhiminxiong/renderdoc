@@ -2762,6 +2762,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         if(activeMask[lane])
         {
           activeLanes.push_back(lane - firstLaneInSub);
+          RDCASSERTEQUAL(workgroup[lane - firstLaneInSub].currentInstruction, currentInstruction);
         }
       }
 
@@ -3048,6 +3049,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         lane = firstLaneInSub + uintComp(GetSrc(group.index), 0);
       }
 
+      RDCASSERTEQUAL(workgroup[lane].currentInstruction, currentInstruction);
       RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
       SetDst(opdata.result, workgroup[lane].GetSrc(value));
       break;
@@ -3072,6 +3074,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
           result = false;
           break;
         }
+        RDCASSERTEQUAL(workgroup[quadNeighbours[i]].currentInstruction, currentInstruction);
 
         if(opdata.op == Op::GroupNonUniformQuadAllKHR)
           result = result && workgroup[quadNeighbours[i]].GetSrc(quad.predicate).value.u32v[0];
@@ -3289,6 +3292,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
           RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
           ShaderVariable x = workgroup[lane].GetSrc(valueId);
+          RDCASSERTEQUAL(workgroup[lane].currentInstruction, currentInstruction);
 
           switch(opdata.op)
           {
@@ -3486,6 +3490,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
           uint32_t bit = 1U << ((lane - firstLaneInSub) % 32U);
 
           RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
+          RDCASSERTEQUAL(workgroup[lane].currentInstruction, currentInstruction);
           ShaderVariable x = workgroup[lane].GetSrc(valueId);
 
           if(x.value.u32v[0])
