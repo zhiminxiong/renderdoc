@@ -654,6 +654,11 @@ public:
   uint64_t GetDeviceThreadID() const { return deviceThreadID; }
   bool IsDeviceThread() const { return Threading::GetCurrentID() == GetDeviceThreadID(); }
   void AddDebugMessage(MessageCategory cat, MessageSeverity sev, MessageSource src, rdcstr desc) const;
+  void FillInputValue(ShaderVariable &var, ShaderBuiltin builtin, uint32_t threadIndex) const;
+  DeviceOpResult ReadTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
+                           uint32_t sample, ShaderVariable &output) const;
+  DeviceOpResult WriteTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
+                            uint32_t sample, const ShaderVariable &input) const;
 private:
   virtual void PreParse(uint32_t maxId);
   virtual void PostParse();

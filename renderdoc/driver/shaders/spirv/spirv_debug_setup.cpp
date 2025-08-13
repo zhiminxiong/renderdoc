@@ -4897,6 +4897,35 @@ void Debugger::ProcessQueuedDeviceThreadSteps()
     }
   }
 }
+
+void Debugger::FillInputValue(ShaderVariable &var, ShaderBuiltin builtin, uint32_t threadIndex) const
+{
+  apiWrapper->FillInputValue(var, builtin, threadIndex, 0, 0);
+}
+
+DeviceOpResult Debugger::ReadTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
+                                   uint32_t sample, ShaderVariable &output) const
+{
+  if(Threading::GetCurrentID() == GetDeviceThreadID())
+  {
+    if(!apiWrapper->ReadTexel(imageBind, coord, sample, output))
+      return DeviceOpResult::Failed;
+    return DeviceOpResult::Succeeded;
+  }
+  return DeviceOpResult::NeedsDevice;
+}
+
+DeviceOpResult Debugger::WriteTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
+                                    uint32_t sample, const ShaderVariable &input) const
+{
+  if(Threading::GetCurrentID() == GetDeviceThreadID())
+  {
+    if(!apiWrapper->WriteTexel(imageBind, coord, sample, input))
+      return DeviceOpResult::Failed;
+    return DeviceOpResult::Succeeded;
+  }
+  return DeviceOpResult::NeedsDevice;
+}
 };    // namespace rdcspv
 
 #if ENABLED(ENABLE_UNIT_TESTS)

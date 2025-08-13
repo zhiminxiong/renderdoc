@@ -3796,8 +3796,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       {
         // get current position
         ShaderVariable curCoord(rdcstr(), 0.0f, 0.0f, 0.0f, 0.0f);
-        debugger.GetAPIWrapper()->FillInputValue(curCoord, ShaderBuiltin::Position, workgroupIndex,
-                                                 0, 0);
+        debugger.FillInputValue(curCoord, ShaderBuiltin::Position, workgroupIndex);
 
         // co-ords are relative to the current position
         setUintComp(coord, 0, uintComp(coord, 0) + (uint32_t)floatComp(curCoord, 0));
@@ -3812,14 +3811,21 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       }
       else
       {
-        if(!debugger.GetAPIWrapper()->ReadTexel(img.GetBindIndex(), coord,
-                                                read.imageOperands.flags & ImageOperands::Sample
-                                                    ? uintComp(GetSrc(read.imageOperands.sample), 0)
-                                                    : 0,
-                                                result))
+        DeviceOpResult opResult =
+            debugger.ReadTexel(img.GetBindIndex(), coord,
+                               read.imageOperands.flags & ImageOperands::Sample
+                                   ? uintComp(GetSrc(read.imageOperands.sample), 0)
+                                   : 0,
+                               result);
+        if(opResult == DeviceOpResult::Failed)
         {
           // sample failed. Pretend we got 0 columns back
           set0001(result);
+        }
+        else if(opResult == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
         }
       }
 
@@ -3837,11 +3843,15 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       // only the sample operand should be here
       RDCASSERT((write.imageOperands.flags & ImageOperands::Sample) == write.imageOperands.flags);
 
-      debugger.GetAPIWrapper()->WriteTexel(img.GetBindIndex(), coord,
-                                           write.imageOperands.flags & ImageOperands::Sample
-                                               ? uintComp(GetSrc(write.imageOperands.sample), 0)
-                                               : 0,
-                                           texel);
+      if(debugger.WriteTexel(img.GetBindIndex(), coord,
+                             write.imageOperands.flags & ImageOperands::Sample
+                                 ? uintComp(GetSrc(write.imageOperands.sample), 0)
+                                 : 0,
+                             texel) == DeviceOpResult::NeedsDevice)
+      {
+        SetStepNeedsDeviceThread();
+        break;
+      }
 
       break;
     }
@@ -4155,11 +4165,17 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         result.rows = result.columns = 1;
         result.type = resultType.scalar().Type();
 
-        if(!debugger.GetAPIWrapper()->ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                                uintComp(ptr.members[2], 0), result))
+        DeviceOpResult opResult = debugger.ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                                                     uintComp(ptr.members[2], 0), result);
+        if(opResult == DeviceOpResult::Failed)
         {
           // sample failed. Pretend we got 0 columns back
           RDCEraseEl(result.value);
+        }
+        else if(opResult == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
         }
       }
 
@@ -4183,8 +4199,12 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       }
       else
       {
-        debugger.GetAPIWrapper()->WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                             uintComp(ptr.members[2], 0), value);
+        if(debugger.WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                               uintComp(ptr.members[2], 0), value) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
 
       break;
@@ -4213,19 +4233,31 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         result.rows = result.columns = 1;
         result.type = resultType.scalar().Type();
 
-        if(!debugger.GetAPIWrapper()->ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                                uintComp(ptr.members[2], 0), result))
+        DeviceOpResult opResult = debugger.ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                                                     uintComp(ptr.members[2], 0), result);
+        if(opResult == DeviceOpResult::NeedsDevice)
         {
-          // sample failed. Pretend we got 0 columns back
-          RDCEraseEl(result.value);
+          SetStepNeedsDeviceThread();
+          break;
         }
+        else
+        {
+          if(opResult == DeviceOpResult::Failed)
+          {
+            // sample failed. Pretend we got 0 columns back
+            RDCEraseEl(result.value);
+          }
 
-        debugger.GetAPIWrapper()->WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                             uintComp(ptr.members[2], 0), value);
+          if(debugger.WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                                 uintComp(ptr.members[2], 0), value) == DeviceOpResult::NeedsDevice)
+          {
+            SetStepNeedsDeviceThread();
+            break;
+          }
+        }
       }
 
       SetDst(excg.result, result);
-
       break;
     }
     case Op::AtomicCompareExchange:
@@ -4253,11 +4285,17 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         result.rows = result.columns = 1;
         result.type = resultType.scalar().Type();
 
-        if(!debugger.GetAPIWrapper()->ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                                uintComp(ptr.members[2], 0), result))
+        DeviceOpResult opResult = debugger.ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                                                     uintComp(ptr.members[2], 0), result);
+        if(opResult == DeviceOpResult::Failed)
         {
           // sample failed. Pretend we got 0 columns back
           RDCEraseEl(result.value);
+        }
+        else if(opResult == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
         }
       }
 
@@ -4284,8 +4322,13 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         }
         else
         {
-          debugger.GetAPIWrapper()->WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                               uintComp(ptr.members[2], 0), value);
+          DeviceOpResult opResult = debugger.WriteTexel(
+              ptr.members[0].GetBindIndex(), ptr.members[1], uintComp(ptr.members[2], 0), value);
+          if(opResult == DeviceOpResult::NeedsDevice)
+          {
+            SetStepNeedsDeviceThread();
+            break;
+          }
         }
       }
       break;
@@ -4313,11 +4356,17 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         result.rows = result.columns = 1;
         result.type = resultType.scalar().Type();
 
-        if(!debugger.GetAPIWrapper()->ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                                uintComp(ptr.members[2], 0), result))
+        DeviceOpResult opResult = debugger.ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                                                     uintComp(ptr.members[2], 0), result);
+        if(opResult == DeviceOpResult::Failed)
         {
           // sample failed. Pretend we got 0 columns back
           RDCEraseEl(result.value);
+        }
+        else if(opResult == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
         }
       }
 
@@ -4341,8 +4390,12 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       }
       else
       {
-        debugger.GetAPIWrapper()->WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                             uintComp(ptr.members[2], 0), result);
+        if(debugger.WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                               uintComp(ptr.members[2], 0), result) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       break;
     }
@@ -4380,11 +4433,17 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         result.rows = result.columns = 1;
         result.type = resultType.scalar().Type();
 
-        if(!debugger.GetAPIWrapper()->ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                                uintComp(ptr.members[2], 0), result))
+        DeviceOpResult opResult = debugger.ReadTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                                                     uintComp(ptr.members[2], 0), result);
+        if(opResult == DeviceOpResult::Failed)
         {
           // sample failed. Pretend we got 0 columns back
           RDCEraseEl(result.value);
+        }
+        else if(opResult == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
         }
       }
 
@@ -4479,8 +4538,12 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       }
       else
       {
-        debugger.GetAPIWrapper()->WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
-                                             uintComp(ptr.members[2], 0), result);
+        if(debugger.WriteTexel(ptr.members[0].GetBindIndex(), ptr.members[1],
+                               uintComp(ptr.members[2], 0), result) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       break;
     }
@@ -5041,7 +5104,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
 void ThreadState::ExecuteMemoryBarrier(Id semanticsId)
 {
-  // ignore if not the acitve thread
+  // ignore if not the active thread
   if(!m_State)
     return;
 
