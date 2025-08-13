@@ -1657,7 +1657,7 @@ private:
 
   std::map<ShaderBindIndex, ImageData> imageCache;
 
-  const Descriptor &GetDescriptor(const rdcstr &access, ShaderBindIndex index, bool &valid)
+  const Descriptor &GetDescriptor(const rdcstr &access, const ShaderBindIndex &index, bool &valid)
   {
     CHECK_DEVICE_THREAD();
     static Descriptor dummy;
@@ -1688,7 +1688,7 @@ private:
     return m_Descriptors[a];
   }
 
-  const SamplerDescriptor &GetSamplerDescriptor(const rdcstr &access, ShaderBindIndex index,
+  const SamplerDescriptor &GetSamplerDescriptor(const rdcstr &access, const ShaderBindIndex &index,
                                                 bool &valid)
   {
     CHECK_DEVICE_THREAD();
