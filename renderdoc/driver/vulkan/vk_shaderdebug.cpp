@@ -339,232 +339,286 @@ public:
       memcpy(data.data() + offset, src, (size_t)byteSize);
   }
 
-  virtual bool ReadTexel(ShaderBindIndex imageBind, const ShaderVariable &coord, uint32_t sample,
-                         ShaderVariable &output) override
+  // Called from any thread
+  // Caller guarantees that if the image data is not cached then we are on the device thread
+  virtual rdcspv::DeviceOpResult ReadTexel(const ShaderBindIndex &imageBind,
+                                           const ShaderVariable &coord, uint32_t sample,
+                                           ShaderVariable &output) override
   {
-    CHECK_DEVICE_THREAD();
-    ImageData &data = PopulateImage(imageBind);
-
-    if(data.width == 0)
-      return false;
-
-    uint32_t coords[4];
-    for(int i = 0; i < 4; i++)
-      coords[i] = uintComp(coord, i);
-
-    if(coords[0] > data.width || coords[1] > data.height || coords[2] > data.depth)
+    rdcspv::DeviceOpResult opResult;
+    bool isCached = false;
     {
-      m_pDriver->AddDebugMessage(
-          MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
-          StringFormat::Fmt(
-              "Out of bounds access to image, coord %u,%u,%u outside of dimensions %ux%ux%u",
-              coords[0], coords[1], coords[2], data.width, data.height, data.depth));
-      return false;
+      SCOPED_READLOCK(imageCacheLock);
+      isCached = GetImageDataFromCache(imageBind, opResult) != NULL;
+      RDCASSERTNOTEQUAL(opResult, rdcspv::DeviceOpResult::NeedsDevice);
     }
 
-    CompType varComp = VarTypeCompType(output.type);
-
-    set0001(output);
-
-    ShaderVariable input;
-    input.columns = data.fmt.compCount;
-
-    // the only 'irregular' format we need to worry about handling for integer types is 10:10:10:2.
-    // All others are float/uint
-    if(data.fmt.type == ResourceFormatType::R10G10B10A2)
+    if(!isCached)
     {
-      PixelValue val;
-      DecodePixelData(data.fmt, data.texel(coords, sample), val);
+      // Add image data to the cache : cache should not be locked by this thread
+      PopulateImage(imageBind);
+    }
 
-      if(data.fmt.compType == CompType::UInt)
-        input.type = VarType::UInt;
+    {
+      SCOPED_READLOCK(imageCacheLock);
+      ImageData *result = GetImageDataFromCache(imageBind, opResult);
+      if(!result)
+      {
+        RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Failed);
+        return rdcspv::DeviceOpResult::Failed;
+      }
+
+      ImageData &data = *result;
+      if(data.width == 0)
+        return rdcspv::DeviceOpResult::Failed;
+
+      uint32_t coords[4];
+      for(int i = 0; i < 4; i++)
+        coords[i] = uintComp(coord, i);
+
+      if(coords[0] > data.width || coords[1] > data.height || coords[2] > data.depth)
+      {
+        if(!IsDeviceThread())
+          return rdcspv::DeviceOpResult::NeedsDevice;
+
+        CHECK_DEVICE_THREAD();
+        m_pDriver->AddDebugMessage(
+            MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+            StringFormat::Fmt(
+                "Out of bounds access to image, coord %u,%u,%u outside of dimensions %ux%ux%u",
+                coords[0], coords[1], coords[2], data.width, data.height, data.depth));
+        return rdcspv::DeviceOpResult::Failed;
+      }
+
+      CompType varComp = VarTypeCompType(output.type);
+
+      set0001(output);
+
+      ShaderVariable input;
+      input.columns = data.fmt.compCount;
+
+      // the only 'irregular' format we need to worry about handling for integer types is
+      // 10:10:10:2. All others are float/uint
+      if(data.fmt.type == ResourceFormatType::R10G10B10A2)
+      {
+        PixelValue val;
+        DecodePixelData(data.fmt, data.texel(coords, sample), val);
+
+        if(data.fmt.compType == CompType::UInt)
+          input.type = VarType::UInt;
+        else if(data.fmt.compType == CompType::SInt)
+          input.type = VarType::SInt;
+        else
+          input.type = VarType::Float;
+
+        memcpy(input.value.u32v.data(), val.uintValue.data(), val.uintValue.byteSize());
+
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
+        {
+          if(data.fmt.compType == CompType::UInt)
+            setUintComp(output, c, uintComp(input, c));
+          else if(data.fmt.compType == CompType::SInt)
+            setIntComp(output, c, intComp(input, c));
+          else
+            setFloatComp(output, c, input.value.f32v[c]);
+        }
+      }
+      else if(data.fmt.compType == CompType::UInt)
+      {
+        RDCASSERT(varComp == CompType::UInt, varComp);
+
+        // set up input type for proper expansion below
+        if(data.fmt.compByteWidth == 1)
+          input.type = VarType::UByte;
+        else if(data.fmt.compByteWidth == 2)
+          input.type = VarType::UShort;
+        else if(data.fmt.compByteWidth == 4)
+          input.type = VarType::UInt;
+        else if(data.fmt.compByteWidth == 8)
+          input.type = VarType::ULong;
+
+        memcpy(input.value.u8v.data(), data.texel(coords, sample), data.texelSize);
+
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
+          setUintComp(output, c, uintComp(input, c));
+      }
       else if(data.fmt.compType == CompType::SInt)
-        input.type = VarType::SInt;
+      {
+        RDCASSERT(varComp == CompType::SInt, varComp);
+
+        // set up input type for proper expansion below
+        if(data.fmt.compByteWidth == 1)
+          input.type = VarType::SByte;
+        else if(data.fmt.compByteWidth == 2)
+          input.type = VarType::SShort;
+        else if(data.fmt.compByteWidth == 4)
+          input.type = VarType::SInt;
+        else if(data.fmt.compByteWidth == 8)
+          input.type = VarType::SLong;
+
+        memcpy(input.value.u8v.data(), data.texel(coords, sample), data.texelSize);
+
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
+          setIntComp(output, c, intComp(input, c));
+      }
       else
+      {
+        RDCASSERT(varComp == CompType::Float, varComp);
+
+        // do the decode of whatever unorm/float/etc the format is
+        FloatVector v = DecodeFormattedComponents(data.fmt, data.texel(coords, sample));
+
+        // set it into f32v
+        input.value.f32v[0] = v.x;
+        input.value.f32v[1] = v.y;
+        input.value.f32v[2] = v.z;
+        input.value.f32v[3] = v.w;
+
+        // read as floats
         input.type = VarType::Float;
 
-      memcpy(input.value.u32v.data(), val.uintValue.data(), val.uintValue.byteSize());
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-      {
-        if(data.fmt.compType == CompType::UInt)
-          setUintComp(output, c, uintComp(input, c));
-        else if(data.fmt.compType == CompType::SInt)
-          setIntComp(output, c, intComp(input, c));
-        else
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
           setFloatComp(output, c, input.value.f32v[c]);
       }
     }
-    else if(data.fmt.compType == CompType::UInt)
-    {
-      RDCASSERT(varComp == CompType::UInt, varComp);
 
-      // set up input type for proper expansion below
-      if(data.fmt.compByteWidth == 1)
-        input.type = VarType::UByte;
-      else if(data.fmt.compByteWidth == 2)
-        input.type = VarType::UShort;
-      else if(data.fmt.compByteWidth == 4)
-        input.type = VarType::UInt;
-      else if(data.fmt.compByteWidth == 8)
-        input.type = VarType::ULong;
-
-      memcpy(input.value.u8v.data(), data.texel(coords, sample), data.texelSize);
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-        setUintComp(output, c, uintComp(input, c));
-    }
-    else if(data.fmt.compType == CompType::SInt)
-    {
-      RDCASSERT(varComp == CompType::SInt, varComp);
-
-      // set up input type for proper expansion below
-      if(data.fmt.compByteWidth == 1)
-        input.type = VarType::SByte;
-      else if(data.fmt.compByteWidth == 2)
-        input.type = VarType::SShort;
-      else if(data.fmt.compByteWidth == 4)
-        input.type = VarType::SInt;
-      else if(data.fmt.compByteWidth == 8)
-        input.type = VarType::SLong;
-
-      memcpy(input.value.u8v.data(), data.texel(coords, sample), data.texelSize);
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-        setIntComp(output, c, intComp(input, c));
-    }
-    else
-    {
-      RDCASSERT(varComp == CompType::Float, varComp);
-
-      // do the decode of whatever unorm/float/etc the format is
-      FloatVector v = DecodeFormattedComponents(data.fmt, data.texel(coords, sample));
-
-      // set it into f32v
-      input.value.f32v[0] = v.x;
-      input.value.f32v[1] = v.y;
-      input.value.f32v[2] = v.z;
-      input.value.f32v[3] = v.w;
-
-      // read as floats
-      input.type = VarType::Float;
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-        setFloatComp(output, c, input.value.f32v[c]);
-    }
-
-    return true;
+    return rdcspv::DeviceOpResult::Succeeded;
   }
 
-  virtual bool WriteTexel(ShaderBindIndex imageBind, const ShaderVariable &coord, uint32_t sample,
-                          const ShaderVariable &input) override
+  // Called from any thread
+  // Caller guarantees that if the image data is not cached then we are on the device thread
+  virtual rdcspv::DeviceOpResult WriteTexel(const ShaderBindIndex &imageBind,
+                                            const ShaderVariable &coord, uint32_t sample,
+                                            const ShaderVariable &input) override
   {
-    CHECK_DEVICE_THREAD();
-    ImageData &data = PopulateImage(imageBind);
-
-    if(data.width == 0)
-      return false;
-
-    uint32_t coords[4];
-    for(int i = 0; i < 4; i++)
-      coords[i] = uintComp(coord, i);
-
-    if(coords[0] > data.width || coords[1] > data.height || coords[2] > data.depth)
+    rdcspv::DeviceOpResult opResult;
+    ImageData *result = NULL;
     {
-      m_pDriver->AddDebugMessage(
-          MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
-          StringFormat::Fmt(
-              "Out of bounds access to image, coord %u,%u,%u outside of dimensions %ux%ux%u",
-              coords[0], coords[1], coords[2], data.width, data.height, data.depth));
-      return false;
+      SCOPED_READLOCK(imageCacheLock);
+      result = GetImageDataFromCache(imageBind, opResult);
+      RDCASSERTNOTEQUAL(opResult, rdcspv::DeviceOpResult::NeedsDevice);
     }
 
-    CompType varComp = VarTypeCompType(input.type);
-
-    ShaderVariable output;
-    output.columns = data.fmt.compCount;
-
-    // the only 'irregular' format we need to worry about handling for integer types is 10:10:10:2.
-    // All others are float/uint
-    if(data.fmt.type == ResourceFormatType::R10G10B10A2)
+    if(!result)
     {
-      // image writes are required to write a whole texel so we know we should have 4 components
-      RDCASSERTEQUAL(input.columns, 4);
+      // Add image data to the cache : cache should not be locked by this thread
+      PopulateImage(imageBind);
+    }
 
-      uint32_t encoded = 0;
+    {
+      SCOPED_READLOCK(imageCacheLock);
+      result = GetImageDataFromCache(imageBind, opResult);
+      if(!result)
+        return rdcspv::DeviceOpResult::Failed;
 
-      if(data.fmt.compType == CompType::SNorm)
-        encoded = ConvertToR10G10B10A2SNorm(Vec4f(input.value.f32v[0], input.value.f32v[1],
-                                                  input.value.f32v[2], input.value.f32v[3]));
+      ImageData &data = *result;
+      if(data.width == 0)
+        return rdcspv::DeviceOpResult::Failed;
+
+      uint32_t coords[4];
+      for(int i = 0; i < 4; i++)
+        coords[i] = uintComp(coord, i);
+
+      if(coords[0] > data.width || coords[1] > data.height || coords[2] > data.depth)
+      {
+        if(!IsDeviceThread())
+          return rdcspv::DeviceOpResult::NeedsDevice;
+
+        CHECK_DEVICE_THREAD();
+        m_pDriver->AddDebugMessage(
+            MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+            StringFormat::Fmt(
+                "Out of bounds access to image, coord %u,%u,%u outside of dimensions %ux%ux%u",
+                coords[0], coords[1], coords[2], data.width, data.height, data.depth));
+        return rdcspv::DeviceOpResult::Failed;
+      }
+
+      CompType varComp = VarTypeCompType(input.type);
+
+      ShaderVariable output;
+      output.columns = data.fmt.compCount;
+
+      // the only 'irregular' format we need to worry about handling for integer types is
+      // 10:10:10:2. All others are float/uint
+      if(data.fmt.type == ResourceFormatType::R10G10B10A2)
+      {
+        // image writes are required to write a whole texel so we know we should have 4 components
+        RDCASSERTEQUAL(input.columns, 4);
+
+        uint32_t encoded = 0;
+
+        if(data.fmt.compType == CompType::SNorm)
+          encoded = ConvertToR10G10B10A2SNorm(Vec4f(input.value.f32v[0], input.value.f32v[1],
+                                                    input.value.f32v[2], input.value.f32v[3]));
+        else if(data.fmt.compType == CompType::UInt)
+          encoded = ConvertToR10G10B10A2(Vec4u(input.value.u32v[0], input.value.u32v[1],
+                                               input.value.u32v[2], input.value.u32v[3]));
+        else
+          encoded = ConvertToR10G10B10A2(Vec4f(input.value.f32v[0], input.value.f32v[1],
+                                               input.value.f32v[2], input.value.f32v[3]));
+
+        memcpy(data.texel(coords, sample), &encoded, sizeof(uint32_t));
+      }
       else if(data.fmt.compType == CompType::UInt)
-        encoded = ConvertToR10G10B10A2(Vec4u(input.value.u32v[0], input.value.u32v[1],
-                                             input.value.u32v[2], input.value.u32v[3]));
+      {
+        RDCASSERT(varComp == CompType::UInt, varComp);
+
+        // set up output type for proper expansion below
+        if(data.fmt.compByteWidth == 1)
+          output.type = VarType::UByte;
+        else if(data.fmt.compByteWidth == 2)
+          output.type = VarType::UShort;
+        else if(data.fmt.compByteWidth == 4)
+          output.type = VarType::UInt;
+        else if(data.fmt.compByteWidth == 8)
+          output.type = VarType::ULong;
+
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
+          setUintComp(output, c, uintComp(input, c));
+
+        memcpy(data.texel(coords, sample), output.value.u8v.data(), data.texelSize);
+      }
+      else if(data.fmt.compType == CompType::SInt)
+      {
+        RDCASSERT(varComp == CompType::SInt, varComp);
+
+        // set up input type for proper expansion below
+        if(data.fmt.compByteWidth == 1)
+          output.type = VarType::SByte;
+        else if(data.fmt.compByteWidth == 2)
+          output.type = VarType::SShort;
+        else if(data.fmt.compByteWidth == 4)
+          output.type = VarType::SInt;
+        else if(data.fmt.compByteWidth == 8)
+          output.type = VarType::SLong;
+
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
+          setIntComp(output, c, intComp(input, c));
+
+        memcpy(data.texel(coords, sample), output.value.u8v.data(), data.texelSize);
+      }
       else
-        encoded = ConvertToR10G10B10A2(Vec4f(input.value.f32v[0], input.value.f32v[1],
-                                             input.value.f32v[2], input.value.f32v[3]));
+      {
+        RDCASSERT(varComp == CompType::Float, varComp);
 
-      memcpy(data.texel(coords, sample), &encoded, sizeof(uint32_t));
+        // read as floats
+        output.type = VarType::Float;
+
+        for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
+          setFloatComp(output, c, input.value.f32v[c]);
+
+        FloatVector v;
+
+        // set it into f32v
+        v.x = input.value.f32v[0];
+        v.y = input.value.f32v[1];
+        v.z = input.value.f32v[2];
+        v.w = input.value.f32v[3];
+
+        EncodeFormattedComponents(data.fmt, v, data.texel(coords, sample));
+      }
     }
-    else if(data.fmt.compType == CompType::UInt)
-    {
-      RDCASSERT(varComp == CompType::UInt, varComp);
-
-      // set up output type for proper expansion below
-      if(data.fmt.compByteWidth == 1)
-        output.type = VarType::UByte;
-      else if(data.fmt.compByteWidth == 2)
-        output.type = VarType::UShort;
-      else if(data.fmt.compByteWidth == 4)
-        output.type = VarType::UInt;
-      else if(data.fmt.compByteWidth == 8)
-        output.type = VarType::ULong;
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-        setUintComp(output, c, uintComp(input, c));
-
-      memcpy(data.texel(coords, sample), output.value.u8v.data(), data.texelSize);
-    }
-    else if(data.fmt.compType == CompType::SInt)
-    {
-      RDCASSERT(varComp == CompType::SInt, varComp);
-
-      // set up input type for proper expansion below
-      if(data.fmt.compByteWidth == 1)
-        output.type = VarType::SByte;
-      else if(data.fmt.compByteWidth == 2)
-        output.type = VarType::SShort;
-      else if(data.fmt.compByteWidth == 4)
-        output.type = VarType::SInt;
-      else if(data.fmt.compByteWidth == 8)
-        output.type = VarType::SLong;
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-        setIntComp(output, c, intComp(input, c));
-
-      memcpy(data.texel(coords, sample), output.value.u8v.data(), data.texelSize);
-    }
-    else
-    {
-      RDCASSERT(varComp == CompType::Float, varComp);
-
-      // read as floats
-      output.type = VarType::Float;
-
-      for(uint8_t c = 0; c < RDCMIN(output.columns, input.columns); c++)
-        setFloatComp(output, c, input.value.f32v[c]);
-
-      FloatVector v;
-
-      // set it into f32v
-      v.x = input.value.f32v[0];
-      v.y = input.value.f32v[1];
-      v.z = input.value.f32v[2];
-      v.w = input.value.f32v[3];
-
-      EncodeFormattedComponents(data.fmt, v, data.texel(coords, sample));
-    }
-
-    return true;
+    return rdcspv::DeviceOpResult::Succeeded;
   }
 
   virtual void FillInputValue(ShaderVariable &var, ShaderBuiltin builtin, uint32_t threadIndex,
@@ -1746,6 +1800,7 @@ private:
     }
   };
 
+  Threading::RWLock imageCacheLock;
   std::map<ShaderBindIndex, ImageData> imageCache;
 
   const Descriptor &GetDescriptor(const rdcstr &access, const ShaderBindIndex &index, bool &valid)
@@ -1822,6 +1877,7 @@ private:
     m_pDriver->GetResIDFromAddr(address, id, ptrOffs);
     if(id == ResourceId())
     {
+      CHECK_DEVICE_THREAD();
       bind.arrayElement = 0;
       auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
       m_pDriver->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
@@ -1836,6 +1892,7 @@ private:
     bytebuf &data = insertIt.first->second;
     if(insertIt.second)
     {
+      CHECK_DEVICE_THREAD();
       // if the resources might be dirty from side-effects from the action, replay back to right
       // before it.
       if(m_ResourcesDirty)
@@ -1882,134 +1939,163 @@ private:
     return data;
   }
 
-  ImageData &PopulateImage(ShaderBindIndex bind)
+  // Must be called from the replay manager thread (the debugger thread)
+  void PopulateImage(const ShaderBindIndex &bind)
   {
     CHECK_DEVICE_THREAD();
-    auto insertIt = imageCache.insert(std::make_pair(bind, ImageData()));
-    ImageData &data = insertIt.first->second;
-    if(insertIt.second)
+
+    ImageData data;
+    bool valid = true;
+    const Descriptor &imgData = GetDescriptor("performing image load/store", bind, valid);
+    if(valid)
     {
-      CHECK_DEVICE_THREAD();
-      bool valid = true;
-      const Descriptor &imgData = GetDescriptor("performing image load/store", bind, valid);
-      if(valid)
+      // if the resources might be dirty from side-effects from the action, replay back to right
+      // before it.
+      if(m_ResourcesDirty)
       {
-        // if the resources might be dirty from side-effects from the action, replay back to right
-        // before it.
-        if(m_ResourcesDirty)
+        VkMarkerRegion region("un-dirtying resources");
+        m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
+        m_ResourcesDirty = false;
+      }
+
+      if(imgData.type == DescriptorType::TypedBuffer ||
+         imgData.type == DescriptorType::ReadWriteTypedBuffer)
+      {
+        VkFormat format;
+        VkDeviceSize byteWidth;
+        VkDeviceSize offset;
+        ResourceId buffer;
+
+        if(imgData.view == ResourceId())
         {
-          VkMarkerRegion region("un-dirtying resources");
-          m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
-          m_ResourcesDirty = false;
+          // descriptor buffer, no buffer view
+          buffer = imgData.resource;
+          offset = imgData.byteOffset;
+          format = MakeVkFormat(imgData.format);
+          byteWidth = imgData.byteSize;
+        }
+        else
+        {
+          const VulkanCreationInfo::BufferView &viewProps =
+              m_Creation.GetBufferViewInfo(m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
+          buffer = viewProps.buffer;
+          offset = viewProps.offset;
+          format = viewProps.format;
+          byteWidth = viewProps.size;
         }
 
-        if(imgData.type == DescriptorType::TypedBuffer ||
-           imgData.type == DescriptorType::ReadWriteTypedBuffer)
+        const VulkanCreationInfo::Buffer &bufferProps = m_Creation.GetBufferInfo(buffer);
+
+        // width in bytes, either from the view or from the remainder of the buffer
+        if(byteWidth == VK_WHOLE_SIZE)
+          byteWidth = bufferProps.size - offset;
+
+        data.fmt = MakeResourceFormat(format);
+        data.texelSize = (uint32_t)GetByteSize(1, 1, 1, format, 0);
+
+        // convert to a texel width, rounding down as per spec (only possible from VK_WHOLE_SIZE)
+        data.width = uint32_t(byteWidth / data.texelSize);
+        data.height = 1;
+        data.depth = 1;
+
+        data.samplePitch = data.slicePitch = data.rowPitch = data.width * data.texelSize;
+
+        m_pDriver->GetReplay()->GetBufferData(
+            m_pDriver->GetResourceManager()->GetLiveID(imgData.resource), offset, data.rowPitch,
+            data.bytes);
+      }
+      else if(imgData.view != ResourceId())
+      {
+        const VulkanCreationInfo::ImageView &viewProps =
+            m_Creation.GetImageViewInfo(m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
+        const VulkanCreationInfo::Image &imageProps = m_Creation.GetImageInfo(viewProps.image);
+
+        uint32_t mip = viewProps.range.baseMipLevel;
+
+        data.width = RDCMAX(1U, imageProps.extent.width >> mip);
+        data.height = RDCMAX(1U, imageProps.extent.height >> mip);
+        if(imageProps.type == VK_IMAGE_TYPE_3D)
         {
-          VkFormat format;
-          VkDeviceSize byteWidth;
-          VkDeviceSize offset;
-          ResourceId buffer;
-
-          if(imgData.view == ResourceId())
-          {
-            // descriptor buffer, no buffer view
-            buffer = imgData.resource;
-            offset = imgData.byteOffset;
-            format = MakeVkFormat(imgData.format);
-            byteWidth = imgData.byteSize;
-          }
-          else
-          {
-            const VulkanCreationInfo::BufferView &viewProps = m_Creation.GetBufferViewInfo(
-                m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
-            buffer = viewProps.buffer;
-            offset = viewProps.offset;
-            format = viewProps.format;
-            byteWidth = viewProps.size;
-          }
-
-          const VulkanCreationInfo::Buffer &bufferProps = m_Creation.GetBufferInfo(buffer);
-
-          // width in bytes, either from the view or from the remainder of the buffer
-          if(byteWidth == VK_WHOLE_SIZE)
-            byteWidth = bufferProps.size - offset;
-
-          data.fmt = MakeResourceFormat(format);
-          data.texelSize = (uint32_t)GetByteSize(1, 1, 1, format, 0);
-
-          // convert to a texel width, rounding down as per spec (only possible from VK_WHOLE_SIZE)
-          data.width = uint32_t(byteWidth / data.texelSize);
-          data.height = 1;
-          data.depth = 1;
-
-          data.samplePitch = data.slicePitch = data.rowPitch = data.width * data.texelSize;
-
-          m_pDriver->GetReplay()->GetBufferData(
-              m_pDriver->GetResourceManager()->GetLiveID(imgData.resource), offset, data.rowPitch,
-              data.bytes);
+          data.depth = RDCMAX(1U, imageProps.extent.depth >> mip);
         }
-        else if(imgData.view != ResourceId())
+        else
         {
-          const VulkanCreationInfo::ImageView &viewProps =
-              m_Creation.GetImageViewInfo(m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
-          const VulkanCreationInfo::Image &imageProps = m_Creation.GetImageInfo(viewProps.image);
+          data.depth = viewProps.range.layerCount;
+          if(data.depth == VK_REMAINING_ARRAY_LAYERS)
+            data.depth = imageProps.arrayLayers - viewProps.range.baseArrayLayer;
+        }
 
-          uint32_t mip = viewProps.range.baseMipLevel;
+        ResourceFormat fmt = MakeResourceFormat(imageProps.format);
 
-          data.width = RDCMAX(1U, imageProps.extent.width >> mip);
-          data.height = RDCMAX(1U, imageProps.extent.height >> mip);
-          if(imageProps.type == VK_IMAGE_TYPE_3D)
+        data.fmt = MakeResourceFormat(imageProps.format);
+        data.texelSize = (uint32_t)GetByteSize(1, 1, 1, imageProps.format, 0);
+        data.rowPitch = (uint32_t)GetByteSize(data.width, 1, 1, imageProps.format, 0);
+        data.slicePitch = GetByteSize(data.width, data.height, 1, imageProps.format, 0);
+        data.samplePitch = GetByteSize(data.width, data.height, data.depth, imageProps.format, 0);
+
+        const uint32_t numSlices = imageProps.type == VK_IMAGE_TYPE_3D ? 1 : data.depth;
+        const uint32_t numSamples = (uint32_t)imageProps.samples;
+
+        data.bytes.reserve(size_t(data.samplePitch * numSamples));
+
+        // defaults are fine - no interpretation. Maybe we could use the view's typecast?
+        const GetTextureDataParams params = GetTextureDataParams();
+
+        for(uint32_t sample = 0; sample < numSamples; sample++)
+        {
+          for(uint32_t slice = 0; slice < numSlices; slice++)
           {
-            data.depth = RDCMAX(1U, imageProps.extent.depth >> mip);
-          }
-          else
-          {
-            data.depth = viewProps.range.layerCount;
-            if(data.depth == VK_REMAINING_ARRAY_LAYERS)
-              data.depth = imageProps.arrayLayers - viewProps.range.baseArrayLayer;
-          }
+            bytebuf subBytes;
+            m_pDriver->GetReplay()->GetTextureData(viewProps.image, Subresource(mip, slice, sample),
+                                                   params, subBytes);
 
-          ResourceFormat fmt = MakeResourceFormat(imageProps.format);
-
-          data.fmt = MakeResourceFormat(imageProps.format);
-          data.texelSize = (uint32_t)GetByteSize(1, 1, 1, imageProps.format, 0);
-          data.rowPitch = (uint32_t)GetByteSize(data.width, 1, 1, imageProps.format, 0);
-          data.slicePitch = GetByteSize(data.width, data.height, 1, imageProps.format, 0);
-          data.samplePitch = GetByteSize(data.width, data.height, data.depth, imageProps.format, 0);
-
-          const uint32_t numSlices = imageProps.type == VK_IMAGE_TYPE_3D ? 1 : data.depth;
-          const uint32_t numSamples = (uint32_t)imageProps.samples;
-
-          data.bytes.reserve(size_t(data.samplePitch * numSamples));
-
-          // defaults are fine - no interpretation. Maybe we could use the view's typecast?
-          const GetTextureDataParams params = GetTextureDataParams();
-
-          for(uint32_t sample = 0; sample < numSamples; sample++)
-          {
-            for(uint32_t slice = 0; slice < numSlices; slice++)
+            // fast path, swap into output if there's only one slice and one sample (common case)
+            if(numSlices == 1 && numSamples == 1)
             {
-              bytebuf subBytes;
-              m_pDriver->GetReplay()->GetTextureData(
-                  viewProps.image, Subresource(mip, slice, sample), params, subBytes);
-
-              // fast path, swap into output if there's only one slice and one sample (common case)
-              if(numSlices == 1 && numSamples == 1)
-              {
-                subBytes.swap(data.bytes);
-              }
-              else
-              {
-                data.bytes.append(subBytes);
-              }
+              subBytes.swap(data.bytes);
+            }
+            else
+            {
+              data.bytes.append(subBytes);
             }
           }
         }
       }
     }
 
-    return data;
+    {
+      // Insert atomically with all the data filled in : to prevent race conditions
+      SCOPED_WRITELOCK(imageCacheLock);
+      auto insertIt = imageCache.insert(std::make_pair(bind, data));
+      RDCASSERT(insertIt.second);
+    }
+  }
+
+  // Called from any thread
+  bool IsImageCached(const ShaderBindIndex &bind) override
+  {
+    SCOPED_READLOCK(imageCacheLock);
+    return imageCache.find(bind) != imageCache.end();
+  }
+
+  // Called from any thread
+  ImageData *GetImageDataFromCache(const ShaderBindIndex &bind, rdcspv::DeviceOpResult &opResult)
+  {
+    // Calling function responsible for acquiring imageCache Read lock
+    auto findIt = imageCache.find(bind);
+    if(findIt != imageCache.end())
+    {
+      opResult = rdcspv::DeviceOpResult::Succeeded;
+      return &findIt->second;
+    }
+
+    opResult = rdcspv::DeviceOpResult::Failed;
+
+    // Not in the cache : populate must happen on the device thread
+    if(!IsDeviceThread())
+      opResult = rdcspv::DeviceOpResult::NeedsDevice;
+
+    return NULL;
   }
 
   VkPipeline MakePipe(const ShaderConstParameters &params, uint32_t floatBitSize, bool depthTex,

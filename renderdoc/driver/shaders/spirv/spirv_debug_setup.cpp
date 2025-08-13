@@ -4906,25 +4906,23 @@ void Debugger::FillInputValue(ShaderVariable &var, ShaderBuiltin builtin, uint32
 DeviceOpResult Debugger::ReadTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
                                    uint32_t sample, ShaderVariable &output) const
 {
-  if(Threading::GetCurrentID() == GetDeviceThreadID())
+  if(!IsDeviceThread())
   {
-    if(!apiWrapper->ReadTexel(imageBind, coord, sample, output))
-      return DeviceOpResult::Failed;
-    return DeviceOpResult::Succeeded;
+    if(!apiWrapper->IsImageCached(imageBind))
+      return DeviceOpResult::NeedsDevice;
   }
-  return DeviceOpResult::NeedsDevice;
+  return apiWrapper->ReadTexel(imageBind, coord, sample, output);
 }
 
 DeviceOpResult Debugger::WriteTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
                                     uint32_t sample, const ShaderVariable &input) const
 {
-  if(Threading::GetCurrentID() == GetDeviceThreadID())
+  if(!IsDeviceThread())
   {
-    if(!apiWrapper->WriteTexel(imageBind, coord, sample, input))
-      return DeviceOpResult::Failed;
-    return DeviceOpResult::Succeeded;
+    if(!apiWrapper->IsImageCached(imageBind))
+      return DeviceOpResult::NeedsDevice;
   }
-  return DeviceOpResult::NeedsDevice;
+  return apiWrapper->WriteTexel(imageBind, coord, sample, input);
 }
 };    // namespace rdcspv
 

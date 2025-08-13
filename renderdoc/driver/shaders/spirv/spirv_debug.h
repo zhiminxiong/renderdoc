@@ -105,15 +105,16 @@ public:
   virtual void ReadAddress(uint64_t address, uint64_t byteSize, void *dst) = 0;
   virtual void WriteAddress(uint64_t address, uint64_t byteSize, const void *src) = 0;
 
-  virtual bool ReadTexel(ShaderBindIndex imageBind, const ShaderVariable &coord, uint32_t sample,
-                         ShaderVariable &output) = 0;
-  virtual bool WriteTexel(ShaderBindIndex imageBind, const ShaderVariable &coord, uint32_t sample,
-                          const ShaderVariable &value) = 0;
+  virtual DeviceOpResult ReadTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
+                                   uint32_t sample, ShaderVariable &output) = 0;
+  virtual DeviceOpResult WriteTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
+                                    uint32_t sample, const ShaderVariable &value) = 0;
 
   virtual void FillInputValue(ShaderVariable &var, ShaderBuiltin builtin, uint32_t threadIndex,
                               uint32_t location, uint32_t component) = 0;
 
   virtual uint32_t GetThreadProperty(uint32_t threadIndex, ThreadProperty prop) = 0;
+  virtual bool IsImageCached(const ShaderBindIndex &bind) = 0;
 
   enum TextureType
   {
