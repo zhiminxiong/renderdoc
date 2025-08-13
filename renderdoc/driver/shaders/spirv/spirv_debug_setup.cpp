@@ -4952,6 +4952,18 @@ DeviceOpResult Debugger::WriteTexel(const ShaderBindIndex &imageBind, const Shad
   }
   return apiWrapper->WriteTexel(imageBind, coord, sample, input);
 }
+
+DeviceOpResult Debugger::GetBufferLength(const ShaderBindIndex &bind, uint64_t &bufferLen) const
+{
+  if(!IsDeviceThread())
+  {
+    if(!apiWrapper->IsImageCached(bind))
+      return DeviceOpResult::NeedsDevice;
+  }
+  bufferLen = apiWrapper->GetBufferLength(bind);
+  return DeviceOpResult::Succeeded;
+}
+
 };    // namespace rdcspv
 
 #if ENABLED(ENABLE_UNIT_TESTS)

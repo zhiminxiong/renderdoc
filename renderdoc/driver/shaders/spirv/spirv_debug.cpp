@@ -1023,7 +1023,13 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       ShaderBindIndex bind = val.GetBindIndex();
 
-      uint64_t byteLen = debugger.GetAPIWrapper()->GetBufferLength(bind) - offset;
+      uint64_t bufferLen;
+      if(debugger.GetBufferLength(bind, bufferLen) == DeviceOpResult::NeedsDevice)
+      {
+        SetStepNeedsDeviceThread();
+        break;
+      }
+      uint64_t byteLen = bufferLen - offset;
 
       const Decorations &dec = debugger.GetDecorations(structType.children[len.arraymember].type);
 

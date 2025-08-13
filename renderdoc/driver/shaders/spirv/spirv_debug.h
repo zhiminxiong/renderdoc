@@ -662,6 +662,7 @@ public:
                            uint32_t sample, ShaderVariable &output) const;
   DeviceOpResult WriteTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
                             uint32_t sample, const ShaderVariable &input) const;
+  DeviceOpResult GetBufferLength(const ShaderBindIndex &bind, uint64_t &bufferLen) const;
 private:
   virtual void PreParse(uint32_t maxId);
   virtual void PostParse();
