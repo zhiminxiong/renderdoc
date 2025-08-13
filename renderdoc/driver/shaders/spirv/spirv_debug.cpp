@@ -356,16 +356,22 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     {
       // if this is a write to a SSBO pointer, don't record any alias changes, just record a no-op
       // change to this pointer
-      basechange.after = basechange.before = debugger.GetPointerValue(ids[pointer]);
+      if(debugger.GetPointerValue(ids[pointer], basechange.before) == DeviceOpResult::NeedsDevice)
+        return DeviceOpResult::NeedsDevice;
+      basechange.after = basechange.before;
       if(debugger.WriteThroughPointer(var, val) == DeviceOpResult::NeedsDevice)
         return DeviceOpResult::NeedsDevice;
       pendingDebugState.changes.push_back(basechange);
       return DeviceOpResult::Succeeded;
     }
 
-    rdcarray<ShaderVariableChange> changes;
-    basechange.before = debugger.GetPointerValue(ids[ptrid]);
+    DeviceOpResult opResult;
+    // Check if the base is available (cached), if it is available then so are all its aliases.
+    opResult = debugger.GetPointerValue(ids[ptrid], basechange.before);
+    if(opResult == DeviceOpResult::NeedsDevice)
+      return DeviceOpResult::NeedsDevice;
 
+    rdcarray<ShaderVariableChange> changes;
     rdcarray<Id> &pointers = pointersForId[ptrid];
 
     changes.resize(pointers.size());
@@ -375,26 +381,32 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     {
       Id id = pointers[i];
       if(id != ptrid && live.contains(id))
-        changes[i].before = debugger.GetPointerValue(ids[id]);
+      {
+        opResult = debugger.GetPointerValue(ids[id], changes[i].before);
+        RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+      }
     }
 
-    if(debugger.WriteThroughPointer(var, val) == DeviceOpResult::NeedsDevice)
-      return DeviceOpResult::NeedsDevice;
+    opResult = debugger.WriteThroughPointer(var, val);
+    RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
 
     // now evaluate the value after
     for(size_t i = 0; i < pointers.size(); i++)
     {
       Id id = pointers[i];
       if(id != ptrid && live.contains(id))
-        changes[i].after = debugger.GetPointerValue(ids[id]);
+      {
+        opResult = debugger.GetPointerValue(ids[id], changes[i].after);
+        RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+      }
     }
 
     // For GSM memory update the global data as well as the local cache, do not send the changes to the UI
     auto gsmPtrIt = gsmPointers.find(pointer);
     if(gsmPtrIt != gsmPointers.end())
     {
-      if(debugger.WriteThroughPointer(gsmPtrIt->second, val) == DeviceOpResult::NeedsDevice)
-        return DeviceOpResult::NeedsDevice;
+      opResult = debugger.WriteThroughPointer(gsmPtrIt->second, val);
+      RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
     }
 
     // if the pointer we're writing is one of the aliased pointers, be sure we add it even if
@@ -419,7 +431,8 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
 
     // always add a change for the base storage variable written itself, even if that's a no-op.
     // This one is not included in any of the pointers lists above
-    basechange.after = debugger.GetPointerValue(ids[ptrid]);
+    opResult = debugger.GetPointerValue(ids[ptrid], basechange.after);
+    RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
 
     // if this is the first local write, mark this variable as becoming alive here, instead of at
     // its declaration
@@ -439,9 +452,9 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
   return DeviceOpResult::Succeeded;
 }
 
-ShaderVariable ThreadState::ReadPointerValue(Id pointer)
+DeviceOpResult ThreadState::ReadPointerValue(Id pointer, ShaderVariable &ret)
 {
-  return debugger.ReadFromPointer(GetSrc(pointer));
+  return debugger.ReadFromPointer(GetSrc(pointer), ret);
 }
 
 void ThreadState::DebugBreak()
@@ -456,6 +469,22 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
   if(IsPendingResultPending())
     return;
 
+  ShaderVariable cur = val;
+  cur.name = GetRawName(id);
+
+  ShaderVariable afterVal;
+  DeviceOpResult opResult;
+  if(m_State)
+  {
+    // Check if the variable is available (cached)
+    opResult = debugger.GetPointerValue(cur, afterVal);
+    if(opResult == DeviceOpResult::NeedsDevice)
+    {
+      SetStepNeedsDeviceThread();
+      return;
+    }
+  }
+
   if(m_State && ContainsNaNInf(val))
     pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf;
 
@@ -466,8 +495,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
   if(prev.name.empty() && prev.type == VarType::Unknown)
     callstack.back()->idsCreated.push_back(id);
 
-  ids[id] = val;
-  ids[id].name = GetRawName(id);
+  ids[id] = cur;
 
   lastWrite[id] = m_State ? m_State->stepIndex : nextInstruction;
 
@@ -494,8 +522,12 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
   {
     ShaderVariableChange change;
     if(wasLive)
-      change.before = debugger.GetPointerValue(prev);
-    change.after = debugger.GetPointerValue(ids[id]);
+    {
+      // The variable was live and written to, it should be cached
+      opResult = debugger.GetPointerValue(prev, change.before);
+      RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+    }
+    change.after = afterVal;
     pendingDebugState.changes.push_back(change);
   }
 }
@@ -511,12 +543,14 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
 
   const rdcarray<Id> &liveGlobals = debugger.GetLiveGlobals();
 
+  ShaderVariable val;
   for(const Id &id : oldLive)
   {
     if(liveGlobals.contains(id))
       continue;
 
-    pendingDebugState.changes.push_back({debugger.GetPointerValue(ids[id])});
+    RDCASSERTEQUAL(debugger.GetPointerValue(ids[id], val), DeviceOpResult::Succeeded);
+    pendingDebugState.changes.push_back({val});
 
     if(ids[id].type == VarType::GPUPointer && !debugger.IsOpaquePointer(ids[id]) &&
        !debugger.IsPhysicalPointer(ids[id]))
@@ -532,7 +566,8 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
     if(liveGlobals.contains(id))
       continue;
 
-    pendingDebugState.changes.push_back({ShaderVariable(), debugger.GetPointerValue(ids[id])});
+    RDCASSERTEQUAL(debugger.GetPointerValue(ids[id], val), DeviceOpResult::Succeeded);
+    pendingDebugState.changes.push_back({ShaderVariable(), val});
   }
 }
 
@@ -831,7 +866,13 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       (void)load.memoryAccess;
 
       // get the pointer value, evaluate it (i.e. dereference) and store the result
-      SetDst(load.result, ReadPointerValue(load.pointer));
+      ShaderVariable val;
+      if(ReadPointerValue(load.pointer, val) == DeviceOpResult::NeedsDevice)
+      {
+        SetStepNeedsDeviceThread();
+        break;
+      }
+      SetDst(load.result, val);
 
       break;
     }
@@ -843,7 +884,10 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       (void)store.memoryAccess;
 
       if(WritePointerValue(store.pointer, GetSrc(store.object)) == DeviceOpResult::NeedsDevice)
+      {
         SetStepNeedsDeviceThread();
+        break;
+      }
 
       break;
     }
@@ -855,8 +899,19 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       (void)copy.memoryAccess0;
       (void)copy.memoryAccess1;
 
-      if(WritePointerValue(copy.target, ReadPointerValue(copy.source)) == DeviceOpResult::NeedsDevice)
+      ShaderVariable val;
+      {
+        if(ReadPointerValue(copy.source, val) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
+      }
+      if(WritePointerValue(copy.target, val) == DeviceOpResult::NeedsDevice)
+      {
         SetStepNeedsDeviceThread();
+        break;
+      }
 
       break;
     }
@@ -948,7 +1003,14 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       ShaderVariable result;
       result.rows = result.columns = 1;
 
-      ShaderBindIndex bind = debugger.GetPointerValue(structPointer).GetBindIndex();
+      ShaderVariable val;
+      if(debugger.GetPointerValue(structPointer, val) == DeviceOpResult::NeedsDevice)
+      {
+        SetStepNeedsDeviceThread();
+        break;
+      }
+
+      ShaderBindIndex bind = val.GetBindIndex();
 
       uint64_t byteLen = debugger.GetAPIWrapper()->GetBufferLength(bind) - offset;
 
@@ -1080,7 +1142,9 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
           debugger.MakeCompositePointer(ids[extract.composite], extract.composite, extract.indexes);
 
       // then evaluate it, to get the extracted value
-      SetDst(extract.result, debugger.ReadFromPointer(ptr));
+      ShaderVariable val;
+      RDCASSERTEQUAL(debugger.ReadFromPointer(ptr, val), DeviceOpResult::Succeeded);
+      SetDst(extract.result, val);
 
       break;
     }
@@ -4055,6 +4119,9 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       {
         if(hasReturnValueData)
           SetDst(call.result, returnValue);
+        if(IsPendingResultPending())
+          break;
+
         returnValue = ShaderVariable();
         hasReturnValueData = false;
         // The instruction after a function call is defined to be a convergence point, mark that we entered it
@@ -4139,11 +4206,18 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       // read/write texel use.
       OpImageTexelPointer ptr(it);
 
+      ShaderVariable val;
+      if(ReadPointerValue(ptr.image, val) == DeviceOpResult::NeedsDevice)
+      {
+        SetStepNeedsDeviceThread();
+        break;
+      }
+
       ShaderVariable result;
       result.rows = 0;
       result.columns = 0;
       result.type = VarType::Struct;
-      result.members = {ReadPointerValue(ptr.image), GetSrc(ptr.coordinate), GetSrc(ptr.sample)};
+      result.members = {val, GetSrc(ptr.coordinate), GetSrc(ptr.sample)};
       result.members[0].name = "image";
       result.members[1].name = "coord";
       result.members[2].name = "sample";
@@ -4164,7 +4238,11 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       if(ptr.members.empty())
       {
-        result = ReadPointerValue(load.pointer);
+        if(ReadPointerValue(load.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4204,7 +4282,10 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       if(ptr.members.empty())
       {
         if(WritePointerValue(store.pointer, value) == DeviceOpResult::NeedsDevice)
+        {
           SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4232,9 +4313,16 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       if(ptr.members.empty())
       {
-        result = ReadPointerValue(excg.pointer);
-        if(WritePointerValue(excg.pointer, value) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(excg.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
           SetStepNeedsDeviceThread();
+          break;
+        }
+        if(WritePointerValue(excg.pointer, value) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4286,7 +4374,11 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       if(ptr.members.empty())
       {
-        result = ReadPointerValue(cmpexcg.pointer);
+        if(ReadPointerValue(cmpexcg.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4309,7 +4401,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         }
       }
 
-      SetDst(cmpexcg.result, result);
+      ShaderVariable ssaResult(result);
 
       uint64_t resultVal = 0, compareVal = 0;
 
@@ -4329,7 +4421,10 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         if(ptr.members.empty())
         {
           if(WritePointerValue(cmpexcg.pointer, value) == DeviceOpResult::NeedsDevice)
+          {
             SetStepNeedsDeviceThread();
+            break;
+          }
         }
         else
         {
@@ -4342,6 +4437,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
           }
         }
       }
+      SetDst(cmpexcg.result, ssaResult);
       break;
     }
     case Op::AtomicIIncrement:
@@ -4358,7 +4454,11 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       if(ptr.members.empty())
       {
-        result = ReadPointerValue(atomic.pointer);
+        if(ReadPointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4381,7 +4481,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         }
       }
 
-      SetDst(atomic.result, result);
+      ShaderVariable ssaResult(result);
 
       {
 #undef _IMPL
@@ -4398,7 +4498,10 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       if(ptr.members.empty())
       {
         if(WritePointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
           SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4409,6 +4512,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
           break;
         }
       }
+      SetDst(atomic.result, ssaResult);
       break;
     }
     case Op::AtomicFAddEXT:
@@ -4436,7 +4540,11 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       if(ptr.members.empty())
       {
-        result = ReadPointerValue(atomic.pointer);
+        if(ReadPointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
+          SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4459,7 +4567,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         }
       }
 
-      SetDst(atomic.result, result);
+      ShaderVariable ssaResult(result);
 
       if(opdata.op == Op::AtomicIAdd)
       {
@@ -4547,7 +4655,10 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       if(ptr.members.empty())
       {
         if(WritePointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+        {
           SetStepNeedsDeviceThread();
+          break;
+        }
       }
       else
       {
@@ -4558,6 +4669,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
           break;
         }
       }
+
+      SetDst(atomic.result, ssaResult);
       break;
     }
 

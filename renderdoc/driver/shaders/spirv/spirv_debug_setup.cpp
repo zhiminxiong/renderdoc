@@ -2597,15 +2597,25 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
     }
 
     // globals won't be filled out by entering the entry point, ensure their change is registered.
+    ShaderVariable val;
+    DeviceOpResult opResult;
     for(const Id &v : liveGlobals)
-      initial.changes.push_back({ShaderVariable(), GetPointerValue(active.ids[v])});
+    {
+      opResult = GetPointerValue(active.ids[v], val);
+      RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+      initial.changes.push_back({ShaderVariable(), val});
+    }
 
     if(m_DebugInfo.valid)
     {
       // debug info can refer to constants for source variable values. Add an initial change for any
       // that are so referenced
       for(const Id &v : m_DebugInfo.constants)
-        initial.changes.push_back({ShaderVariable(), GetPointerValue(active.ids[v])});
+      {
+        opResult = GetPointerValue(active.ids[v], val);
+        RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+        initial.changes.push_back({ShaderVariable(), val});
+      }
     }
 
     ret.push_back(std::move(initial));
@@ -3143,36 +3153,39 @@ DebugAPIWrapper::TextureType Debugger::GetTextureType(const ShaderVariable &img)
   return getTextureType(img);
 }
 
-ShaderVariable Debugger::GetPointerValue(const ShaderVariable &ptr) const
+DeviceOpResult Debugger::GetPointerValue(const ShaderVariable &ptr, ShaderVariable &ret) const
 {
   // opaque pointers display as their inner value
   if(IsOpaquePointer(ptr))
   {
     const ShaderVariable *inner = getPointer(ptr);
-    ShaderVariable ret = *inner;
+    ret = *inner;
     ret.name = ptr.name;
     // inherit any array index from the pointer
     ShaderBindIndex bind = ret.GetBindIndex();
     bind.arrayElement = getBindArrayIndex(ptr);
     ret.SetBindIndex(bind);
-    return ret;
+    return DeviceOpResult::Succeeded;
   }
   // physical pointers which haven't been dereferenced are returned as-is, they're ready for display
   else if(IsPhysicalPointer(ptr) && !checkPointerFlags(ptr, PointerFlags::DereferencedPhysical))
   {
-    return ptr;
+    ret = ptr;
+    return DeviceOpResult::Succeeded;
   }
 
   // every other kind of pointer displays as its contents
-  return ReadFromPointer(ptr);
+  return ReadFromPointer(ptr, ret);
 }
 
-ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
+DeviceOpResult Debugger::ReadFromPointer(const ShaderVariable &ptr, ShaderVariable &ret) const
 {
   if(ptr.type != VarType::GPUPointer)
-    return ptr;
+  {
+    ret = ptr;
+    return DeviceOpResult::Succeeded;
+  }
 
-  ShaderVariable ret;
   // values for setting up pointer reads, either from a physical pointer or from an opaque pointer
   rdcspv::Id typeId;
   Decorations parentDecorations;
@@ -3182,7 +3195,10 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
   std::function<void(uint64_t offset, uint64_t size, void *dst)> pointerReadCallback;
   if(IsPhysicalPointer(ptr))
   {
-    CHECK_DEBUGGER_THREAD();
+    baseAddress = ptr.GetPointer().pointer;
+    if(!IsDeviceThread() && !apiWrapper->IsBufferCached(baseAddress))
+      return DeviceOpResult::NeedsDevice;
+
     if(checkPointerFlags(ptr, PointerFlags::DereferencedPhysical))
       typeId = getBufferTypeId(ptr);
     else
@@ -3203,7 +3219,6 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
           Decorations::Flags(parentDecorations.flags | Decorations::HasMatrixStride);
       parentDecorations.matrixStride = varMatrixStride;
     }
-    baseAddress = ptr.GetPointer().pointer;
     pointerReadCallback = [this, baseAddress](uint64_t offset, uint64_t size, void *dst) {
       apiWrapper->ReadAddress(baseAddress + offset, size, dst);
     };
@@ -3213,11 +3228,13 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
     const ShaderVariable *inner = getPointer(ptr);
     if(inner->type == VarType::ReadWriteResource && checkPointerFlags(*inner, PointerFlags::SSBO))
     {
-      CHECK_DEBUGGER_THREAD();
       typeId = getBufferTypeId(ptr);
       byteOffset = getByteOffset(ptr);
       bind = inner->GetBindIndex();
       bind.arrayElement = getBindArrayIndex(ptr);
+      if(!IsDeviceThread() && !apiWrapper->IsBufferCached(bind))
+        return DeviceOpResult::NeedsDevice;
+
       uint32_t varMatrixStride = getMatrixStride(ptr);
       if(varMatrixStride != 0)
       {
@@ -3320,7 +3337,7 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
                                        rdcstr(), readCallback);
 
     ret.name = ptr.name;
-    return ret;
+    return DeviceOpResult::Succeeded;
   }
 
   // this is the case of 'reading' from a pointer where the data is entirely contained within the
@@ -3384,7 +3401,7 @@ ShaderVariable Debugger::ReadFromPointer(const ShaderVariable &ptr) const
     }
   }
 
-  return ret;
+  return DeviceOpResult::Succeeded;
 }
 
 Id Debugger::GetPointerBaseId(const ShaderVariable &ptr) const
@@ -3450,6 +3467,10 @@ DeviceOpResult Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVa
 
   if(IsPhysicalPointer(ptr))
   {
+    baseAddress = ptr.GetPointer().pointer;
+    if(!IsDeviceThread() && !apiWrapper->IsBufferCached(baseAddress))
+      return DeviceOpResult::NeedsDevice;
+
     if(checkPointerFlags(ptr, PointerFlags::DereferencedPhysical))
       typeId = getBufferTypeId(ptr);
     else
@@ -3468,7 +3489,6 @@ DeviceOpResult Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVa
           Decorations::Flags(parentDecorations.flags | Decorations::HasMatrixStride);
       parentDecorations.matrixStride = varMatrixStride;
     }
-    baseAddress = ptr.GetPointer().pointer;
     pointerWriteCallback = [this, baseAddress](uint64_t offset, uint64_t size, const void *src) {
       apiWrapper->WriteAddress(baseAddress + offset, size, src);
     };
@@ -3482,6 +3502,9 @@ DeviceOpResult Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVa
       byteOffset = getByteOffset(ptr);
       bind = inner->GetBindIndex();
       bind.arrayElement = getBindArrayIndex(ptr);
+      if(!IsDeviceThread() && !apiWrapper->IsBufferCached(bind))
+        return DeviceOpResult::NeedsDevice;
+
       uint32_t varMatrixStride = getMatrixStride(ptr);
       if(varMatrixStride != 0)
       {
@@ -4737,7 +4760,9 @@ void Debugger::InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret
         {
           thread.live.erase(l);
           ShaderVariableChange change;
-          change.before = GetPointerValue(thread.ids[id]);
+          DeviceOpResult opResult = GetPointerValue(thread.ids[id], change.before);
+          // The variable was live and written to, it should be cached
+          RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
           activeDebugState.changes.push_back(change);
           continue;
         }

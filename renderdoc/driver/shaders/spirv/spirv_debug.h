@@ -95,11 +95,11 @@ public:
 
   virtual ResourceId GetShaderID() = 0;
 
-  virtual uint64_t GetBufferLength(ShaderBindIndex bind) = 0;
+  virtual uint64_t GetBufferLength(const ShaderBindIndex &bind) = 0;
 
-  virtual void ReadBufferValue(ShaderBindIndex bind, uint64_t offset, uint64_t byteSize,
+  virtual void ReadBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                void *dst) = 0;
-  virtual void WriteBufferValue(ShaderBindIndex bind, uint64_t offset, uint64_t byteSize,
+  virtual void WriteBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                 const void *src) = 0;
 
   virtual void ReadAddress(uint64_t address, uint64_t byteSize, void *dst) = 0;
@@ -115,6 +115,8 @@ public:
 
   virtual uint32_t GetThreadProperty(uint32_t threadIndex, ThreadProperty prop) = 0;
   virtual bool IsImageCached(const ShaderBindIndex &bind) = 0;
+  virtual bool IsBufferCached(const ShaderBindIndex &bind) = 0;
+  virtual bool IsBufferCached(uint64_t address) = 0;
 
   enum TextureType
   {
@@ -336,7 +338,7 @@ struct ThreadState
 
   const ShaderVariable &GetSrc(Id id) const;
   DeviceOpResult WritePointerValue(Id pointer, const ShaderVariable &val);
-  ShaderVariable ReadPointerValue(Id pointer);
+  DeviceOpResult ReadPointerValue(Id pointer, ShaderVariable &ret);
 
   void DebugBreak();
 
@@ -624,8 +626,8 @@ public:
   rdcstr GetHumanName(Id id) const;
   void AllocateVariable(Id id, Id typeId, ShaderVariable &outVar) const;
 
-  ShaderVariable ReadFromPointer(const ShaderVariable &v) const;
-  ShaderVariable GetPointerValue(const ShaderVariable &v) const;
+  DeviceOpResult ReadFromPointer(const ShaderVariable &ptr, ShaderVariable &ret) const;
+  DeviceOpResult GetPointerValue(const ShaderVariable &v, ShaderVariable &ret) const;
   uint64_t GetPointerByteOffset(const ShaderVariable &ptr) const;
   DebugAPIWrapper::TextureType GetTextureType(const ShaderVariable &img) const;
   ShaderVariable MakePointerVariable(Id id, const ShaderVariable *v, uint8_t scalar0 = 0xff,

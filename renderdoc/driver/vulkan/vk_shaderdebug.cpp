@@ -295,48 +295,78 @@ public:
 
   virtual ResourceId GetShaderID() override { return m_ShaderID; }
 
-  virtual uint64_t GetBufferLength(ShaderBindIndex bind) override
+  virtual uint64_t GetBufferLength(const ShaderBindIndex &bind) override
   {
-    CHECK_DEVICE_THREAD();
-    return PopulateBuffer(bind).size();
+    rdcspv::DeviceOpResult opResult;
+    size_t length = 0;
+    // BufferFunction guarantees the buffer cache readlock whilst the function is called
+    bool succeeded = BufferFunction(
+        bind, [&length](bytebuf *data) { length = data->size(); }, opResult);
+    RDCASSERT(succeeded);
+    RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Succeeded);
+    return length;
   }
 
-  virtual void ReadBufferValue(ShaderBindIndex bind, uint64_t offset, uint64_t byteSize,
+  virtual void ReadBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                void *dst) override
   {
-    CHECK_DEVICE_THREAD();
-    const bytebuf &data = PopulateBuffer(bind);
-
-    if(offset + byteSize <= data.size())
-      memcpy(dst, data.data() + (size_t)offset, (size_t)byteSize);
+    rdcspv::DeviceOpResult opResult;
+    // BufferFunction guarantees the buffer cache readlock whilst the function is called
+    bool succeeded = BufferFunction(
+        bind,
+        [offset, byteSize, dst](bytebuf *data) {
+          if(offset + byteSize <= data->size())
+            memcpy(dst, data->data() + (size_t)offset, (size_t)byteSize);
+        },
+        opResult);
+    RDCASSERT(succeeded);
+    RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Succeeded);
   }
 
-  virtual void WriteBufferValue(ShaderBindIndex bind, uint64_t offset, uint64_t byteSize,
+  virtual void WriteBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                 const void *src) override
   {
-    CHECK_DEVICE_THREAD();
-    bytebuf &data = PopulateBuffer(bind);
-
-    if(offset + byteSize <= data.size())
-      memcpy(data.data() + (size_t)offset, src, (size_t)byteSize);
+    rdcspv::DeviceOpResult opResult;
+    // BufferFunction guarantees the buffer cache readlock whilst the function is called
+    bool succeeded = BufferFunction(
+        bind,
+        [offset, byteSize, src](bytebuf *data) {
+          if(offset + byteSize <= data->size())
+            memcpy(data->data() + (size_t)offset, src, (size_t)byteSize);
+        },
+        opResult);
+    RDCASSERT(succeeded);
+    RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Succeeded);
   }
 
   virtual void ReadAddress(uint64_t address, uint64_t byteSize, void *dst) override
   {
-    CHECK_DEVICE_THREAD();
-    size_t offset;
-    const bytebuf &data = PopulateBuffer(address, offset);
-    if(offset + byteSize <= data.size())
-      memcpy(dst, data.data() + offset, (size_t)byteSize);
+    rdcspv::DeviceOpResult opResult;
+    // BufferFunction guarantees the buffer cache readlock whilst the function is called
+    bool succeeded = BufferFunction(
+        address,
+        [byteSize, dst](bytebuf *data, size_t offset) {
+          if(offset + byteSize <= data->size())
+            memcpy(dst, data->data() + offset, (size_t)byteSize);
+        },
+        opResult);
+    RDCASSERT(succeeded);
+    RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Succeeded);
   }
 
   virtual void WriteAddress(uint64_t address, uint64_t byteSize, const void *src) override
   {
-    CHECK_DEVICE_THREAD();
-    size_t offset;
-    bytebuf &data = PopulateBuffer(address, offset);
-    if(offset + byteSize <= data.size())
-      memcpy(data.data() + offset, src, (size_t)byteSize);
+    rdcspv::DeviceOpResult opResult;
+    // BufferFunction guarantees the buffer cache readlock whilst the function is called
+    bool succeeded = BufferFunction(
+        address,
+        [byteSize, src](bytebuf *data, size_t offset) {
+          if(offset + byteSize <= data->size())
+            memcpy(data->data() + offset, src, (size_t)byteSize);
+        },
+        opResult);
+    RDCASSERT(succeeded);
+    RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Succeeded);
   }
 
   // Called from any thread
@@ -1768,6 +1798,7 @@ private:
   typedef rdcpair<ResourceId, float> SamplerBiasKey;
   std::map<SamplerBiasKey, VkSampler> m_BiasSamplers;
 
+  Threading::RWLock bufferCacheLock;
   std::map<ShaderBindIndex, bytebuf> bufferCache;
 
   VkCommandBuffer queuedOpCmdBuffer = VK_NULL_HANDLE;
@@ -1866,33 +1897,175 @@ private:
     return m_SamplerDescriptors[a];
   }
 
-  bytebuf &PopulateBuffer(uint64_t address, size_t &offs)
+  // Called from any thread
+  ShaderBindIndex GenerateBufferBind(const uint64_t address, size_t &offs)
+  {
+    ResourceId id;
+    uint64_t ptrOffs;
+    m_pDriver->GetResIDFromAddr(address, id, ptrOffs);
+    offs = size_t(ptrOffs);
+
+    ShaderBindIndex bind;
+    bind.arrayElement = (address - offs) & 0xFFFFFFFFU;
+
+    return bind;
+  }
+
+  // Called from any thread
+  bool IsBufferCached(const ShaderBindIndex &bind) override
+  {
+    SCOPED_READLOCK(bufferCacheLock);
+    return bufferCache.find(bind) != bufferCache.end();
+  }
+
+  // Called from any thread
+  bool IsBufferCached(uint64_t address) override
+  {
+    size_t offs = 0;
+    ShaderBindIndex bind = GenerateBufferBind(address, offs);
+    return IsBufferCached(bind);
+  }
+
+  // Called from any thread
+  bytebuf *GetBufferDataFromCache(const ShaderBindIndex &bind, rdcspv::DeviceOpResult &opResult)
+  {
+    // Calling function responsible for acquiring bufferCache Read lock
+    auto findIt = bufferCache.find(bind);
+    if(findIt != bufferCache.end())
+    {
+      opResult = rdcspv::DeviceOpResult::Succeeded;
+      return &findIt->second;
+    }
+
+    opResult = rdcspv::DeviceOpResult::Failed;
+
+    // Not in the cache : populate must happen on the device thread
+    if(!IsDeviceThread())
+      opResult = rdcspv::DeviceOpResult::NeedsDevice;
+
+    return NULL;
+  }
+
+  // Called from any thread
+  bool BufferFunction(const ShaderBindIndex &bind, const std::function<void(bytebuf *data)> &func,
+                      rdcspv::DeviceOpResult &opResult)
+  {
+    bool isCached = false;
+    {
+      SCOPED_READLOCK(bufferCacheLock);
+      isCached = GetBufferDataFromCache(bind, opResult) != NULL;
+      if(opResult == rdcspv::DeviceOpResult::NeedsDevice)
+        return false;
+    }
+
+    if(!isCached)
+    {
+      // Add buffer data to the cache : cache should not be locked by this thread
+      PopulateBuffer(bind);
+    }
+
+    {
+      SCOPED_READLOCK(bufferCacheLock);
+      bytebuf *result = GetBufferDataFromCache(bind, opResult);
+      if(result)
+      {
+        // Guarantee the buffer cache readlock whilst the function is called
+        func(result);
+        return true;
+      }
+
+      RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Failed);
+      opResult = rdcspv::DeviceOpResult::Failed;
+      return false;
+    }
+  }
+
+  // Called from any thread
+  bool BufferFunction(uint64_t address, const std::function<void(bytebuf *data, size_t offset)> &func,
+                      rdcspv::DeviceOpResult &opResult)
+  {
+    size_t offs = 0;
+    ShaderBindIndex bind = GenerateBufferBind(address, offs);
+    bool isCached = false;
+    {
+      SCOPED_READLOCK(bufferCacheLock);
+      isCached = GetBufferDataFromCache(bind, opResult) != NULL;
+      if(opResult == rdcspv::DeviceOpResult::NeedsDevice)
+        return false;
+    }
+
+    if(!isCached)
+    {
+      // Add buffer data to the cache : cache should not be locked by this thread
+      PopulateBuffer(address, bind);
+    }
+
+    {
+      SCOPED_READLOCK(bufferCacheLock);
+      bytebuf *result = GetBufferDataFromCache(bind, opResult);
+      if(result)
+      {
+        // Guarantee the buffer cache readlock whilst the function is called
+        func(result, offs);
+        return true;
+      }
+
+      RDCASSERTEQUAL(opResult, rdcspv::DeviceOpResult::Failed);
+      opResult = rdcspv::DeviceOpResult::Failed;
+      return false;
+    }
+  }
+
+  // Must be called from the replay manager thread (the debugger thread)
+  void PopulateBuffer(uint64_t address, ShaderBindIndex bind)
   {
     CHECK_DEVICE_THREAD();
     // pick a non-overlapping bind namespace for direct pointer access
-    ShaderBindIndex bind;
     ResourceId id;
     uint64_t ptrOffs;
 
     m_pDriver->GetResIDFromAddr(address, id, ptrOffs);
     if(id == ResourceId())
     {
+      ShaderBindIndex noBind;
       CHECK_DEVICE_THREAD();
-      bind.arrayElement = 0;
-      auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
+      auto insertIt = bufferCache.insert(std::make_pair(noBind, bytebuf()));
       m_pDriver->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
                                  MessageSource::RuntimeWarning,
                                  StringFormat::Fmt("invalid or OOB pointer access detected ."));
-      return insertIt.first->second;
+      return;
     }
-    bind.arrayElement = (address - offs) & 0xFFFFFFFFU;
-    offs = size_t(ptrOffs);
 
-    auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
-    bytebuf &data = insertIt.first->second;
-    if(insertIt.second)
+    // if the resources might be dirty from side-effects from the action, replay back to right
+    // before it.
+    if(m_ResourcesDirty)
     {
-      CHECK_DEVICE_THREAD();
+      VkMarkerRegion region("un-dirtying resources");
+      m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
+      m_ResourcesDirty = false;
+    }
+
+    bytebuf data;
+    m_pDriver->GetDebugManager()->GetBufferData(id, 0, 0, data);
+
+    {
+      // Insert atomically with all the data filled in : to prevent race conditions
+      SCOPED_WRITELOCK(bufferCacheLock);
+      auto insertIt = bufferCache.insert(std::make_pair(bind, data));
+      RDCASSERT(insertIt.second);
+    }
+  }
+
+  // Must be called from the replay manager thread (the debugger thread)
+  void PopulateBuffer(const ShaderBindIndex &bind)
+  {
+    CHECK_DEVICE_THREAD();
+    bytebuf data;
+
+    bool valid = true;
+    const Descriptor &bufData = GetDescriptor("accessing buffer value", bind, valid);
+    if(valid)
+    {
       // if the resources might be dirty from side-effects from the action, replay back to right
       // before it.
       if(m_ResourcesDirty)
@@ -1901,42 +2074,21 @@ private:
         m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
         m_ResourcesDirty = false;
       }
-      m_pDriver->GetDebugManager()->GetBufferData(id, 0, 0, data);
-    }
-    return data;
-  }
 
-  bytebuf &PopulateBuffer(ShaderBindIndex bind)
-  {
-    CHECK_DEVICE_THREAD();
-    auto insertIt = bufferCache.insert(std::make_pair(bind, bytebuf()));
-    bytebuf &data = insertIt.first->second;
-    if(insertIt.second)
-    {
-      CHECK_DEVICE_THREAD();
-      bool valid = true;
-      const Descriptor &bufData = GetDescriptor("accessing buffer value", bind, valid);
-      if(valid)
+      if(bufData.resource != ResourceId())
       {
-        // if the resources might be dirty from side-effects from the action, replay back to right
-        // before it.
-        if(m_ResourcesDirty)
-        {
-          VkMarkerRegion region("un-dirtying resources");
-          m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
-          m_ResourcesDirty = false;
-        }
-
-        if(bufData.resource != ResourceId())
-        {
-          m_pDriver->GetReplay()->GetBufferData(
-              m_pDriver->GetResourceManager()->GetLiveID(bufData.resource), bufData.byteOffset,
-              bufData.byteSize, data);
-        }
+        m_pDriver->GetReplay()->GetBufferData(
+            m_pDriver->GetResourceManager()->GetLiveID(bufData.resource), bufData.byteOffset,
+            bufData.byteSize, data);
       }
     }
 
-    return data;
+    {
+      // Insert atomically with all the data filled in : to prevent race conditions
+      SCOPED_WRITELOCK(bufferCacheLock);
+      auto insertIt = bufferCache.insert(std::make_pair(bind, data));
+      RDCASSERT(insertIt.second);
+    }
   }
 
   // Must be called from the replay manager thread (the debugger thread)
