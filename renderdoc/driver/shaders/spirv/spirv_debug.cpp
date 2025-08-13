@@ -669,7 +669,6 @@ void ThreadState::JumpToLabel(Id target)
   {
     OpLoopMerge merge(it);
 
-    mergeBlock = merge.mergeBlock;
     SetConvergencePoint(merge.mergeBlock);
 
     it++;
@@ -742,7 +741,6 @@ void ThreadState::SkipIgnoredInstructions()
     {
       OpSelectionMerge merge(it);
 
-      mergeBlock = merge.mergeBlock;
       SetConvergencePoint(merge.mergeBlock);
 
       nextInstruction++;
@@ -753,7 +751,6 @@ void ThreadState::SkipIgnoredInstructions()
     {
       OpLoopMerge merge(it);
 
-      mergeBlock = merge.mergeBlock;
       SetConvergencePoint(merge.mergeBlock);
 
       nextInstruction++;

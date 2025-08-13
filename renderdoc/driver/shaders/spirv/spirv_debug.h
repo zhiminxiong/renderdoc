@@ -233,21 +233,17 @@ struct ThreadState
   };
   rdcarray<GSMIndex> gsmIndexes;
 
-  // the id of the merge block that the last branch targetted
-  Id mergeBlock;
-  uint32_t convergenceInstruction;
-  uint32_t functionReturnPoint;
+  bool IsDiverged() const { return diverged; };
+  const rdcarray<uint32_t> &GetEnteredPoints() const { return enteredPoints; }
+  uint32_t GetConvergenceInstruction() const { return convergenceInstruction; }
+  uint32_t GetFunctionReturnPoint() const { return functionReturnPoint; }
+
   ShaderVariable returnValue;
   bool hasReturnValueData;
   rdcarray<StackFrame *> callstack;
 
   // the list of IDs that are currently valid and live
   rdcarray<Id> live;
-
-  // true if executed an operation which could trigger divergence
-  bool diverged;
-  // list of potential convergence points that were entered in a single step (used for tracking thread convergence)
-  rdcarray<uint32_t> enteredPoints;
 
   std::map<Id, uint32_t> lastWrite;
 
@@ -285,6 +281,16 @@ private:
   static bool WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup);
 
   ShaderDebugState *m_State = NULL;
+
+  // Control Flow state variables
+  // true if executed an operation which could trigger divergence
+  bool diverged;
+  // list of potential convergence points that were entered in a single step (used for tracking thread convergence)
+  rdcarray<uint32_t> enteredPoints;
+  // the id of the merge block that the last branch targetted
+  uint32_t convergenceInstruction;
+  // the instruction after a function call is defined to be a convergence point
+  uint32_t functionReturnPoint;
 };
 
 enum class DebugScope

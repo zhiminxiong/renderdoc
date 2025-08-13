@@ -2775,11 +2775,11 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         {
           thread.StepNext(NULL, workgroup, activeMask);
         }
-        threadExecutionStates[threadId] = thread.enteredPoints;
+        threadExecutionStates[threadId] = thread.GetEnteredPoints();
 
         ProcessQueuedDebugMessages();
 
-        uint32_t threadConvergeInstruction = thread.convergenceInstruction;
+        uint32_t threadConvergeInstruction = thread.GetConvergenceInstruction();
         tangle.SetThreadMergePoint(threadId, threadConvergeInstruction);
         // the thread activated a new convergence point
         if(threadConvergeInstruction != INVALID_EXECUTION_POINT)
@@ -2793,7 +2793,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
             ++countIdentialConvergePointThreads;
         }
 
-        uint32_t threadFunctionReturnPoint = thread.functionReturnPoint;
+        uint32_t threadFunctionReturnPoint = thread.GetFunctionReturnPoint();
         // the thread activated a new function return point
         if(threadFunctionReturnPoint != INVALID_EXECUTION_POINT)
         {
@@ -2813,7 +2813,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         if(thread.Finished())
           tangle.SetThreadDead(threadId);
 
-        if(thread.diverged)
+        if(thread.IsDiverged())
           ++countDivergedThreads;
       }
       for(size_t lane = 0; lane < workgroup.size(); lane++)
