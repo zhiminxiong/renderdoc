@@ -8,12 +8,6 @@ class Subgroup_Zoo(rdtest.TestCase):
     demos_test_name = None
     workgroup = (0, 0, 0)
 
-    def check_support(self, **kwargs):
-        # Only allow this if explicitly run
-        if kwargs['test_include'] == self.demos_test_name:
-            return True, ''
-        return False, 'Disabled test'
-
     def check_compute_thread_result(self, test, action, x, y, z, dim, bufdata):
         try:
             real = struct.unpack_from(
@@ -169,7 +163,7 @@ class Subgroup_Zoo(rdtest.TestCase):
                             rdtest.log.error(
                                 f"Test {idx} at {action.eventId} got no debug result at {vtx} inst {inst} view {view}")
                             failed = True
-                            return
+                            continue
 
                         _, variables = self.process_trace(trace)
 
