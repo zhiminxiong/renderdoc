@@ -1691,6 +1691,10 @@ static const VkExtensionProperties supportedExtensions[] = {
         VK_KHR_MAINTENANCE_6_SPEC_VERSION,
     },
     {
+        VK_KHR_MAINTENANCE_7_EXTENSION_NAME,
+        VK_KHR_MAINTENANCE_7_SPEC_VERSION,
+    },
+    {
         VK_KHR_MAP_MEMORY_2_EXTENSION_NAME,
         VK_KHR_MAP_MEMORY_2_SPEC_VERSION,
     },

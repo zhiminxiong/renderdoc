@@ -4527,6 +4527,20 @@ rdcstr DoStringise(const VkGeometryTypeKHR &el)
 }
 
 template <>
+rdcstr DoStringise(const VkPhysicalDeviceLayeredApiKHR &el)
+{
+  BEGIN_ENUM_STRINGISE(VkPhysicalDeviceLayeredApiKHR);
+  {
+    STRINGISE_ENUM(VK_PHYSICAL_DEVICE_LAYERED_API_VULKAN_KHR)
+    STRINGISE_ENUM(VK_PHYSICAL_DEVICE_LAYERED_API_D3D12_KHR)
+    STRINGISE_ENUM(VK_PHYSICAL_DEVICE_LAYERED_API_METAL_KHR)
+    STRINGISE_ENUM(VK_PHYSICAL_DEVICE_LAYERED_API_OPENGL_KHR)
+    STRINGISE_ENUM(VK_PHYSICAL_DEVICE_LAYERED_API_OPENGLES_KHR)
+  }
+  END_ENUM_STRINGISE();
+}
+
+template <>
 rdcstr DoStringise(const VkImageCompressionFixedRateFlagBitsEXT &el)
 {
   BEGIN_BITFIELD_STRINGISE(VkImageCompressionFixedRateFlagBitsEXT);

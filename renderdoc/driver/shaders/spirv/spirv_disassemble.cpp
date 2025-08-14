@@ -1613,7 +1613,7 @@ rdcstr Reflector::Disassemble(const rdcstr &entryPoint,
               uint32_t c = decoded.components[i];
 
               ret += idName(c < vec1Cols ? decoded.vector1 : decoded.vector2) + ".";
-              ret.push_back(comps[c % vec1Cols]);
+              ret.push_back(comps[c < vec1Cols ? c : c - vec1Cols]);
 
               if(i + 1 < decoded.components.size())
                 ret += ", ";
