@@ -1228,14 +1228,21 @@ ShaderVariable NClamp(ThreadState &state, uint32_t, const rdcarray<Id> &params)
 
 ShaderVariable GPUOp(ThreadState &state, uint32_t instruction, const rdcarray<Id> &params)
 {
+  if(state.IsPendingResultReady())
+    return state.GetPendingResult();
+
   rdcarray<ShaderVariable> paramVars;
   for(Id id : params)
     paramVars.push_back(state.GetSrc(id));
 
   ShaderVariable ret = paramVars[0];
 
-  if(!state.debugger.GetAPIWrapper()->CalculateMathOp(state, (GLSLstd450)instruction, paramVars, ret))
-    memset(&ret.value, 0, sizeof(ret.value));
+  // these two operations change the type of the output
+  rdcspv::GLSLstd450 op = (GLSLstd450)instruction;
+  if(op == rdcspv::GLSLstd450::Length || op == rdcspv::GLSLstd450::Distance)
+    ret.columns = 1;
+
+  state.QueueMathOp(op, paramVars, ret);
 
   return ret;
 }

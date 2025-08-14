@@ -336,7 +336,7 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
     ShaderVariable &var = ids[pointer];
 
     if(ContainsNaNInf(val))
-      m_State->flags |= ShaderEvents::GeneratedNanOrInf;
+      pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf;
 
     // if var is a pointer we update the underlying storage and generate at least one change,
     // plus any additional ones for other pointers.
@@ -357,7 +357,7 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
       // if this is a write to a SSBO pointer, don't record any alias changes, just record a no-op
       // change to this pointer
       basechange.after = basechange.before = debugger.GetPointerValue(ids[pointer]);
-      m_State->changes.push_back(basechange);
+      pendingDebugState.changes.push_back(basechange);
       debugger.WriteThroughPointer(var, val);
       return;
     }
@@ -395,7 +395,7 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
     {
       if(pointer != ptrid)
       {
-        m_State->changes.push_back(changes[ptrIdx]);
+        pendingDebugState.changes.push_back(changes[ptrIdx]);
         changes.erase(ptrIdx);
       }
     }
@@ -405,7 +405,7 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
     // we're assigning the same value) but that false negative is not a concern.
     changes.removeIf([](const ShaderVariableChange &c) { return c.before == c.after; });
 
-    m_State->changes.append(changes);
+    pendingDebugState.changes.append(changes);
 
     // always add a change for the base storage variable written itself, even if that's a no-op.
     // This one is not included in any of the pointers lists above
@@ -416,7 +416,7 @@ void ThreadState::WritePointerValue(Id pointer, const ShaderVariable &val)
     if(firstLocalWrite)
       basechange.before = {};
 
-    m_State->changes.push_back(basechange);
+    pendingDebugState.changes.push_back(basechange);
 
     if(ptrIdx == -1)
       pointers.push_back(pointer);
@@ -446,8 +446,12 @@ void ThreadState::DebugBreak()
 
 void ThreadState::SetDst(Id id, const ShaderVariable &val)
 {
+  // Waiting for result i.e. from the GPU or replay thread
+  if(IsPendingResultPending())
+    return;
+
   if(m_State && ContainsNaNInf(val))
-    m_State->flags |= ShaderEvents::GeneratedNanOrInf;
+    pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf;
 
   ShaderVariable prev = ids[id];
 
@@ -486,7 +490,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
     if(wasLive)
       change.before = debugger.GetPointerValue(prev);
     change.after = debugger.GetPointerValue(ids[id]);
-    m_State->changes.push_back(change);
+    pendingDebugState.changes.push_back(change);
   }
 }
 
@@ -506,7 +510,7 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
     if(liveGlobals.contains(id))
       continue;
 
-    m_State->changes.push_back({debugger.GetPointerValue(ids[id])});
+    pendingDebugState.changes.push_back({debugger.GetPointerValue(ids[id])});
 
     if(ids[id].type == VarType::GPUPointer && !debugger.IsOpaquePointer(ids[id]) &&
        !debugger.IsPhysicalPointer(ids[id]))
@@ -522,7 +526,7 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
     if(liveGlobals.contains(id))
       continue;
 
-    m_State->changes.push_back({ShaderVariable(), debugger.GetPointerValue(ids[id])});
+    pendingDebugState.changes.push_back({ShaderVariable(), debugger.GetPointerValue(ids[id])});
   }
 }
 
@@ -790,8 +794,7 @@ bool ThreadState::WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup)
   return false;
 }
 
-void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup,
-                           const rdcarray<bool> &activeMask)
+void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup)
 {
   m_State = state;
 
@@ -2289,16 +2292,16 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         for(uint8_t c = 0; c < var.columns; c++)
         {
 #undef _IMPL
-#define _IMPL(I, S, U)                                   \
-  if(comp<S>(b, c) != 0)                                 \
-  {                                                      \
-    comp<S>(var, c) /= comp<S>(b, c);                    \
-  }                                                      \
-  else                                                   \
-  {                                                      \
-    comp<U>(var, c) = 0;                                 \
-    if(m_State)                                          \
-      m_State->flags |= ShaderEvents::GeneratedNanOrInf; \
+#define _IMPL(I, S, U)                                            \
+  if(comp<S>(b, c) != 0)                                          \
+  {                                                               \
+    comp<S>(var, c) /= comp<S>(b, c);                             \
+  }                                                               \
+  else                                                            \
+  {                                                               \
+    comp<U>(var, c) = 0;                                          \
+    if(m_State)                                                   \
+      pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
           IMPL_FOR_INT_TYPES(_IMPL);
@@ -2309,16 +2312,16 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         for(uint8_t c = 0; c < var.columns; c++)
         {
 #undef _IMPL
-#define _IMPL(I, S, U)                                   \
-  if(comp<U>(b, c) != 0)                                 \
-  {                                                      \
-    comp<U>(var, c) /= comp<U>(b, c);                    \
-  }                                                      \
-  else                                                   \
-  {                                                      \
-    comp<U>(var, c) = 0;                                 \
-    if(m_State)                                          \
-      m_State->flags |= ShaderEvents::GeneratedNanOrInf; \
+#define _IMPL(I, S, U)                                            \
+  if(comp<U>(b, c) != 0)                                          \
+  {                                                               \
+    comp<U>(var, c) /= comp<U>(b, c);                             \
+  }                                                               \
+  else                                                            \
+  {                                                               \
+    comp<U>(var, c) = 0;                                          \
+    if(m_State)                                                   \
+      pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
           IMPL_FOR_INT_TYPES(_IMPL);
@@ -2329,16 +2332,16 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         for(uint8_t c = 0; c < var.columns; c++)
         {
 #undef _IMPL
-#define _IMPL(I, S, U)                                   \
-  if(comp<U>(b, c) != 0)                                 \
-  {                                                      \
-    comp<U>(var, c) %= comp<U>(b, c);                    \
-  }                                                      \
-  else                                                   \
-  {                                                      \
-    comp<U>(var, c) = 0;                                 \
-    if(m_State)                                          \
-      m_State->flags |= ShaderEvents::GeneratedNanOrInf; \
+#define _IMPL(I, S, U)                                            \
+  if(comp<U>(b, c) != 0)                                          \
+  {                                                               \
+    comp<U>(var, c) %= comp<U>(b, c);                             \
+  }                                                               \
+  else                                                            \
+  {                                                               \
+    comp<U>(var, c) = 0;                                          \
+    if(m_State)                                                   \
+      pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
           IMPL_FOR_INT_TYPES(_IMPL);
@@ -2360,22 +2363,22 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         for(uint8_t c = 0; c < var.columns; c++)
         {
 #undef _IMPL
-#define _IMPL(I, S, U)                                        \
-  if(comp<S>(b, c) != 0)                                      \
-  {                                                           \
-    S op1 = comp<S>(var, c);                                  \
-    S op2 = comp<S>(b, c);                                    \
-    S tmp = op1 % op2;                                        \
-    if(opdata.op == Op::SRem)                                 \
-      comp<S>(var, c) = op1 < 0 ? (S)-ABS(tmp) : (S)ABS(tmp); \
-    else                                                      \
-      comp<S>(var, c) = op2 < 0 ? (S)-ABS(tmp) : (S)ABS(tmp); \
-  }                                                           \
-  else                                                        \
-  {                                                           \
-    comp<S>(var, c) = 0;                                      \
-    if(m_State)                                               \
-      m_State->flags |= ShaderEvents::GeneratedNanOrInf;      \
+#define _IMPL(I, S, U)                                            \
+  if(comp<S>(b, c) != 0)                                          \
+  {                                                               \
+    S op1 = comp<S>(var, c);                                      \
+    S op2 = comp<S>(b, c);                                        \
+    S tmp = op1 % op2;                                            \
+    if(opdata.op == Op::SRem)                                     \
+      comp<S>(var, c) = op1 < 0 ? (S)-ABS(tmp) : (S)ABS(tmp);     \
+    else                                                          \
+      comp<S>(var, c) = op2 < 0 ? (S)-ABS(tmp) : (S)ABS(tmp);     \
+  }                                                               \
+  else                                                            \
+  {                                                               \
+    comp<S>(var, c) = 0;                                          \
+    if(m_State)                                                   \
+      pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
           IMPL_FOR_INT_TYPES(_IMPL);
@@ -3571,6 +3574,18 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     case Op::ImageSampleProjDrefExplicitLod:
     case Op::ImageSampleProjDrefImplicitLod:
     {
+      const DataType &resultType = debugger.GetType(opdata.resultType);
+
+      if(IsPendingResultReady())
+      {
+        ShaderVariable result = GetPendingResult();
+        result.rows = 1;
+        result.columns = RDCMAX(1U, resultType.vector().count) & 0xff;
+
+        SetDst(opdata.result, result);
+        break;
+      }
+
       ShaderVariable img;
       ShaderVariable sampler;
       ShaderVariable uv;
@@ -3724,8 +3739,6 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         sampler = sampler.members[1];
       }
 
-      const DataType &resultType = debugger.GetType(opdata.resultType);
-
       RDCASSERT(img.type == VarType::ReadOnlyResource || img.type == VarType::ReadWriteResource);
       RDCASSERT(sampler.type == VarType::Unknown || sampler.type == VarType::ReadOnlyResource ||
                 sampler.type == VarType::Sampler);
@@ -3744,13 +3757,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       if(sampler.type == VarType::Sampler || sampler.type == VarType::ReadOnlyResource)
         samplerIndex = sampler.GetBindIndex();
 
-      if(!debugger.GetAPIWrapper()->CalculateSampleGather(
-             *this, opdata.op, texType, img.GetBindIndex(), samplerIndex, uv, ddxCalc, ddyCalc,
-             compare, gather, operands, result))
-      {
-        // sample failed. Pretend we got 0 columns back
-        set0001(result);
-      }
+      QueueSampleGather(opdata.op, texType, img.GetBindIndex(), samplerIndex, uv, ddxCalc, ddyCalc,
+                        compare, gather, operands, result);
 
       result.rows = 1;
       result.columns = RDCMAX(1U, resultType.vector().count) & 0xff;
@@ -3760,6 +3768,13 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     }
     case Op::ImageRead:
     {
+      if(IsPendingResultReady())
+      {
+        ShaderVariable result = GetPendingResult();
+        SetDst(opdata.result, result);
+        break;
+      }
+
       OpImageRead read(it);
 
       ShaderVariable img = GetSrc(read.image);
@@ -3791,14 +3806,9 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         // do it with samplegather as ImageFetch rather than a Read which caches the whole texture
         // on the CPU for no reason (since we can't write to it)
 
-        if(!debugger.GetAPIWrapper()->CalculateSampleGather(
-               *this, Op::ImageFetch, texType, img.GetBindIndex(), ShaderBindIndex(), coord,
-               ShaderVariable(), ShaderVariable(), ShaderVariable(), GatherChannel::Red,
-               ImageOperandsAndParamDatas(), result))
-        {
-          // sample failed. Pretend we got 0 columns back
-          set0001(result);
-        }
+        QueueSampleGather(Op::ImageFetch, texType, img.GetBindIndex(), ShaderBindIndex(), coord,
+                          ShaderVariable(), ShaderVariable(), ShaderVariable(), GatherChannel::Red,
+                          ImageOperandsAndParamDatas(), result);
       }
       else
       {
@@ -4984,6 +4994,18 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     case Op::Max: RDCWARN("Unhandled SPIR-V operation %s", ToStr(opdata.op).c_str()); break;
   }
 
+  // if instruction result is pending i.e. waiting for GPU then stay on the current instruction (early return)
+  if(IsPendingResultPending())
+  {
+    nextInstruction--;
+    // This instruction is being deferred clear the pending debug state
+    if(m_State)
+      ClearPendingDebugState();
+    m_State = NULL;
+    return;
+  }
+  SetPendingResultUnknown();
+
   // skip over any degenerate branches
   while(!debugger.HasDebugInfo())
   {
@@ -5012,7 +5034,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   // set the state's next instruction (if we have one) to ours, bounded by how many
   // instructions there are
   if(m_State)
-    m_State->nextInstruction = RDCMIN(nextInstruction, debugger.GetNumInstructions() - 1);
+    pendingDebugState.nextInstruction = RDCMIN(nextInstruction, debugger.GetNumInstructions() - 1);
 
   m_State = NULL;
 }
@@ -5044,7 +5066,7 @@ void ThreadState::ExecuteMemoryBarrier(Id semanticsId)
         AssignValue(privates[localIndex], globalData);
         change.after = privates[localIndex];
         if(!(change.after == change.before))
-          m_State->changes.push_back(change);
+          pendingDebugState.changes.push_back(change);
       }
       else
       {
@@ -5057,4 +5079,66 @@ void ThreadState::ExecuteMemoryBarrier(Id semanticsId)
     }
   }
 }
+
+void ThreadState::QueueMathOp(GLSLstd450 op, const rdcarray<ShaderVariable> &paramVars,
+                              const ShaderVariable &result)
+{
+  RDCASSERT(!IsPendingResultPending());
+  pendingResultData = result;
+  queuedGpuMathOp.workgroupIndex = workgroupIndex;
+  queuedGpuMathOp.op = op;
+  queuedGpuMathOp.paramVars = paramVars;
+  queuedGpuMathOp.result = &pendingResultData;
+  SetStepNeedsGpuMathOp();
+}
+
+void ThreadState::QueueSampleGather(Op opcode, DebugAPIWrapper::TextureType texType,
+                                    const ShaderBindIndex &imageBind,
+                                    const ShaderBindIndex &samplerBind, const ShaderVariable &uv,
+                                    const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                                    const ShaderVariable &compare, GatherChannel gatherChannel,
+                                    const ImageOperandsAndParamDatas &operands,
+                                    const ShaderVariable &result)
+{
+  RDCASSERT(!IsPendingResultPending());
+  pendingResultData = result;
+  queuedGpuSampleGatherOp.workgroupIndex = workgroupIndex;
+  queuedGpuSampleGatherOp.opcode = opcode;
+  queuedGpuSampleGatherOp.texType = texType;
+  queuedGpuSampleGatherOp.imageBind = imageBind;
+  queuedGpuSampleGatherOp.samplerBind = samplerBind;
+  queuedGpuSampleGatherOp.uv = uv;
+  queuedGpuSampleGatherOp.ddxCalc = ddxCalc;
+  queuedGpuSampleGatherOp.ddyCalc = ddyCalc;
+  queuedGpuSampleGatherOp.compare = compare;
+  queuedGpuSampleGatherOp.gatherChannel = gatherChannel;
+  queuedGpuSampleGatherOp.operands = operands;
+  queuedGpuSampleGatherOp.result = &pendingResultData;
+  SetStepNeedsGpuSampleGatherOp();
+}
+
 };    // namespace rdcspv
+
+template <>
+rdcstr DoStringise(const rdcspv::ThreadState::PendingResultStatus &el)
+{
+  BEGIN_ENUM_STRINGISE(rdcspv::ThreadState::PendingResultStatus)
+  {
+    STRINGISE_ENUM_CLASS(Unknown)
+    STRINGISE_ENUM_CLASS(Pending)
+    STRINGISE_ENUM_CLASS(Ready)
+  }
+  END_ENUM_STRINGISE();
+};
+
+template <>
+rdcstr DoStringise(const rdcspv::StepThreadMode &el)
+{
+  BEGIN_ENUM_STRINGISE(rdcspv::StepThreadMode)
+  {
+    STRINGISE_ENUM_CLASS(RUN_SINGLE_STEP)
+    STRINGISE_ENUM_CLASS(RUN_MULTIPLE_STEPS)
+    STRINGISE_ENUM_CLASS(QUEUE_MULTIPLE_STEPS)
+  }
+  END_ENUM_STRINGISE();
+};

@@ -58,6 +58,25 @@ enum class ThreadProperty : uint32_t
 
 ITERABLE_OPERATORS(ThreadProperty);
 
+inline void AtomicStore(int32_t *var, int32_t newVal)
+{
+  int32_t oldVal = *var;
+  while(Atomic::CmpExch32(var, oldVal, newVal) != oldVal)
+  {
+    oldVal = *var;
+  };
+}
+
+inline int32_t AtomicLoad(int32_t *var)
+{
+  return Atomic::CmpExch32(var, 0, 0);
+}
+
+inline int32_t AtomicLoad(const int32_t *var)
+{
+  return Atomic::CmpExch32((int32_t *)var, 0, 0);
+}
+
 struct ThreadState;
 
 class DebugAPIWrapper
@@ -99,16 +118,17 @@ public:
     Subpass_Texture = 0x20,
   };
 
-  virtual bool CalculateSampleGather(ThreadState &lane, Op opcode, TextureType texType,
-                                     ShaderBindIndex imageBind, ShaderBindIndex samplerBind,
-                                     const ShaderVariable &uv, const ShaderVariable &ddxCalc,
-                                     const ShaderVariable &ddyCalc, const ShaderVariable &compare,
-                                     GatherChannel gatherChannel,
-                                     const ImageOperandsAndParamDatas &operands,
-                                     ShaderVariable &output) = 0;
-
-  virtual bool CalculateMathOp(ThreadState &lane, GLSLstd450 op,
-                               const rdcarray<ShaderVariable> &params, ShaderVariable &output) = 0;
+  virtual bool QueueSampleGather(ThreadState &lane, Op opcode, TextureType texType,
+                                 const ShaderBindIndex &imageBind,
+                                 const ShaderBindIndex &samplerBind, const ShaderVariable &uv,
+                                 const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                                 const ShaderVariable &compare, GatherChannel gatherChannel,
+                                 const rdcspv::ImageOperandsAndParamDatas &operands,
+                                 ShaderVariable &output, bool &hasResult) = 0;
+  virtual bool QueueCalculateMathOp(GLSLstd450 op, const rdcarray<ShaderVariable> &params) = 0;
+  virtual bool GetQueuedResults(rdcarray<ShaderVariable *> &mathOpResults,
+                                rdcarray<ShaderVariable *> &sampleGatherResults) = 0;
+  virtual bool QueuedOpsHasSpace() = 0;
 };
 
 typedef ShaderVariable (*ExtInstImpl)(ThreadState &, uint32_t, const rdcarray<Id> &);
@@ -173,6 +193,49 @@ private:
   StackFrame &operator=(const StackFrame &o) = delete;
 };
 
+struct GpuMathOperation
+{
+  void Clear()
+  {
+    workgroupIndex = 0;
+    op = GLSLstd450::Invalid;
+    paramVars.clear();
+    result = NULL;
+  }
+  uint32_t workgroupIndex;
+  GLSLstd450 op;
+  rdcarray<ShaderVariable> paramVars;
+  ShaderVariable *result;
+};
+
+struct GpuSampleGatherOperation
+{
+  void Clear()
+  {
+    workgroupIndex = 0;
+    opcode = Op::Max;
+    texType = DebugAPIWrapper::TextureType::Float_Texture;
+    imageBind = ShaderBindIndex();
+    samplerBind = ShaderBindIndex();
+    uv = ddxCalc = ddyCalc = compare = ShaderVariable();
+    gatherChannel = GatherChannel::Red;
+    operands.setNone();
+    result = NULL;
+  }
+  uint32_t workgroupIndex;
+  Op opcode;
+  DebugAPIWrapper::TextureType texType;
+  ShaderBindIndex imageBind;
+  ShaderBindIndex samplerBind;
+  ShaderVariable uv;
+  ShaderVariable ddxCalc;
+  ShaderVariable ddyCalc;
+  ShaderVariable compare;
+  GatherChannel gatherChannel;
+  ImageOperandsAndParamDatas operands;
+  ShaderVariable *result = NULL;
+};
+
 class Debugger;
 
 struct ThreadState
@@ -181,8 +244,7 @@ struct ThreadState
   ~ThreadState();
 
   void EnterEntryPoint(ShaderDebugState *state);
-  void StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup,
-                const rdcarray<bool> &activeMask);
+  void StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup);
 
   enum DerivDir
   {
@@ -204,6 +266,8 @@ struct ThreadState
 
   uint32_t currentInstruction;
   uint32_t nextInstruction;
+
+  rdcarray<bool> activeMask;
 
   const GlobalState &global;
   Debugger &debugger;
@@ -267,6 +331,87 @@ struct ThreadState
 
   void DebugBreak();
 
+  enum class PendingResultStatus : int32_t
+  {
+    Unknown,
+    Pending,
+    Ready,
+    Stepped,
+  };
+
+  void QueueMathOp(GLSLstd450 op, const rdcarray<ShaderVariable> &paramVars,
+                   const ShaderVariable &result);
+  void QueueSampleGather(Op opcode, DebugAPIWrapper::TextureType texType,
+                         const ShaderBindIndex &imageBind, const ShaderBindIndex &samplerBind,
+                         const ShaderVariable &uv, const ShaderVariable &ddxCalc,
+                         const ShaderVariable &ddyCalc, const ShaderVariable &compare,
+                         GatherChannel gatherChannel, const ImageOperandsAndParamDatas &operands,
+                         const ShaderVariable &result);
+
+  bool IsPendingResultPending() const
+  {
+    return GetPendingResultStatus() == PendingResultStatus::Pending;
+  }
+  bool IsPendingResultReady() const
+  {
+    return GetPendingResultStatus() == PendingResultStatus::Ready;
+  }
+  void SetPendingResultUnknown() { SetPendingResultStatus(PendingResultStatus::Unknown); }
+  void SetPendingResultReady()
+  {
+    RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Pending);
+    SetPendingResultStatus(PendingResultStatus::Ready);
+  }
+  const ShaderVariable &GetPendingResult() const
+  {
+    RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Ready);
+    return pendingResultData;
+  }
+  void SetStepQueued()
+  {
+    AtomicStore(&atomic_isSimulationStepActive, 1);
+    AtomicStore(&atomic_stepNeedsGpuSampleGatherOp, 0);
+    AtomicStore(&atomic_stepNeedsGpuMathOp, 0);
+  }
+  void SetStepNeedsGpuSampleGatherOp()
+  {
+    AtomicStore(&atomic_stepNeedsGpuSampleGatherOp, 1);
+    SetPendingResultStatus(PendingResultStatus::Pending);
+  }
+  bool StepNeedsGpuSampleGatherOp() const
+  {
+    return (AtomicLoad(&atomic_stepNeedsGpuSampleGatherOp) == 1);
+  }
+  void SetStepNeedsGpuMathOp()
+  {
+    AtomicStore(&atomic_stepNeedsGpuMathOp, 1);
+    SetPendingResultStatus(PendingResultStatus::Pending);
+  }
+  bool StepNeedsGpuMathOp() const { return (AtomicLoad(&atomic_stepNeedsGpuMathOp) == 1); }
+  const GpuMathOperation &GetQueuedGpuMathOp() const
+  {
+    RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuMathOp));
+    RDCASSERT(IsPendingResultPending());
+    return queuedGpuMathOp;
+  }
+  const GpuSampleGatherOperation &GetQueuedGpuSampleGatherOp() const
+  {
+    RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuSampleGatherOp));
+    RDCASSERT(IsPendingResultPending());
+    return queuedGpuSampleGatherOp;
+  }
+
+  void SetSimulationStepCompleted() { AtomicStore(&atomic_isSimulationStepActive, 0); }
+  bool IsSimulationStepActive() const { return (AtomicLoad(&atomic_isSimulationStepActive) == 1); }
+
+  void ClearPendingDebugState()
+  {
+    pendingDebugState.changes.clear();
+    pendingDebugState.flags = ShaderEvents::NoEvent;
+    pendingDebugState.nextInstruction = 0;
+  }
+  const ShaderDebugState &GetPendingDebugState() const { return pendingDebugState; }
+
 private:
   void EnterFunction(const rdcarray<Id> &arguments);
   void SetDst(Id id, const ShaderVariable &val);
@@ -280,7 +425,21 @@ private:
   void ExecuteMemoryBarrier(Id semanticsId);
   static bool WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup);
 
+  PendingResultStatus GetPendingResultStatus() const
+  {
+    return (PendingResultStatus)AtomicLoad(&atomic_pendingResultStatus);
+  }
+
+  void SetPendingResultStatus(PendingResultStatus status)
+  {
+    AtomicStore(&atomic_pendingResultStatus, (int32_t)status);
+  }
+
+  ShaderDebugState pendingDebugState;
   ShaderDebugState *m_State = NULL;
+  ShaderVariable pendingResultData;
+  GpuMathOperation queuedGpuMathOp;
+  GpuSampleGatherOperation queuedGpuSampleGatherOp;
 
   // Control Flow state variables
   // true if executed an operation which could trigger divergence
@@ -291,6 +450,12 @@ private:
   uint32_t convergenceInstruction;
   // the instruction after a function call is defined to be a convergence point
   uint32_t functionReturnPoint;
+
+  // These need to be accessed using atomics
+  int32_t atomic_pendingResultStatus = (int32_t)PendingResultStatus::Unknown;
+  int32_t atomic_stepNeedsGpuSampleGatherOp = 0;
+  int32_t atomic_stepNeedsGpuMathOp = 0;
+  int32_t atomic_isSimulationStepActive = 0;
 };
 
 enum class DebugScope
@@ -408,6 +573,13 @@ struct DebugMessage
   rdcstr desc;
 };
 
+enum class StepThreadMode
+{
+  RUN_SINGLE_STEP,
+  RUN_MULTIPLE_STEPS,
+  QUEUE_MULTIPLE_STEPS
+};
+
 class Debugger : public Processor, public ShaderDebugger
 {
 public:
@@ -459,6 +631,10 @@ public:
   ThreadState &GetActiveLane() { return workgroup[activeLaneIndex]; }
   const ThreadState &GetActiveLane() const { return workgroup[activeLaneIndex]; }
   uint32_t GetSubgroupSize() const { return subgroupSize; }
+
+  void QueueGpuMathOp(uint32_t lane);
+  void QueueGpuSampleGatherOp(uint32_t lane);
+
   uint64_t GetDeviceThreadID() const { return deviceThreadID; }
   bool IsDeviceThread() const { return Threading::GetCurrentID() == GetDeviceThreadID(); }
   void AddDebugMessage(MessageCategory cat, MessageSeverity sev, MessageSource src, rdcstr desc) const;
@@ -581,10 +757,28 @@ private:
   void ClampScalars(const ShaderVariable &var, uint8_t &scalar0) const;
   void ClampScalars(const ShaderVariable &var, uint8_t &scalar0, uint8_t &scalar1) const;
 
+  void QueueJob(uint32_t lane, rdcarray<ShaderDebugState> *ret);
+  void StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<ShaderDebugState> *ret);
+  void InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret);
+
   void ProcessQueuedDebugMessages();
+  void ProcessQueuedOps();
+  void ProcessQueuedGpuMathOps();
+  void ProcessQueuedGpuSampleGatherOps();
+  void SyncPendingGpuOps();
+  void SyncPendingLanes();
 
   mutable Threading::CriticalSection queuedDebugMessagesLock;
   mutable rdcarray<DebugMessage> queuedDebugMessages;
+  rdcarray<bool> queuedGpuMathOps;
+  rdcarray<bool> queuedGpuSampleGatherOps;
+  rdcarray<ShaderDebugState> *shaderChangesReturn;
+
+  bool retireIDs = true;
+  ShaderDebugState activeDebugState;
+  rdcarray<bool> pendingLanes;
+  rdcarray<ShaderVariable *> pendingGpuMathsOpsResults;
+  rdcarray<ShaderVariable *> pendingGpuSampleGatherOpsResults;
 
   uint64_t deviceThreadID;
 };
@@ -595,3 +789,6 @@ private:
 void AssignValue(ShaderVariable &dst, const ShaderVariable &src);
 
 };    // namespace rdcspv
+
+DECLARE_REFLECTION_ENUM(rdcspv::ThreadState::PendingResultStatus);
+DECLARE_REFLECTION_ENUM(rdcspv::StepThreadMode);
