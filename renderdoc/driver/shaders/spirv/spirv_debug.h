@@ -58,6 +58,14 @@ enum class ThreadProperty : uint32_t
 
 ITERABLE_OPERATORS(ThreadProperty);
 
+enum class DeviceOpResult : uint32_t
+{
+  Unknown,
+  Succeeded,
+  Failed,
+  NeedsDevice,
+};
+
 inline void AtomicStore(int32_t *var, int32_t newVal)
 {
   int32_t oldVal = *var;
@@ -372,6 +380,7 @@ struct ThreadState
     AtomicStore(&atomic_isSimulationStepActive, 1);
     AtomicStore(&atomic_stepNeedsGpuSampleGatherOp, 0);
     AtomicStore(&atomic_stepNeedsGpuMathOp, 0);
+    AtomicStore(&atomic_stepNeedsDeviceThread, 0);
   }
   void SetStepNeedsGpuSampleGatherOp()
   {
@@ -388,6 +397,12 @@ struct ThreadState
     SetPendingResultStatus(PendingResultStatus::Pending);
   }
   bool StepNeedsGpuMathOp() const { return (AtomicLoad(&atomic_stepNeedsGpuMathOp) == 1); }
+  void SetStepNeedsDeviceThread()
+  {
+    AtomicStore(&atomic_stepNeedsDeviceThread, 1);
+    SetPendingResultStatus(PendingResultStatus::Pending);
+  }
+  bool StepNeedsDeviceThread() const { return (AtomicLoad(&atomic_stepNeedsDeviceThread) == 1); }
   const GpuMathOperation &GetQueuedGpuMathOp() const
   {
     RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuMathOp));
@@ -455,6 +470,7 @@ private:
   int32_t atomic_pendingResultStatus = (int32_t)PendingResultStatus::Unknown;
   int32_t atomic_stepNeedsGpuSampleGatherOp = 0;
   int32_t atomic_stepNeedsGpuMathOp = 0;
+  int32_t atomic_stepNeedsDeviceThread = 0;
   int32_t atomic_isSimulationStepActive = 0;
 };
 
@@ -757,6 +773,9 @@ private:
   void ClampScalars(const ShaderVariable &var, uint8_t &scalar0) const;
   void ClampScalars(const ShaderVariable &var, uint8_t &scalar0, uint8_t &scalar1) const;
 
+  void QueueDeviceThreadStep(uint32_t lane);
+  void ProcessQueuedDeviceThreadSteps();
+
   void QueueJob(uint32_t lane, rdcarray<ShaderDebugState> *ret);
   void StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<ShaderDebugState> *ret);
   void InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret);
@@ -772,6 +791,7 @@ private:
   mutable rdcarray<DebugMessage> queuedDebugMessages;
   rdcarray<bool> queuedGpuMathOps;
   rdcarray<bool> queuedGpuSampleGatherOps;
+  rdcarray<bool> queuedDeviceThreadSteps;
   rdcarray<ShaderDebugState> *shaderChangesReturn;
 
   bool retireIDs = true;
@@ -792,3 +812,4 @@ void AssignValue(ShaderVariable &dst, const ShaderVariable &src);
 
 DECLARE_REFLECTION_ENUM(rdcspv::ThreadState::PendingResultStatus);
 DECLARE_REFLECTION_ENUM(rdcspv::StepThreadMode);
+DECLARE_REFLECTION_ENUM(rdcspv::DeviceOpResult);

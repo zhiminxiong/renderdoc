@@ -1024,12 +1024,14 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   stage = shaderStage;
   apiWrapper = api;
 
+  queuedDeviceThreadSteps.resize(threadsInWorkgroup);
   queuedGpuMathOps.resize(threadsInWorkgroup);
   queuedGpuSampleGatherOps.resize(threadsInWorkgroup);
   pendingLanes.resize(threadsInWorkgroup);
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
     workgroup.push_back(ThreadState(*this, global));
+    queuedDeviceThreadSteps[i] = false;
     queuedGpuMathOps[i] = false;
     queuedGpuSampleGatherOps[i] = false;
     pendingLanes[i] = false;
@@ -2693,6 +2695,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
     do
     {
       ProcessQueuedDebugMessages();
+      ProcessQueuedDeviceThreadSteps();
       // Convert the simulation threads queued operations into pending operations i.e. GPU commands
       ProcessQueuedOps();
       // Sync any pending GPU operations and set the results to the pending threads
@@ -4669,6 +4672,8 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
       break;
     else if(thread.StepNeedsGpuMathOp())
       break;
+    else if(thread.StepNeedsDeviceThread())
+      break;
 
     if(isActiveThread)
       curActiveSteps++;
@@ -4693,6 +4698,12 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
   {
     RDCASSERT(!simulateStep);
     QueueGpuMathOp(lane);
+    return;
+  }
+  if(thread.StepNeedsDeviceThread())
+  {
+    RDCASSERT(!simulateStep);
+    QueueDeviceThreadStep(lane);
     return;
   }
   RDCASSERT(!thread.IsPendingResultPending());
@@ -4743,6 +4754,8 @@ void Debugger::InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret
     if(thread.StepNeedsGpuSampleGatherOp())
       return;
     if(thread.StepNeedsGpuMathOp())
+      return;
+    if(thread.StepNeedsDeviceThread())
       return;
 
     if(!thread.IsPendingResultPending())
@@ -4821,6 +4834,8 @@ void Debugger::InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret
       return;
     if(thread.StepNeedsGpuMathOp())
       return;
+    if(thread.StepNeedsDeviceThread())
+      return;
   }
 }
 
@@ -4856,6 +4871,32 @@ void Debugger::AddDebugMessage(MessageCategory c, MessageSeverity sv, MessageSou
   queuedDebugMessages.push_back({c, sv, src, d});
 }
 
+// Can be called from any thread
+void Debugger::QueueDeviceThreadStep(uint32_t lane)
+{
+  ThreadState &thread = workgroup[lane];
+  RDCASSERT(thread.IsSimulationStepActive());
+  thread.SetStepQueued();
+  RDCASSERT(!queuedDeviceThreadSteps[lane]);
+  queuedDeviceThreadSteps[lane] = true;
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::ProcessQueuedDeviceThreadSteps()
+{
+  CHECK_DEBUGGER_THREAD();
+  for(uint32_t lane = 0; lane < queuedDeviceThreadSteps.size(); ++lane)
+  {
+    if(queuedDeviceThreadSteps[lane])
+    {
+      queuedDeviceThreadSteps[lane] = false;
+      ThreadState &thread = workgroup[lane];
+      thread.SetPendingResultUnknown();
+      RDCASSERT(thread.IsSimulationStepActive());
+      StepThread(lane, StepThreadMode::QUEUE_MULTIPLE_STEPS, shaderChangesReturn);
+    }
+  }
+}
 };    // namespace rdcspv
 
 #if ENABLED(ENABLE_UNIT_TESTS)

@@ -5142,3 +5142,16 @@ rdcstr DoStringise(const rdcspv::StepThreadMode &el)
   }
   END_ENUM_STRINGISE();
 };
+
+template <>
+rdcstr DoStringise(const rdcspv::DeviceOpResult &el)
+{
+  BEGIN_ENUM_STRINGISE(rdcspv::DeviceOpResult)
+  {
+    STRINGISE_ENUM_CLASS(Unknown)
+    STRINGISE_ENUM_CLASS(Succeeded)
+    STRINGISE_ENUM_CLASS(Failed)
+    STRINGISE_ENUM_CLASS(NeedsDevice)
+  }
+  END_ENUM_STRINGISE();
+};
