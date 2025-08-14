@@ -687,6 +687,7 @@ void CreateInputFetcher(const DXBC::DXBCContainer *dxbc, const DXBC::DXBCContain
 struct Inputs
 {
 };
+void CopyInputs(out Inputs OUT, in Inputs IN) {}
 )";
   }
   else
