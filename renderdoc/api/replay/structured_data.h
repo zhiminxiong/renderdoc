@@ -214,10 +214,16 @@ struct SDType
   DOCUMENT("The name of this type.");
   rdcinflexiblestr name;
 
-  DOCUMENT("The :class:`SDBasic` category that this type belongs to.");
+  DOCUMENT(R"(The :class:`SDBasic` category that this type belongs to.
+
+:type: SDBasic
+)");
   SDBasic basetype;
 
-  DOCUMENT("The :class:`SDTypeFlags` flags for this type.");
+  DOCUMENT(R"(The :class:`SDTypeFlags` flags for this type.
+
+:type: SDTypeFlags
+)");
   SDTypeFlags flags;
 
   DOCUMENT(R"(The size in bytes that an instance of this type takes up.
@@ -227,6 +233,8 @@ an arbitrary size, or for basic types such as integers and floating point values
 size/precision of the type.
 
 For variable size types like structs, arrays, etc it will be set to 0.
+
+:type: int
 )");
   uint64_t byteSize;
 
@@ -287,22 +295,35 @@ struct SDChunkMetaData
 
   DOCUMENT(R"(The length in bytes of this chunk - may be longer than the actual sum of the data if a
 conservative size estimate was used on creation to avoid seeking to fix-up the stored length.
+
+:type: int
 )");
   uint64_t length = 0;
 
-  DOCUMENT("The ID of the thread where this chunk was recorded.");
+  DOCUMENT(R"(The ID of the thread where this chunk was recorded.
+
+:type: int
+)");
   uint64_t threadID = 0;
 
   DOCUMENT(R"(The duration in microseconds that this chunk took. This is the time for the actual
 work, not the serialising.
 Since 0 is a possible value for this (for extremely fast calls), -1 is the invalid/not present value.
+
+:type: int
 )");
   int64_t durationMicro = -1;
 
-  DOCUMENT("The point in time when this chunk was recorded, in microseconds since program start.");
+  DOCUMENT(R"(The point in time when this chunk was recorded, in microseconds since program start.
+
+:type: int
+)");
   uint64_t timestampMicro = 0;
 
-  DOCUMENT("The frames of the CPU-side callstack leading up to the chunk.");
+  DOCUMENT(R"(The frames of the CPU-side callstack leading up to the chunk.
+
+:type: List[int]
+)");
   rdcarray<uint64_t> callstack;
 
 private:
@@ -320,22 +341,40 @@ Only one member is valid, as defined by the type of the :class:`SDObject`.
 )");
 union SDObjectPODData
 {
-  DOCUMENT("The value as an unsigned integer.");
+  DOCUMENT(R"(The value as an unsigned integer.
+
+:type: int
+)");
   uint64_t u;
 
-  DOCUMENT("The value as a signed integer.");
+  DOCUMENT(R"(The value as a signed integer.
+
+:type: int
+)");
   int64_t i;
 
-  DOCUMENT("The value as a floating point number.");
+  DOCUMENT(R"(The value as a floating point number.
+
+:type: float
+)");
   double d;
 
-  DOCUMENT("The value as a boolean.");
+  DOCUMENT(R"(The value as a boolean.
+
+:type: bool
+)");
   bool b;
 
-  DOCUMENT("The value as a single byte character.");
+  DOCUMENT(R"(The value as a single byte character.
+
+:type: str
+)");
   char c;
 
-  DOCUMENT("The value as a :class:`ResourceId`.");
+  DOCUMENT(R"(The value as a :class:`ResourceId`
+
+:type: ResourceId
+)");
   ResourceId id;
 
   SDObjectPODData() : u(0) {}
@@ -391,10 +430,16 @@ struct SDObjectData
   DOCUMENT("");
   SDObjectData() = default;
 
-  DOCUMENT("The plain-old data contents of the object, in a :class:`SDObjectPODData`.");
+  DOCUMENT(R"(The plain-old data contents of the object, in a :class:`SDObjectPODData`.
+
+:type: basic
+)");
   SDObjectPODData basic;
 
-  DOCUMENT("The string contents of the object.");
+  DOCUMENT(R"(The string contents of the object.
+
+:type: str
+)");
   rdcinflexiblestr str;
 
   SDObjectData(const SDObjectData &) = delete;
@@ -562,13 +607,22 @@ struct SDObject
     return ret;
   }
 
-  DOCUMENT("The name of this object.");
+  DOCUMENT(R"(The name of this object.
+
+:type: name
+)");
   rdcinflexiblestr name;
 
-  DOCUMENT("The :class:`SDType` of this object.");
+  DOCUMENT(R"(The :class:`SDType` of this object.
+
+:type: SDType
+)");
   SDType type;
 
-  DOCUMENT("The :class:`SDObjectData` with the contents of this object.");
+  DOCUMENT(R"(The :class:`SDObjectData` with the contents of this object.
+
+:type: SDObjectData
+)");
   SDObjectData data;
 
   DOCUMENT(R"(Checks if the given object has the same value as this one. This equality is defined
@@ -1560,7 +1614,10 @@ public:
 )");
   StructuredBufferList buffers;
 
-  DOCUMENT("The version of this structured stream, typically only used internally.");
+  DOCUMENT(R"(The version of this structured stream, typically only used internally.
+
+:type: int
+)");
   uint64_t version = 0;
 
   DOCUMENT(R"(Swaps the contents of this file with another.
