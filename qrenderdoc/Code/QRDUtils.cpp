@@ -2213,6 +2213,7 @@ void addStructuredChildren(RDTreeWidgetItem *parent, const SDObject &parentObj)
       name = obj->name;
 
     RDTreeWidgetItem *item = new RDTreeWidgetItem({name, QString()});
+    item->setTag(QVariant::fromValue((void *)obj));
 
     item->setText(1, SDObject2Variant(obj, false));
 
