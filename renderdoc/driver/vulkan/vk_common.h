@@ -71,6 +71,7 @@
 // set up these defines so that vulkan_core.h doesn't trash the enum names we want to define as real
 // 64-bit enums
 #define VkAccessFlagBits2 VkAccessFlagBits2_VkFlags64_typedef
+#define VkAccessFlagBits3KHR VkAccessFlagBits3KHR_VkFlags64_typedef
 #define VkPipelineStageFlagBits2 VkPipelineStageFlagBits2_VkFlags64_typedef
 #define VkFormatFeatureFlagBits2 VkFormatFeatureFlagBits2_VkFlags64_typedef
 #define VkBufferUsageFlagBits2 VkBufferUsageFlagBits2_VkFlags64_typedef
@@ -84,6 +85,7 @@
 #include "vk_dispatchtables.h"
 
 #undef VkAccessFlagBits2
+#undef VkAccessFlagBits3KHR
 #undef VkPipelineStageFlagBits2
 #undef VkFormatFeatureFlagBits2
 #undef VkBufferUsageFlagBits2
@@ -1625,6 +1627,7 @@ DECLARE_REFLECTION_STRUCT(VkMemoryAllocateFlagsInfo);
 DECLARE_REFLECTION_STRUCT(VkMemoryAllocateInfo);
 DECLARE_REFLECTION_STRUCT(VkMemoryBarrier);
 DECLARE_REFLECTION_STRUCT(VkMemoryBarrier2);
+DECLARE_REFLECTION_STRUCT(VkMemoryBarrierAccessFlags3KHR);
 DECLARE_REFLECTION_STRUCT(VkMemoryDedicatedAllocateInfo);
 DECLARE_REFLECTION_STRUCT(VkMemoryDedicatedRequirements);
 DECLARE_REFLECTION_STRUCT(VkMemoryFdPropertiesKHR);
@@ -1731,6 +1734,7 @@ DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance6FeaturesKHR);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance6PropertiesKHR);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance7FeaturesKHR);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance7PropertiesKHR);
+DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMaintenance8FeaturesKHR);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMemoryBudgetPropertiesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMemoryPriorityFeaturesEXT);
 DECLARE_REFLECTION_STRUCT(VkPhysicalDeviceMemoryProperties2);
@@ -2141,6 +2145,7 @@ DECLARE_DESERIALISE_TYPE(VkMemoryAllocateFlagsInfo);
 DECLARE_DESERIALISE_TYPE(VkMemoryAllocateInfo);
 DECLARE_DESERIALISE_TYPE(VkMemoryBarrier);
 DECLARE_DESERIALISE_TYPE(VkMemoryBarrier2);
+DECLARE_DESERIALISE_TYPE(VkMemoryBarrierAccessFlags3KHR);
 DECLARE_DESERIALISE_TYPE(VkMemoryDedicatedAllocateInfo);
 DECLARE_DESERIALISE_TYPE(VkMemoryDedicatedRequirements);
 DECLARE_DESERIALISE_TYPE(VkMemoryFdPropertiesKHR);
@@ -2244,6 +2249,7 @@ DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance6FeaturesKHR);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance6PropertiesKHR);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance7FeaturesKHR);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance7PropertiesKHR);
+DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMaintenance8FeaturesKHR);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMemoryBudgetPropertiesEXT);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMemoryPriorityFeaturesEXT);
 DECLARE_DESERIALISE_TYPE(VkPhysicalDeviceMemoryProperties2);
@@ -2647,6 +2653,10 @@ enum VkAccessFlagBits2 : uint64_t
 {
 };
 
+enum VkAccessFlagBits3KHR : uint64_t
+{
+};
+
 enum VkPipelineStageFlagBits2 : uint64_t
 {
 };
@@ -2671,6 +2681,7 @@ DECLARE_REFLECTION_ENUM(VkAccelerationStructureCreateFlagBitsKHR);
 DECLARE_REFLECTION_ENUM(VkAccelerationStructureTypeKHR);
 DECLARE_REFLECTION_ENUM(VkAccessFlagBits);
 DECLARE_REFLECTION_ENUM(VkAccessFlagBits2);
+DECLARE_REFLECTION_ENUM(VkAccessFlagBits3KHR);
 DECLARE_REFLECTION_ENUM(VkAcquireProfilingLockFlagBitsKHR);
 DECLARE_REFLECTION_ENUM(VkAttachmentDescriptionFlagBits);
 DECLARE_REFLECTION_ENUM(VkAttachmentLoadOp);

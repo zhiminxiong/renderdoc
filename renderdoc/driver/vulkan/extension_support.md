@@ -188,6 +188,7 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_KHR_maintenance5`
 * `VK_KHR_maintenance6`
 * `VK_KHR_maintenance7`
+* `VK_KHR_maintenance8`
 * `VK_KHR_map_memory2`
 * `VK_KHR_multiview`
 * `VK_KHR_performance_query`
@@ -273,7 +274,6 @@ KHR extensions will definitely be implemented at some point, though KHR extensio
 ## KHR Extensions
 
 * `VK_KHR_cooperative_matrix`
-* `VK_KHR_maintenance8`
 * `VK_KHR_maintenance9`
 * `VK_KHR_pipeline_binary`
 

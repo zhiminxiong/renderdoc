@@ -160,6 +160,7 @@ DECL_VKFLAG(VkToolPurpose);
 DECL_VKFLAG(VkSubmit);
 DECL_VKFLAG_EXT(VkPipelineStage, 2);
 DECL_VKFLAG_EXT(VkAccess, 2);
+DECL_VKFLAG_EXT(VkAccess, 3KHR);
 DECL_VKFLAG_EXT(VkFormatFeature, 2);
 DECL_VKFLAG_EXT(VkGraphicsPipelineLibrary, EXT);
 DECL_VKFLAG(VkRendering);
@@ -1314,6 +1315,11 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_API_VULKAN_PROPERTIES_KHR,                    \
                VkPhysicalDeviceLayeredApiVulkanPropertiesKHR)                                          \
                                                                                                        \
+  /* VK_KHR_maintenance8 */                                                                            \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR,                           \
+               VkPhysicalDeviceMaintenance8FeaturesKHR)                                                \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_BARRIER_ACCESS_FLAGS_3_KHR, VkMemoryBarrierAccessFlags3KHR)    \
+                                                                                                       \
   /* VK_KHR_map_memory2 */                                                                             \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_MAP_INFO, VkMemoryMapInfo)                                     \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO, VkMemoryUnmapInfo)                                 \
@@ -1953,10 +1959,6 @@ SERIALISE_VK_HANDLES();
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR)                               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_PROPERTIES_KHR)               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR)                 \
-                                                                                                       \
-  /* VK_KHR_maintenance8 */                                                                            \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR)                      \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_MEMORY_BARRIER_ACCESS_FLAGS_3_KHR)                               \
                                                                                                        \
   /* VK_KHR_maintenance9     */                                                                        \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR)                      \
@@ -13896,6 +13898,38 @@ void Deserialise(const VkPhysicalDeviceMaintenance7PropertiesKHR &el)
 }
 
 template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDeviceMaintenance8FeaturesKHR &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(maintenance8);
+}
+
+template <>
+void Deserialise(const VkPhysicalDeviceMaintenance8FeaturesKHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkMemoryBarrierAccessFlags3KHR &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_MEMORY_BARRIER_ACCESS_FLAGS_3_KHR);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER_VKFLAGS(VkAccessFlags3KHR, srcAccessMask3);
+  SERIALISE_MEMBER_VKFLAGS(VkAccessFlags3KHR, dstAccessMask3);
+}
+
+template <>
+void Deserialise(const VkMemoryBarrierAccessFlags3KHR &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, VkImageCompressionControlEXT &el)
 {
   RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT);
@@ -14414,6 +14448,7 @@ INSTANTIATE_SERIALISE_TYPE(VkMemoryAllocateFlagsInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryAllocateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryBarrier);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryBarrier2);
+INSTANTIATE_SERIALISE_TYPE(VkMemoryBarrierAccessFlags3KHR);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryDedicatedAllocateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryDedicatedRequirements);
 INSTANTIATE_SERIALISE_TYPE(VkMemoryFdPropertiesKHR);
@@ -14519,6 +14554,7 @@ INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance6FeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance6PropertiesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance7FeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance7PropertiesKHR);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMaintenance8FeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMemoryBudgetPropertiesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMemoryPriorityFeaturesEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDeviceMemoryProperties2);

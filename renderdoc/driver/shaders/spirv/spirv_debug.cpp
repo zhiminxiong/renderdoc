@@ -2345,19 +2345,34 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       }
       else if(opdata.op == Op::SRem || opdata.op == Op::SMod)
       {
+        // OpSRem:
+        // ... the sign of r is the same as the sign of Operand 1.
+        // OpSMod:
+        // ... the sign of r is the same as the sign of Operand 2.
+        //
+        // match signs to the appropriate operand by checking and doing -abs() or abs().
+        // since abs() never truncates (INT_MIN has a corresponding unsigned value) this will never
+        // lose precision as -abs(INT_MIN) == INT_MIN
+
         for(uint8_t c = 0; c < var.columns; c++)
         {
 #undef _IMPL
-#define _IMPL(I, S, U)                                   \
-  if(comp<S>(b, c) != 0)                                 \
-  {                                                      \
-    comp<S>(var, c) %= comp<S>(b, c);                    \
-  }                                                      \
-  else                                                   \
-  {                                                      \
-    comp<S>(var, c) = 0;                                 \
-    if(m_State)                                          \
-      m_State->flags |= ShaderEvents::GeneratedNanOrInf; \
+#define _IMPL(I, S, U)                                        \
+  if(comp<S>(b, c) != 0)                                      \
+  {                                                           \
+    S op1 = comp<S>(var, c);                                  \
+    S op2 = comp<S>(b, c);                                    \
+    S tmp = op1 % op2;                                        \
+    if(opdata.op == Op::SRem)                                 \
+      comp<S>(var, c) = op1 < 0 ? (S)-abs(tmp) : (S)abs(tmp); \
+    else                                                      \
+      comp<S>(var, c) = op2 < 0 ? (S)-abs(tmp) : (S)abs(tmp); \
+  }                                                           \
+  else                                                        \
+  {                                                           \
+    comp<S>(var, c) = 0;                                      \
+    if(m_State)                                               \
+      m_State->flags |= ShaderEvents::GeneratedNanOrInf;      \
   }
 
           IMPL_FOR_INT_TYPES(_IMPL);

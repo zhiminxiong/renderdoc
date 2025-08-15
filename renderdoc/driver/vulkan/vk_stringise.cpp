@@ -4120,6 +4120,15 @@ rdcstr DoStringise(const VkAccessFlagBits2 &el)
 }
 
 template <>
+rdcstr DoStringise(const VkAccessFlagBits3KHR &el)
+{
+  BEGIN_BITFIELD_STRINGISE(VkAccessFlagBits3KHR);
+  {
+  }
+  END_BITFIELD_STRINGISE();
+}
+
+template <>
 rdcstr DoStringise(const VkFormatFeatureFlagBits2 &el)
 {
   BEGIN_BITFIELD_STRINGISE(VkFormatFeatureFlagBits2);
