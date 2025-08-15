@@ -2011,13 +2011,14 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       for(uint8_t c = 0; c < var.columns; c++)
       {
 #undef _IMPL
-#define _IMPL(I, S, U)                  \
-  U v = comp<U>(var, c);                \
-  comp<U>(var, c) = 0;                  \
-  for(uint8_t b = 0; b < 32; b++)       \
-  {                                     \
-    uint32_t bit = (v >> b) & 0x1;      \
-    comp<U>(var, c) |= bit << (31 - b); \
+#define _IMPL(I, S, U)                             \
+  U v = comp<U>(var, c);                           \
+  comp<U>(var, c) = 0;                             \
+  uint8_t numBits = sizeof(U) * 8;                 \
+  for(uint8_t b = 0; b < numBits; b++)             \
+  {                                                \
+    U bit = (v >> b) & 0x1;                        \
+    comp<U>(var, c) |= bit << ((numBits - 1) - b); \
   }
 
         IMPL_FOR_INT_TYPES(_IMPL);

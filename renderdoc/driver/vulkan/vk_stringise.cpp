@@ -3966,6 +3966,17 @@ rdcstr DoStringise(const VkMemoryOverallocationBehaviorAMD &el)
 }
 
 template <>
+rdcstr DoStringise(const VkDefaultVertexAttributeValueKHR &el)
+{
+  BEGIN_ENUM_STRINGISE(VkDefaultVertexAttributeValueKHR);
+  {
+    STRINGISE_ENUM(VK_DEFAULT_VERTEX_ATTRIBUTE_VALUE_ZERO_ZERO_ZERO_ZERO_KHR);
+    STRINGISE_ENUM(VK_DEFAULT_VERTEX_ATTRIBUTE_VALUE_ZERO_ZERO_ZERO_ONE_KHR);
+  }
+  END_ENUM_STRINGISE();
+}
+
+template <>
 rdcstr DoStringise(const VkSemaphoreWaitFlagBits &el)
 {
   BEGIN_BITFIELD_STRINGISE(VkSemaphoreWaitFlagBits);
