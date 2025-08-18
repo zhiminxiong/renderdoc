@@ -192,6 +192,7 @@
     <ClCompile Include="d3d11\d3d11_video_textures.cpp" />
     <ClCompile Include="d3d11\d3d11_workgroup_zoo.cpp" />
     <ClCompile Include="d3d12\d3d12_amd_shader_extensions.cpp" />
+    <ClCompile Include="d3d12\d3d12_blend.cpp" />
     <ClCompile Include="d3d12\d3d12_buffer_truncation.cpp" />
     <ClCompile Include="d3d12\d3d12_cbuffer_zoo.cpp" />
     <ClCompile Include="d3d12\d3d12_compute_only.cpp" />

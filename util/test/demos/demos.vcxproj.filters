@@ -733,6 +733,9 @@
     <ClCompile Include="vk\vk_descriptor_buffer_analyse.cpp">
       <Filter>Vulkan\demos</Filter>
     </ClCompile>
+    <ClCompile Include="d3d12\d3d12_blend.cpp">
+      <Filter>D3D12\demos</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="D3D11">

@@ -2312,9 +2312,11 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
       // Mask out writes to targets which aren't the pixel history color target
       for(uint32_t i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
       {
-        pipeDesc.BlendState.RenderTarget[i].BlendEnable = FALSE;
         if(i != colorOutputIndex)
+        {
+          pipeDesc.BlendState.RenderTarget[i].BlendEnable = FALSE;
           pipeDesc.BlendState.RenderTarget[i].RenderTargetWriteMask = 0;
+        }
       }
     }
 
