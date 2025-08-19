@@ -1763,7 +1763,24 @@ SubresourceStateVector BakedCmdListInfo::GetState(WrappedID3D12Device *device, R
 
   device->GetResourceManager()->ApplyBarriers(barriers, data);
 
-  return data[id];
+  SubresourceStateVector ret = data[id];
+
+  if(type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+  {
+    for(D3D12ResourceLayout &layout : ret)
+    {
+      if(layout.IsStates())
+      {
+        D3D12_RESOURCE_STATES states = layout.ToStates();
+        states &= ~(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_STREAM_OUT |
+                    D3D12_RESOURCE_STATE_INDEX_BUFFER | D3D12_RESOURCE_STATE_RENDER_TARGET |
+                    D3D12_RESOURCE_STATE_DEPTH_WRITE | D3D12_RESOURCE_STATE_DEPTH_READ);
+        layout = D3D12ResourceLayout::FromStates(states);
+      }
+    }
+  }
+
+  return ret;
 }
 
 D3D12CommandData::D3D12CommandData()
