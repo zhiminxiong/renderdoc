@@ -787,9 +787,10 @@ private:
   void QueueDeviceThreadStep(uint32_t lane);
   void ProcessQueuedDeviceThreadSteps();
 
-  void QueueJob(uint32_t lane, rdcarray<ShaderDebugState> *ret);
-  void StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<ShaderDebugState> *ret);
-  void InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret);
+  void QueueJob(uint32_t lane);
+  void StepThread(uint32_t lane, StepThreadMode stepMode);
+  void InternalStepThread(uint32_t lane);
+  void SimulationJobHelper();
 
   void ProcessQueuedDebugMessages();
   void ProcessQueuedOps();
@@ -804,6 +805,7 @@ private:
   rdcarray<bool> queuedGpuSampleGatherOps;
   rdcarray<bool> queuedDeviceThreadSteps;
   rdcarray<ShaderDebugState> *shaderChangesReturn;
+  rdcarray<int32_t> queuedJobs;
 
   bool retireIDs = true;
   ShaderDebugState activeDebugState;
@@ -812,6 +814,8 @@ private:
   rdcarray<ShaderVariable *> pendingGpuSampleGatherOpsResults;
 
   uint64_t deviceThreadID;
+  int32_t simulationFinished;
+  bool mtSimulation;
 };
 
 // this does a 'safe' value assignment, by doing parallel depth-first iteration of both variables

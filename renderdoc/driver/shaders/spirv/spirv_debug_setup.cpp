@@ -40,6 +40,9 @@ RDOC_DEBUG_CONFIG(
 RDOC_CONFIG(bool, Vulkan_Debug_EnableShaderDebugMT, true,
             "Use multiple threads to run the shader debugger simulation.");
 
+RDOC_DEBUG_CONFIG(bool, Vulkan_Hack_ShaderDebugUsesJobSystemQueue, false,
+                  "Work in progress run shader debugging simulation in job system queue.");
+
 using namespace rdcshaders;
 
 // this could be cleaner if ShaderVariable wasn't a very public struct, but it's not worth it so
@@ -293,6 +296,8 @@ Debugger::Debugger() : deviceThreadID(Threading::GetCurrentID())
 
 Debugger::~Debugger()
 {
+  AtomicStore(&simulationFinished, 1);
+  Threading::JobSystem::SyncAllJobs();
   SAFE_DELETE(apiWrapper);
 }
 
@@ -1028,6 +1033,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   queuedGpuMathOps.resize(threadsInWorkgroup);
   queuedGpuSampleGatherOps.resize(threadsInWorkgroup);
   pendingLanes.resize(threadsInWorkgroup);
+  queuedJobs.resize(threadsInWorkgroup);
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
     workgroup.push_back(ThreadState(*this, global));
@@ -1035,6 +1041,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
     queuedGpuMathOps[i] = false;
     queuedGpuSampleGatherOps[i] = false;
     pendingLanes[i] = false;
+    queuedJobs[i] = 0;
   }
 
   ThreadState &active = GetActiveLane();
@@ -1783,6 +1790,20 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   ret->samplers = global.samplers;
   ret->inputs = active.inputs;
 
+  mtSimulation = Vulkan_Debug_EnableShaderDebugMT();
+  if(threadsInWorkgroup < 4)
+    mtSimulation = false;
+
+  AtomicStore(&simulationFinished, 0);
+  if(mtSimulation)
+  {
+    if(!Vulkan_Hack_ShaderDebugUsesJobSystemQueue())
+    {
+      uint32_t countJobs = RDCMIN(threadsInWorkgroup, Threading::JobSystem::GetCountWorkers() / 2U);
+      for(uint32_t i = 0; i < countJobs; ++i)
+        Threading::JobSystem::AddJob([this]() { SimulationJobHelper(); });
+    }
+  }
   return ret;
 }
 
@@ -2640,7 +2661,11 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
   // if we've finished, return an empty set to signify that
   if(active.Finished())
+  {
+    AtomicStore(&simulationFinished, 1);
+    Threading::JobSystem::SyncAllJobs();
     return ret;
+  }
 
   bool allStepsCompleted = true;
   shaderChangesReturn = &ret;
@@ -2698,7 +2723,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         }
         RDCASSERTEQUAL(thread.activeMask.size(), activeMask.size());
         memcpy(thread.activeMask.data(), activeMask.data(), activeMask.size() * sizeof(bool));
-        QueueJob(lane, &ret);
+        QueueJob(lane);
       }
     }
 
@@ -4579,7 +4604,7 @@ void Debugger::SyncPendingLanes()
       pendingLanes[lane] = false;
       ThreadState &thread = workgroup[lane];
       thread.SetPendingResultReady();
-      QueueJob(lane, shaderChangesReturn);
+      QueueJob(lane);
     }
   }
 }
@@ -4675,8 +4700,22 @@ DebugAPIWrapper *Debugger::GetAPIWrapper() const
   return apiWrapper;
 }
 
+void Debugger::SimulationJobHelper()
+{
+  while(AtomicLoad(&simulationFinished) == 0)
+  {
+    for(uint32_t lane = 0; lane < workgroup.size(); ++lane)
+    {
+      if(Atomic::CmpExch32(&queuedJobs[lane], 1, 0) == 1)
+      {
+        StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS);
+      }
+    }
+  };
+}
+
 // Called from any thread
-void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<ShaderDebugState> *ret)
+void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
 {
   ThreadState &thread = workgroup[lane];
   bool isActiveThread = lane == activeLaneIndex;
@@ -4691,7 +4730,7 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
       thread.ClearPendingDebugState();
       if(isActiveThread)
         activeDebugState.stepIndex = curActiveSteps;
-      InternalStepThread(lane, ret);
+      InternalStepThread(lane);
       thread.ClearPendingDebugState();
     }
     if(thread.StepNeedsGpuSampleGatherOp())
@@ -4747,7 +4786,7 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
   if(simulateStep)
   {
     RDCASSERTEQUAL(stepMode, StepThreadMode::QUEUE_MULTIPLE_STEPS);
-    QueueJob(lane, ret);
+    QueueJob(lane);
     return;
   }
   RDCASSERT(!thread.IsPendingResultPending());
@@ -4755,7 +4794,7 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
 }
 
 // Called from any thread
-void Debugger::InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret)
+void Debugger::InternalStepThread(uint32_t lane)
 {
   ThreadState &thread = workgroup[lane];
   if(lane == activeLaneIndex)
@@ -4862,7 +4901,7 @@ void Debugger::InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret
         }
       }
 
-      ret->push_back(activeDebugState);
+      shaderChangesReturn->push_back(activeDebugState);
       {
         activeDebugState.callstack.clear();
         activeDebugState.changes.clear();
@@ -4886,16 +4925,27 @@ void Debugger::InternalStepThread(uint32_t lane, rdcarray<ShaderDebugState> *ret
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-void Debugger::QueueJob(uint32_t lane, rdcarray<ShaderDebugState> *ret)
+void Debugger::QueueJob(uint32_t lane)
 {
   CHECK_DEBUGGER_THREAD();
   ThreadState &thread = workgroup[lane];
   thread.SetStepQueued();
-  if(Vulkan_Debug_EnableShaderDebugMT())
-    Threading::JobSystem::AddJob(
-        [this, lane, ret]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS, ret); });
+  if(mtSimulation)
+  {
+    if(Vulkan_Hack_ShaderDebugUsesJobSystemQueue())
+    {
+      Threading::JobSystem::AddJob(
+          [this, lane]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS); });
+    }
+    else
+    {
+      RDCASSERT(Atomic::CmpExch32(&queuedJobs[lane], 0, 1) == 0);
+    }
+  }
   else
-    StepThread(lane, StepThreadMode::RUN_SINGLE_STEP, ret);
+  {
+    StepThread(lane, StepThreadMode::RUN_SINGLE_STEP);
+  }
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -4939,7 +4989,7 @@ void Debugger::ProcessQueuedDeviceThreadSteps()
       ThreadState &thread = workgroup[lane];
       thread.SetPendingResultUnknown();
       RDCASSERT(thread.IsSimulationStepActive());
-      StepThread(lane, StepThreadMode::QUEUE_MULTIPLE_STEPS, shaderChangesReturn);
+      StepThread(lane, StepThreadMode::QUEUE_MULTIPLE_STEPS);
     }
   }
 }
