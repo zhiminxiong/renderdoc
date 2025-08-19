@@ -629,6 +629,124 @@ class TestCase:
 
         log.success("Backbuffer is identical to reference")
 
+    def log_shader_variable(self, var: rd.ShaderVariable) -> None:
+        log.print(f"Shader Variable: {var.name} Type:{var.type} Rows:{var.rows} Columns:{var.columns} Flags:{var.flags} CountMembers:{len(var.members)}")
+
+        for i in range(var.rows * var.columns):
+            type = var.type
+            if type == rd.VarType.UByte or type == rd.VarType.SByte:
+                log.print(f"Byte   {i}: {var.value.u8v[i]}")
+            elif type == rd.VarType.Half or type == rd.VarType.UShort or type == rd.VarType.SShort:
+                log.print(f"Half   {i}: {var.value.u16v[i]}")
+            elif type == rd.VarType.Float:
+                log.print(f"Float  {i}: {var.value.f32v[i]}")
+            elif type == rd.VarType.UInt or type == rd.VarType.SInt or type == rd.VarType.Bool or type == rd.VarType.Enum:
+                log.print(f"Int    {i}: {var.value.u32v[i]}")
+            elif type == rd.VarType.Double:
+                log.print(f"Double {i}: {var.value.f64v[i]}")
+            elif type == rd.VarType.ULong or type == rd.VarType.SLong or type == rd.VarType.GPUPointer:
+                log.print(f"Long   {i}: {var.value.u64v[i]}")
+            else:
+                log.print(f"???    {i}: {var.value.u64v[i]}")
+
+        for m in range(len(var.members)):
+            self.log_shader_variable(var.members[m])
+
+    def compare_shader_variable_change(self, expectedChange: rd.ShaderVariableChange, change: rd.ShaderVariableChange, showDiffs = True) -> bool:
+        ret = True
+        difference = ""
+        (res, difference) = analyse.shadervariable_equal(expectedChange.before, change.before)
+        if not res:
+            if not showDiffs:
+                return False
+            log.error(f"ShaderVariableChange different before {expectedChange.before.name} {change.before.name} {difference}")
+            ret = False
+        (res, difference) = analyse.shadervariable_equal(expectedChange.after, change.after)
+        if not res:
+            if not showDiffs:
+                return False
+            log.error(f"ShaderVariableChange different after {expectedChange.after.name} {change.after.name} {difference}")
+            ret = False
+        return ret
+
+    def compare_shader_variable_changes(self, expectedChanges: List[rd.ShaderVariableChange], changes: List[rd.ShaderVariableChange], showDiffs = True) -> bool:
+        ret = True
+        if (len(expectedChanges) != len(changes)):
+            if not showDiffs:
+                return False
+            log.error(f"Different number of changes:{len(expectedChanges)} != {len(changes)}")
+            return False
+        for i in range(len(expectedChanges)):
+            expected = expectedChanges[i]
+            change = changes[i]
+            if not self.compare_shader_variable_change(expected, change, showDiffs):
+                if not showDiffs:
+                    return False
+                log.error(f"ShaderVariableChange[{i}] does not match")
+                ret = False
+        return ret
+
+    def compare_single_step(self, expectedState: rd.ShaderDebugState, state: rd.ShaderDebugState, showDiffs = True) -> bool:
+        ret = True
+        if expectedState.stepIndex != state.stepIndex:
+            if not showDiffs:
+                return False
+            log.error(f"Different stepIndex: {expectedState.stepIndex} != {state.stepIndex}")
+            ret = False
+        if expectedState.flags != state.flags:
+            if not showDiffs:
+                return False
+            log.error(f"Different flags: {expectedState.flags} != {state.flags}")
+            ret = False
+        if expectedState.nextInstruction != state.nextInstruction:
+            if not showDiffs:
+                return False
+            log.error(f"Different nextInstruction: {expectedState.nextInstruction} != {state.nextInstruction}")
+            ret = False
+        if not self.compare_shader_variable_changes(expectedState.changes, state.changes, showDiffs):
+            if not showDiffs:
+                return False
+            log.error(f"Different changes at nextInstruction:{expectedState.nextInstruction} stepIndex:{expectedState.stepIndex}")
+            ret = False
+        if len(expectedState.callstack) != len(state.callstack):
+            if not showDiffs:
+                return False
+            log.error(f"Different callstack length: {len(expectedState.callstack)} != {len(state.callstack)}")
+            return False
+        for i in range(len(expectedState.callstack)):
+            if expectedState.callstack[i] != state.callstack[i]:
+                if not showDiffs:
+                    return False
+                log.error(f"Different callstack entry[{i}]: {expectedState.callstack[i]} != {state.callstack[i]}")
+                ret = False
+
+        return ret
+
+    def compare_full_traces(self, expectedStates: List[rd.ShaderDebugState], states: List[rd.ShaderDebugState], showDiffs = True) -> bool:
+        ret = True
+        if len(expectedStates) != len(states):
+            if not showDiffs:
+                return False
+            log.error(f"Traces have different number of states: {len(expectedStates)} != {len(states)}")
+            return False
+        for i in range(len(expectedStates)):
+            if not self.compare_single_step(expectedStates[i], states[i], showDiffs):
+                if not showDiffs:
+                    return False
+                log.error(f"Trace state[{i}] does not match")
+                ret = False
+        return ret
+
+    def generate_full_trace(self, trace: rd.ShaderDebugTrace) -> List[rd.ShaderDebugState]:
+        allStates = []
+        while True:
+            states = self.controller.ContinueDebug(trace.debugger)
+            if len(states) == 0:
+                break
+            for state in states:
+                allStates.append(state)
+        return allStates
+
     def process_trace(self, trace: rd.ShaderDebugTrace, validate: bool = True):
         variables = {}
         cycles = 0
@@ -980,8 +1098,9 @@ class TestCase:
                 else:
                     if c.after.name in variables:
                         # Step Forwards: not-first appearance of a variable "before" must equal currently known value
-                        if not analyse.shadervariable_equal(c.before, variables[c.after.name]):
-                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.after.name}' before does not match existing entry")
+                        (res, difference) = analyse.shadervariable_equal(c.before, variables[c.after.name])
+                        if not res:
+                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.after.name}' before does not match existing entry {difference}")
                     else:
                         # Step Forwards: first appearance of a variable must have "before" = {}
                         if c.before != rd.ShaderVariable():
@@ -1006,8 +1125,9 @@ class TestCase:
                 else:
                     if c.before.name in variables:
                         # Step Backwards: not-first appearance of a variable "after" must equal currently known value
-                        if not analyse.shadervariable_equal(c.after, variables[c.before.name]):
-                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.before.name}' after does not match existing entry")
+                        (res, difference) = analyse.shadervariable_equal(c.after, variables[c.before.name])
+                        if not res:
+                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.before.name}' after does not match existing entry {difference}")
                     else:
                         # Step Backwards: first appearance of a variable must have "after" = {}
                         if c.after != rd.ShaderVariable():
