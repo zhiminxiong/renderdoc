@@ -642,7 +642,10 @@ void VulkanReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &seco
             VkBuffer ib =
                 m_pDriver->GetResourceManager()->GetLiveHandle<VkBuffer>(fmt.indexResourceId);
 
-            vt->CmdBindIndexBuffer(Unwrap(cmd), Unwrap(ib), fmt.indexByteOffset, idxtype);
+            const VulkanCreationInfo::Buffer &bufProps =
+                m_pDriver->m_CreationInfo.m_Buffer[fmt.indexResourceId];
+            uint64_t ibOffs = RDCMIN(fmt.indexByteOffset, bufProps.size);
+            vt->CmdBindIndexBuffer(Unwrap(cmd), Unwrap(ib), ibOffs, idxtype);
           }
           vt->CmdDrawIndexed(Unwrap(cmd), fmt.numIndices, 1, 0, fmt.baseVertex, 0);
         }
@@ -804,7 +807,10 @@ void VulkanReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &seco
         VkBuffer ib =
             m_pDriver->GetResourceManager()->GetCurrentHandle<VkBuffer>(cfg.position.indexResourceId);
 
-        vt->CmdBindIndexBuffer(Unwrap(cmd), Unwrap(ib), cfg.position.indexByteOffset, idxtype);
+        const VulkanCreationInfo::Buffer &bufProps =
+            m_pDriver->m_CreationInfo.m_Buffer[cfg.position.indexResourceId];
+        uint64_t ibOffs = RDCMIN(cfg.position.indexByteOffset, bufProps.size);
+        vt->CmdBindIndexBuffer(Unwrap(cmd), Unwrap(ib), ibOffs, idxtype);
       }
       vt->CmdDrawIndexed(Unwrap(cmd), cfg.position.numIndices, 1, 0, cfg.position.baseVertex, 0);
     }
@@ -852,7 +858,10 @@ void VulkanReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &seco
         VkBuffer ib =
             m_pDriver->GetResourceManager()->GetCurrentHandle<VkBuffer>(cfg.position.indexResourceId);
 
-        vt->CmdBindIndexBuffer(Unwrap(cmd), Unwrap(ib), cfg.position.indexByteOffset, idxtype);
+        const VulkanCreationInfo::Buffer &bufProps =
+            m_pDriver->m_CreationInfo.m_Buffer[cfg.position.indexResourceId];
+        uint64_t ibOffs = RDCMIN(cfg.position.indexByteOffset, bufProps.size);
+        vt->CmdBindIndexBuffer(Unwrap(cmd), Unwrap(ib), ibOffs, idxtype);
       }
       vt->CmdDrawIndexed(Unwrap(cmd), cfg.position.numIndices, 1, 0, cfg.position.baseVertex, 0);
     }
