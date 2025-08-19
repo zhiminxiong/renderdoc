@@ -95,8 +95,8 @@ void SetOutput(vec4 val)
 
 void Init(vec4 val)
 {
-  tid = gl_GlobalInvocationID;
-  flatId = gl_SubgroupInvocationID;
+  tid = gl_LocalInvocationID;
+  flatId = tid.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + tid.y * gl_WorkGroupSize.x + tid.x;
   gsmUint4[flatId].xyz = tid;
   gsmUint4[flatId].z = tid.x;
   SetOutput(val);
