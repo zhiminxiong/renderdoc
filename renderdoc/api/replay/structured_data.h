@@ -117,6 +117,12 @@ enum class SDBasic : uint32_t
 
 DECLARE_REFLECTION_ENUM(SDBasic);
 
+#if defined(ENABLE_PYTHON_FLAG_ENUMS)
+
+ENABLE_PYTHON_FLAG_ENUMS;
+
+#endif
+
 DOCUMENT(R"(Bitfield flags that could be applied to a type.
 
 .. data:: NoFlags
@@ -194,6 +200,36 @@ enum class SDTypeFlags : uint32_t
 BITMASK_OPERATORS(SDTypeFlags);
 DECLARE_REFLECTION_ENUM(SDTypeFlags);
 
+DOCUMENT(R"(Bitfield flags that could be applied to an :class:`SDChunk`.
+
+.. data:: NoFlags
+
+  This chunk has no special properties.
+
+.. data:: OpaqueChunk
+
+  This chunk wasn't supported for decoding or was skipped for another reason and was detailed as
+  an opaque byte stream. It should be preserved as-is and will remain in native RDC format.
+
+.. data:: HasCallstack
+
+  This chunk has a callstack. Used to indicate the presence of a callstack even if it's empty
+  (perhaps due to failure to collect the stack frames).
+)");
+enum class SDChunkFlags : uint64_t
+{
+  NoFlags = 0x0,
+  OpaqueChunk = 0x1,
+  HasCallstack = 0x2,
+};
+
+BITMASK_OPERATORS(SDChunkFlags);
+DECLARE_REFLECTION_ENUM(SDChunkFlags);
+
+#if defined(DISABLE_PYTHON_FLAG_ENUMS)
+DISABLE_PYTHON_FLAG_ENUMS;
+#endif
+
 struct SDObject;
 struct SDChunk;
 
@@ -252,32 +288,6 @@ protected:
 };
 
 DECLARE_REFLECTION_STRUCT(SDType);
-
-DOCUMENT(R"(Bitfield flags that could be applied to an :class:`SDChunk`.
-
-.. data:: NoFlags
-
-  This chunk has no special properties.
-
-.. data:: OpaqueChunk
-
-  This chunk wasn't supported for decoding or was skipped for another reason and was detailed as
-  an opaque byte stream. It should be preserved as-is and will remain in native RDC format.
-
-.. data:: HasCallstack
-
-  This chunk has a callstack. Used to indicate the presence of a callstack even if it's empty
-  (perhaps due to failure to collect the stack frames).
-)");
-enum class SDChunkFlags : uint64_t
-{
-  NoFlags = 0x0,
-  OpaqueChunk = 0x1,
-  HasCallstack = 0x2,
-};
-
-BITMASK_OPERATORS(SDChunkFlags);
-DECLARE_REFLECTION_ENUM(SDChunkFlags);
 
 DOCUMENT("The metadata that goes along with a :class:`SDChunk` to detail how it was recorded.");
 struct SDChunkMetaData
