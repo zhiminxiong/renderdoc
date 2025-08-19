@@ -1314,9 +1314,9 @@ rdcpair<ID3D12Resource *, UINT64> D3D12DebugManager::PatchExecuteIndirect(
   cmd->SetComputeRootSignature(m_EIPatchRootSig);
   cmd->SetComputeRootConstantBufferView(0, UploadConstants(argOffsets.data(), argOffsets.byteSize()));
   if(countBufAddr == 0)
-    cmd->SetComputeRootConstantBufferView(1, UploadConstants(&maxCount, sizeof(uint32_t)));
+    cmd->SetComputeRootShaderResourceView(1, UploadConstants(&maxCount, sizeof(uint32_t)));
   else
-    cmd->SetComputeRootConstantBufferView(1, countBufAddr);
+    cmd->SetComputeRootShaderResourceView(1, countBufAddr);
   cmd->SetComputeRoot32BitConstant(2, maxCount, 0);
   cmd->SetComputeRootShaderResourceView(3, m_EIPatchBufferData->GetGPUVirtualAddress());
   cmd->SetComputeRootUnorderedAccessView(4, ret.first->GetGPUVirtualAddress() + ret.second);
@@ -2023,7 +2023,7 @@ void D3D12DebugManager::PrepareExecuteIndirectPatching(GPUAddressRangeTracker &o
     bytebuf root = EncodeRootSig(m_pDevice->RootSigVersion(),
                                  {
                                      cbvParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0),
-                                     cbvParam(D3D12_SHADER_VISIBILITY_ALL, 0, 1),
+                                     srvParam(D3D12_SHADER_VISIBILITY_ALL, 0, 1),
                                      constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 2, 1),
                                      srvParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0),
                                      uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0),

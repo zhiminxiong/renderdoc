@@ -143,10 +143,7 @@ cbuffer executepatchdata : register(b0)
   uint4 argOffsets[32];
 };
 
-cbuffer countbuffer : register(b1)
-{
-  uint numExecutes;
-};
+StructuredBuffer<uint> numExecutes : register(t1);
 
 cbuffer countbuffer : register(b2)
 {
@@ -183,7 +180,7 @@ GPUAddress PatchAddress(GPUAddress addr)
                                                               : SV_GroupIndex) {
   if(idx < argCount)
   {
-    for(uint i = 0; i < min(numExecutes, maxNumExecutes); i++)
+    for(uint i = 0; i < min(numExecutes[0], maxNumExecutes); i++)
     {
       uint offs = argStride * i + argOffsets[idx / 4][idx % 4];
 
