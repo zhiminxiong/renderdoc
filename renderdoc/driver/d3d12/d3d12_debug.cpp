@@ -1195,7 +1195,7 @@ rdcpair<ID3D12Resource *, UINT64> D3D12DebugManager::PatchExecuteIndirect(
 {
   rdcarray<uint32_t> argOffsets;
 
-  if(!m_EIPatchBufferData)
+  if(!m_EIPatchBufferData || maxCount == 0)
   {
     return {argBuf, argBufOffset};
   }

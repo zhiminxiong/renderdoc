@@ -3519,7 +3519,8 @@ void WrappedID3D12GraphicsCommandList::SaveExecuteIndirectParameters(
 
   BakedCmdListInfo &cmdListInfo = m_Cmd->m_BakedCmdListInfo[m_Cmd->m_LastCmdListID];
 
-  const size_t argsSize = comSig->sig.ByteStride * (MaxCommandCount - 1) + comSig->sig.PackedByteSize;
+  const size_t argsSize =
+      comSig->sig.ByteStride * (RDCMAX(1U, MaxCommandCount) - 1) + comSig->sig.PackedByteSize;
   const size_t countSize = 16;
 
   // at most we need to copy two executes. The last may be partial and so contain some state set
