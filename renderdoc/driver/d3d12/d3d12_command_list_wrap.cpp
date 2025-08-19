@@ -4247,6 +4247,14 @@ bool WrappedID3D12GraphicsCommandList::Serialise_ExecuteIndirect(
 
           countToReplay = RDCMIN(countToReplay, maxCommands);
 
+          if(m_Cmd->m_FirstEventID > 1)
+          {
+            const uint32_t argidx = (curEID - baseEventID - 1);
+            const uint32_t execidx = argidx / comSig->sig.arguments.count();
+
+            argOffset += comSig->sig.ByteStride * execidx;
+          }
+
           for(uint32_t i = 0; i < countToReplay; i++)
           {
             ActionFlags drawType =
