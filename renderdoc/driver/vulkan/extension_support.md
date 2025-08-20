@@ -87,6 +87,7 @@ Maintainers can update this file by updating vk.xml in this folder and running `
 * `VK_EXT_pci_bus_info`
 * `VK_EXT_pipeline_creation_cache_control`
 * `VK_EXT_pipeline_creation_feedback`
+* `VK_EXT_pipeline_protected_access`
 * `VK_EXT_pipeline_robustness`
 * `VK_EXT_post_depth_coverage`
 * `VK_EXT_present_mode_fifo_latest_ready`
@@ -309,7 +310,6 @@ The portability subset is only relevant on mac, which is not a supported platfor
 * `VK_EXT_opacity_micromap`
 * `VK_EXT_physical_device_drm`
 * `VK_EXT_pipeline_library_group_handles`
-* `VK_EXT_pipeline_protected_access`
 * `VK_EXT_shader_float8`
 * `VK_EXT_shader_module_identifier`
 * `VK_EXT_shader_replicated_composites`
