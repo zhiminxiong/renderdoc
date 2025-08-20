@@ -33,6 +33,9 @@
 // extensions made core in 1.3
 #define VK13 VK_MAKE_VERSION(1, 3, 0)
 
+// extensions made core in 1.4
+#define VK14 VK_MAKE_VERSION(1, 4, 0)
+
 // extensions that are not core in any version
 #define VKXX VK_MAKE_VERSION(99, 99, 0)
 
@@ -613,7 +616,7 @@
   CheckExt(KHR_external_fence_fd, VKXX);                      \
   CheckExt(KHR_get_memory_requirements2, VK11);               \
   CheckExt(AMD_shader_info, VKXX);                            \
-  CheckExt(KHR_push_descriptor, VKXX);                        \
+  CheckExt(KHR_push_descriptor, VK14);                        \
   CheckExt(KHR_descriptor_update_template, VK11);             \
   CheckExt(KHR_bind_memory2, VK11);                           \
   CheckExt(EXT_conservative_rasterization, VKXX);             \
@@ -632,7 +635,7 @@
   CheckExt(EXT_sample_locations, VKXX);                       \
   CheckExt(EXT_discard_rectangles, VKXX);                     \
   CheckExt(EXT_calibrated_timestamps, VKXX);                  \
-  CheckExt(EXT_host_image_copy, VKXX);                        \
+  CheckExt(EXT_host_image_copy, VK14);                        \
   CheckExt(EXT_host_query_reset, VK12);                       \
   CheckExt(EXT_buffer_device_address, VKXX);                  \
   CheckExt(EXT_hdr_metadata, VKXX);                           \
@@ -667,7 +670,7 @@
   CheckExt(EXT_multisampled_render_to_single_sampled, VKXX);  \
   CheckExt(EXT_vertex_input_dynamic_state, VKXX);             \
   CheckExt(KHR_dynamic_rendering, VK13);                      \
-  CheckExt(KHR_dynamic_rendering_local_read, VKXX);           \
+  CheckExt(KHR_dynamic_rendering_local_read, VK14);           \
   CheckExt(KHR_fragment_shading_rate, VKXX);                  \
   CheckExt(EXT_attachment_feedback_loop_layout, VKXX);        \
   CheckExt(EXT_pageable_device_local_memory, VKXX);           \
@@ -679,8 +682,8 @@
   CheckExt(EXT_extended_dynamic_state3, VKXX);                \
   CheckExt(EXT_mesh_shader, VKXX);                            \
   CheckExt(EXT_scalar_block_layout, VK12);                    \
-  CheckExt(KHR_vertex_attribute_divisor, VKXX);               \
-  CheckExt(KHR_line_rasterization, VKXX);                     \
+  CheckExt(KHR_vertex_attribute_divisor, VK14);               \
+  CheckExt(KHR_line_rasterization, VK14);                     \
   CheckExt(KHR_calibrated_timestamps, VKXX);                  \
   CheckExt(KHR_deferred_host_operations, VKXX);               \
   CheckExt(KHR_acceleration_structure, VKXX);                 \
@@ -692,12 +695,12 @@
   CheckExt(EXT_shader_subgroup_vote, VK11);                   \
   CheckExt(KHR_shader_subgroup_uniform_control_flow, VKXX);   \
   CheckExt(KHR_ray_tracing_maintenance1, VKXX);               \
-  CheckExt(KHR_maintenance5, VKXX);                           \
-  CheckExt(KHR_maintenance6, VKXX);                           \
+  CheckExt(KHR_maintenance5, VK14);                           \
+  CheckExt(KHR_maintenance6, VK14);                           \
   CheckExt(EXT_image_compression_control, VKXX);              \
   CheckExt(EXT_image_compression_control_swapchain, VKXX);    \
   CheckExt(EXT_descriptor_buffer, VKXX);                      \
-  CheckExt(KHR_map_memory2, VKXX);                            \
+  CheckExt(KHR_map_memory2, VK14);                            \
   CheckExt(KHR_present_wait2, VKXX);
 
 #define HookInitVulkanInstanceExts_PhysDev()                                                         \
@@ -848,12 +851,12 @@
   HookInitPromotedExtension(KHR_get_memory_requirements2, GetImageMemoryRequirements2, KHR);         \
   HookInitPromotedExtension(KHR_get_memory_requirements2, GetImageSparseMemoryRequirements2, KHR);   \
   HookInitExtension(AMD_shader_info, GetShaderInfoAMD);                                              \
-  HookInitExtension(KHR_push_descriptor, CmdPushDescriptorSetKHR);                                   \
+  HookInitPromotedExtension(KHR_push_descriptor, CmdPushDescriptorSet, KHR);                         \
   HookInitPromotedExtension(KHR_descriptor_update_template, CreateDescriptorUpdateTemplate, KHR);    \
   HookInitPromotedExtension(KHR_descriptor_update_template, DestroyDescriptorUpdateTemplate, KHR);   \
   HookInitPromotedExtension(KHR_descriptor_update_template, UpdateDescriptorSetWithTemplate, KHR);   \
-  HookInitExtension(KHR_push_descriptor &&KHR_descriptor_update_template,                            \
-                    CmdPushDescriptorSetWithTemplateKHR);                                            \
+  HookInitPromotedExtension(KHR_push_descriptor &&KHR_descriptor_update_template,                    \
+                            CmdPushDescriptorSetWithTemplate, KHR);                                  \
   HookInitPromotedExtension(KHR_bind_memory2, BindBufferMemory2, KHR);                               \
   HookInitPromotedExtension(KHR_bind_memory2, BindImageMemory2, KHR);                                \
   HookInitPromotedExtension(KHR_maintenance3, GetDescriptorSetLayoutSupport, KHR);                   \
@@ -897,10 +900,10 @@
   HookInitExtension(EXT_sample_locations, CmdSetSampleLocationsEXT);                                 \
   HookInitExtension(EXT_discard_rectangles, CmdSetDiscardRectangleEXT);                              \
   HookInitExtension(EXT_calibrated_timestamps, GetCalibratedTimestampsEXT);                          \
-  HookInitExtension(EXT_host_image_copy, CopyImageToImageEXT);                                       \
-  HookInitExtension(EXT_host_image_copy, CopyImageToMemoryEXT);                                      \
-  HookInitExtension(EXT_host_image_copy, CopyMemoryToImageEXT);                                      \
-  HookInitExtension(EXT_host_image_copy, TransitionImageLayoutEXT);                                  \
+  HookInitPromotedExtension(EXT_host_image_copy, CopyImageToImage, EXT);                             \
+  HookInitPromotedExtension(EXT_host_image_copy, CopyImageToMemory, EXT);                            \
+  HookInitPromotedExtension(EXT_host_image_copy, CopyMemoryToImage, EXT);                            \
+  HookInitPromotedExtension(EXT_host_image_copy, TransitionImageLayout, EXT);                        \
   HookInitPromotedExtension(EXT_host_query_reset, ResetQueryPool, EXT);                              \
   HookInitExtension(EXT_buffer_device_address, GetBufferDeviceAddressEXT);                           \
   HookInitExtension(EXT_hdr_metadata, SetHdrMetadataEXT);                                            \
@@ -975,8 +978,10 @@
   HookInitExtension(EXT_vertex_input_dynamic_state || EXT_shader_object, CmdSetVertexInputEXT);      \
   HookInitPromotedExtension(KHR_dynamic_rendering, CmdBeginRendering, KHR);                          \
   HookInitPromotedExtension(KHR_dynamic_rendering, CmdEndRendering, KHR);                            \
-  HookInitExtension(KHR_dynamic_rendering_local_read, CmdSetRenderingAttachmentLocationsKHR);        \
-  HookInitExtension(KHR_dynamic_rendering_local_read, CmdSetRenderingInputAttachmentIndicesKHR);     \
+  HookInitPromotedExtension(KHR_dynamic_rendering_local_read, CmdSetRenderingAttachmentLocations,    \
+                            KHR);                                                                    \
+  HookInitPromotedExtension(KHR_dynamic_rendering_local_read,                                        \
+                            CmdSetRenderingInputAttachmentIndices, KHR);                             \
   HookInitExtension(KHR_fragment_shading_rate, CmdSetFragmentShadingRateKHR);                        \
   HookInitExtension(EXT_pageable_device_local_memory, SetDeviceMemoryPriorityEXT);                   \
   HookInitExtension(EXT_swapchain_maintenance1, ReleaseSwapchainImagesEXT);                          \
@@ -1036,7 +1041,7 @@
   HookInitExtension(EXT_mesh_shader, CmdDrawMeshTasksIndirectEXT);                                   \
   HookInitExtension(EXT_mesh_shader, CmdDrawMeshTasksIndirectCountEXT);                              \
   HookInitExtension(KHR_calibrated_timestamps, GetCalibratedTimestampsKHR);                          \
-  HookInitExtension(KHR_line_rasterization, CmdSetLineStippleKHR);                                   \
+  HookInitPromotedExtension(KHR_line_rasterization, CmdSetLineStipple, KHR);                         \
   HookInitExtensionEXTtoKHR(CmdSetLineStipple);                                                      \
   HookInitExtension(KHR_deferred_host_operations, CreateDeferredOperationKHR);                       \
   HookInitExtension(KHR_deferred_host_operations, DeferredOperationJoinKHR);                         \
@@ -1071,17 +1076,18 @@
   HookInitExtension(KHR_ray_tracing_pipeline, GetRayTracingShaderGroupHandlesKHR);                   \
   HookInitExtension(KHR_ray_tracing_pipeline, GetRayTracingShaderGroupStackSizeKHR);                 \
   HookInitExtension(KHR_ray_tracing_maintenance1, CmdTraceRaysIndirect2KHR);                         \
-  HookInitExtension(KHR_maintenance5, CmdBindIndexBuffer2KHR);                                       \
-  HookInitExtension(KHR_maintenance5, GetDeviceImageSubresourceLayoutKHR);                           \
-  HookInitExtension(KHR_maintenance5, GetImageSubresourceLayout2KHR);                                \
-  HookInitExtension(KHR_maintenance5, GetRenderingAreaGranularityKHR);                               \
-  HookInitExtension(KHR_maintenance6, CmdBindDescriptorSets2KHR);                                    \
-  HookInitExtension(KHR_maintenance6, CmdPushConstants2KHR);                                         \
+  HookInitPromotedExtension(KHR_maintenance5, CmdBindIndexBuffer2, KHR);                             \
+  HookInitPromotedExtension(KHR_maintenance5, GetDeviceImageSubresourceLayout, KHR);                 \
+  HookInitPromotedExtension(KHR_maintenance5, GetImageSubresourceLayout2, KHR);                      \
+  HookInitPromotedExtension(KHR_maintenance5, GetRenderingAreaGranularity, KHR);                     \
+  HookInitPromotedExtension(KHR_maintenance6, CmdBindDescriptorSets2, KHR);                          \
+  HookInitPromotedExtension(KHR_maintenance6, CmdPushConstants2, KHR);                               \
   HookInitExtension(KHR_maintenance6 &&EXT_descriptor_buffer,                                        \
                     CmdBindDescriptorBufferEmbeddedSamplers2EXT);                                    \
   HookInitExtension(KHR_maintenance6 &&EXT_descriptor_buffer, CmdSetDescriptorBufferOffsets2EXT);    \
-  HookInitExtension(KHR_maintenance6 &&KHR_push_descriptor, CmdPushDescriptorSet2KHR);               \
-  HookInitExtension(KHR_maintenance6 &&KHR_push_descriptor, CmdPushDescriptorSetWithTemplate2KHR);   \
+  HookInitPromotedExtension(KHR_maintenance6 &&KHR_push_descriptor, CmdPushDescriptorSet2, KHR);     \
+  HookInitPromotedExtension(KHR_maintenance6 &&KHR_push_descriptor,                                  \
+                            CmdPushDescriptorSetWithTemplate2, KHR);                                 \
   HookInitExtension(EXT_image_compression_control || EXT_host_image_copy,                            \
                     GetImageSubresourceLayout2EXT);                                                  \
   HookInitExtension(EXT_descriptor_buffer, CmdBindDescriptorBufferEmbeddedSamplersEXT);              \
@@ -1095,8 +1101,8 @@
   HookInitExtension(EXT_descriptor_buffer, GetImageViewOpaqueCaptureDescriptorDataEXT);              \
   HookInitExtension(EXT_descriptor_buffer, GetSamplerOpaqueCaptureDescriptorDataEXT);                \
   HookInitExtension(EXT_descriptor_buffer, GetAccelerationStructureOpaqueCaptureDescriptorDataEXT);  \
-  HookInitExtension(KHR_map_memory2, MapMemory2KHR);                                                 \
-  HookInitExtension(KHR_map_memory2, UnmapMemory2KHR);                                               \
+  HookInitPromotedExtension(KHR_map_memory2, MapMemory2, KHR);                                       \
+  HookInitPromotedExtension(KHR_map_memory2, UnmapMemory2, KHR);                                     \
   HookInitExtension(KHR_present_wait, WaitForPresent2KHR);                                           \
   HookInitExtension_Device_Win32();                                                                  \
   HookInitExtension_Device_Linux();                                                                  \
@@ -1520,9 +1526,9 @@
   HookDefine6(VkResult, vkGetShaderInfoAMD, VkDevice, device, VkPipeline, pipeline,                  \
               VkShaderStageFlagBits, shaderStage, VkShaderInfoTypeAMD, infoType, size_t *,           \
               pInfoSize, void *, pInfo);                                                             \
-  HookDefine6(void, vkCmdPushDescriptorSetKHR, VkCommandBuffer, commandBuffer,                       \
-              VkPipelineBindPoint, pipelineBindPoint, VkPipelineLayout, layout, uint32_t, set,       \
-              uint32_t, descriptorWriteCount, const VkWriteDescriptorSet *, pDescriptorWrites);      \
+  HookDefine6(void, vkCmdPushDescriptorSet, VkCommandBuffer, commandBuffer, VkPipelineBindPoint,     \
+              pipelineBindPoint, VkPipelineLayout, layout, uint32_t, set, uint32_t,                  \
+              descriptorWriteCount, const VkWriteDescriptorSet *, pDescriptorWrites);                \
   HookDefine4(VkResult, vkCreateDescriptorUpdateTemplate, VkDevice, device,                          \
               const VkDescriptorUpdateTemplateCreateInfo *, pCreateInfo,                             \
               const VkAllocationCallbacks *, pAllocator, VkDescriptorUpdateTemplate *,               \
@@ -1532,7 +1538,7 @@
   HookDefine4(void, vkUpdateDescriptorSetWithTemplate, VkDevice, device, VkDescriptorSet,            \
               descriptorSet, VkDescriptorUpdateTemplate, descriptorUpdateTemplate, const void *,     \
               pData);                                                                                \
-  HookDefine5(void, vkCmdPushDescriptorSetWithTemplateKHR, VkCommandBuffer, commandBuffer,           \
+  HookDefine5(void, vkCmdPushDescriptorSetWithTemplate, VkCommandBuffer, commandBuffer,              \
               VkDescriptorUpdateTemplate, descriptorUpdateTemplate, VkPipelineLayout, layout,        \
               uint32_t, set, const void *, pData);                                                   \
   HookDefine3(VkResult, vkBindBufferMemory2, VkDevice, device, uint32_t, bindInfoCount,              \
@@ -1667,13 +1673,13 @@
   HookDefine5(VkResult, vkGetCalibratedTimestampsEXT, VkDevice, device, uint32_t, timestampCount,    \
               const VkCalibratedTimestampInfoKHR *, pTimestampInfos, uint64_t *, pTimestamps,        \
               uint64_t *, pMaxDeviation);                                                            \
-  HookDefine2(VkResult, vkCopyImageToImageEXT, VkDevice, device, const VkCopyImageToImageInfo *,     \
+  HookDefine2(VkResult, vkCopyImageToImage, VkDevice, device, const VkCopyImageToImageInfo *,        \
               pCopyImageToImageInfo);                                                                \
-  HookDefine2(VkResult, vkCopyImageToMemoryEXT, VkDevice, device, const VkCopyImageToMemoryInfo *,   \
+  HookDefine2(VkResult, vkCopyImageToMemory, VkDevice, device, const VkCopyImageToMemoryInfo *,      \
               pCopyImageToMemoryInfo);                                                               \
-  HookDefine2(VkResult, vkCopyMemoryToImageEXT, VkDevice, device, const VkCopyMemoryToImageInfo *,   \
+  HookDefine2(VkResult, vkCopyMemoryToImage, VkDevice, device, const VkCopyMemoryToImageInfo *,      \
               pCopyMemoryToImageInfo);                                                               \
-  HookDefine3(VkResult, vkTransitionImageLayoutEXT, VkDevice, device, uint32_t, transitionCount,     \
+  HookDefine3(VkResult, vkTransitionImageLayout, VkDevice, device, uint32_t, transitionCount,        \
               const VkHostImageLayoutTransitionInfo *, pTransitions);                                \
   HookDefine4(void, vkResetQueryPool, VkDevice, device, VkQueryPool, queryPool, uint32_t,            \
               firstQuery, uint32_t, queryCount);                                                     \
@@ -1817,9 +1823,9 @@
   HookDefine2(void, vkCmdBeginRendering, VkCommandBuffer, commandBuffer, const VkRenderingInfo *,    \
               pRenderingInfo);                                                                       \
   HookDefine1(void, vkCmdEndRendering, VkCommandBuffer, commandBuffer);                              \
-  HookDefine2(void, vkCmdSetRenderingAttachmentLocationsKHR, VkCommandBuffer, commandBuffer,         \
+  HookDefine2(void, vkCmdSetRenderingAttachmentLocations, VkCommandBuffer, commandBuffer,            \
               const VkRenderingAttachmentLocationInfo *, pLocationInfo);                             \
-  HookDefine2(void, vkCmdSetRenderingInputAttachmentIndicesKHR, VkCommandBuffer, commandBuffer,      \
+  HookDefine2(void, vkCmdSetRenderingInputAttachmentIndices, VkCommandBuffer, commandBuffer,         \
               const VkRenderingInputAttachmentIndexInfo *, pInputAttachmentIndexInfo);               \
   HookDefine3(void, vkCmdSetFragmentShadingRateKHR, VkCommandBuffer, commandBuffer,                  \
               const VkExtent2D *, pFragmentSize, const VkFragmentShadingRateCombinerOpKHR *,         \
@@ -1834,7 +1840,7 @@
   HookDefine4(VkResult, vkGetDrmDisplayEXT, VkPhysicalDevice, physicalDevice, int32_t, drmFd,        \
               uint32_t, connectorId, VkDisplayKHR *, display);                                       \
   HookDefine2(VkResult, vkReleaseSwapchainImagesEXT, VkDevice, device,                               \
-              const VkReleaseSwapchainImagesInfoEXT *, pReleaseInfo);                                \
+              const VkReleaseSwapchainImagesInfoKHR *, pReleaseInfo);                                \
   HookDefine2(VkResult, vkReleaseSwapchainImagesKHR, VkDevice, device,                               \
               const VkReleaseSwapchainImagesInfoKHR *, pReleaseInfo);                                \
   HookDefine2(void, vkCmdSetAttachmentFeedbackLoopEnableEXT, VkCommandBuffer, commandBuffer,         \
@@ -1917,7 +1923,7 @@
   HookDefine5(VkResult, vkGetCalibratedTimestampsKHR, VkDevice, device, uint32_t, timestampCount,    \
               const VkCalibratedTimestampInfoKHR *, pTimestampInfos, uint64_t *, pTimestamps,        \
               uint64_t *, pMaxDeviation);                                                            \
-  HookDefine3(void, vkCmdSetLineStippleKHR, VkCommandBuffer, commandBuffer, uint32_t,                \
+  HookDefine3(void, vkCmdSetLineStipple, VkCommandBuffer, commandBuffer, uint32_t,                   \
               lineStippleFactor, uint16_t, lineStipplePattern);                                      \
   HookDefine3(VkResult, vkCreateDeferredOperationKHR, VkDevice, device,                              \
               const VkAllocationCallbacks *, pAllocator, VkDeferredOperationKHR *,                   \
@@ -2015,14 +2021,14 @@
               uint32_t, pipelineStackSize);                                                          \
   HookDefine2(void, vkCmdTraceRaysIndirect2KHR, VkCommandBuffer, commandBuffer, VkDeviceAddress,     \
               indirectDeviceAddress);                                                                \
-  HookDefine5(void, vkCmdBindIndexBuffer2KHR, VkCommandBuffer, commandBuffer, VkBuffer, buffer,      \
+  HookDefine5(void, vkCmdBindIndexBuffer2, VkCommandBuffer, commandBuffer, VkBuffer, buffer,         \
               VkDeviceSize, offset, VkDeviceSize, size, VkIndexType, indexType);                     \
-  HookDefine3(void, vkGetDeviceImageSubresourceLayoutKHR, VkDevice, device,                          \
+  HookDefine3(void, vkGetDeviceImageSubresourceLayout, VkDevice, device,                             \
               const VkDeviceImageSubresourceInfo *, pInfo, VkSubresourceLayout2 *, pLayout);         \
-  HookDefine4(void, vkGetImageSubresourceLayout2KHR, VkDevice, device, VkImage, image,               \
+  HookDefine4(void, vkGetImageSubresourceLayout2, VkDevice, device, VkImage, image,                  \
               const VkImageSubresource2 *, pSubresource, VkSubresourceLayout2 *, pLayout);           \
-  HookDefine3(void, vkGetRenderingAreaGranularityKHR, VkDevice, device,                              \
-              const VkRenderingAreaInfo *, pRenderingAreaInfo, VkExtent2D *, pGranularity);          \
+  HookDefine3(void, vkGetRenderingAreaGranularity, VkDevice, device, const VkRenderingAreaInfo *,    \
+              pRenderingAreaInfo, VkExtent2D *, pGranularity);                                       \
   HookDefine4(void, vkGetImageSubresourceLayout2EXT, VkDevice, device, VkImage, image,               \
               const VkImageSubresource2 *, pSubresource, VkSubresourceLayout2 *, pLayout);           \
   HookDefine3(void, vkGetDescriptorSetLayoutSizeEXT, VkDevice, device, VkDescriptorSetLayout,        \
@@ -2048,19 +2054,18 @@
               const VkSamplerCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);                  \
   HookDefine3(VkResult, vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT, VkDevice, device,  \
               const VkAccelerationStructureCaptureDescriptorDataInfoEXT *, pInfo, void *, pData);    \
-  HookDefine3(VkResult, vkMapMemory2KHR, VkDevice, device, const VkMemoryMapInfo *,                  \
-              pMemoryMapInfo, void **, ppData);                                                      \
-  HookDefine2(void, vkUnmapMemory2KHR, VkDevice, device, const VkMemoryUnmapInfo *,                  \
-              pMemoryUnmapInfo);                                                                     \
+  HookDefine3(VkResult, vkMapMemory2, VkDevice, device, const VkMemoryMapInfo *, pMemoryMapInfo,     \
+              void **, ppData);                                                                      \
+  HookDefine2(void, vkUnmapMemory2, VkDevice, device, const VkMemoryUnmapInfo *, pMemoryUnmapInfo);  \
   HookDefine3(VkResult, vkWaitForPresent2KHR, VkDevice, device, VkSwapchainKHR, swapchain,           \
               const VkPresentWait2InfoKHR *, pPresentWait2Info);                                     \
-  HookDefine2(void, vkCmdBindDescriptorSets2KHR, VkCommandBuffer, commandBuffer,                     \
+  HookDefine2(void, vkCmdBindDescriptorSets2, VkCommandBuffer, commandBuffer,                        \
               const VkBindDescriptorSetsInfo *, pBindDescriptorSetsInfo);                            \
-  HookDefine2(void, vkCmdPushConstants2KHR, VkCommandBuffer, commandBuffer,                          \
+  HookDefine2(void, vkCmdPushConstants2, VkCommandBuffer, commandBuffer,                             \
               const VkPushConstantsInfo *, pPushConstantsInfo);                                      \
-  HookDefine2(void, vkCmdPushDescriptorSet2KHR, VkCommandBuffer, commandBuffer,                      \
+  HookDefine2(void, vkCmdPushDescriptorSet2, VkCommandBuffer, commandBuffer,                         \
               const VkPushDescriptorSetInfo *, pPushDescriptorSetInfo);                              \
-  HookDefine2(void, vkCmdPushDescriptorSetWithTemplate2KHR, VkCommandBuffer, commandBuffer,          \
+  HookDefine2(void, vkCmdPushDescriptorSetWithTemplate2, VkCommandBuffer, commandBuffer,             \
               const VkPushDescriptorSetWithTemplateInfo *, pPushDescriptorSetWithTemplateInfo);      \
   HookDefine2(void, vkCmdSetDescriptorBufferOffsets2EXT, VkCommandBuffer, commandBuffer,             \
               const VkSetDescriptorBufferOffsetsInfoEXT *, pSetDescriptorBufferOffsetsInfo);         \

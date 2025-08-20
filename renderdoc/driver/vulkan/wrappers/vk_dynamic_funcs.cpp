@@ -911,10 +911,9 @@ void WrappedVulkan::vkCmdSetDiscardRectangleEXT(VkCommandBuffer commandBuffer,
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdSetLineStippleKHR(SerialiserType &ser,
-                                                     VkCommandBuffer commandBuffer,
-                                                     uint32_t lineStippleFactor,
-                                                     uint16_t lineStipplePattern)
+bool WrappedVulkan::Serialise_vkCmdSetLineStipple(SerialiserType &ser, VkCommandBuffer commandBuffer,
+                                                  uint32_t lineStippleFactor,
+                                                  uint16_t lineStipplePattern)
 {
   SERIALISE_ELEMENT(commandBuffer);
   SERIALISE_ELEMENT(lineStippleFactor).Important();
@@ -953,14 +952,14 @@ bool WrappedVulkan::Serialise_vkCmdSetLineStippleKHR(SerialiserType &ser,
     // other since it's a straight promotion. This allows us to share implementation between the two
     if(commandBuffer != VK_NULL_HANDLE)
       ObjDisp(commandBuffer)
-          ->CmdSetLineStippleKHR(Unwrap(commandBuffer), lineStippleFactor, lineStipplePattern);
+          ->CmdSetLineStipple(Unwrap(commandBuffer), lineStippleFactor, lineStipplePattern);
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdSetLineStippleKHR(VkCommandBuffer commandBuffer,
-                                           uint32_t lineStippleFactor, uint16_t lineStipplePattern)
+void WrappedVulkan::vkCmdSetLineStipple(VkCommandBuffer commandBuffer, uint32_t lineStippleFactor,
+                                        uint16_t lineStipplePattern)
 {
   SCOPED_DBG_SINK();
 
@@ -968,7 +967,7 @@ void WrappedVulkan::vkCmdSetLineStippleKHR(VkCommandBuffer commandBuffer,
   // other since it's a straight promotion. This allows us to share implementation between the two
   SERIALISE_TIME_CALL(
       ObjDisp(commandBuffer)
-          ->CmdSetLineStippleKHR(Unwrap(commandBuffer), lineStippleFactor, lineStipplePattern));
+          ->CmdSetLineStipple(Unwrap(commandBuffer), lineStippleFactor, lineStipplePattern));
 
   if(IsCaptureMode(m_State))
   {
@@ -976,8 +975,8 @@ void WrappedVulkan::vkCmdSetLineStippleKHR(VkCommandBuffer commandBuffer,
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdSetLineStippleKHR);
-    Serialise_vkCmdSetLineStippleKHR(ser, commandBuffer, lineStippleFactor, lineStipplePattern);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdSetLineStipple);
+    Serialise_vkCmdSetLineStipple(ser, commandBuffer, lineStippleFactor, lineStipplePattern);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
   }
@@ -989,7 +988,7 @@ void WrappedVulkan::vkCmdSetLineStippleKHR(VkCommandBuffer commandBuffer,
 void WrappedVulkan::vkCmdSetLineStippleEXT(VkCommandBuffer commandBuffer,
                                            uint32_t lineStippleFactor, uint16_t lineStipplePattern)
 {
-  return vkCmdSetLineStippleKHR(commandBuffer, lineStippleFactor, lineStipplePattern);
+  return vkCmdSetLineStipple(commandBuffer, lineStippleFactor, lineStipplePattern);
 }
 
 template <typename SerialiserType>
@@ -3566,7 +3565,7 @@ void WrappedVulkan::vkCmdSetRayTracingPipelineStackSizeKHR(VkCommandBuffer comma
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdSetRenderingAttachmentLocationsKHR(
+bool WrappedVulkan::Serialise_vkCmdSetRenderingAttachmentLocations(
     SerialiserType &ser, VkCommandBuffer commandBuffer,
     const VkRenderingAttachmentLocationInfo *pLocationInfo)
 {
@@ -3600,20 +3599,19 @@ bool WrappedVulkan::Serialise_vkCmdSetRenderingAttachmentLocationsKHR(
     }
 
     if(commandBuffer != VK_NULL_HANDLE)
-      ObjDisp(commandBuffer)->CmdSetRenderingAttachmentLocationsKHR(Unwrap(commandBuffer), &locationInfo);
+      ObjDisp(commandBuffer)->CmdSetRenderingAttachmentLocations(Unwrap(commandBuffer), &locationInfo);
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdSetRenderingAttachmentLocationsKHR(
+void WrappedVulkan::vkCmdSetRenderingAttachmentLocations(
     VkCommandBuffer commandBuffer, const VkRenderingAttachmentLocationInfo *pLocationInfo)
 {
   SCOPED_DBG_SINK();
 
   SERIALISE_TIME_CALL(
-      ObjDisp(commandBuffer)
-          ->CmdSetRenderingAttachmentLocationsKHR(Unwrap(commandBuffer), pLocationInfo));
+      ObjDisp(commandBuffer)->CmdSetRenderingAttachmentLocations(Unwrap(commandBuffer), pLocationInfo));
 
   if(IsCaptureMode(m_State))
   {
@@ -3621,15 +3619,15 @@ void WrappedVulkan::vkCmdSetRenderingAttachmentLocationsKHR(
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdSetRenderingAttachmentLocationsKHR);
-    Serialise_vkCmdSetRenderingAttachmentLocationsKHR(ser, commandBuffer, pLocationInfo);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdSetRenderingAttachmentLocations);
+    Serialise_vkCmdSetRenderingAttachmentLocations(ser, commandBuffer, pLocationInfo);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
   }
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdSetRenderingInputAttachmentIndicesKHR(
+bool WrappedVulkan::Serialise_vkCmdSetRenderingInputAttachmentIndices(
     SerialiserType &ser, VkCommandBuffer commandBuffer,
     const VkRenderingInputAttachmentIndexInfo *pInputAttachmentIndexInfo)
 {
@@ -3666,22 +3664,21 @@ bool WrappedVulkan::Serialise_vkCmdSetRenderingInputAttachmentIndicesKHR(
 
     if(commandBuffer != VK_NULL_HANDLE)
       ObjDisp(commandBuffer)
-          ->CmdSetRenderingInputAttachmentIndicesKHR(Unwrap(commandBuffer),
-                                                     &inputAttachmentIndexInfo);
+          ->CmdSetRenderingInputAttachmentIndices(Unwrap(commandBuffer), &inputAttachmentIndexInfo);
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdSetRenderingInputAttachmentIndicesKHR(
+void WrappedVulkan::vkCmdSetRenderingInputAttachmentIndices(
     VkCommandBuffer commandBuffer,
     const VkRenderingInputAttachmentIndexInfo *pInputAttachmentIndexInfo)
 {
   SCOPED_DBG_SINK();
 
   SERIALISE_TIME_CALL(ObjDisp(commandBuffer)
-                          ->CmdSetRenderingInputAttachmentIndicesKHR(Unwrap(commandBuffer),
-                                                                     pInputAttachmentIndexInfo));
+                          ->CmdSetRenderingInputAttachmentIndices(Unwrap(commandBuffer),
+                                                                  pInputAttachmentIndexInfo));
 
   if(IsCaptureMode(m_State))
   {
@@ -3689,9 +3686,8 @@ void WrappedVulkan::vkCmdSetRenderingInputAttachmentIndicesKHR(
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdSetRenderingInputAttachmentIndicesKHR);
-    Serialise_vkCmdSetRenderingInputAttachmentIndicesKHR(ser, commandBuffer,
-                                                         pInputAttachmentIndexInfo);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdSetRenderingInputAttachmentIndices);
+    Serialise_vkCmdSetRenderingInputAttachmentIndices(ser, commandBuffer, pInputAttachmentIndexInfo);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
   }
@@ -3734,7 +3730,7 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetDiscardRectangleEXT, VkCommandBuff
                                 uint32_t firstDiscardRectangle, uint32_t discardRectangleCount,
                                 const VkRect2D *pDiscardRectangles);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetLineStippleKHR, VkCommandBuffer commandBuffer,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetLineStipple, VkCommandBuffer commandBuffer,
                                 uint32_t lineStippleFactor, uint16_t lineStipplePattern);
 
 INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetCullMode, VkCommandBuffer commandBuffer,
@@ -3839,9 +3835,9 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetTessellationDomainOriginEXT,
 INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetRayTracingPipelineStackSizeKHR,
                                 VkCommandBuffer commandBuffer, uint32_t pipelineStackSize)
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetRenderingAttachmentLocationsKHR,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetRenderingAttachmentLocations,
                                 VkCommandBuffer commandBuffer,
                                 const VkRenderingAttachmentLocationInfo *pLocationInfo);
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetRenderingInputAttachmentIndicesKHR,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdSetRenderingInputAttachmentIndices,
                                 VkCommandBuffer commandBuffer,
                                 const VkRenderingInputAttachmentIndexInfo *pInputAttachmentIndexInfo);

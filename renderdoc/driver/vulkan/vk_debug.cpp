@@ -2688,7 +2688,7 @@ void VulkanDebugManager::FillWithDiscardPatternOnHost(VkDevice device, DiscardTy
     hostCopy.imageOffset = copy.imageOffset;
     hostCopy.imageExtent = copy.imageExtent;
 
-    ObjDisp(device)->CopyMemoryToImageEXT(Unwrap(device), &info);
+    ObjDisp(device)->CopyMemoryToImage(Unwrap(device), &info);
   }
 
   // For stencil, the pattern data is found after depth.
@@ -2702,7 +2702,7 @@ void VulkanDebugManager::FillWithDiscardPatternOnHost(VkDevice device, DiscardTy
     hostCopy.imageOffset = copy.imageOffset;
     hostCopy.imageExtent = copy.imageExtent;
 
-    ObjDisp(device)->CopyMemoryToImageEXT(Unwrap(device), &info);
+    ObjDisp(device)->CopyMemoryToImage(Unwrap(device), &info);
   }
 }
 

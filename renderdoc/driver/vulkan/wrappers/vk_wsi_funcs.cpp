@@ -1819,7 +1819,7 @@ VkResult WrappedVulkan::vkReleaseSwapchainImagesKHR(VkDevice device,
 // EXT is available it will go through to the EXT from the driver, and we would rather merge the
 // EXT/KHR paths and silently promote than keep them separate and maintain two paths.
 VkResult WrappedVulkan::vkReleaseSwapchainImagesEXT(VkDevice device,
-                                                    const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo)
+                                                    const VkReleaseSwapchainImagesInfoKHR *pReleaseInfo)
 {
   return vkReleaseSwapchainImagesKHR(device, pReleaseInfo);
 }

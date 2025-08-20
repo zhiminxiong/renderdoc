@@ -881,8 +881,10 @@ void WrappedVulkan::vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevi
   VkPhysicalDeviceHostImageCopyProperties *hostImageCopy =
       (VkPhysicalDeviceHostImageCopyProperties *)FindNextStruct(
           pProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES);
+  VkPhysicalDeviceVulkan14Properties *vulkan14 = (VkPhysicalDeviceVulkan14Properties *)FindNextStruct(
+      pProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES);
 
-  if(shaderObject || hostImageCopy)
+  if(shaderObject || hostImageCopy || vulkan14)
   {
     MakeFakeUUID();
   }
@@ -894,6 +896,10 @@ void WrappedVulkan::vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevi
   if(hostImageCopy)
   {
     memcpy(hostImageCopy->optimalTilingLayoutUUID, fakeRenderDocUUID, VK_UUID_SIZE);
+  }
+  if(vulkan14)
+  {
+    memcpy(vulkan14->optimalTilingLayoutUUID, fakeRenderDocUUID, VK_UUID_SIZE);
   }
 
   VkPhysicalDeviceDescriptorBufferPropertiesEXT *descBufferProperties =
@@ -1348,9 +1354,9 @@ VkDeviceSize WrappedVulkan::vkGetRayTracingShaderGroupStackSizeKHR(
                                                                group, groupShader);
 }
 
-void WrappedVulkan::vkGetDeviceImageSubresourceLayoutKHR(VkDevice device,
-                                                         const VkDeviceImageSubresourceInfo *pInfo,
-                                                         VkSubresourceLayout2 *pLayout)
+void WrappedVulkan::vkGetDeviceImageSubresourceLayout(VkDevice device,
+                                                      const VkDeviceImageSubresourceInfo *pInfo,
+                                                      VkSubresourceLayout2 *pLayout)
 {
   size_t tempMemSize = GetNextPatchSize(pInfo);
 
@@ -1370,15 +1376,14 @@ void WrappedVulkan::vkGetDeviceImageSubresourceLayoutKHR(VkDevice device,
 
   PatchImageCreateInfo((VkImageCreateInfo *)unwrappedInfo->pCreateInfo, (VkFormat *)tempMem);
 
-  ObjDisp(device)->GetDeviceImageSubresourceLayoutKHR(Unwrap(device), unwrappedInfo, pLayout);
+  ObjDisp(device)->GetDeviceImageSubresourceLayout(Unwrap(device), unwrappedInfo, pLayout);
 }
 
-void WrappedVulkan::vkGetImageSubresourceLayout2KHR(VkDevice device, VkImage image,
-                                                    const VkImageSubresource2 *pSubresource,
-                                                    VkSubresourceLayout2 *pLayout)
+void WrappedVulkan::vkGetImageSubresourceLayout2(VkDevice device, VkImage image,
+                                                 const VkImageSubresource2 *pSubresource,
+                                                 VkSubresourceLayout2 *pLayout)
 {
-  ObjDisp(device)->GetImageSubresourceLayout2KHR(Unwrap(device), Unwrap(image), pSubresource,
-                                                 pLayout);
+  ObjDisp(device)->GetImageSubresourceLayout2(Unwrap(device), Unwrap(image), pSubresource, pLayout);
 
   // RenderDoc removes calls with VK_HOST_IMAGE_COPY_MEMCPY_BIT flag, so the
   // VkSubresourceHostMemcpySize struct chained to VkSubresourceLayout2 is overriden to
@@ -1389,19 +1394,18 @@ void WrappedVulkan::vkGetImageSubresourceLayout2KHR(VkDevice device, VkImage ima
     memcpySize->size = 64;
 }
 
-void WrappedVulkan::vkGetRenderingAreaGranularityKHR(VkDevice device,
-                                                     const VkRenderingAreaInfo *pRenderingAreaInfo,
-                                                     VkExtent2D *pGranularity)
+void WrappedVulkan::vkGetRenderingAreaGranularity(VkDevice device,
+                                                  const VkRenderingAreaInfo *pRenderingAreaInfo,
+                                                  VkExtent2D *pGranularity)
 {
-  ObjDisp(device)->GetRenderingAreaGranularityKHR(Unwrap(device), pRenderingAreaInfo, pGranularity);
+  ObjDisp(device)->GetRenderingAreaGranularity(Unwrap(device), pRenderingAreaInfo, pGranularity);
 }
 
 void WrappedVulkan::vkGetImageSubresourceLayout2EXT(VkDevice device, VkImage image,
                                                     const VkImageSubresource2 *pSubresource,
                                                     VkSubresourceLayout2 *pLayout)
 {
-  ObjDisp(device)->GetImageSubresourceLayout2EXT(Unwrap(device), Unwrap(image), pSubresource,
-                                                 pLayout);
+  ObjDisp(device)->GetImageSubresourceLayout2(Unwrap(device), Unwrap(image), pSubresource, pLayout);
 
   // RenderDoc removes calls with VK_HOST_IMAGE_COPY_MEMCPY_BIT flag, so the
   // VkSubresourceHostMemcpySize struct chained to VkSubresourceLayout2 is overriden to

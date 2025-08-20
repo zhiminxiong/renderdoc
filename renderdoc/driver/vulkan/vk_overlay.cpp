@@ -385,14 +385,14 @@ struct VulkanQuadOverdrawCallback : public VulkanActionCallback
       {
         VkRenderingAttachmentLocationInfo attachmentLocations = {};
         attachmentLocations.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO;
-        m_pDriver->vkCmdSetRenderingAttachmentLocationsKHR(cmd, &attachmentLocations);
+        m_pDriver->vkCmdSetRenderingAttachmentLocations(cmd, &attachmentLocations);
       }
       if(m_PrevState.dynamicRendering.localRead.AreInputIndicesNonDefault())
       {
         VkRenderingInputAttachmentIndexInfo inputIndices = {};
         inputIndices.sType = VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO;
 
-        m_pDriver->vkCmdSetRenderingInputAttachmentIndicesKHR(cmd, &inputIndices);
+        m_pDriver->vkCmdSetRenderingInputAttachmentIndices(cmd, &inputIndices);
       }
     }
   }

@@ -1816,7 +1816,7 @@ void DynamicRenderingLocalRead::SetLocations(VkCommandBuffer cmd)
   attachmentLocations.colorAttachmentCount = colorAttachmentLocations.count();
   attachmentLocations.pColorAttachmentLocations = colorAttachmentLocations.data();
 
-  ObjDisp(cmd)->CmdSetRenderingAttachmentLocationsKHR(Unwrap(cmd), &attachmentLocations);
+  ObjDisp(cmd)->CmdSetRenderingAttachmentLocations(Unwrap(cmd), &attachmentLocations);
 }
 
 void DynamicRenderingLocalRead::SetInputIndices(VkCommandBuffer cmd)
@@ -1830,7 +1830,7 @@ void DynamicRenderingLocalRead::SetInputIndices(VkCommandBuffer cmd)
   inputIndices.pStencilInputAttachmentIndex =
       isStencilInputAttachmentIndexImplicit ? NULL : &stencilInputAttachmentIndex;
 
-  ObjDisp(cmd)->CmdSetRenderingInputAttachmentIndicesKHR(Unwrap(cmd), &inputIndices);
+  ObjDisp(cmd)->CmdSetRenderingInputAttachmentIndices(Unwrap(cmd), &inputIndices);
 }
 
 #if ENABLED(ENABLE_UNIT_TESTS)

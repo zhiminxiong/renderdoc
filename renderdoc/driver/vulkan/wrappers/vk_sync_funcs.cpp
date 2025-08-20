@@ -1506,9 +1506,9 @@ void WrappedVulkan::vkCmdWaitEvents2(VkCommandBuffer commandBuffer, uint32_t eve
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkTransitionImageLayoutEXT(
-    SerialiserType &ser, VkDevice device, uint32_t transitionCount,
-    const VkHostImageLayoutTransitionInfo *pTransitions)
+bool WrappedVulkan::Serialise_vkTransitionImageLayout(SerialiserType &ser, VkDevice device,
+                                                      uint32_t transitionCount,
+                                                      const VkHostImageLayoutTransitionInfo *pTransitions)
 {
   SERIALISE_ELEMENT(device);
   SERIALISE_ELEMENT(transitionCount);
@@ -1552,15 +1552,15 @@ bool WrappedVulkan::Serialise_vkTransitionImageLayoutEXT(
       }
     }
 
-    ObjDisp(device)->TransitionImageLayoutEXT(Unwrap(device), (uint32_t)imgBarriers.size(),
-                                              imgBarriers.data());
+    ObjDisp(device)->TransitionImageLayout(Unwrap(device), (uint32_t)imgBarriers.size(),
+                                           imgBarriers.data());
   }
 
   return true;
 }
 
-VkResult WrappedVulkan::vkTransitionImageLayoutEXT(VkDevice device, uint32_t transitionCount,
-                                                   const VkHostImageLayoutTransitionInfo *pTransitions)
+VkResult WrappedVulkan::vkTransitionImageLayout(VkDevice device, uint32_t transitionCount,
+                                                const VkHostImageLayoutTransitionInfo *pTransitions)
 {
   SCOPED_DBG_SINK();
 
@@ -1576,7 +1576,7 @@ VkResult WrappedVulkan::vkTransitionImageLayoutEXT(VkDevice device, uint32_t tra
     }
 
     SERIALISE_TIME_CALL(
-        ret = ObjDisp(device)->TransitionImageLayoutEXT(Unwrap(device), transitionCount, im));
+        ret = ObjDisp(device)->TransitionImageLayout(Unwrap(device), transitionCount, im));
   }
 
   if(IsActiveCapturing(m_State))
@@ -1584,7 +1584,7 @@ VkResult WrappedVulkan::vkTransitionImageLayoutEXT(VkDevice device, uint32_t tra
     CACHE_THREAD_SERIALISER();
 
     SCOPED_SERIALISE_CHUNK(VulkanChunk::vkTransitionImageLayout);
-    Serialise_vkTransitionImageLayoutEXT(ser, device, transitionCount, pTransitions);
+    Serialise_vkTransitionImageLayout(ser, device, transitionCount, pTransitions);
 
     m_FrameCaptureRecord->AddChunk(scope.Get());
 
@@ -1715,6 +1715,6 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdWaitEvents2, VkCommandBuffer commandB
                                 uint32_t eventCount, const VkEvent *pEvents,
                                 const VkDependencyInfo *pDependencyInfos);
 
-INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkTransitionImageLayoutEXT, VkDevice device,
+INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkTransitionImageLayout, VkDevice device,
                                 uint32_t transitionCount,
                                 const VkHostImageLayoutTransitionInfo *pTransitions);

@@ -2443,12 +2443,12 @@ public:
                                  uint32_t set, uint32_t descriptorWriteCount,
                                  const VkWriteDescriptorSet *pDescriptorWrites);
 
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSetKHR, VkCommandBuffer commandBuffer,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet, VkCommandBuffer commandBuffer,
                                 VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout,
                                 uint32_t set, uint32_t descriptorWriteCount,
                                 const VkWriteDescriptorSet *pDescriptorWrites);
 
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSetWithTemplateKHR,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSetWithTemplate,
                                 VkCommandBuffer commandBuffer,
                                 VkDescriptorUpdateTemplate descriptorUpdateTemplate,
                                 VkPipelineLayout layout, uint32_t set, const void *pData);
@@ -2698,13 +2698,13 @@ public:
 
   // VK_EXT_host_image_copy
 
-  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkCopyImageToImageEXT, VkDevice device,
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkCopyImageToImage, VkDevice device,
                                 const VkCopyImageToImageInfo *pCopyImageToImageInfo);
-  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkCopyImageToMemoryEXT, VkDevice device,
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkCopyImageToMemory, VkDevice device,
                                 const VkCopyImageToMemoryInfo *pCopyImageToMemoryInfo);
-  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkCopyMemoryToImageEXT, VkDevice device,
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkCopyMemoryToImage, VkDevice device,
                                 const VkCopyMemoryToImageInfo *pCopyMemoryToImageInfo);
-  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkTransitionImageLayoutEXT, VkDevice device,
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkTransitionImageLayout, VkDevice device,
                                 uint32_t transitionCount,
                                 const VkHostImageLayoutTransitionInfo *pTransitions);
 
@@ -2772,7 +2772,7 @@ public:
 
   // VK_KHR_line_rasterization
 
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetLineStippleKHR, VkCommandBuffer commandBuffer,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetLineStipple, VkCommandBuffer commandBuffer,
                                 uint32_t lineStippleFactor, uint16_t lineStipplePattern);
 
   // VK_GOOGLE_display_timing
@@ -2970,10 +2970,10 @@ public:
 
   // VK_KHR_dynamic_rendering_local_read
 
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetRenderingAttachmentLocationsKHR,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetRenderingAttachmentLocations,
                                 VkCommandBuffer commandBuffer,
                                 const VkRenderingAttachmentLocationInfo *pLocationInfo);
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetRenderingInputAttachmentIndicesKHR,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdSetRenderingInputAttachmentIndices,
                                 VkCommandBuffer commandBuffer,
                                 const VkRenderingInputAttachmentIndexInfo *pLocationInfo);
 
@@ -3000,7 +3000,7 @@ public:
 
   // VK_EXT_swapchain_maintenance1
   VkResult vkReleaseSwapchainImagesEXT(VkDevice device,
-                                       const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo);
+                                       const VkReleaseSwapchainImagesInfoKHR *pReleaseInfo);
 
   // VK_KHR_swapchain_maintenance1
   VkResult vkReleaseSwapchainImagesKHR(VkDevice device,
@@ -3215,18 +3215,16 @@ public:
                                 VkDeviceAddress indirectDeviceAddress);
 
   // VK_KHR_maintenance5
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindIndexBuffer2KHR, VkCommandBuffer commandBuffer,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindIndexBuffer2, VkCommandBuffer commandBuffer,
                                 VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size,
                                 VkIndexType indexType);
-  void vkGetDeviceImageSubresourceLayoutKHR(VkDevice device,
-                                            const VkDeviceImageSubresourceInfo *pInfo,
-                                            VkSubresourceLayout2 *pLayout);
-  void vkGetImageSubresourceLayout2KHR(VkDevice device, VkImage image,
-                                       const VkImageSubresource2 *pSubresource,
-                                       VkSubresourceLayout2 *pLayout);
-  void vkGetRenderingAreaGranularityKHR(VkDevice device,
-                                        const VkRenderingAreaInfo *pRenderingAreaInfo,
-                                        VkExtent2D *pGranularity);
+  void vkGetDeviceImageSubresourceLayout(VkDevice device, const VkDeviceImageSubresourceInfo *pInfo,
+                                         VkSubresourceLayout2 *pLayout);
+  void vkGetImageSubresourceLayout2(VkDevice device, VkImage image,
+                                    const VkImageSubresource2 *pSubresource,
+                                    VkSubresourceLayout2 *pLayout);
+  void vkGetRenderingAreaGranularity(VkDevice device, const VkRenderingAreaInfo *pRenderingAreaInfo,
+                                     VkExtent2D *pGranularity);
 
   // VK_EXT_image_compression_control, VK_EXT_host_image_copy
   void vkGetImageSubresourceLayout2EXT(VkDevice device, VkImage image,
@@ -3265,9 +3263,9 @@ public:
                                 VkPipelineLayout layout, uint32_t set);
 
   // VK_KHR_map_memory2
-  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkMapMemory2KHR, VkDevice device,
+  IMPLEMENT_FUNCTION_SERIALISED(VkResult, vkMapMemory2, VkDevice device,
                                 const VkMemoryMapInfo *pMemoryMapInfo, void **ppData);
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkUnmapMemory2KHR, VkDevice device,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkUnmapMemory2, VkDevice device,
                                 const VkMemoryUnmapInfo *pMemoryUnmapInfo);
 
   // VK_KHR_present_wait2
@@ -3277,9 +3275,9 @@ public:
                                 const VkPresentWait2InfoKHR *pPresentWait2Info);
 
   // VK_KHR_maintenance5
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindDescriptorSets2KHR, VkCommandBuffer commandBuffer,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdBindDescriptorSets2, VkCommandBuffer commandBuffer,
                                 const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo);
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushConstants2KHR, VkCommandBuffer commandBuffer,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushConstants2, VkCommandBuffer commandBuffer,
                                 const VkPushConstantsInfo *pPushConstantsInfo);
   // VK_KHR_maintenance5+VK_EXT_descriptor_buffer
   IMPLEMENT_FUNCTION_SERIALISED(
@@ -3289,9 +3287,9 @@ public:
       void, vkCmdSetDescriptorBufferOffsets2EXT, VkCommandBuffer commandBuffer,
       const VkSetDescriptorBufferOffsetsInfoEXT *pSetDescriptorBufferOffsetsInfo);
   // VK_KHR_maintenance5+VK_KHR_push_descriptor
-  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet2KHR, VkCommandBuffer commandBuffer,
+  IMPLEMENT_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet2, VkCommandBuffer commandBuffer,
                                 const VkPushDescriptorSetInfo *pPushDescriptorSetInfo);
   IMPLEMENT_FUNCTION_SERIALISED(
-      void, vkCmdPushDescriptorSetWithTemplate2KHR, VkCommandBuffer commandBuffer,
+      void, vkCmdPushDescriptorSetWithTemplate2, VkCommandBuffer commandBuffer,
       const VkPushDescriptorSetWithTemplateInfo *pPushDescriptorSetWithTemplateInfo);
 };

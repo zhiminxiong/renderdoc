@@ -1191,9 +1191,9 @@ void WrappedVulkan::ProcessUnmap(VkDevice device, VkDeviceMemory mem, const VkMe
         {
           CACHE_THREAD_SERIALISER();
 
-          SCOPED_SERIALISE_CHUNK(info ? VulkanChunk::vkUnmapMemory2KHR : VulkanChunk::vkUnmapMemory);
+          SCOPED_SERIALISE_CHUNK(info ? VulkanChunk::vkUnmapMemory2 : VulkanChunk::vkUnmapMemory);
           if(info)
-            Serialise_vkUnmapMemory2KHR(ser, device, info);
+            Serialise_vkUnmapMemory2(ser, device, info);
           else
             Serialise_vkUnmapMemory(ser, device, mem);
 
@@ -1241,8 +1241,8 @@ VkResult WrappedVulkan::vkMapMemory(VkDevice device, VkDeviceMemory memory, VkDe
   return ret;
 }
 
-VkResult WrappedVulkan::vkMapMemory2KHR(VkDevice device, const VkMemoryMapInfo *pMemoryMapInfo,
-                                        void **ppData)
+VkResult WrappedVulkan::vkMapMemory2(VkDevice device, const VkMemoryMapInfo *pMemoryMapInfo,
+                                     void **ppData)
 {
   VkMemoryMapInfo unwrapped = *pMemoryMapInfo;
   unwrapped.memory = Unwrap(unwrapped.memory);
@@ -1250,7 +1250,7 @@ VkResult WrappedVulkan::vkMapMemory2KHR(VkDevice device, const VkMemoryMapInfo *
   VkDeviceSize misalignedOffset = AlignMapBoundaries(unwrapped.offset, unwrapped.size);
 
   byte *realData = NULL;
-  VkResult ret = ObjDisp(device)->MapMemory2KHR(Unwrap(device), &unwrapped, (void **)&realData);
+  VkResult ret = ObjDisp(device)->MapMemory2(Unwrap(device), &unwrapped, (void **)&realData);
 
   if(ret == VK_SUCCESS && realData)
   {
@@ -1320,8 +1320,8 @@ void WrappedVulkan::vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkUnmapMemory2KHR(SerialiserType &ser, VkDevice device,
-                                                const VkMemoryUnmapInfo *pMemoryUnmapInfo)
+bool WrappedVulkan::Serialise_vkUnmapMemory2(SerialiserType &ser, VkDevice device,
+                                             const VkMemoryUnmapInfo *pMemoryUnmapInfo)
 {
   SERIALISE_ELEMENT(device);
   SERIALISE_ELEMENT_LOCAL(UnmapInfo, *pMemoryUnmapInfo).Important();
@@ -1348,7 +1348,7 @@ bool WrappedVulkan::Serialise_vkUnmapMemory2KHR(SerialiserType &ser, VkDevice de
     VkMemoryMapInfo mapInfo = {
         VK_STRUCTURE_TYPE_MEMORY_MAP_INFO, NULL, 0, Unwrap(UnmapInfo.memory), MapOffset, MapSize,
     };
-    VkResult vkr = ObjDisp(device)->MapMemory2KHR(Unwrap(device), &mapInfo, (void **)&MapData);
+    VkResult vkr = ObjDisp(device)->MapMemory2(Unwrap(device), &mapInfo, (void **)&MapData);
     if(vkr != VK_SUCCESS)
     {
       SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIReplayFailed,
@@ -1364,7 +1364,7 @@ bool WrappedVulkan::Serialise_vkUnmapMemory2KHR(SerialiserType &ser, VkDevice de
   {
     VkMemoryUnmapInfo unwrapped = UnmapInfo;
     unwrapped.memory = Unwrap(unwrapped.memory);
-    ObjDisp(device)->UnmapMemory2KHR(Unwrap(device), &unwrapped);
+    ObjDisp(device)->UnmapMemory2(Unwrap(device), &unwrapped);
   }
 
   SERIALISE_CHECK_READ_ERRORS();
@@ -1372,13 +1372,13 @@ bool WrappedVulkan::Serialise_vkUnmapMemory2KHR(SerialiserType &ser, VkDevice de
   return true;
 }
 
-void WrappedVulkan::vkUnmapMemory2KHR(VkDevice device, const VkMemoryUnmapInfo *pMemoryUnmapInfo)
+void WrappedVulkan::vkUnmapMemory2(VkDevice device, const VkMemoryUnmapInfo *pMemoryUnmapInfo)
 {
   ProcessUnmap(device, VK_NULL_HANDLE, pMemoryUnmapInfo);
 
   VkMemoryUnmapInfo unwrapped = *pMemoryUnmapInfo;
   unwrapped.memory = Unwrap(unwrapped.memory);
-  ObjDisp(device)->UnmapMemory2KHR(Unwrap(device), &unwrapped);
+  ObjDisp(device)->UnmapMemory2(Unwrap(device), &unwrapped);
 }
 
 template <typename SerialiserType>
@@ -4053,5 +4053,5 @@ INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCreateAccelerationStructureKHR, VkDe
                                 const VkAllocationCallbacks *,
                                 VkAccelerationStructureKHR *pAccelerationStructure);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkUnmapMemory2KHR, VkDevice device,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkUnmapMemory2, VkDevice device,
                                 const VkMemoryUnmapInfo *pMemoryUnmapInfo);

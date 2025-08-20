@@ -330,10 +330,10 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
               VkPhysicalDeviceFragmentDensityMap2FeaturesEXT);                                        \
   COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_2_PROPERTIES_EXT,                \
               VkPhysicalDeviceFragmentDensityMap2PropertiesEXT);                                      \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM,            \
-              VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM);                                  \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_PROPERTIES_QCOM,          \
-              VkPhysicalDeviceFragmentDensityMapOffsetPropertiesQCOM);                                \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_EXT,             \
+              VkPhysicalDeviceFragmentDensityMapOffsetFeaturesEXT);                                   \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_PROPERTIES_EXT,           \
+              VkPhysicalDeviceFragmentDensityMapOffsetPropertiesEXT);                                 \
   COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT,               \
               VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT);                                    \
   COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,                   \
@@ -607,6 +607,10 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
               VkPhysicalDeviceVulkan13Features);                                                      \
   COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES,                                \
               VkPhysicalDeviceVulkan13Properties);                                                    \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,                                  \
+              VkPhysicalDeviceVulkan14Features);                                                      \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES,                                \
+              VkPhysicalDeviceVulkan14Properties);                                                    \
   COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES,                         \
               VkPhysicalDeviceVulkanMemoryModelFeatures);                                             \
   COPY_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_FEATURES_KHR,        \
@@ -694,6 +698,8 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2, VkRenderPassCreateInfo2);                  \
   COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,                     \
               VkRenderPassFragmentDensityMapCreateInfoEXT);                                           \
+  COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_EXT,                 \
+              VkRenderPassFragmentDensityMapOffsetEndInfoEXT);                                        \
   COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_INPUT_ATTACHMENT_ASPECT_CREATE_INFO,                      \
               VkRenderPassInputAttachmentAspectCreateInfo);                                           \
   COPY_STRUCT(VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO, VkRenderPassMultiviewCreateInfo);  \
@@ -724,8 +730,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2, VkSubpassDescription2);                        \
   COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE,                            \
               VkSubpassDescriptionDepthStencilResolve);                                               \
-  COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_QCOM,                    \
-              VkSubpassFragmentDensityMapOffsetEndInfoQCOM);                                          \
   COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_END_INFO, VkSubpassEndInfo);                                  \
   COPY_STRUCT(VK_STRUCTURE_TYPE_SUBPASS_RESOLVE_PERFORMANCE_QUERY_EXT,                                \
               VkSubpassResolvePerformanceQueryEXT);                                                   \
@@ -1290,8 +1294,6 @@ static void AppendModifiedChainedStruct(byte *&tempMem, VkStruct *outputStruct,
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_FORMAT_INFO_KHR:                                 \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_MAINTENANCE_1_FEATURES_KHR:                      \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_MAINTENANCE_2_FEATURES_KHR:                      \
-  case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES:                                   \
-  case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES:                                 \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_YCBCR_DEGAMMA_FEATURES_QCOM:                           \
   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ZERO_INITIALIZE_DEVICE_MEMORY_FEATURES_EXT:            \
   case VK_STRUCTURE_TYPE_PIPELINE_BINARY_CREATE_INFO_KHR:                                       \
@@ -1529,11 +1531,11 @@ size_t GetNextPatchSize(const void *pNext)
           memSize += info->pImageBinds[i].bindCount * sizeof(VkSparseImageMemoryBind);
         break;
       }
-      case VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO_KHR:
+      case VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO:
       {
-        memSize += sizeof(VkBindDescriptorSetsInfoKHR);
+        memSize += sizeof(VkBindDescriptorSetsInfo);
 
-        VkBindDescriptorSetsInfoKHR *info = (VkBindDescriptorSetsInfoKHR *)next;
+        VkBindDescriptorSetsInfo *info = (VkBindDescriptorSetsInfo *)next;
         memSize += info->descriptorSetCount * sizeof(VkDescriptorSet);
         break;
       }
@@ -1798,7 +1800,7 @@ size_t GetNextPatchSize(const void *pNext)
         memSize += info->colorAttachmentCount * sizeof(VkFormat);
         break;
       }
-      case VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO_KHR:
+      case VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO:
       {
         memSize += sizeof(VkPushDescriptorSetInfo);
 
@@ -2311,10 +2313,10 @@ void UnwrapNextChain(CaptureState state, const char *structName, byte *&tempMem,
 
         break;
       }
-      case VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO_KHR:
+      case VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO:
       {
-        const VkBindDescriptorSetsInfoKHR *in = (const VkBindDescriptorSetsInfoKHR *)nextInput;
-        VkBindDescriptorSetsInfoKHR *out = (VkBindDescriptorSetsInfoKHR *)tempMem;
+        const VkBindDescriptorSetsInfo *in = (const VkBindDescriptorSetsInfo *)nextInput;
+        VkBindDescriptorSetsInfo *out = (VkBindDescriptorSetsInfo *)tempMem;
 
         // append immediately so tempMem is incremented
         AppendModifiedChainedStruct(tempMem, out, nextChainTail);
@@ -2925,7 +2927,7 @@ void UnwrapNextChain(CaptureState state, const char *structName, byte *&tempMem,
 
         break;
       }
-      case VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO_KHR:
+      case VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO:
       {
         const VkPushDescriptorSetInfo *in = (const VkPushDescriptorSetInfo *)nextInput;
         VkPushDescriptorSetInfo *out = (VkPushDescriptorSetInfo *)tempMem;
@@ -3590,8 +3592,8 @@ void CopyNextChainForPatching(const char *structName, byte *&tempMem, VkBaseInSt
       case VK_STRUCTURE_TYPE_BIND_SPARSE_INFO:
         CopyNextChainedStruct(sizeof(VkBindSparseInfo), tempMem, nextInput, nextChainTail);
         break;
-      case VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO_KHR:
-        CopyNextChainedStruct(sizeof(VkBindDescriptorSetsInfoKHR), tempMem, nextInput, nextChainTail);
+      case VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO:
+        CopyNextChainedStruct(sizeof(VkBindDescriptorSetsInfo), tempMem, nextInput, nextChainTail);
         break;
       case VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2:
         CopyNextChainedStruct(sizeof(VkBlitImageInfo2), tempMem, nextInput, nextChainTail);
@@ -3670,7 +3672,7 @@ void CopyNextChainForPatching(const char *structName, byte *&tempMem, VkBaseInSt
         CopyNextChainedStruct(sizeof(VkPipelineRenderingCreateInfo), tempMem, nextInput,
                               nextChainTail);
         break;
-      case VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO_KHR:
+      case VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO:
         CopyNextChainedStruct(sizeof(VkPushDescriptorSetInfo), tempMem, nextInput, nextChainTail);
         break;
       case VK_STRUCTURE_TYPE_PRESENT_INFO_KHR:

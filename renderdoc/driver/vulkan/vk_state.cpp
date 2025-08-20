@@ -785,7 +785,7 @@ void VulkanRenderState::BindDynamicState(WrappedVulkan *vk, VkCommandBuffer cmd)
       type = VK_INDEX_TYPE_UINT8;
 
     if(vk->Maintenance5() && ibuffer.size != VK_WHOLE_SIZE)
-      ObjDisp(cmd)->CmdBindIndexBuffer2KHR(
+      ObjDisp(cmd)->CmdBindIndexBuffer2(
           Unwrap(cmd), Unwrap(vk->GetResourceManager()->GetCurrentHandle<VkBuffer>(ibuffer.buf)),
           ibuffer.offs, ibuffer.size, type);
     else
@@ -802,8 +802,8 @@ void VulkanRenderState::BindDynamicState(WrappedVulkan *vk, VkCommandBuffer cmd)
       type = VK_INDEX_TYPE_UINT8;
 
     if(vk->Maintenance5() && ibuffer.size != VK_WHOLE_SIZE)
-      ObjDisp(cmd)->CmdBindIndexBuffer2KHR(Unwrap(cmd), VK_NULL_HANDLE, ibuffer.offs, ibuffer.size,
-                                           type);
+      ObjDisp(cmd)->CmdBindIndexBuffer2(Unwrap(cmd), VK_NULL_HANDLE, ibuffer.offs, ibuffer.size,
+                                        type);
     else
       ObjDisp(cmd)->CmdBindIndexBuffer(Unwrap(cmd), VK_NULL_HANDLE, ibuffer.offs, type);
   }
@@ -1375,8 +1375,8 @@ void VulkanRenderState::BindDescriptorSet(WrappedVulkan *vk, const DescSetLayout
       push.pTexelBufferView = NULL;
     }
 
-    ObjDisp(cmd)->CmdPushDescriptorSetKHR(Unwrap(cmd), bindPoint, Unwrap(layout), setIndex,
-                                          (uint32_t)writes.size(), writes.data());
+    ObjDisp(cmd)->CmdPushDescriptorSet(Unwrap(cmd), bindPoint, Unwrap(layout), setIndex,
+                                       (uint32_t)writes.size(), writes.data());
 
     // delete allocated arrays for descriptor writes
     for(VkDescriptorBufferInfo *a : allocBufWrites)

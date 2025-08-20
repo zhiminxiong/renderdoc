@@ -1902,8 +1902,8 @@ VkResult WrappedVulkan::vkGetQueryPoolResults(VkDevice device, VkQueryPool query
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCopyImageToImageEXT(SerialiserType &ser, VkDevice device,
-                                                    const VkCopyImageToImageInfo *pCopyImageToImageInfo)
+bool WrappedVulkan::Serialise_vkCopyImageToImage(SerialiserType &ser, VkDevice device,
+                                                 const VkCopyImageToImageInfo *pCopyImageToImageInfo)
 {
   SERIALISE_ELEMENT(device);
   SERIALISE_ELEMENT_LOCAL(CopyImageToImageInfo, *pCopyImageToImageInfo).Important();
@@ -1917,7 +1917,7 @@ bool WrappedVulkan::Serialise_vkCopyImageToImageEXT(SerialiserType &ser, VkDevic
     CopyImageToImageInfo.srcImage = Unwrap(CopyImageToImageInfo.srcImage);
     CopyImageToImageInfo.dstImage = Unwrap(CopyImageToImageInfo.dstImage);
 
-    ObjDisp(device)->CopyImageToImageEXT(Unwrap(device), &CopyImageToImageInfo);
+    ObjDisp(device)->CopyImageToImage(Unwrap(device), &CopyImageToImageInfo);
 
     if(!IsActiveReplaying(m_State))
     {
@@ -1968,8 +1968,8 @@ bool WrappedVulkan::Serialise_vkCopyImageToImageEXT(SerialiserType &ser, VkDevic
   return true;
 }
 
-VkResult WrappedVulkan::vkCopyImageToImageEXT(VkDevice device,
-                                              const VkCopyImageToImageInfo *pCopyImageToImageInfo)
+VkResult WrappedVulkan::vkCopyImageToImage(VkDevice device,
+                                           const VkCopyImageToImageInfo *pCopyImageToImageInfo)
 {
   SCOPED_DBG_SINK();
 
@@ -1978,7 +1978,7 @@ VkResult WrappedVulkan::vkCopyImageToImageEXT(VkDevice device,
       UnwrapStructAndChain(m_State, tempMem, pCopyImageToImageInfo);
 
   VkResult ret;
-  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CopyImageToImageEXT(Unwrap(device), unwrappedInfo));
+  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CopyImageToImage(Unwrap(device), unwrappedInfo));
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
@@ -1989,7 +1989,7 @@ VkResult WrappedVulkan::vkCopyImageToImageEXT(VkDevice device,
 
       ser.SetActionChunk();
       SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCopyImageToImage);
-      Serialise_vkCopyImageToImageEXT(ser, device, pCopyImageToImageInfo);
+      Serialise_vkCopyImageToImage(ser, device, pCopyImageToImageInfo);
 
       m_FrameCaptureRecord->AddChunk(scope.Get());
       GetResourceManager()->MarkResourceFrameReferenced(GetResID(pCopyImageToImageInfo->srcImage),
@@ -2003,8 +2003,8 @@ VkResult WrappedVulkan::vkCopyImageToImageEXT(VkDevice device,
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCopyImageToMemoryEXT(
-    SerialiserType &ser, VkDevice device, const VkCopyImageToMemoryInfo *pCopyImageToMemoryInfo)
+bool WrappedVulkan::Serialise_vkCopyImageToMemory(SerialiserType &ser, VkDevice device,
+                                                  const VkCopyImageToMemoryInfo *pCopyImageToMemoryInfo)
 {
   SERIALISE_ELEMENT(device);
   SERIALISE_ELEMENT_LOCAL(CopyImageToMemoryInfo, *pCopyImageToMemoryInfo).Important();
@@ -2018,7 +2018,7 @@ bool WrappedVulkan::Serialise_vkCopyImageToMemoryEXT(
     VkImage srcImage = CopyImageToMemoryInfo.srcImage;
     CopyImageToMemoryInfo.srcImage = Unwrap(srcImage);
 
-    ObjDisp(device)->CopyImageToMemoryEXT(Unwrap(device), &CopyImageToMemoryInfo);
+    ObjDisp(device)->CopyImageToMemory(Unwrap(device), &CopyImageToMemoryInfo);
 
     if(!IsActiveReplaying(m_State))
     {
@@ -2050,13 +2050,13 @@ bool WrappedVulkan::Serialise_vkCopyImageToMemoryEXT(
   return true;
 }
 
-VkResult WrappedVulkan::vkCopyImageToMemoryEXT(VkDevice device,
-                                               const VkCopyImageToMemoryInfo *pCopyImageToMemoryInfo)
+VkResult WrappedVulkan::vkCopyImageToMemory(VkDevice device,
+                                            const VkCopyImageToMemoryInfo *pCopyImageToMemoryInfo)
 {
   SCOPED_DBG_SINK();
 
   // Calls with VK_HOST_IMAGE_COPY_MEMCPY_BIT are not supported, and are not expected from typical
-  // applications. See comment in vkCopyMemoryToImageEXT() for more details.
+  // applications. See comment in vkCopyMemoryToImage() for more details.
   if((pCopyImageToMemoryInfo->flags & VK_HOST_IMAGE_COPY_MEMCPY_BIT) != 0)
   {
     return VK_SUCCESS;
@@ -2067,7 +2067,7 @@ VkResult WrappedVulkan::vkCopyImageToMemoryEXT(VkDevice device,
       UnwrapStructAndChain(m_State, tempMem, pCopyImageToMemoryInfo);
 
   VkResult ret;
-  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CopyImageToMemoryEXT(Unwrap(device), unwrappedInfo));
+  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CopyImageToMemory(Unwrap(device), unwrappedInfo));
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
@@ -2078,7 +2078,7 @@ VkResult WrappedVulkan::vkCopyImageToMemoryEXT(VkDevice device,
 
       ser.SetActionChunk();
       SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCopyImageToMemory);
-      Serialise_vkCopyImageToMemoryEXT(ser, device, pCopyImageToMemoryInfo);
+      Serialise_vkCopyImageToMemory(ser, device, pCopyImageToMemoryInfo);
 
       m_FrameCaptureRecord->AddChunk(scope.Get());
       GetResourceManager()->MarkResourceFrameReferenced(GetResID(pCopyImageToMemoryInfo->srcImage),
@@ -2090,8 +2090,8 @@ VkResult WrappedVulkan::vkCopyImageToMemoryEXT(VkDevice device,
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCopyMemoryToImageEXT(
-    SerialiserType &ser, VkDevice device, const VkCopyMemoryToImageInfo *pCopyMemoryToImageInfo)
+bool WrappedVulkan::Serialise_vkCopyMemoryToImage(SerialiserType &ser, VkDevice device,
+                                                  const VkCopyMemoryToImageInfo *pCopyMemoryToImageInfo)
 {
   SERIALISE_ELEMENT(device);
   SERIALISE_ELEMENT_LOCAL(CopyMemoryToImageInfo, *pCopyMemoryToImageInfo).Important();
@@ -2105,7 +2105,7 @@ bool WrappedVulkan::Serialise_vkCopyMemoryToImageEXT(
     VkImage dstImage = CopyMemoryToImageInfo.dstImage;
     CopyMemoryToImageInfo.dstImage = Unwrap(dstImage);
 
-    ObjDisp(device)->CopyMemoryToImageEXT(Unwrap(device), &CopyMemoryToImageInfo);
+    ObjDisp(device)->CopyMemoryToImage(Unwrap(device), &CopyMemoryToImageInfo);
 
     if(!IsActiveReplaying(m_State))
     {
@@ -2137,8 +2137,8 @@ bool WrappedVulkan::Serialise_vkCopyMemoryToImageEXT(
   return true;
 }
 
-VkResult WrappedVulkan::vkCopyMemoryToImageEXT(VkDevice device,
-                                               const VkCopyMemoryToImageInfo *pCopyMemoryToImageInfo)
+VkResult WrappedVulkan::vkCopyMemoryToImage(VkDevice device,
+                                            const VkCopyMemoryToImageInfo *pCopyMemoryToImageInfo)
 {
   SCOPED_DBG_SINK();
 
@@ -2165,7 +2165,7 @@ VkResult WrappedVulkan::vkCopyMemoryToImageEXT(VkDevice device,
       UnwrapStructAndChain(m_State, tempMem, pCopyMemoryToImageInfo);
 
   VkResult ret;
-  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CopyMemoryToImageEXT(Unwrap(device), unwrappedInfo));
+  SERIALISE_TIME_CALL(ret = ObjDisp(device)->CopyMemoryToImage(Unwrap(device), unwrappedInfo));
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
@@ -2176,7 +2176,7 @@ VkResult WrappedVulkan::vkCopyMemoryToImageEXT(VkDevice device,
 
       ser.SetActionChunk();
       SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCopyMemoryToImage);
-      Serialise_vkCopyMemoryToImageEXT(ser, device, pCopyMemoryToImageInfo);
+      Serialise_vkCopyMemoryToImage(ser, device, pCopyMemoryToImageInfo);
 
       m_FrameCaptureRecord->AddChunk(scope.Get());
       GetResourceManager()->MarkResourceFrameReferenced(GetResID(pCopyMemoryToImageInfo->dstImage),
@@ -3125,13 +3125,13 @@ INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCreateSamplerYcbcrConversion, VkDevi
                                 const VkAllocationCallbacks *,
                                 VkSamplerYcbcrConversion *pYcbcrConversion);
 
-INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCopyImageToImageEXT, VkDevice device,
+INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCopyImageToImage, VkDevice device,
                                 const VkCopyImageToImageInfo *pCopyImageToImageInfo);
 
-INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCopyImageToMemoryEXT, VkDevice device,
+INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCopyImageToMemory, VkDevice device,
                                 const VkCopyImageToMemoryInfo *pCopyImageToMemoryInfo);
 
-INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCopyMemoryToImageEXT, VkDevice device,
+INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkCopyMemoryToImage, VkDevice device,
                                 const VkCopyMemoryToImageInfo *pCopyMemoryToImageInfo);
 
 INSTANTIATE_FUNCTION_SERIALISED(VkResult, vkResetQueryPool, VkDevice device, VkQueryPool queryPool,

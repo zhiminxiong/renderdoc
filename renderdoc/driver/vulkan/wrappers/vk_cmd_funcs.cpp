@@ -3326,10 +3326,10 @@ bool WrappedVulkan::Serialise_vkCmdEndRenderPass2(SerialiserType &ser, VkCommand
         m_BakedCmdBufferInfo[m_LastCmdBufferID].renderPassOpen = false;
         m_BakedCmdBufferInfo[m_LastCmdBufferID].endBarriers.append(GetImplicitRenderPassBarriers(~0U));
 
-        const VkSubpassFragmentDensityMapOffsetEndInfoQCOM *fragmentDensityOffsetStruct =
-            (const VkSubpassFragmentDensityMapOffsetEndInfoQCOM *)FindNextStruct(
+        const VkRenderPassFragmentDensityMapOffsetEndInfoEXT *fragmentDensityOffsetStruct =
+            (const VkRenderPassFragmentDensityMapOffsetEndInfoEXT *)FindNextStruct(
                 &unwrappedEndInfo,
-                VK_STRUCTURE_TYPE_SUBPASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_QCOM);
+                VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_EXT);
 
         if(fragmentDensityOffsetStruct)
         {
@@ -3986,7 +3986,7 @@ void WrappedVulkan::vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets2KHR(
+bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets2(
     SerialiserType &ser, VkCommandBuffer commandBuffer,
     const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo)
 {
@@ -4014,7 +4014,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets2KHR(
       {
         commandBuffer = RerecordCmdBuf(m_LastCmdBufferID);
 
-        ObjDisp(commandBuffer)->CmdBindDescriptorSets2KHR(Unwrap(commandBuffer), unwrappedInfo);
+        ObjDisp(commandBuffer)->CmdBindDescriptorSets2(Unwrap(commandBuffer), unwrappedInfo);
 
         {
           VulkanRenderState &renderstate = GetCmdRenderState();
@@ -4093,15 +4093,15 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets2KHR(
         }
       }
 
-      ObjDisp(commandBuffer)->CmdBindDescriptorSets2KHR(Unwrap(commandBuffer), unwrappedInfo);
+      ObjDisp(commandBuffer)->CmdBindDescriptorSets2(Unwrap(commandBuffer), unwrappedInfo);
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdBindDescriptorSets2KHR(VkCommandBuffer commandBuffer,
-                                                const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo)
+void WrappedVulkan::vkCmdBindDescriptorSets2(VkCommandBuffer commandBuffer,
+                                             const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo)
 {
   SCOPED_DBG_SINK();
 
@@ -4110,7 +4110,7 @@ void WrappedVulkan::vkCmdBindDescriptorSets2KHR(VkCommandBuffer commandBuffer,
       UnwrapStructAndChain(m_State, tempMem, pBindDescriptorSetsInfo);
 
   SERIALISE_TIME_CALL(
-      ObjDisp(commandBuffer)->CmdBindDescriptorSets2KHR(Unwrap(commandBuffer), unwrappedInfo));
+      ObjDisp(commandBuffer)->CmdBindDescriptorSets2(Unwrap(commandBuffer), unwrappedInfo));
 
   if(IsCaptureMode(m_State))
   {
@@ -4118,8 +4118,8 @@ void WrappedVulkan::vkCmdBindDescriptorSets2KHR(VkCommandBuffer commandBuffer,
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdBindDescriptorSets2KHR);
-    Serialise_vkCmdBindDescriptorSets2KHR(ser, commandBuffer, pBindDescriptorSetsInfo);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdBindDescriptorSets2);
+    Serialise_vkCmdBindDescriptorSets2(ser, commandBuffer, pBindDescriptorSetsInfo);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkResourceFrameReferenced(GetResID(pBindDescriptorSetsInfo->layout), eFrameRef_Read);
@@ -4502,9 +4502,8 @@ void WrappedVulkan::vkCmdPushConstants(VkCommandBuffer commandBuffer, VkPipeline
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdPushConstants2KHR(SerialiserType &ser,
-                                                     VkCommandBuffer commandBuffer,
-                                                     const VkPushConstantsInfo *pPushConstantsInfo)
+bool WrappedVulkan::Serialise_vkCmdPushConstants2(SerialiserType &ser, VkCommandBuffer commandBuffer,
+                                                  const VkPushConstantsInfo *pPushConstantsInfo)
 {
   SERIALISE_ELEMENT(commandBuffer);
   SERIALISE_ELEMENT_LOCAL(PushConstantsInfo, *pPushConstantsInfo);
@@ -4525,7 +4524,7 @@ bool WrappedVulkan::Serialise_vkCmdPushConstants2KHR(SerialiserType &ser,
       if(InRerecordRange(m_LastCmdBufferID))
       {
         commandBuffer = RerecordCmdBuf(m_LastCmdBufferID);
-        ObjDisp(commandBuffer)->CmdPushConstants2KHR(Unwrap(commandBuffer), unwrappedInfo);
+        ObjDisp(commandBuffer)->CmdPushConstants2(Unwrap(commandBuffer), unwrappedInfo);
 
         {
           VulkanRenderState &renderstate = GetCmdRenderState();
@@ -4545,23 +4544,22 @@ bool WrappedVulkan::Serialise_vkCmdPushConstants2KHR(SerialiserType &ser,
     }
     else
     {
-      ObjDisp(commandBuffer)->CmdPushConstants2KHR(Unwrap(commandBuffer), unwrappedInfo);
+      ObjDisp(commandBuffer)->CmdPushConstants2(Unwrap(commandBuffer), unwrappedInfo);
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdPushConstants2KHR(VkCommandBuffer commandBuffer,
-                                           const VkPushConstantsInfo *pPushConstantsInfo)
+void WrappedVulkan::vkCmdPushConstants2(VkCommandBuffer commandBuffer,
+                                        const VkPushConstantsInfo *pPushConstantsInfo)
 {
   SCOPED_DBG_SINK();
 
   byte *tempMem = GetTempMemory(GetNextPatchSize(pPushConstantsInfo));
   VkPushConstantsInfo *unwrappedInfo = UnwrapStructAndChain(m_State, tempMem, pPushConstantsInfo);
 
-  SERIALISE_TIME_CALL(
-      ObjDisp(commandBuffer)->CmdPushConstants2KHR(Unwrap(commandBuffer), unwrappedInfo));
+  SERIALISE_TIME_CALL(ObjDisp(commandBuffer)->CmdPushConstants2(Unwrap(commandBuffer), unwrappedInfo));
 
   if(IsCaptureMode(m_State))
   {
@@ -4569,8 +4567,8 @@ void WrappedVulkan::vkCmdPushConstants2KHR(VkCommandBuffer commandBuffer,
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushConstants2KHR);
-    Serialise_vkCmdPushConstants2KHR(ser, commandBuffer, pPushConstantsInfo);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushConstants2);
+    Serialise_vkCmdPushConstants2(ser, commandBuffer, pPushConstantsInfo);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkResourceFrameReferenced(GetResID(pPushConstantsInfo->layout), eFrameRef_Read);
@@ -6149,12 +6147,12 @@ void WrappedVulkan::ApplyPushDescriptorWrites(VkPipelineBindPoint pipelineBindPo
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetKHR(SerialiserType &ser,
-                                                        VkCommandBuffer commandBuffer,
-                                                        VkPipelineBindPoint pipelineBindPoint,
-                                                        VkPipelineLayout layout, uint32_t set,
-                                                        uint32_t descriptorWriteCount,
-                                                        const VkWriteDescriptorSet *pDescriptorWrites)
+bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet(SerialiserType &ser,
+                                                     VkCommandBuffer commandBuffer,
+                                                     VkPipelineBindPoint pipelineBindPoint,
+                                                     VkPipelineLayout layout, uint32_t set,
+                                                     uint32_t descriptorWriteCount,
+                                                     const VkWriteDescriptorSet *pDescriptorWrites)
 {
   SERIALISE_ELEMENT(commandBuffer);
   SERIALISE_ELEMENT(pipelineBindPoint);
@@ -6232,19 +6230,19 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetKHR(SerialiserType &ser,
       UnwrapDescriptorWritesInPlace((VkWriteDescriptorSet *)pDescriptorWrites, descriptorWriteCount);
 
       ObjDisp(commandBuffer)
-          ->CmdPushDescriptorSetKHR(Unwrap(commandBuffer), pipelineBindPoint, Unwrap(layout), set,
-                                    descriptorWriteCount, pDescriptorWrites);
+          ->CmdPushDescriptorSet(Unwrap(commandBuffer), pipelineBindPoint, Unwrap(layout), set,
+                                 descriptorWriteCount, pDescriptorWrites);
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdPushDescriptorSetKHR(VkCommandBuffer commandBuffer,
-                                              VkPipelineBindPoint pipelineBindPoint,
-                                              VkPipelineLayout layout, uint32_t set,
-                                              uint32_t descriptorWriteCount,
-                                              const VkWriteDescriptorSet *pDescriptorWrites)
+void WrappedVulkan::vkCmdPushDescriptorSet(VkCommandBuffer commandBuffer,
+                                           VkPipelineBindPoint pipelineBindPoint,
+                                           VkPipelineLayout layout, uint32_t set,
+                                           uint32_t descriptorWriteCount,
+                                           const VkWriteDescriptorSet *pDescriptorWrites)
 {
   SCOPED_DBG_SINK();
 
@@ -6385,9 +6383,9 @@ void WrappedVulkan::vkCmdPushDescriptorSetKHR(VkCommandBuffer commandBuffer,
     }
 
     SERIALISE_TIME_CALL(ObjDisp(commandBuffer)
-                            ->CmdPushDescriptorSetKHR(Unwrap(commandBuffer), pipelineBindPoint,
-                                                      Unwrap(layout), set, descriptorWriteCount,
-                                                      unwrappedWrites));
+                            ->CmdPushDescriptorSet(Unwrap(commandBuffer), pipelineBindPoint,
+                                                   Unwrap(layout), set, descriptorWriteCount,
+                                                   unwrappedWrites));
   }
 
   if(IsCaptureMode(m_State))
@@ -6403,9 +6401,9 @@ void WrappedVulkan::vkCmdPushDescriptorSetKHR(VkCommandBuffer commandBuffer,
     for(uint32_t i = 0; i < descriptorWriteCount; i++)
       sanitised[i].dstSet = VK_NULL_HANDLE;
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSetKHR);
-    Serialise_vkCmdPushDescriptorSetKHR(ser, commandBuffer, pipelineBindPoint, layout, set,
-                                        descriptorWriteCount, sanitised);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSet);
+    Serialise_vkCmdPushDescriptorSet(ser, commandBuffer, pipelineBindPoint, layout, set,
+                                     descriptorWriteCount, sanitised);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkResourceFrameReferenced(GetResID(layout), eFrameRef_Read);
@@ -6414,7 +6412,7 @@ void WrappedVulkan::vkCmdPushDescriptorSetKHR(VkCommandBuffer commandBuffer,
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplateKHR(
+bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate(
     SerialiserType &ser, VkCommandBuffer commandBuffer,
     VkDescriptorUpdateTemplate descriptorUpdateTemplate, VkPipelineLayout layout, uint32_t set,
     const void *pData)
@@ -6508,15 +6506,15 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplateKHR(
                                     apply.writes.count());
 
       ObjDisp(commandBuffer)
-          ->CmdPushDescriptorSetKHR(Unwrap(commandBuffer), bindPoint, Unwrap(layout), set,
-                                    (uint32_t)apply.writes.size(), apply.writes.data());
+          ->CmdPushDescriptorSet(Unwrap(commandBuffer), bindPoint, Unwrap(layout), set,
+                                 (uint32_t)apply.writes.size(), apply.writes.data());
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdPushDescriptorSetWithTemplateKHR(
+void WrappedVulkan::vkCmdPushDescriptorSetWithTemplate(
     VkCommandBuffer commandBuffer, VkDescriptorUpdateTemplate descriptorUpdateTemplate,
     VkPipelineLayout layout, uint32_t set, const void *pData)
 {
@@ -6535,9 +6533,9 @@ void WrappedVulkan::vkCmdPushDescriptorSetWithTemplateKHR(
     refs.UnwrapAndGatherRefs(tempInfo, tempMem, pData);
 
     SERIALISE_TIME_CALL(ObjDisp(commandBuffer)
-                            ->CmdPushDescriptorSetWithTemplateKHR(Unwrap(commandBuffer),
-                                                                  Unwrap(descriptorUpdateTemplate),
-                                                                  Unwrap(layout), set, tempMem));
+                            ->CmdPushDescriptorSetWithTemplate(Unwrap(commandBuffer),
+                                                               Unwrap(descriptorUpdateTemplate),
+                                                               Unwrap(layout), set, tempMem));
   }
 
   if(IsCaptureMode(m_State))
@@ -6546,9 +6544,9 @@ void WrappedVulkan::vkCmdPushDescriptorSetWithTemplateKHR(
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSetWithTemplateKHR);
-    Serialise_vkCmdPushDescriptorSetWithTemplateKHR(ser, commandBuffer, descriptorUpdateTemplate,
-                                                    layout, set, pData);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSetWithTemplate);
+    Serialise_vkCmdPushDescriptorSetWithTemplate(ser, commandBuffer, descriptorUpdateTemplate,
+                                                 layout, set, pData);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkResourceFrameReferenced(GetResID(descriptorUpdateTemplate), eFrameRef_Read);
@@ -8924,10 +8922,10 @@ void WrappedVulkan::vkCmdBindShadersEXT(VkCommandBuffer commandBuffer, uint32_t 
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdBindIndexBuffer2KHR(SerialiserType &ser,
-                                                       VkCommandBuffer commandBuffer,
-                                                       VkBuffer buffer, VkDeviceSize offset,
-                                                       VkDeviceSize size, VkIndexType indexType)
+bool WrappedVulkan::Serialise_vkCmdBindIndexBuffer2(SerialiserType &ser,
+                                                    VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                                    VkDeviceSize offset, VkDeviceSize size,
+                                                    VkIndexType indexType)
 {
   SERIALISE_ELEMENT(commandBuffer);
   SERIALISE_ELEMENT(buffer).Important();
@@ -8949,7 +8947,7 @@ bool WrappedVulkan::Serialise_vkCmdBindIndexBuffer2KHR(SerialiserType &ser,
       {
         commandBuffer = RerecordCmdBuf(m_LastCmdBufferID);
         ObjDisp(commandBuffer)
-            ->CmdBindIndexBuffer2KHR(Unwrap(commandBuffer), Unwrap(buffer), offset, size, indexType);
+            ->CmdBindIndexBuffer2(Unwrap(commandBuffer), Unwrap(buffer), offset, size, indexType);
 
         {
           VulkanRenderState &renderstate = GetCmdRenderState();
@@ -8959,7 +8957,7 @@ bool WrappedVulkan::Serialise_vkCmdBindIndexBuffer2KHR(SerialiserType &ser,
 
           if(indexType == VK_INDEX_TYPE_UINT32)
             renderstate.ibuffer.bytewidth = 4;
-          else if(indexType == VK_INDEX_TYPE_UINT8_KHR)
+          else if(indexType == VK_INDEX_TYPE_UINT8)
             renderstate.ibuffer.bytewidth = 1;
           else
             renderstate.ibuffer.bytewidth = 2;
@@ -8971,7 +8969,7 @@ bool WrappedVulkan::Serialise_vkCmdBindIndexBuffer2KHR(SerialiserType &ser,
       // track while reading, as we need to bind current topology & index byte width in AddAction
       if(indexType == VK_INDEX_TYPE_UINT32)
         m_BakedCmdBufferInfo[m_LastCmdBufferID].state.ibuffer.bytewidth = 4;
-      else if(indexType == VK_INDEX_TYPE_UINT8_KHR)
+      else if(indexType == VK_INDEX_TYPE_UINT8)
         m_BakedCmdBufferInfo[m_LastCmdBufferID].state.ibuffer.bytewidth = 1;
       else
         m_BakedCmdBufferInfo[m_LastCmdBufferID].state.ibuffer.bytewidth = 2;
@@ -8980,22 +8978,22 @@ bool WrappedVulkan::Serialise_vkCmdBindIndexBuffer2KHR(SerialiserType &ser,
       m_BakedCmdBufferInfo[m_LastCmdBufferID].state.ibuffer.buf = GetResID(buffer);
 
       ObjDisp(commandBuffer)
-          ->CmdBindIndexBuffer2KHR(Unwrap(commandBuffer), Unwrap(buffer), offset, size, indexType);
+          ->CmdBindIndexBuffer2(Unwrap(commandBuffer), Unwrap(buffer), offset, size, indexType);
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdBindIndexBuffer2KHR(VkCommandBuffer commandBuffer, VkBuffer buffer,
-                                             VkDeviceSize offset, VkDeviceSize size,
-                                             VkIndexType indexType)
+void WrappedVulkan::vkCmdBindIndexBuffer2(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                          VkDeviceSize offset, VkDeviceSize size,
+                                          VkIndexType indexType)
 {
   SCOPED_DBG_SINK();
 
   SERIALISE_TIME_CALL(
       ObjDisp(commandBuffer)
-          ->CmdBindIndexBuffer2KHR(Unwrap(commandBuffer), Unwrap(buffer), offset, size, indexType));
+          ->CmdBindIndexBuffer2(Unwrap(commandBuffer), Unwrap(buffer), offset, size, indexType));
 
   if(IsCaptureMode(m_State))
   {
@@ -9003,8 +9001,8 @@ void WrappedVulkan::vkCmdBindIndexBuffer2KHR(VkCommandBuffer commandBuffer, VkBu
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdBindIndexBuffer2KHR);
-    Serialise_vkCmdBindIndexBuffer2KHR(ser, commandBuffer, buffer, offset, size, indexType);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdBindIndexBuffer2);
+    Serialise_vkCmdBindIndexBuffer2(ser, commandBuffer, buffer, offset, size, indexType);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkBufferFrameReferenced(GetRecord(buffer), offset, size, eFrameRef_Read);
@@ -9627,7 +9625,7 @@ void WrappedVulkan::vkCmdBindDescriptorBufferEmbeddedSamplers2EXT(
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2KHR(
+bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2(
     SerialiserType &ser, VkCommandBuffer commandBuffer,
     const VkPushDescriptorSetInfo *pPushDescriptorSetInfo)
 {
@@ -9723,15 +9721,15 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2KHR(
       UnwrapNextChain(m_State, "VkPushDescriptorSetInfo", tempMem,
                       (VkBaseInStructure *)&unwrappedInfo);
 
-      ObjDisp(commandBuffer)->CmdPushDescriptorSet2KHR(Unwrap(commandBuffer), &unwrappedInfo);
+      ObjDisp(commandBuffer)->CmdPushDescriptorSet2(Unwrap(commandBuffer), &unwrappedInfo);
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdPushDescriptorSet2KHR(VkCommandBuffer commandBuffer,
-                                               const VkPushDescriptorSetInfo *pPushDescriptorSetInfo)
+void WrappedVulkan::vkCmdPushDescriptorSet2(VkCommandBuffer commandBuffer,
+                                            const VkPushDescriptorSetInfo *pPushDescriptorSetInfo)
 {
   SCOPED_DBG_SINK();
 
@@ -9740,7 +9738,7 @@ void WrappedVulkan::vkCmdPushDescriptorSet2KHR(VkCommandBuffer commandBuffer,
       UnwrapStructAndChain(m_State, tempMem, pPushDescriptorSetInfo);
 
   SERIALISE_TIME_CALL(
-      ObjDisp(commandBuffer)->CmdPushDescriptorSet2KHR(Unwrap(commandBuffer), unwrappedInfo));
+      ObjDisp(commandBuffer)->CmdPushDescriptorSet2(Unwrap(commandBuffer), unwrappedInfo));
 
   if(IsCaptureMode(m_State))
   {
@@ -9759,8 +9757,8 @@ void WrappedVulkan::vkCmdPushDescriptorSet2KHR(VkCommandBuffer commandBuffer,
     VkPushDescriptorSetInfo sanitisedInfo = *pPushDescriptorSetInfo;
     sanitisedInfo.pDescriptorWrites = sanitised;
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSet2KHR);
-    Serialise_vkCmdPushDescriptorSet2KHR(ser, commandBuffer, &sanitisedInfo);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSet2);
+    Serialise_vkCmdPushDescriptorSet2(ser, commandBuffer, &sanitisedInfo);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkResourceFrameReferenced(GetResID(pPushDescriptorSetInfo->layout), eFrameRef_Read);
@@ -9770,7 +9768,7 @@ void WrappedVulkan::vkCmdPushDescriptorSet2KHR(VkCommandBuffer commandBuffer,
 }
 
 template <typename SerialiserType>
-bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate2KHR(
+bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate2(
     SerialiserType &ser, VkCommandBuffer commandBuffer,
     const VkPushDescriptorSetWithTemplateInfo *pPushDescriptorSetWithTemplateInfo)
 {
@@ -9885,14 +9883,14 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate2KHR(
       UnwrapNextChain(m_State, "VkPushDescriptorSetInfo", tempMem,
                       (VkBaseInStructure *)&unwrappedInfo);
 
-      ObjDisp(commandBuffer)->CmdPushDescriptorSet2KHR(Unwrap(commandBuffer), &unwrappedInfo);
+      ObjDisp(commandBuffer)->CmdPushDescriptorSet2(Unwrap(commandBuffer), &unwrappedInfo);
     }
   }
 
   return true;
 }
 
-void WrappedVulkan::vkCmdPushDescriptorSetWithTemplate2KHR(
+void WrappedVulkan::vkCmdPushDescriptorSetWithTemplate2(
     VkCommandBuffer commandBuffer,
     const VkPushDescriptorSetWithTemplateInfo *pPushDescriptorSetWithTemplateInfo)
 {
@@ -9919,8 +9917,7 @@ void WrappedVulkan::vkCmdPushDescriptorSetWithTemplate2KHR(
     unwrappedInfo.pData = tempMem;
 
     SERIALISE_TIME_CALL(
-        ObjDisp(commandBuffer)
-            ->CmdPushDescriptorSetWithTemplate2KHR(Unwrap(commandBuffer), &unwrappedInfo));
+        ObjDisp(commandBuffer)->CmdPushDescriptorSetWithTemplate2(Unwrap(commandBuffer), &unwrappedInfo));
   }
 
   if(IsCaptureMode(m_State))
@@ -9929,9 +9926,9 @@ void WrappedVulkan::vkCmdPushDescriptorSetWithTemplate2KHR(
 
     CACHE_THREAD_SERIALISER();
 
-    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSetWithTemplate2KHR);
-    Serialise_vkCmdPushDescriptorSetWithTemplate2KHR(ser, commandBuffer,
-                                                     pPushDescriptorSetWithTemplateInfo);
+    SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCmdPushDescriptorSetWithTemplate2);
+    Serialise_vkCmdPushDescriptorSetWithTemplate2(ser, commandBuffer,
+                                                  pPushDescriptorSetWithTemplateInfo);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
     record->MarkResourceFrameReferenced(
@@ -9982,7 +9979,7 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindDescriptorSets, VkCommandBuffer c
                                 const VkDescriptorSet *pDescriptorSets, uint32_t dynamicOffsetCount,
                                 const uint32_t *pDynamicOffsets);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindDescriptorSets2KHR, VkCommandBuffer commandBuffer,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindDescriptorSets2, VkCommandBuffer commandBuffer,
                                 const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo);
 
 INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindIndexBuffer, VkCommandBuffer commandBuffer,
@@ -9996,7 +9993,7 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushConstants, VkCommandBuffer comman
                                 VkPipelineLayout layout, VkShaderStageFlags stageFlags,
                                 uint32_t offset, uint32_t size, const void *pValues);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushConstants2KHR, VkCommandBuffer commandBuffer,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushConstants2, VkCommandBuffer commandBuffer,
                                 const VkPushConstantsInfo *pPushConstantsInfo);
 
 INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPipelineBarrier, VkCommandBuffer commandBuffer,
@@ -10037,12 +10034,12 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdDebugMarkerEndEXT, VkCommandBuffer co
 INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdDebugMarkerInsertEXT, VkCommandBuffer commandBuffer,
                                 const VkDebugMarkerMarkerInfoEXT *pMarker);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSetKHR, VkCommandBuffer commandBuffer,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet, VkCommandBuffer commandBuffer,
                                 VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout,
                                 uint32_t set, uint32_t descriptorWriteCount,
                                 const VkWriteDescriptorSet *pDescriptorWrites);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSetWithTemplateKHR,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSetWithTemplate,
                                 VkCommandBuffer commandBuffer,
                                 VkDescriptorUpdateTemplate descriptorUpdateTemplate,
                                 VkPipelineLayout layout, uint32_t set, const void *pData);
@@ -10140,7 +10137,7 @@ INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindShadersEXT, VkCommandBuffer comma
                                 uint32_t stageCount, const VkShaderStageFlagBits *pStages,
                                 const VkShaderEXT *pShaders);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindIndexBuffer2KHR, VkCommandBuffer commandBuffer,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdBindIndexBuffer2, VkCommandBuffer commandBuffer,
                                 VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size,
                                 VkIndexType indexType);
 
@@ -10162,8 +10159,8 @@ INSTANTIATE_FUNCTION_SERIALISED(
     void, vkCmdBindDescriptorBufferEmbeddedSamplers2EXT, VkCommandBuffer commandBuffer,
     const VkBindDescriptorBufferEmbeddedSamplersInfoEXT *pBindDescriptorBufferEmbeddedSamplersInfo);
 
-INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet2KHR, VkCommandBuffer commandBuffer,
+INSTANTIATE_FUNCTION_SERIALISED(void, vkCmdPushDescriptorSet2, VkCommandBuffer commandBuffer,
                                 const VkPushDescriptorSetInfo *pPushDescriptorSetInfo);
 INSTANTIATE_FUNCTION_SERIALISED(
-    void, vkCmdPushDescriptorSetWithTemplate2KHR, VkCommandBuffer commandBuffer,
+    void, vkCmdPushDescriptorSetWithTemplate2, VkCommandBuffer commandBuffer,
     const VkPushDescriptorSetWithTemplateInfo *pPushDescriptorSetWithTemplateInfo);
