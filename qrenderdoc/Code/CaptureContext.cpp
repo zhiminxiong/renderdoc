@@ -304,7 +304,7 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
 
   for(QString extensionFolder : PythonContext::GetApplicationExtensionsPaths())
   {
-    QDirIterator it(extensionFolder, QDirIterator::Subdirectories);
+    QDirIterator it(extensionFolder, QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
 
     while(it.hasNext())
     {
