@@ -608,6 +608,7 @@ void VulkanShaderCache::MakeGraphicsPipelineInfo(VkGraphicsPipelineCreateInfo &p
   uint32_t dataOffset = 0;
 
   static VkPipelineShaderStageRequiredSubgroupSizeCreateInfo reqSubgroupSize[NumShaderStages] = {};
+  static VkPipelineRobustnessCreateInfo shaderRobustness[NumShaderStages] = {};
 
   // reserve space for spec constants
   for(uint32_t i = 0; i < NumShaderStages; i++)
@@ -624,10 +625,23 @@ void VulkanShaderCache::MakeGraphicsPipelineInfo(VkGraphicsPipelineCreateInfo &p
 
       if(pipeInfo.shaders[i].requiredSubgroupSize != 0)
       {
+        reqSubgroupSize[i].requiredSubgroupSize = pipeInfo.shaders[i].requiredSubgroupSize;
+
         reqSubgroupSize[i].sType =
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO;
-        reqSubgroupSize[i].requiredSubgroupSize = pipeInfo.shaders[i].requiredSubgroupSize;
+        reqSubgroupSize[i].pNext = (void *)stages[stageCount].pNext;
         stages[stageCount].pNext = &reqSubgroupSize[i];
+      }
+
+      if(pipeInfo.shaders[i].HasRobustness())
+      {
+        shaderRobustness[i].images = pipeInfo.shaders[i].imageRobustness;
+        shaderRobustness[i].uniformBuffers = pipeInfo.shaders[i].uniformBufferRobustness;
+        shaderRobustness[i].storageBuffers = pipeInfo.shaders[i].storageBufferRobustness;
+
+        shaderRobustness[i].sType = VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO;
+        shaderRobustness[i].pNext = stages[stageCount].pNext;
+        stages[stageCount].pNext = &shaderRobustness;
       }
 
       if(!pipeInfo.shaders[i].specialization.empty())
@@ -1082,6 +1096,20 @@ void VulkanShaderCache::MakeGraphicsPipelineInfo(VkGraphicsPipelineCreateInfo &p
     ret.flags = (uint32_t)flags;
   }
 
+  static VkPipelineRobustnessCreateInfo VkPipelineRobustnessCreateInfo = {
+      VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO,
+  };
+
+  // we only need to specify vertex input robustness, all per-shader robustness is handled via
+  // pNexts on the stages above
+  if(pipeInfo.vertexInputRobustness != VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DEVICE_DEFAULT)
+  {
+    VkPipelineRobustnessCreateInfo.vertexInputs = pipeInfo.vertexInputRobustness;
+
+    VkPipelineRobustnessCreateInfo.pNext = ret.pNext;
+    ret.pNext = &VkPipelineRobustnessCreateInfo;
+  }
+
   pipeCreateInfo = ret;
 }
 
@@ -1146,7 +1174,21 @@ void VulkanShaderCache::MakeComputePipelineInfo(VkComputePipelineCreateInfo &pip
   if(pipeInfo.shaders[i].requiredSubgroupSize != 0)
   {
     reqSubgroupSize.requiredSubgroupSize = pipeInfo.shaders[i].requiredSubgroupSize;
+    reqSubgroupSize.pNext = (void *)stage.pNext;
     stage.pNext = &reqSubgroupSize;
+  }
+
+  static VkPipelineRobustnessCreateInfo robustness = {
+      VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO,
+  };
+
+  if(pipeInfo.shaders[i].HasRobustness())
+  {
+    robustness.images = pipeInfo.shaders[i].imageRobustness;
+    robustness.uniformBuffers = pipeInfo.shaders[i].uniformBufferRobustness;
+    robustness.storageBuffers = pipeInfo.shaders[i].storageBufferRobustness;
+    robustness.pNext = stage.pNext;
+    stage.pNext = &robustness;
   }
 
   VkComputePipelineCreateInfo ret = {

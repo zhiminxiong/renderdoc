@@ -1262,6 +1262,13 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
       dynamicStates[VkDynamicScissor] = false;
   }
 
+  vertexInputRobustness = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DEVICE_DEFAULT;
+  const VkPipelineRobustnessCreateInfo *robustness =
+      (const VkPipelineRobustnessCreateInfo *)FindNextStruct(
+          pCreateInfo, VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO);
+  if(robustness)
+    vertexInputRobustness = robustness->vertexInputs;
+
   // VkPipelineShaderStageCreateInfo
   for(uint32_t i = 0; i < pCreateInfo->stageCount; i++)
   {
@@ -1271,6 +1278,26 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
     int stageIndex = StageIndex(pCreateInfo->pStages[i].stage);
 
     ShaderEntry &shad = shaders[stageIndex];
+
+    shad.storageBufferRobustness = shad.uniformBufferRobustness =
+        VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DEVICE_DEFAULT;
+    shad.imageRobustness = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_DEVICE_DEFAULT;
+
+    const VkPipelineRobustnessCreateInfo *shaderRobustness =
+        (const VkPipelineRobustnessCreateInfo *)FindNextStruct(
+            &pCreateInfo->pStages[i], VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO);
+
+    // If VkPipelineRobustnessCreateInfo is specified for both a pipeline and a pipeline stage, the
+    // VkPipelineRobustnessCreateInfo specified for the pipeline stage will take precedence.
+    if(shaderRobustness == NULL)
+      shaderRobustness = robustness;
+
+    if(shaderRobustness)
+    {
+      shad.storageBufferRobustness = shaderRobustness->storageBuffers;
+      shad.uniformBufferRobustness = shaderRobustness->uniformBuffers;
+      shad.imageRobustness = shaderRobustness->images;
+    }
 
     const VkPipelineShaderStageRequiredSubgroupSizeCreateInfo *subgroupSize =
         (const VkPipelineShaderStageRequiredSubgroupSizeCreateInfo *)FindNextStruct(
@@ -1903,10 +1930,30 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan, Vulk
 
   // need to figure out which states are valid to be NULL
 
+  // If VkPipelineRobustnessCreateInfo is specified for both a pipeline and a pipeline stage, the
+  // VkPipelineRobustnessCreateInfo specified for the pipeline stage will take precedence.
+  const VkPipelineRobustnessCreateInfo *shaderRobustness =
+      (const VkPipelineRobustnessCreateInfo *)FindNextStruct(
+          &pCreateInfo->stage, VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO);
+
+  if(shaderRobustness == NULL)
+    shaderRobustness = (const VkPipelineRobustnessCreateInfo *)FindNextStruct(
+        pCreateInfo, VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO);
+
   // VkPipelineShaderStageCreateInfo
   {
     ResourceId shadid = GetResID(pCreateInfo->stage.module);
     ShaderEntry &shad = shaders[5];    // 5 is the compute shader's index (VS, TCS, TES, GS, FS, CS)
+
+    shad.storageBufferRobustness = shad.uniformBufferRobustness =
+        VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DEVICE_DEFAULT;
+    shad.imageRobustness = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_DEVICE_DEFAULT;
+    if(shaderRobustness)
+    {
+      shad.storageBufferRobustness = shaderRobustness->storageBuffers;
+      shad.uniformBufferRobustness = shaderRobustness->uniformBuffers;
+      shad.imageRobustness = shaderRobustness->images;
+    }
 
     const VkPipelineShaderStageRequiredSubgroupSizeCreateInfo *subgroupSize =
         (const VkPipelineShaderStageRequiredSubgroupSizeCreateInfo *)FindNextStruct(

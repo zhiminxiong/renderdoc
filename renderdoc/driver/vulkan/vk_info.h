@@ -251,6 +251,18 @@ struct VulkanCreationInfo
 
     // VkPipelineShaderStageRequiredSubgroupSizeCreateInfo
     uint32_t requiredSubgroupSize = 0;
+
+    // VkPipelineRobustnessCreateInfo
+    VkPipelineRobustnessBufferBehavior storageBufferRobustness;
+    VkPipelineRobustnessBufferBehavior uniformBufferRobustness;
+    VkPipelineRobustnessImageBehavior imageRobustness;
+
+    bool HasRobustness() const
+    {
+      return storageBufferRobustness != VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DEVICE_DEFAULT ||
+             uniformBufferRobustness != VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DEVICE_DEFAULT ||
+             imageRobustness != VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_DEVICE_DEFAULT;
+    }
   };
 
   struct Pipeline
@@ -446,6 +458,9 @@ struct VulkanCreationInfo
 
     // VkPipelineRasterizationProvokingVertexStateCreateInfoEXT
     VkProvokingVertexModeEXT provokingVertex;
+
+    // VkPipelineRobustnessCreateInfo
+    VkPipelineRobustnessBufferBehavior vertexInputRobustness;
   };
   std::unordered_map<ResourceId, Pipeline> m_Pipeline;
 

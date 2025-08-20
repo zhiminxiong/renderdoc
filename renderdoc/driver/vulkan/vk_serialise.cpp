@@ -853,6 +853,13 @@ SERIALISE_VK_HANDLES();
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO,                               \
                VkPipelineCreationFeedbackCreateInfo)                                                   \
                                                                                                        \
+  /* VK_EXT_pipeline_robustness */                                                                     \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO, VkPipelineRobustnessCreateInfo)      \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES,                         \
+               VkPhysicalDevicePipelineRobustnessFeatures)                                             \
+  PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_PROPERTIES,                       \
+               VkPhysicalDevicePipelineRobustnessProperties)                                           \
+                                                                                                       \
   /* VK_EXT_primitive_topology_list_restart */                                                         \
   PNEXT_STRUCT(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT,         \
                VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT)                                \
@@ -1898,11 +1905,6 @@ SERIALISE_VK_HANDLES();
                                                                                                        \
   /* VK_EXT_pipeline_protected_access */                                                               \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_PROTECTED_ACCESS_FEATURES)              \
-                                                                                                       \
-  /* VK_EXT_pipeline_robustness */                                                                     \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO)                                 \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES)                    \
-  PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_PROPERTIES)                  \
                                                                                                        \
   /* VK_EXT_shader_float8     */                                                                       \
   PNEXT_UNSUPPORTED(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT)                      \
@@ -10591,6 +10593,59 @@ void Deserialise(const VkPipelineCreationFeedbackCreateInfo &el)
 }
 
 template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPipelineRobustnessCreateInfo &el)
+{
+  RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(storageBuffers);
+  SERIALISE_MEMBER(uniformBuffers);
+  SERIALISE_MEMBER(vertexInputs);
+  SERIALISE_MEMBER(images);
+}
+
+template <>
+void Deserialise(const VkPipelineRobustnessCreateInfo &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDevicePipelineRobustnessProperties &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_PROPERTIES);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(defaultRobustnessStorageBuffers);
+  SERIALISE_MEMBER(defaultRobustnessUniformBuffers);
+  SERIALISE_MEMBER(defaultRobustnessVertexInputs);
+  SERIALISE_MEMBER(defaultRobustnessImages);
+}
+
+template <>
+void Deserialise(const VkPhysicalDevicePipelineRobustnessProperties &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, VkPhysicalDevicePipelineRobustnessFeatures &el)
+{
+  RDCASSERT(ser.IsReading() ||
+            el.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES);
+  SerialiseNext(ser, el.sType, el.pNext);
+
+  SERIALISE_MEMBER(pipelineRobustness);
+}
+
+template <>
+void Deserialise(const VkPhysicalDevicePipelineRobustnessFeatures &el)
+{
+  DeserialiseNext(el.pNext);
+}
+
+template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, VkDisplayPowerInfoEXT &el)
 {
   RDCASSERT(ser.IsReading() || el.sType == VK_STRUCTURE_TYPE_DISPLAY_POWER_INFO_EXT);
@@ -14627,6 +14682,8 @@ INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePerformanceQueryFeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePerformanceQueryPropertiesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePipelineCreationCacheControlFeatures);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePipelineRobustnessFeatures);
+INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePipelineRobustnessProperties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePointClippingProperties);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePresentId2FeaturesKHR);
 INSTANTIATE_SERIALISE_TYPE(VkPhysicalDevicePresentIdFeaturesKHR);
@@ -14737,6 +14794,7 @@ INSTANTIATE_SERIALISE_TYPE(VkPipelineRasterizationProvokingVertexStateCreateInfo
 INSTANTIATE_SERIALISE_TYPE(VkPipelineRasterizationStateCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkPipelineRasterizationStateStreamCreateInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPipelineRenderingCreateInfo);
+INSTANTIATE_SERIALISE_TYPE(VkPipelineRobustnessCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkPipelineSampleLocationsStateCreateInfoEXT);
 INSTANTIATE_SERIALISE_TYPE(VkPipelineShaderStageCreateInfo);
 INSTANTIATE_SERIALISE_TYPE(VkPipelineShaderStageRequiredSubgroupSizeCreateInfo);
