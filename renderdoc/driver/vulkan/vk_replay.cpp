@@ -2441,6 +2441,34 @@ void VulkanReplay::FillDescriptor(Descriptor &dstel, const DescriptorSetSlot &sr
       dstel.byteOffset = convert(srcel.imageLayoutOrFormat);
 
       dstel.minLODClamp = c.m_ImageView[viewid].minLOD;
+
+      switch(c.m_ImageView[viewid].viewType)
+      {
+        case VK_IMAGE_VIEW_TYPE_1D: dstel.textureType = TextureType::Texture1D; break;
+        case VK_IMAGE_VIEW_TYPE_1D_ARRAY: dstel.textureType = TextureType::Texture1DArray; break;
+        case VK_IMAGE_VIEW_TYPE_2D:
+        {
+          if(c.m_Image[c.m_ImageView[viewid].image].samples > VK_SAMPLE_COUNT_1_BIT)
+            dstel.textureType = TextureType::Texture2DMS;
+          else
+            dstel.textureType = TextureType::Texture2D;
+          break;
+        }
+        case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
+        {
+          if(c.m_Image[c.m_ImageView[viewid].image].samples > VK_SAMPLE_COUNT_1_BIT)
+            dstel.textureType = TextureType::Texture2DMSArray;
+          else
+            dstel.textureType = TextureType::Texture2DArray;
+          break;
+        }
+        case VK_IMAGE_VIEW_TYPE_3D: dstel.textureType = TextureType::Texture3D; break;
+        case VK_IMAGE_VIEW_TYPE_CUBE: dstel.textureType = TextureType::TextureCube; break;
+        case VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
+          dstel.textureType = TextureType::TextureCubeArray;
+          break;
+        case VK_IMAGE_VIEW_TYPE_MAX_ENUM: break;
+      }
     }
     else
     {
