@@ -446,6 +446,11 @@ Job *AddJob(std::function<void()> &&callback, const rdcarray<Job *> &parents)
   return ret;
 }
 
+uint32_t GetCountWorkers()
+{
+  return (uint32_t)workers.size();
+}
+
 };    // namespace JobSystem
 
 };    // namespace Threading

@@ -118,6 +118,7 @@ void Init(uint32_t numThreads = 0);
 void Shutdown();
 Job *AddJob(std::function<void()> &&cb, const rdcarray<Job *> &parents = {});
 void SyncAllJobs();
+uint32_t GetCountWorkers();
 };
 
 };
