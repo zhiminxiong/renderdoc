@@ -4879,12 +4879,17 @@ DOCUMENT(R"(A set of flags for events that may occur while debugging a shader
 .. data:: GeneratedNanOrInf
 
   A floating point operation generated a ``NaN`` or ``infinity`` result.
+
+.. data:: DebugBreak
+
+  A debugbreak event was emitted.
 )");
 enum class ShaderEvents : uint32_t
 {
   NoEvent = 0,
   SampleLoadGather = 0x1,
   GeneratedNanOrInf = 0x2,
+  DebugBreak = 0x4,
 };
 
 BITMASK_OPERATORS(ShaderEvents);

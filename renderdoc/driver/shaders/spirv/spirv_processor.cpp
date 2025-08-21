@@ -569,6 +569,8 @@ void Processor::RegisterOp(Iter it)
       knownExtSet[ExtSet_Printf] = decoded.result;
     else if(decoded.name == "NonSemantic.Shader.DebugInfo.100")
       knownExtSet[ExtSet_ShaderDbg] = decoded.result;
+    else if(decoded.name == "NonSemantic.DebugBreak")
+      knownExtSet[ExtSet_DebugBreak] = decoded.result;
   }
   else if(opdata.op == Op::EntryPoint)
   {

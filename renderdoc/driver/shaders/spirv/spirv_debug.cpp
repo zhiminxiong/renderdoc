@@ -438,6 +438,12 @@ ShaderVariable ThreadState::ReadPointerValue(Id pointer)
   return debugger.ReadFromPointer(GetSrc(pointer));
 }
 
+void ThreadState::DebugBreak()
+{
+  if(m_State)
+    m_State->flags |= ShaderEvents::DebugBreak;
+}
+
 void ThreadState::SetDst(Id id, const ShaderVariable &val)
 {
   if(m_State && ContainsNaNInf(val))
@@ -1567,8 +1573,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       const ExtInstDispatcher &dispatch = global.extInsts[extinst];
 
-      // ignore nonsemantic instructions
-      if(dispatch.nonsemantic)
+      // ignore nonsemantic instructions that we have no implementations for
+      if(dispatch.skippedNonsemantic)
         break;
 
       uint32_t instruction = it.word(4);

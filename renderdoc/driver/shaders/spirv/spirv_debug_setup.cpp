@@ -255,6 +255,12 @@ static const void *VarElemPointer(const ShaderVariable &var, uint32_t comp)
 
 namespace rdcspv
 {
+ShaderVariable ThreadDebugBreak(ThreadState &state, uint32_t, const rdcarray<Id> &)
+{
+  state.DebugBreak();
+  return ShaderVariable("void", 0U, 0U, 0U, 0U);
+}
+
 rdcstr GetRawName(Id id)
 {
   // 32-bit value means at most 10 decimal digits, plus a preceeding _, plus trailing NULL.
@@ -971,13 +977,29 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
 
       global.extInsts[id] = extinst;
     }
+    else if(setname == "NonSemantic.DebugBreak")
+    {
+      ExtInstDispatcher extinst;
+
+      extinst.name = setname;
+
+      // idx 0 is unused, fill with a dummy function
+      extinst.names.push_back("__");
+      extinst.functions.push_back(&ThreadDebugBreak);
+      extinst.names.push_back("DebugBreak");
+      extinst.functions.push_back(&ThreadDebugBreak);
+
+      global.extInsts[id] = extinst;
+
+      RDCLOG("extinst set %u is debug break", id.value());
+    }
     else if(setname.beginsWith("NonSemantic."))
     {
       ExtInstDispatcher extinst;
 
       extinst.name = setname;
 
-      extinst.nonsemantic = true;
+      extinst.skippedNonsemantic = true;
 
       global.extInsts[id] = extinst;
     }

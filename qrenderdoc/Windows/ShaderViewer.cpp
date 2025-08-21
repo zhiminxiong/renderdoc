@@ -2617,6 +2617,8 @@ void ShaderViewer::runTo(const rdcarray<uint32_t> &runToInstructions, bool forwa
   if(!m_Trace || m_States.empty())
     return;
 
+  condition |= ShaderEvents::DebugBreak;
+
   m_VariablesChanged.clear();
 
   bool firstStep = true;

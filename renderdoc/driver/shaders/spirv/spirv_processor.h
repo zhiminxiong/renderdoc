@@ -624,6 +624,7 @@ protected:
     ExtSet_GLSL450 = 0,
     ExtSet_Printf = 1,
     ExtSet_ShaderDbg = 2,
+    ExtSet_DebugBreak = 3,
     ExtSet_Count,
   };
 

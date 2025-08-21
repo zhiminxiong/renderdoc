@@ -116,7 +116,7 @@ typedef ShaderVariable (*ExtInstImpl)(ThreadState &, uint32_t, const rdcarray<Id
 struct ExtInstDispatcher
 {
   rdcstr name;
-  bool nonsemantic = false;
+  bool skippedNonsemantic = false;
   rdcarray<rdcstr> names;
   rdcarray<ExtInstImpl> functions;
 };
@@ -268,6 +268,8 @@ struct ThreadState
   const ShaderVariable &GetSrc(Id id) const;
   void WritePointerValue(Id pointer, const ShaderVariable &val);
   ShaderVariable ReadPointerValue(Id pointer);
+
+  void DebugBreak();
 
 private:
   void EnterFunction(const rdcarray<Id> &arguments);
