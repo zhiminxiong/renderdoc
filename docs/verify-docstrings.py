@@ -340,11 +340,18 @@ for mod_name in ['renderdoc', 'qrenderdoc']:
                     type_name = re.sub('StructuredBufferList', 'List[bytes]', type_name)
                     type_name = re.sub('StructuredObjectList', 'List[SDObject]', type_name)
                     type_name = re.sub('StructuredChunkList', 'List[SDChunk]', type_name)
+                    type_name = re.sub('^builtins.', '', type_name)
+                    type_name = re.sub('^importlib._bootstrap.', '', type_name)
+                    type_name = re.sub('datetime.datetime', 'datetime', type_name)
 
-                    # Maybe in future we could enforce :type: on all members? For now we
-                    # only really care about ones we might want to access properties on,
-                    # so not builtin types (lists/tuples excluded) or ResourceId
-                    if type(value).__module__ not in [rd.__name__, qrd.__name__] or type_name == 'ResourceId' and type(value) is not tuple:
+                    if type_name == 'NoneType':
+                        if args.verbose:
+                            print(f"Skipping {objname}.{member_name} as pointer-assumed from None")
+                        continue
+
+                    if objname == 'ResourceId' and member_name == 'Null' and 'function' in type_name:
+                        if args.verbose:
+                            print("Skipping ResourceId")
                         continue
 
                     if args.verbose:
@@ -359,9 +366,11 @@ for mod_name in ['renderdoc', 'qrenderdoc']:
                     if type_decl is None:
                         count += 1
                         print("Error {:3}: {}.{} is missing :type: declaration, should be {}".format(count, qualname, member_name, type_name))
-                    elif type_decl != type_name:
-                        count += 1
-                        print("Error {:3}: {}.{} has wrong :type: declaration {}, should be {}".format(count, qualname, member_name, type_decl, type_name))
+                    else:
+                        type_decl = re.sub('Tuple\[.*\]', 'tuple', type_decl)
+                        if type_decl != type_name:
+                            count += 1
+                            print("Error {:3}: {}.{} has wrong :type: declaration {}, should be {}".format(count, qualname, member_name, type_decl, type_name))
         elif callable(obj):
             used_types = []
 

@@ -35,10 +35,16 @@ actual output data desired as well as any stdout/stderr messages.
 )");
 struct ShaderToolOutput
 {
-  DOCUMENT("The output log - containing the information about the tool run and any errors.");
+  DOCUMENT(R"(The output log - containing the information about the tool run and any errors.
+
+:type: str
+)");
   rdcstr log;
 
-  DOCUMENT("The actual output data from the tool");
+  DOCUMENT(R"(The actual output data from the tool
+
+:type: bytes
+)");
   bytebuf result;
 };
 
@@ -74,17 +80,35 @@ struct ShaderProcessingTool
       return output < o.output;
     return false;
   }
-  DOCUMENT("The :class:`KnownShaderTool` identifying which known tool this program is.");
+  DOCUMENT(R"(The :class:`KnownShaderTool` identifying which known tool this program is.
+
+:type: KnownShaderTool
+)");
   KnownShaderTool tool = KnownShaderTool::Unknown;
-  DOCUMENT("The human-readable name of the program.");
+  DOCUMENT(R"(The human-readable name of the program.
+
+:type: str
+)");
   rdcstr name;
-  DOCUMENT("The path to the executable to run for this program.");
+  DOCUMENT(R"(The path to the executable to run for this program.
+
+:type: str
+)");
   rdcstr executable;
-  DOCUMENT("The command line argmuents to pass to the program.");
+  DOCUMENT(R"(The command line argmuents to pass to the program.
+
+:type: str
+)");
   rdcstr args;
-  DOCUMENT("The input that this program expects.");
+  DOCUMENT(R"(The input that this program expects.
+
+:type: ShaderEncoding
+)");
   ShaderEncoding input = ShaderEncoding::Unknown;
-  DOCUMENT("The output that this program provides.");
+  DOCUMENT(R"(The output that this program provides.
+
+:type: ShaderEncoding
+)");
   ShaderEncoding output = ShaderEncoding::Unknown;
 
   DOCUMENT(R"(Return the default arguments used when invoking this tool
@@ -158,13 +182,25 @@ struct BugReport
       return unreadUpdates < o.unreadUpdates;
     return false;
   }
-  DOCUMENT("The private ID of the bug report.");
+  DOCUMENT(R"(The private ID of the bug report.
+
+:type: str
+)");
   rdcstr reportId;
-  DOCUMENT("The original date when this bug was submitted.");
+  DOCUMENT(R"(The original date when this bug was submitted.
+
+:type: datetime
+)");
   rdcdatetime submitDate;
-  DOCUMENT("The last date that we checked for updates.");
+  DOCUMENT(R"(The last date that we checked for updates.
+
+:type: datetime
+)");
   rdcdatetime checkDate;
-  DOCUMENT("Unread updates to the bug exist");
+  DOCUMENT(R"(Unread updates to the bug exist
+
+:type: bool
+)");
   bool unreadUpdates = false;
 
   DOCUMENT(R"(Gets the URL for this report.
@@ -193,18 +229,24 @@ DECLARE_REFLECTION_STRUCT(BugReport);
   DOCUMENT(                                                                                        \
       "The style to load for the UI. Possible values include 'Native', 'RDLight', 'RDDark'. "      \
       "If empty, the closest of RDLight and RDDark will be chosen, based on the overall "          \
-      "light-on-dark or dark-on-light theme of the application native style.");                    \
+      "light-on-dark or dark-on-light theme of the application native style."                      \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, UIStyle, "")                                         \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The path to the last capture to be opened, which is useful as a default location for "      \
-      "browsing.");                                                                                \
+      "browsing."                                                                                  \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, LastCaptureFilePath, "")                             \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The path to the last file browsed to in any dialog. Used as a default location for all "    \
       "file browsers without another explicit default directory (such as opening capture files - " \
-      "see :data:`LastCaptureFilePath`).");                                                        \
+      "see :data:`LastCaptureFilePath`)."                                                          \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, LastFileBrowsePath, "")                              \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -215,11 +257,15 @@ DECLARE_REFLECTION_STRUCT(BugReport);
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The path containing the last executable that was captured, which is useful as a default "   \
-      "location for browsing.");                                                                   \
+      "location for browsing."                                                                     \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, LastCapturePath, "")                                 \
                                                                                                    \
   DOCUMENT(                                                                                        \
-      "The filename of the last executable that was captured, inside :data:`LastCapturePath`.");   \
+      "The filename of the last executable that was captured, inside :data:`LastCapturePath`."     \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, LastCaptureExe, "")                                  \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -230,12 +276,16 @@ DECLARE_REFLECTION_STRUCT(BugReport);
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The path to where temporary capture files should be stored until they're saved "            \
-      "permanently.");                                                                             \
+      "permanently."                                                                               \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, TemporaryCaptureDirectory, "")                       \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The default path to save captures in, when browsing to save a temporary capture "           \
-      "somewhere.");                                                                               \
+      "somewhere."                                                                                 \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, DefaultCaptureSaveDirectory, "")                     \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -249,14 +299,18 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "``True`` if the :class:`TextureViewer` should reset the visible range when a new texture "  \
       "is selected.\n"                                                                             \
       "\n:"                                                                                        \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, TextureViewer_ResetRange, false)                          \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if the :class:`TextureViewer` should store most visualisation settings on a "      \
       "per-texture basis instead of keeping it persistent across different textures.\n"            \
       "\n:"                                                                                        \
-      "Defaults to ``True``.");                                                                    \
+      "Defaults to ``True``."                                                                      \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, TextureViewer_PerTexSettings, true)                       \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -265,7 +319,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "\n"                                                                                         \
       "Does nothing if per-texture settings are disabled in general.\n"                            \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, TextureViewer_PerTexYFlip, false)                         \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -279,14 +335,18 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "uses an API that can be supported locally, should be loaded locally without prompting to "  \
       "switch to a remote context.\n"                                                              \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, AlwaysReplayLocally, false)                               \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The index of the local proxy API to use when using remote context replay. ``-1`` if the "   \
       "default proxy should be used.\n"                                                            \
       "\n"                                                                                         \
-      "Defaults to ``-1``.");                                                                      \
+      "Defaults to ``-1``."                                                                        \
+      ""                                                                                           \
+      ":type: int");                                                                               \
   CONFIG_SETTING_VAL(public, int, int, LocalProxyAPI, -1)                                          \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -300,7 +360,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "The :class:`TimeUnit` to use to display the duration column in the "                        \
       ":class:`EventBrowser`.\n"                                                                   \
       "\n"                                                                                         \
-      "Defaults to microseconds.");                                                                \
+      "Defaults to microseconds."                                                                  \
+      ""                                                                                           \
+      ":type: TimeUnit");                                                                          \
   CONFIG_SETTING_VAL(public, int, TimeUnit, EventBrowser_TimeUnit, TimeUnit::Microseconds)         \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -308,28 +370,36 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "markers, for easier browsing. The regions are identified by grouping actions that write "   \
       "to the same targets together.\n"                                                            \
       "\n"                                                                                         \
-      "Defaults to ``True``.");                                                                    \
+      "Defaults to ``True``."                                                                      \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, EventBrowser_AddFake, true)                               \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if the :class:`EventBrowser` should apply any colors specified with API marker "   \
       "regions.\n"                                                                                 \
       "\n"                                                                                         \
-      "Defaults to ``True``.");                                                                    \
+      "Defaults to ``True``."                                                                      \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, EventBrowser_ApplyColors, true)                           \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if when coloring marker regions in the :class:`EventBrowser`, the whole row "      \
       "should be colored instead of just a side-bar.\n"                                            \
       "\n"                                                                                         \
-      "Defaults to ``True``.");                                                                    \
+      "Defaults to ``True``."                                                                      \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, EventBrowser_ColorEventRow, true)                         \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if when loading a new capture that contains a comments section, the comment "      \
       "viewer will be opened and focussed.\n"                                                      \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, Comments_ShowOnLoad, true)                                \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -339,7 +409,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "  The naming of 'MinFigures' is a historical artifact - this controls the number of "       \
       "  decimal places only, not the number of significant figures.\n"                            \
       "\n"                                                                                         \
-      "Defaults to ``2``.");                                                                       \
+      "Defaults to ``2``."                                                                         \
+      ""                                                                                           \
+      ":type: int");                                                                               \
   CONFIG_SETTING_VAL(public, int, int, Formatter_MinFigures, 2)                                    \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -349,7 +421,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "  The naming of 'MaxFigures' is a historical artifact - this controls the number of "       \
       "  decimal places only, not the number of significant figures.\n"                            \
       "\n"                                                                                         \
-      "Defaults to ``5``.");                                                                       \
+      "Defaults to ``5``."                                                                         \
+      ""                                                                                           \
+      ":type: int");                                                                               \
   CONFIG_SETTING_VAL(public, int, int, Formatter_MaxFigures, 5)                                    \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -359,7 +433,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "E.g. for a value of 5, anything below 1.0e-5 will be displayed using scientific "           \
       "notation.\n"                                                                                \
       "\n"                                                                                         \
-      "Defaults to ``5``.");                                                                       \
+      "Defaults to ``5``."                                                                         \
+      ""                                                                                           \
+      ":type: int");                                                                               \
   CONFIG_SETTING_VAL(public, int, int, Formatter_NegExp, 5)                                        \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -369,7 +445,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "E.g. for a value of 7, anything below 1.0e+7 will be displayed using scientific "           \
       "notation.\n"                                                                                \
       "\n"                                                                                         \
-      "Defaults to ``7``.");                                                                       \
+      "Defaults to ``7``."                                                                         \
+      ""                                                                                           \
+      ":type: int");                                                                               \
   CONFIG_SETTING_VAL(public, int, int, Formatter_PosExp, 7)                                        \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -378,33 +456,43 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "E.g. Auto: decimal by default and hexadecimal if above a certain threshold, "               \
       "Decimal: always use decimal, Hexadecimal: always use hexadecimal."                          \
       "\n"                                                                                         \
-      "Defaults to ``Auto``.");                                                                    \
+      "Defaults to ``Auto``."                                                                      \
+      ""                                                                                           \
+      ":type: OffsetSizeDisplayMode");                                                             \
   CONFIG_SETTING_VAL(public, int, OffsetSizeDisplayMode, Formatter_OffsetSizeDisplayMode,          \
                      OffsetSizeDisplayMode::Auto)                                                  \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The global scale to apply to fonts in the application, expressed as a float.\n"             \
       "\n"                                                                                         \
-      "Defaults to ``1.0`` which means 100%.");                                                    \
+      "Defaults to ``1.0`` which means 100%."                                                      \
+      ""                                                                                           \
+      ":type: float");                                                                             \
   CONFIG_SETTING_VAL(public, float, float, Font_GlobalScale, 1.0f)                                 \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The font family to use in the UI.\n"                                                        \
       "\n"                                                                                         \
-      "Defaults to an empty string which means to use the system default.");                       \
+      "Defaults to an empty string which means to use the system default."                         \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, Font_Family, "")                                     \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The monospaced font family to use in the UI.\n"                                             \
       "\n"                                                                                         \
-      "Defaults to an empty string which means to use the system default.");                       \
+      "Defaults to an empty string which means to use the system default."                         \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, Font_MonoFamily, "")                                 \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if a monospaced font should be used in all places where data is displayed, even "  \
       "if the data is not tabular such as names.\n"                                                \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, Font_PreferMonospaced, false)                             \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -412,7 +500,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "older than is generally supported. This prevents the user being spammed if they "           \
       "consistently use an old Android device. If it has been more than 3 weeks since the last "   \
       "time an old device was seen, we re-warn the user, but if it's less than 3 weeks we "        \
-      "silently update this date so continuous use doesn't nag.");                                 \
+      "silently update this date so continuous use doesn't nag."                                   \
+      ""                                                                                           \
+      ":type: datetime");                                                                          \
   CONFIG_SETTING_VAL(public, QDateTime, rdcdatetime, UnsupportedAndroid_LastUpdate,                \
                      rdcdatetime(2015, 01, 01))                                                    \
                                                                                                    \
@@ -420,50 +510,70 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "``True`` if the UI should be allowed to make update checks remotely to see if a new "       \
       "version is available.\n"                                                                    \
       "\n"                                                                                         \
-      "Defaults to ``True``.");                                                                    \
+      "Defaults to ``True``."                                                                      \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, CheckUpdate_AllowChecks, true)                            \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if an update to a newer version is currently available.\n"                         \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, CheckUpdate_UpdateAvailable, false)                       \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The current version at the time of update checks. Used to determine if a cached pending "   \
-      "update is no longer valid because we got updated through some other method.");              \
+      "update is no longer valid because we got updated through some other method."                \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, CheckUpdate_CurrentVersion, "")                      \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "Contains the response from the update server from the last update check, with any release " \
-      "notes for the new version.");                                                               \
+      "notes for the new version."                                                                 \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, CheckUpdate_UpdateResponse, "")                      \
                                                                                                    \
-  DOCUMENT("A date containing the last time that update checks happened.");                        \
+  DOCUMENT(                                                                                        \
+      "A date containing the last time that update checks happened."                               \
+      ""                                                                                           \
+      ":type: datetime");                                                                          \
   CONFIG_SETTING_VAL(public, QDateTime, rdcdatetime, CheckUpdate_LastUpdate,                       \
                      rdcdatetime(2012, 06, 27))                                                    \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "A date containing the last time that the user was warned about captures being loaded in "   \
-      "degraded support. This prevents the user being spammed if their hardware is low spec.");    \
+      "degraded support. This prevents the user being spammed if their hardware is low spec."      \
+      ""                                                                                           \
+      ":type: datetime");                                                                          \
   CONFIG_SETTING_VAL(public, QDateTime, rdcdatetime, DegradedCapture_LastUpdate,                   \
                      rdcdatetime(2015, 01, 01))                                                    \
                                                                                                    \
-  DOCUMENT("The path to the executable of the external Radeon GPU Profiler tool.");                \
+  DOCUMENT(                                                                                        \
+      "The path to the executable of the external Radeon GPU Profiler tool."                       \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, ExternalTool_RadeonGPUProfiler, "")                  \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if the user has seen the first tip, which should always be shown first before "    \
       "randomising.\n"                                                                             \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, Tips_HasSeenFirst, false)                                 \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if global hooking is enabled. Since it has potentially problematic side-effects "  \
       "and is dangerous, it requires explicit opt-in.\n"                                           \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, AllowGlobalHook, false)                                   \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -471,7 +581,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "not want users want to do. New users can get confused by it being there and go to it "      \
       "first.\n"                                                                                   \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, AllowProcessInject, false)                                \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -485,7 +597,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "``True`` if the user has selected to completely opt-out from and disable all analytics "    \
       "collection and reporting.\n"                                                                \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, Analytics_TotalOptOut, false)                             \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -493,7 +607,9 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "check each report that is sent out.\n"                                                      \
       "collection and reporting.\n"                                                                \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, Analytics_ManualCheck, false)                             \
                                                                                                    \
   DOCUMENT(                                                                                        \
@@ -502,24 +618,33 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       "enter an email. Once the prompt has happened, regardless of the answer this is set to "     \
       "true and remains there forever.\n"                                                          \
       "\n"                                                                                         \
-      "Defaults to ``False``.");                                                                   \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, CrashReport_EmailNagged, false)                           \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "``True`` if the email address entered in the crash reporter should be remembered for next " \
       "time. If no email is entered then nothing happens (any previous saved email is kept).\n"    \
       "\n"                                                                                         \
-      "Defaults to ``True``.");                                                                    \
+      "Defaults to ``True``."                                                                      \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, CrashReport_ShouldRememberEmail, true)                    \
                                                                                                    \
-  DOCUMENT("The saved email address for pre-filling out in crash reports.");                       \
+  DOCUMENT(                                                                                        \
+      "The saved email address for pre-filling out in crash reports."                              \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, CrashReport_EmailAddress, "")                        \
                                                                                                    \
   DOCUMENT(                                                                                        \
       "The last opened capture, to send if any crash is encountered. This is different to the "    \
       "most recent opened file, because it's set before any processing happens (recent files are " \
       "only added to the list when they successfully open), and it's cleared again when the "      \
-      "capture is closed.");                                                                       \
+      "capture is closed."                                                                         \
+      ""                                                                                           \
+      ":type: str");                                                                               \
   CONFIG_SETTING_VAL(public, QString, rdcstr, CrashReport_LastOpenedCapture, "")                   \
                                                                                                    \
   DOCUMENT(                                                                                        \

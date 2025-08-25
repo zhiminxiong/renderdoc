@@ -247,7 +247,10 @@ struct SDType
   }
 #endif
 
-  DOCUMENT("The name of this type.");
+  DOCUMENT(R"(The name of this type.
+
+:type: str
+)");
   rdcinflexiblestr name;
 
   DOCUMENT(R"(The :class:`SDBasic` category that this type belongs to.
@@ -297,10 +300,16 @@ struct SDChunkMetaData
   SDChunkMetaData(const SDChunkMetaData &) = default;
   SDChunkMetaData &operator=(const SDChunkMetaData &) = default;
 
-  DOCUMENT("The internal chunk ID - unique given a particular driver in use.");
+  DOCUMENT(R"(The internal chunk ID - unique given a particular driver in use.
+
+:type: int
+)");
   uint32_t chunkID = 0;
 
-  DOCUMENT("The :class:`SDChunkFlags` for this chunk.");
+  DOCUMENT(R"(The :class:`SDChunkFlags` for this chunk.
+
+:type: SDChunkFlags
+)");
   SDChunkFlags flags = SDChunkFlags::NoFlags;
 
   DOCUMENT(R"(The length in bytes of this chunk - may be longer than the actual sum of the data if a
@@ -1462,7 +1471,10 @@ struct SDChunk : public SDObject
   {
     type.basetype = SDBasic::Chunk;
   }
-  DOCUMENT("The :class:`SDChunkMetaData` with the metadata for this chunk.");
+  DOCUMENT(R"(The :class:`SDChunkMetaData` with the metadata for this chunk.
+
+:type: SDChunkMetaData
+)");
   SDChunkMetaData metadata;
 
   DOCUMENT(R"(

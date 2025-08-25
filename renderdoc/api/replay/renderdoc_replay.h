@@ -2085,13 +2085,22 @@ extern "C" RENDERDOC_API void RENDERDOC_CC RENDERDOC_EndSelfHostCapture(const rd
 DOCUMENT("INTERNAL: Information about vulkan layer registration");
 struct VulkanLayerRegistrationInfo
 {
-  DOCUMENT(":class:`VulkanLayerFlags` detailing the current registration.");
+  DOCUMENT(R"(:class:`VulkanLayerFlags` detailing the current registration.
+
+:type: VulkanLayerFlags
+)");
   VulkanLayerFlags flags;
 
-  DOCUMENT("A list of jsons that should be registered");
+  DOCUMENT(R"(A list of jsons that should be registered
+
+:type: List[str]
+)");
   rdcarray<rdcstr> myJSONs;
 
-  DOCUMENT("A list of jsons that should be unregistered / updated");
+  DOCUMENT(R"(A list of jsons that should be unregistered / updated
+
+:type: List[str]
+)");
   rdcarray<rdcstr> otherJSONs;
 };
 

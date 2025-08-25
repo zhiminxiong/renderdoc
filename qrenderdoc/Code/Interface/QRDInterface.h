@@ -107,26 +107,45 @@ struct CaptureSettings
 :type: renderdoc.CaptureOptions
 )");
   CaptureOptions options;
-  DOCUMENT(
-      "``True`` if the described capture is an inject-into-process instead of a launched "
-      "executable.");
+  DOCUMENT(R"(``True`` if the described capture is an inject-into-process instead of a launched executable.
+
+:type: bool
+)");
   bool inject;
-  DOCUMENT("``True`` if this capture settings object should be immediately executed upon load.");
+  DOCUMENT(R"(``True`` if this capture settings object should be immediately executed upon load.
+
+:type: bool
+)");
   bool autoStart;
-  DOCUMENT("The path to the executable to run.");
+  DOCUMENT(R"(The path to the executable to run.
+
+:type: str
+)");
   rdcstr executable;
-  DOCUMENT("The path to the working directory to run in, or blank for the executable's directory.");
+  DOCUMENT(R"(The path to the working directory to run in, or blank for the executable's directory.
+
+:type: str
+)");
   rdcstr workingDir;
-  DOCUMENT("The command line to pass when running :data:`executable`.");
+  DOCUMENT(R"(The command line to pass when running :data:`executable`.
+
+:type: str
+)");
   rdcstr commandLine;
   DOCUMENT(R"(The environment changes to apply.
 
 :type: List[renderdoc.EnvironmentModification]
 )");
   rdcarray<EnvironmentModification> environment;
-  DOCUMENT("The number of queued frames to capture, or 0 if no frames are queued to be captured.");
+  DOCUMENT(R"(The number of queued frames to capture, or 0 if no frames are queued to be captured.
+
+:type: int
+)");
   uint32_t numQueuedFrames;
-  DOCUMENT("The first queued frame to capture. Ignored if :data:`numQueuedFrames` is 0.");
+  DOCUMENT(R"(The first queued frame to capture. Ignored if :data:`numQueuedFrames` is 0.
+
+:type: int
+)");
   uint32_t queuedFrameCap;
 };
 
@@ -1762,10 +1781,16 @@ BITMASK_OPERATORS(CaptureModifications);
 DOCUMENT("A description of a bookmark on an event");
 struct EventBookmark
 {
-  DOCUMENT("The :data:`eventId <renderdoc.APIEvent.eventId>` at which this bookmark is placed.");
+  DOCUMENT(R"(The :data:`eventId <renderdoc.APIEvent.eventId>` at which this bookmark is placed.
+
+:type: int
+)");
   uint32_t eventId = 0;
 
-  DOCUMENT("The text associated with this bookmark - could be empty");
+  DOCUMENT(R"(The text associated with this bookmark - could be empty
+
+:type: str
+)");
   rdcstr text;
 
   DOCUMENT("The color associated with this bookmark - 0=default, 1=red, 2=green, 3=blue");

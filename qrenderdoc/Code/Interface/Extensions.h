@@ -310,28 +310,52 @@ struct ExtensionMetadata
     return false;
   }
 
-  DOCUMENT("The version of the extension API that this extension is written against");
+  DOCUMENT(R"(The version of the extension API that this extension is written against
+
+:type: int
+)");
   int extensionAPI;
 
-  DOCUMENT("The location of this package on disk");
+  DOCUMENT(R"(The location of this package on disk
+
+:type: str
+)");
   rdcstr filePath;
 
-  DOCUMENT("The python package for this extension, e.g. foo.bar");
+  DOCUMENT(R"(The python package for this extension, e.g. foo.bar
+
+:type: str
+)");
   rdcstr package;
 
-  DOCUMENT("The short friendly name for the extension");
+  DOCUMENT(R"(The short friendly name for the extension
+
+:type: str
+)");
   rdcstr name;
 
-  DOCUMENT("The version of the extension");
+  DOCUMENT(R"(The version of the extension
+
+:type: str
+)");
   rdcstr version;
 
-  DOCUMENT("The author of the extension, optionally with an email contact");
+  DOCUMENT(R"(The author of the extension, optionally with an email contact
+
+:type: str
+)");
   rdcstr author;
 
-  DOCUMENT("The URL for where the extension is fetched from");
+  DOCUMENT(R"(The URL for where the extension is fetched from
+
+:type: str
+)");
   rdcstr extensionURL;
 
-  DOCUMENT("A longer description of what the extension does");
+  DOCUMENT(R"(A longer description of what the extension does
+
+:type: str
+)");
   rdcstr description;
 };
 
