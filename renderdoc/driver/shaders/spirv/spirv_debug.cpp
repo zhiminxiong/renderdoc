@@ -2355,6 +2355,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
         // since abs() never truncates (INT_MIN has a corresponding unsigned value) this will never
         // lose precision as -abs(INT_MIN) == INT_MIN
 
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+
         for(uint8_t c = 0; c < var.columns; c++)
         {
 #undef _IMPL
@@ -2365,9 +2367,9 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     S op2 = comp<S>(b, c);                                    \
     S tmp = op1 % op2;                                        \
     if(opdata.op == Op::SRem)                                 \
-      comp<S>(var, c) = op1 < 0 ? (S)-abs(tmp) : (S)abs(tmp); \
+      comp<S>(var, c) = op1 < 0 ? (S)-ABS(tmp) : (S)ABS(tmp); \
     else                                                      \
-      comp<S>(var, c) = op2 < 0 ? (S)-abs(tmp) : (S)abs(tmp); \
+      comp<S>(var, c) = op2 < 0 ? (S)-ABS(tmp) : (S)ABS(tmp); \
   }                                                           \
   else                                                        \
   {                                                           \
@@ -2377,6 +2379,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   }
 
           IMPL_FOR_INT_TYPES(_IMPL);
+
+#undef ABS
         }
       }
       else if(opdata.op == Op::IAdd)
