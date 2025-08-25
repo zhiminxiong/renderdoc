@@ -3486,7 +3486,7 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
       {
         // uniform/storage are identical in the union. Since the type forms part of our this
         // logic can be done in common
-        if(pDescriptorInfo->data.pUniformBuffer)
+        if(pDescriptorInfo->data.pUniformBuffer && pDescriptorInfo->data.pUniformBuffer->address)
         {
           VkFormat fmt = VK_FORMAT_UNDEFINED;
           if(pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
