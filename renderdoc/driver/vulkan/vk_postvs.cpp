@@ -4367,7 +4367,7 @@ void VulkanReplay::FetchVSOut(uint32_t eventId, VulkanRenderState &state)
         GetBufferData(state.ibuffer.buf, state.ibuffer.offs + action->indexOffset * idxsize,
                       readSizeBytes, idxdata);
       else if(m_pDriver->Maintenance6())
-        idxdata.resize(readSizeBytes);
+        idxdata.resize((size_t)readSizeBytes);
     }
 
     // figure out what the maximum index could be, so we can clamp our index buffer to something

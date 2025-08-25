@@ -624,7 +624,7 @@ void VulkanDebugManager::PatchLineStripIndexBuffer(const ActionDescription *acti
     }
 
     if(rs.ibuffer.buf == ResourceId())
-      indices.resize(readSizeBytes);
+      indices.resize((size_t)readSizeBytes);
     else
       GetBufferData(rs.ibuffer.buf,
                     rs.ibuffer.offs + uint64_t(action->indexOffset) * rs.ibuffer.bytewidth,
