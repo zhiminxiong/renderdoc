@@ -1607,8 +1607,9 @@ struct Subresource
 
   DOCUMENT("The mip level in the texture.");
   uint32_t mip;
-  DOCUMENT(R"(The slice within the texture. For 3D textures this is a depth slice, for arrays it is
-an array slice.
+  DOCUMENT(R"(The slice within the texture. For array textures this is an array slice. For 3D textures
+when a single depth slice can be referred to this refers to that depth slice. In some cases a 3D
+texture may not allow referring to a single depth slice - see where the Subresource is used.
 
 .. note::
   Cubemaps are simply 2D array textures with a special meaning, so the faces of a cubemap are the 2D

@@ -4300,22 +4300,6 @@ void D3D12Replay::GetTextureData(ResourceId tex, const Subresource &sub,
         memcpy(dst, src, dstRowPitch);
       }
     }
-
-    // for 3D textures if we wanted a particular slice (slice3DCopy > 0) copy it into the beginning.
-    if(layouts[0].Footprint.Depth > 1 && slice3DCopy > 0 &&
-       (int)slice3DCopy < layouts[0].Footprint.Depth)
-    {
-      for(UINT y = 0; y < rowcount; y++)
-      {
-        UINT srcrow = y + slice3DCopy * rowcount;
-        UINT dstrow = y;
-
-        byte *src = pData + layouts[0].Footprint.RowPitch * srcrow;
-        byte *dst = data.data() + dstRowPitch * dstrow;
-
-        memcpy(dst, src, dstRowPitch);
-      }
-    }
   }
 
   SAFE_DELETE_ARRAY(layouts);

@@ -1108,6 +1108,9 @@ texture to something compatible with the target file format.
 
   DOCUMENT(R"(Retrieve the contents of one subresource of a texture as a ``bytes``.
 
+.. note:: For 3D textures a whole width x height x depth mip is returned, you can't select a single
+  depth slice using :data:`Subresource.slice`.
+
 :param ResourceId tex: The id of the texture to retrieve data from.
 :param Subresource sub: The subresource within this texture to use.
 :return: The requested texture contents.
