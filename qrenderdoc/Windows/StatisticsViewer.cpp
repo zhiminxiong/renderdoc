@@ -635,7 +635,6 @@ void StatisticsViewer::CountContributingEvents(const ActionDescription &action, 
   if (action.flags & ActionFlags::Clear)
     clearCount += 1;
 
-  // 统计顶点数量（对于drawcall）
   if (action.flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
   {
     if (action.flags & ActionFlags::Indexed)
