@@ -623,16 +623,15 @@ void StatisticsViewer::CountContributingEvents(const ActionDescription &action, 
       ActionFlags::SetMarker | ActionFlags::PushMarker | ActionFlags::PopMarker;
   ActionFlags diagnosticMasked = action.flags & diagnosticMask;
 
-  if(diagnosticMasked != ActionFlags::NoFlags)
+  if (diagnosticMasked != ActionFlags::NoFlags)
     diagnosticCount += 1;
 
-  if(action.flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
+  if (action.flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
     drawCount += 1;
 
   if(action.flags & ActionFlags::Dispatch)
     dispatchCount += 1;
 
-  // 统计glclear数量
   if (action.flags & ActionFlags::Clear)
     clearCount += 1;
 
@@ -641,32 +640,27 @@ void StatisticsViewer::CountContributingEvents(const ActionDescription &action, 
   {
     if (action.flags & ActionFlags::Indexed)
     {
-      // 索引绘制：顶点数量等于索引数量
-      vertexCount += action.numIndices;
+      vertexCount += (action.flags & ActionFlags::Instanced) ? action.numIndices * action.numInstances : action.numIndices;
     }
     else
     {
-      // 非索引绘制：顶点数量等于numIndices
       vertexCount += action.numIndices;
     }
 
-    // 统计面数（假设三角形图元）
     if (action.numIndices > 0)
     {
       if(action.flags & ActionFlags::Indexed)
       {
-        // 索引三角形：面数 = 索引数量 / 3
         primitiveCount += (action.flags & ActionFlags::Instanced) ? action.numIndices / 3 * action.numInstances : action.numIndices / 3;
       }
       else
       {
-        // 非索引三角形：面数 = 顶点数量 / 3
         primitiveCount += action.numIndices / 3;
       }
     }
   }
 
-  for(const ActionDescription &c : action.children)
+  for (const ActionDescription &c : action.children)
     CountContributingEvents(c, drawCount, dispatchCount, diagnosticCount, clearCount, vertexCount, primitiveCount);
 }
 
