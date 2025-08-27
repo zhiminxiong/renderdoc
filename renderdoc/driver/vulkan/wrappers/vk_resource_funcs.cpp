@@ -2896,7 +2896,6 @@ VkResult WrappedVulkan::vkCreateImage(VkDevice device, const VkImageCreateInfo *
         AddForcedReference(record);
 
       record->resInfo = new ResourceInfo();
-      record->resInfo->parentResInfo = record->resInfo;
       ResourceInfo &resInfo = *record->resInfo;
       resInfo.imageInfo = ImageInfo(*pCreateInfo);
 
@@ -3327,6 +3326,8 @@ VkResult WrappedVulkan::vkCreateImageView(VkDevice device, const VkImageViewCrea
       if(m_DescriptorBuffers)
       {
         record->resInfo = new ResourceInfo(*imageRecord->resInfo);
+        // use the image's resinfo for things like sparse records, we only duplicate for descriptor
+        // uniqueness tracking.
         record->resInfo->parentResInfo = imageRecord->resInfo;
       }
       else

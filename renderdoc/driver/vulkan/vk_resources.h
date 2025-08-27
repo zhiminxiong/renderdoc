@@ -1089,7 +1089,7 @@ struct ResourceInfo
   // for images this is a self pointer. For image views when we are using descriptor buffers we
   // can't alias the resInfo in each view's record because each view needs to track its own
   // descriptors - instead we point back to the image's resInfo here for sparse info. blech
-  ResourceInfo *parentResInfo;
+  ResourceInfo *parentResInfo = this;
 
   // for buffers, or for images when layouts can affect descriptors, the set of descriptors which
   // have already been serialised
