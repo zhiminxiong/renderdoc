@@ -67,7 +67,8 @@ private:
   void AppendOutputStatistics();
   void AppendDetailedInformation();
   void CountContributingEvents(const ActionDescription &action, uint32_t &drawCount,
-                               uint32_t &dispatchCount, uint32_t &diagnosticCount);
+                              uint32_t &dispatchCount, uint32_t &diagnosticCount,
+                              uint32_t &clearCount, uint32_t &vertexCount, uint32_t &primitiveCount);
   void AppendAPICallSummary();
   void GenerateReport();
 };

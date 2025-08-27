@@ -616,7 +616,8 @@ void StatisticsViewer::AppendDetailedInformation()
 }
 
 void StatisticsViewer::CountContributingEvents(const ActionDescription &action, uint32_t &drawCount,
-                                               uint32_t &dispatchCount, uint32_t &diagnosticCount)
+                                               uint32_t &dispatchCount, uint32_t &diagnosticCount,
+                                               uint32_t &clearCount, uint32_t &vertexCount, uint32_t &primitiveCount)
 {
   const ActionFlags diagnosticMask =
       ActionFlags::SetMarker | ActionFlags::PushMarker | ActionFlags::PopMarker;
@@ -631,8 +632,42 @@ void StatisticsViewer::CountContributingEvents(const ActionDescription &action, 
   if(action.flags & ActionFlags::Dispatch)
     dispatchCount += 1;
 
+  // 统计glclear数量
+  if (action.flags & ActionFlags::Clear)
+    clearCount += 1;
+
+  // 统计顶点数量（对于drawcall）
+  if (action.flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
+  {
+    if (action.flags & ActionFlags::Indexed)
+    {
+      // 索引绘制：顶点数量等于索引数量
+      vertexCount += action.numIndices;
+    }
+    else
+    {
+      // 非索引绘制：顶点数量等于numIndices
+      vertexCount += action.numIndices;
+    }
+
+    // 统计面数（假设三角形图元）
+    if (action.numIndices > 0)
+    {
+      if(action.flags & ActionFlags::Indexed)
+      {
+        // 索引三角形：面数 = 索引数量 / 3
+        primitiveCount += (action.flags & ActionFlags::Instanced) ? action.numIndices / 3 * action.numInstances : action.numIndices / 3;
+      }
+      else
+      {
+        // 非索引三角形：面数 = 顶点数量 / 3
+        primitiveCount += action.numIndices / 3;
+      }
+    }
+  }
+
   for(const ActionDescription &c : action.children)
-    CountContributingEvents(c, drawCount, dispatchCount, diagnosticCount);
+    CountContributingEvents(c, drawCount, dispatchCount, diagnosticCount, clearCount, vertexCount, primitiveCount);
 }
 
 void StatisticsViewer::AppendAPICallSummary()
@@ -682,8 +717,12 @@ void StatisticsViewer::GenerateReport()
   uint32_t drawCount = 0;
   uint32_t dispatchCount = 0;
   uint32_t diagnosticCount = 0;
+  uint32_t clearCount = 0;
+  uint32_t vertexCount = 0;
+  uint32_t primitiveCount = 0;
+
   for(const ActionDescription &action : curActions)
-    CountContributingEvents(action, drawCount, dispatchCount, diagnosticCount);
+    CountContributingEvents(action, drawCount, dispatchCount, diagnosticCount, clearCount, vertexCount, primitiveCount);
 
   uint32_t numAPIcalls =
       m_Ctx.GetLastAction()->eventId - (drawCount + dispatchCount + diagnosticCount);
@@ -772,7 +811,10 @@ void StatisticsViewer::GenerateReport()
           .arg(compressRatio, 2, 'f', 2)
           .arg(persistentMB, 2, 'f', 2)
           .arg(initDataMB, 2, 'f', 2);
-  QString drawList = tr("Draw calls: %1\nDispatch calls: %2\n").arg(drawCount).arg(dispatchCount);
+  QString drawList = tr("Draw calls: %1\nDispatch calls: %2\nClear calls: %3\n")
+                     .arg(drawCount).arg(dispatchCount).arg(clearCount);
+  QString geometryStats = tr("Total vertices: %1\nTotal primitives (triangles): %2\n")
+                         .arg(vertexCount).arg(primitiveCount);
   QString ratio = tr("API:Draw/Dispatch call ratio: %1\n\n").arg(drawRatio);
   QString textures = tr("%1 Textures - %2 MB (%3 MB over 32x32), %4 RTs - %5 MB.\n"
                         "Avg. tex dimension: %6x%7 (%8x%9 over 32x32)\n")
@@ -797,6 +839,7 @@ void StatisticsViewer::GenerateReport()
 
   m_Report.append(tr("\n*** Summary ***\n\n"));
   m_Report.append(drawList);
+  m_Report.append(geometryStats);
   m_Report += tr("API calls: %1\n").arg(numAPIcalls);
   AppendAPICallSummary();
   m_Report.append(ratio);
