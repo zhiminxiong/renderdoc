@@ -209,6 +209,7 @@ private:
   void repopulateBookmarks();
   void highlightBookmarks();
   void bookmarkContextMenu(QRClickToolButton *button, uint32_t EID);
+  void showBookmarkStatistics();
 
   int FindEvent(QModelIndex parent, QString filter, uint32_t after, bool forward);
   int FindEvent(QString filter, uint32_t after, bool forward);
