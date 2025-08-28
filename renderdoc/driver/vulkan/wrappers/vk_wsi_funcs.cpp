@@ -532,7 +532,7 @@ bool WrappedVulkan::Serialise_vkCreateSwapchainKHR(SerialiserType &ser, VkDevice
       VkMemoryOpaqueCaptureAddressAllocateInfo memoryDeviceAddress = {
           VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,
       };
-      if(fakeBackbuffers)
+      if(fakeBackbuffers && opaqueMemAddress)
       {
         allocInfo.pNext = &memFlags;
         memFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
