@@ -5472,20 +5472,30 @@ void EventBrowser::showBookmarkStatistics()
   uint64_t totalTriangles = 0;
   uint32_t validDrawCalls = 0;
 
-  for(const EventBookmark &bookmark : bookmarks)
+  for (const EventBookmark &bookmark : bookmarks)
   {
     const ActionDescription *action = GetActionForEID(bookmark.eventId);
-    if(action && (action->flags & ActionFlags::Drawcall))
+    if (action && action->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
     {
-      totalVertices += action->numIndices > 0 ? action->numIndices : action->numInstances;
-      
-      if(action->numIndices > 0)
+      if (action->flags & ActionFlags::Indexed)
       {
-        totalTriangles += action->numIndices / 3;
+        totalVertices += (action->flags & ActionFlags::Instanced) ? action->numIndices * action->numInstances : action->numIndices;
       }
-      else if(action->numInstances > 0)
+      else
       {
-        totalTriangles += action->numInstances / 3;
+        totalVertices += action->numIndices;
+      }
+
+      if (action->numIndices > 0)
+      {
+        if(action->flags & ActionFlags::Indexed)
+        {
+          totalTriangles += (action->flags & ActionFlags::Instanced) ? action->numIndices / 3 * action->numInstances : action->numIndices / 3;
+        }
+        else
+        {
+          totalTriangles += action->numIndices / 3;
+        }
       }
       
       validDrawCalls++;
