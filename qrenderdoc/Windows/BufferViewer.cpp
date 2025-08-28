@@ -4049,6 +4049,12 @@ QVariant BufferViewer::persistData()
                                QVariant(m_Config.axisMapping.zAxis.z)};
   state[lit("zAxisMapping")] = zAxisMapping;
 
+  state[lit("controlType")] = ui->controlType->currentIndex();
+  state[lit("drawRange")] = ui->drawRange->currentIndex();
+  state[lit("visualisation")] = ui->visualisation->currentIndex();
+  state[lit("wireframeRender")] = ui->wireframeRender->isChecked();
+  state[lit("highlightVerts")] = ui->highlightVerts->isChecked();
+
   return state;
 }
 
@@ -4071,6 +4077,17 @@ void BufferViewer::setPersistData(const QVariant &persistData)
     m_Config.axisMapping.zAxis.y = state[lit("zAxisMapping")].toList()[1].toInt();
     m_Config.axisMapping.zAxis.z = state[lit("zAxisMapping")].toList()[2].toInt();
   }
+
+  if(state.contains(lit("controlType")))
+    ui->controlType->setCurrentIndex(state[lit("controlType")].toInt());
+  if(state.contains(lit("drawRange")))
+    ui->drawRange->setCurrentIndex(state[lit("drawRange")].toInt());
+  if(state.contains(lit("visualisation")))
+    ui->visualisation->setCurrentIndex(state[lit("visualisation")].toInt());
+  if(state.contains(lit("wireframeRender")))
+    ui->wireframeRender->setChecked(state[lit("wireframeRender")].toBool());
+  if(state.contains(lit("highlightVerts")))
+    ui->highlightVerts->setChecked(state[lit("highlightVerts")].toBool());
 }
 
 void BufferViewer::UI_FixedAddMatrixRows(RDTreeWidgetItem *n, const ShaderConstant &c,
