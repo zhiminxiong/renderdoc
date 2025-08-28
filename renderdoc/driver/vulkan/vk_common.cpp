@@ -1326,11 +1326,13 @@ VkDriverInfo::VkDriverInfo(const VkPhysicalDeviceProperties &physProps,
       nvidiaStaticPipelineRebindStates = true;
     }
 
+#if ENABLED(RDOC_WIN32)
     // this is fixed in a windows version but we can't easily query that, so instead we are waiting
     // for a driver-based workaround and apply the workaround ourselves in the meantime
     if(active)
       RDCLOG("Enabling NV workaround for unaligned BDA memory capture/replay");
     nvidiaUnalignedBDAIssue = true;
+#endif
 
     // this was found in the initial implementation, if mesh output is fetched and a user descriptor
     // set has no vertex bindings at all (and they're not also compute bindings) then a descriptor
