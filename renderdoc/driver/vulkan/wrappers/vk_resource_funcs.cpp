@@ -350,7 +350,7 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
     }
 
     // apply workaround for presumed windows bug
-    if(GetDriverInfo().NVUnalignedBDAIssue())
+    if(GetDriverInfo().NVUnalignedBDAIssue() && ser.VersionAtLeast(0x17))
     {
       // all memory allocations must be 64kB aligned. The rest of the workaround only applies during capture
       patched.allocationSize = AlignUp(patched.allocationSize, VkDeviceSize(64 * 1024));
