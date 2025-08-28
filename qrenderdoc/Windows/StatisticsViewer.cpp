@@ -632,7 +632,7 @@ void StatisticsViewer::CountContributingEvents(const ActionDescription &action, 
   if(action.flags & ActionFlags::Dispatch)
     dispatchCount += 1;
 
-  if (action.flags & ActionFlags::Clear)
+  if (action.flags & ActionFlags::ClearColor || action.flags & ActionFlags::ClearDepthStencil)
     clearCount += 1;
 
   if (action.flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
@@ -848,7 +848,7 @@ StatisticsViewer::StatisticsViewer(ICaptureContext &ctx, QWidget *parent)
 {
   ui->setupUi(this);
 
-  ui->statistics->setFont(Formatter::FixedFont());
+  ui->statistics->setFont(Formatter::PreferredFont());
 
   m_Ctx.AddCaptureViewer(this);
 }
