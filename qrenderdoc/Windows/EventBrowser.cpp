@@ -43,6 +43,10 @@
 #include <QStylePainter>
 #include <QTextEdit>
 #include <QTimer>
+#include <QApplication>
+#include <QClipboard>
+#include <QMessageBox>
+#include <QVBoxLayout>
 #include "Code/QRDUtils.h"
 #include "Code/Resources.h"
 #include "Widgets/CollapseGroupBox.h"
@@ -4217,6 +4221,15 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   QObject::connect(ui->filterExpression, &RDTextEdit::completionEnd, this,
                    &EventBrowser::on_filterExpression_textChanged);
 
+  RDToolButton *statisticsButton = new RDToolButton(this);
+  statisticsButton->setText(tr("Bookmark Statistics"));
+  statisticsButton->setToolTip(tr("Bookmark Statistics"));
+  statisticsButton->setIcon(Icons::chart_curve());
+  statisticsButton->setAutoRaise(true);
+  QObject::connect(statisticsButton, &RDToolButton::clicked, this, &EventBrowser::showBookmarkStatistics);
+
+  m_BookmarkStripLayout->addWidget(statisticsButton);
+
   if(m_FilterTimeout->isActive())
     m_FilterTimeout->stop();
 
@@ -5979,6 +5992,15 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
   contextMenu.addAction(&toggleBookmark);
   contextMenu.addAction(&selectCols);
 
+  if (!m_Ctx.GetBookmarks().isEmpty())
+  {
+    contextMenu.addSeparator();
+    QAction *statisticsAction = new QAction(tr("Bookmark statistics"), this);
+    statisticsAction->setIcon(Icons::chart_curve());
+    QObject::connect(statisticsAction, &QAction::triggered, this, &EventBrowser::showBookmarkStatistics);
+    contextMenu.addAction(statisticsAction);
+  }
+
   expandAll.setIcon(Icons::arrow_out());
   collapseAll.setIcon(Icons::arrow_in());
   toggleBookmark.setIcon(Icons::asterisk_orange());
@@ -6163,6 +6185,81 @@ void EventBrowser::bookmarkContextMenu(QRClickToolButton *button, uint32_t EID)
   });
 
   RDDialog::show(&contextMenu, QCursor::pos());
+}
+
+void EventBrowser::showBookmarkStatistics()
+{
+  if (!m_Ctx.IsCaptureLoaded())
+    return;
+
+  const rdcarray<EventBookmark> bookmarks = m_Ctx.GetBookmarks();
+  
+  if (bookmarks.isEmpty())
+  {
+    QMessageBox::information(this, tr("Bookmark statistics"), tr("no bookmards!"));
+    return;
+  }
+
+  uint64_t totalVertices = 0;
+  uint64_t totalTriangles = 0;
+  uint32_t validDrawCalls = 0;
+
+  for(const EventBookmark &bookmark : bookmarks)
+  {
+    const ActionDescription *action = GetActionForEID(bookmark.eventId);
+    if(action && (action->flags & ActionFlags::Drawcall))
+    {
+      totalVertices += action->numIndices > 0 ? action->numIndices : action->numInstances;
+      
+      if(action->numIndices > 0)
+      {
+        totalTriangles += action->numIndices / 3;
+      }
+      else if(action->numInstances > 0)
+      {
+        totalTriangles += action->numInstances / 3;
+      }
+      
+      validDrawCalls++;
+    }
+  }
+
+  QString statisticsText = lit(
+    "Bookmark statistics:\n\n"
+    "bookmark count: %1\n"
+    "drawcall* count: %2\n"
+    "total vertices num: %3\n"
+    "total primitive count: %4\n"
+  ).arg(bookmarks.count())
+   .arg(validDrawCalls)
+   .arg(totalVertices)
+   .arg(totalTriangles);
+
+  QDialog dialog(this);
+  dialog.setWindowTitle(tr("Bookmark statistics"));
+  dialog.setModal(true);
+  dialog.resize(400, 300);
+
+  QVBoxLayout *layout = new QVBoxLayout(&dialog);
+  
+  QTextEdit *textEdit = new QTextEdit(&dialog);
+  textEdit->setPlainText(statisticsText);
+  textEdit->setReadOnly(true);
+  layout->addWidget(textEdit);
+  
+  QDialogButtonBox *buttonBox = new QDialogButtonBox(&dialog);
+  QPushButton *copyButton = buttonBox->addButton(tr("Copy"), QDialogButtonBox::ActionRole);
+  QPushButton *closeButton = buttonBox->addButton(tr("Close"), QDialogButtonBox::RejectRole);
+  
+  layout->addWidget(buttonBox);
+  
+  QObject::connect(copyButton, &QPushButton::clicked, [statisticsText]() {
+    QApplication::clipboard()->setText(statisticsText);
+  });
+  
+  QObject::connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+  
+  dialog.exec();
 }
 
 void EventBrowser::ExpandNode(QModelIndex idx)
