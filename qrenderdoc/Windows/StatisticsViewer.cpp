@@ -637,25 +637,11 @@ void StatisticsViewer::CountContributingEvents(const ActionDescription &action, 
 
   if (action.flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
   {
-    if (action.flags & ActionFlags::Indexed)
-    {
-      vertexCount += (action.flags & ActionFlags::Instanced) ? action.numIndices * action.numInstances : action.numIndices;
-    }
-    else
-    {
-      vertexCount += action.numIndices;
-    }
-
     if (action.numIndices > 0)
     {
-      if(action.flags & ActionFlags::Indexed)
-      {
-        primitiveCount += (action.flags & ActionFlags::Instanced) ? action.numIndices / 3 * action.numInstances : action.numIndices / 3;
-      }
-      else
-      {
-        primitiveCount += action.numIndices / 3;
-      }
+      vertexCount += (action.numInstances > 0) ? action.numIndices * action.numInstances : action.numIndices;
+      primitiveCount += CalculatePrimitiveCount(m_Ctx.CurPipelineState().GetPrimitiveTopology(), 
+                                                   action.numIndices, action.numInstances);
     }
   }
 
@@ -806,7 +792,7 @@ void StatisticsViewer::GenerateReport()
           .arg(initDataMB, 2, 'f', 2);
   QString drawList = tr("Draw calls: %1\nDispatch calls: %2\nClear calls: %3\n")
                      .arg(drawCount).arg(dispatchCount).arg(clearCount);
-  QString geometryStats = tr("Total vertices: %1\nTotal primitives (triangles): %2\n")
+  QString geometryStats = tr("Total vertices: %1\nTotal primitives: %2\n")
                          .arg(vertexCount).arg(primitiveCount);
   QString ratio = tr("API:Draw/Dispatch call ratio: %1\n\n").arg(drawRatio);
   QString textures = tr("%1 Textures - %2 MB (%3 MB over 32x32), %4 RTs - %5 MB.\n"

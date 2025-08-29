@@ -6209,25 +6209,11 @@ void EventBrowser::showBookmarkStatistics()
     const ActionDescription *action = GetActionForEID(bookmark.eventId);
     if (action && action->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))
     {
-      if (action->flags & ActionFlags::Indexed)
-      {
-        totalVertices += (action->flags & ActionFlags::Instanced) ? action->numIndices * action->numInstances : action->numIndices;
-      }
-      else
-      {
-        totalVertices += action->numIndices;
-      }
-
       if (action->numIndices > 0)
       {
-        if(action->flags & ActionFlags::Indexed)
-        {
-          totalTriangles += (action->flags & ActionFlags::Instanced) ? action->numIndices / 3 * action->numInstances : action->numIndices / 3;
-        }
-        else
-        {
-          totalTriangles += action->numIndices / 3;
-        }
+        totalVertices += (action->numInstances > 0) ? action->numIndices * action->numInstances : action->numIndices;
+        totalTriangles += CalculatePrimitiveCount(m_Ctx.CurPipelineState().GetPrimitiveTopology(), 
+                                                   action->numIndices, action->numInstances);
       }
       
       validDrawCalls++;
