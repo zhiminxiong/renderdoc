@@ -55,6 +55,12 @@ struct VulkanStatePipeline
     uint32_t descBufferIdx = ~0U;
     VkDeviceSize descBufferOffset = 0;
     bool descBufferEmbeddedSamplers = false;
+    bool descBufferPush = false;
+
+    bool IsDescBufferBound() const
+    {
+      return descBufferIdx != ~0U || descBufferEmbeddedSamplers || descBufferPush;
+    }
 
     bool IsBound() const
     {

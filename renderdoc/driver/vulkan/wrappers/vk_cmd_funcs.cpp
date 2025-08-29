@@ -6192,6 +6192,11 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet(SerialiserType &ser,
           descsets[set].pipeLayout = GetResID(layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
+          ResourceId setLayout =
+              m_CreationInfo.m_PipelineLayout[GetResID(layout)].descSetLayouts[set];
+          descsets[set].descBufferPush =
+              (m_CreationInfo.m_DescSetLayout[setLayout].flags &
+               VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
         }
 
         // actual replay of the command will happen below
@@ -6215,6 +6220,9 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet(SerialiserType &ser,
       // allocated object corresponding to it.
       descsets[set].descSet = setId;
       descsets[set].push = true;
+      ResourceId setLayout = m_CreationInfo.m_PipelineLayout[GetResID(layout)].descSetLayouts[set];
+      descsets[set].descBufferPush = (m_CreationInfo.m_DescSetLayout[setLayout].flags &
+                                      VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
     }
 
     if(commandBuffer != VK_NULL_HANDLE)
@@ -6467,6 +6475,11 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate(
           descsets[set].pipeLayout = GetResID(layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
+          ResourceId setLayout =
+              m_CreationInfo.m_PipelineLayout[GetResID(layout)].descSetLayouts[set];
+          descsets[set].descBufferPush =
+              (m_CreationInfo.m_DescSetLayout[setLayout].flags &
+               VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
         }
 
         // actual replay of the command will happen below
@@ -6490,6 +6503,9 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate(
       // allocated object corresponding to it.
       descsets[set].descSet = setId;
       descsets[set].push = true;
+      ResourceId setLayout = m_CreationInfo.m_PipelineLayout[GetResID(layout)].descSetLayouts[set];
+      descsets[set].descBufferPush = (m_CreationInfo.m_DescSetLayout[setLayout].flags &
+                                      VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
     }
 
     if(commandBuffer != VK_NULL_HANDLE)
@@ -9204,6 +9220,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
             pipeline.descSets[firstSet + set].descBufferIdx = pBufferIndices[set];
             pipeline.descSets[firstSet + set].descBufferOffset = pOffsets[set];
             pipeline.descSets[firstSet + set].descBufferEmbeddedSamplers = false;
+            pipeline.descSets[firstSet + set].descBufferPush = false;
           }
 
           // any normal descriptor set bindings are invalidated
@@ -9214,7 +9231,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
             VulkanStatePipeline &pipe = renderstate.GetPipeline(bindPoint);
 
             for(uint32_t i = 0; i < pipe.descSets.size(); i++)
-              if(pipe.descSets[i].descSet != ResourceId())
+              if(!pipe.descSets[i].IsDescBufferBound())
                 pipe.descSets[i] = {};
           }
         }
@@ -9238,6 +9255,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
           pipeline.descSets[firstSet + set].descBufferIdx = pBufferIndices[set];
           pipeline.descSets[firstSet + set].descBufferOffset = pOffsets[set];
           pipeline.descSets[firstSet + set].descBufferEmbeddedSamplers = false;
+          pipeline.descSets[firstSet + set].descBufferPush = false;
         }
 
         // any normal descriptor set bindings are invalidated
@@ -9248,7 +9266,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
           VulkanStatePipeline &pipe = renderstate.GetPipeline(bindPoint);
 
           for(uint32_t i = 0; i < pipe.descSets.size(); i++)
-            if(pipe.descSets[i].descSet != ResourceId())
+            if(!pipe.descSets[i].IsDescBufferBound())
               pipe.descSets[i] = {};
         }
       }
@@ -9328,6 +9346,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
           pipeline.descSets[set].descBufferIdx = ~0U;
           pipeline.descSets[set].descBufferOffset = 0;
           pipeline.descSets[set].descBufferEmbeddedSamplers = true;
+          pipeline.descSets[set].descBufferPush = false;
 
           // any normal descriptor set bindings are invalidated
           for(VkPipelineBindPoint bindPoint :
@@ -9337,7 +9356,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
             VulkanStatePipeline &pipe = renderstate.GetPipeline(bindPoint);
 
             for(uint32_t i = 0; i < pipe.descSets.size(); i++)
-              if(pipe.descSets[i].descSet != ResourceId())
+              if(!pipe.descSets[i].IsDescBufferBound())
                 pipe.descSets[i] = {};
           }
         }
@@ -9431,6 +9450,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsets2EXT(
             pipeline.descSets[firstSet + set].descBufferOffset =
                 SetDescriptorBufferOffsetsInfo.pOffsets[set];
             pipeline.descSets[firstSet + set].descBufferEmbeddedSamplers = false;
+            pipeline.descSets[firstSet + set].descBufferPush = false;
           }
         }
 
@@ -9442,7 +9462,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsets2EXT(
           VulkanStatePipeline &pipe = renderstate.GetPipeline(bindPoint);
 
           for(uint32_t i = 0; i < pipe.descSets.size(); i++)
-            if(pipe.descSets[i].descSet != ResourceId())
+            if(!pipe.descSets[i].IsDescBufferBound())
               pipe.descSets[i] = {};
         }
       }
@@ -9470,6 +9490,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsets2EXT(
           pipeline.descSets[firstSet + set].descBufferOffset =
               SetDescriptorBufferOffsetsInfo.pOffsets[set];
           pipeline.descSets[firstSet + set].descBufferEmbeddedSamplers = false;
+          pipeline.descSets[firstSet + set].descBufferPush = false;
         }
       }
 
@@ -9481,7 +9502,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsets2EXT(
         VulkanStatePipeline &pipe = renderstate.GetPipeline(bindPoint);
 
         for(uint32_t i = 0; i < pipe.descSets.size(); i++)
-          if(pipe.descSets[i].descSet != ResourceId())
+          if(!pipe.descSets[i].IsDescBufferBound())
             pipe.descSets[i] = {};
       }
 
@@ -9569,6 +9590,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT(
           pipeline.descSets[set].descBufferIdx = ~0U;
           pipeline.descSets[set].descBufferOffset = 0;
           pipeline.descSets[set].descBufferEmbeddedSamplers = true;
+          pipeline.descSets[set].descBufferPush = false;
         }
 
         // any normal descriptor set bindings are invalidated
@@ -9579,7 +9601,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT(
           VulkanStatePipeline &pipe = renderstate.GetPipeline(bindPoint);
 
           for(uint32_t i = 0; i < pipe.descSets.size(); i++)
-            if(pipe.descSets[i].descSet != ResourceId())
+            if(!pipe.descSets[i].IsDescBufferBound())
               pipe.descSets[i] = {};
         }
       }
@@ -9669,6 +9691,11 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2(
           descsets[set].pipeLayout = GetResID(PushDescriptorSetInfo.layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
+          ResourceId setLayout =
+              m_CreationInfo.m_PipelineLayout[GetResID(PushDescriptorSetInfo.layout)].descSetLayouts[set];
+          descsets[set].descBufferPush =
+              (m_CreationInfo.m_DescSetLayout[setLayout].flags &
+               VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
         }
 
         // actual replay of the command will happen below
@@ -9697,6 +9724,11 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2(
         // allocated object corresponding to it.
         descsets[set].descSet = setId;
         descsets[set].push = true;
+        ResourceId setLayout =
+            m_CreationInfo.m_PipelineLayout[GetResID(PushDescriptorSetInfo.layout)].descSetLayouts[set];
+        descsets[set].descBufferPush =
+            (m_CreationInfo.m_DescSetLayout[setLayout].flags &
+             VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0;
       }
     }
 
