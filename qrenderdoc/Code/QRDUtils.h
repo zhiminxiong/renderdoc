@@ -273,6 +273,9 @@ void CombineUsageEvents(
     ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
     std::function<void(uint32_t startEID, uint32_t endEID, ResourceUsage use)> callback);
 
+// Calculate primitive count based on topology and vertex/index count
+uint32_t CalculatePrimitiveCount(Topology topology, uint32_t vertexOrIndexCount, uint32_t instanceCount = 1);
+
 class RDTreeWidgetItem;
 
 QVariant SDObject2Variant(const SDObject *obj, bool inlineImportant);

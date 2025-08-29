@@ -1948,6 +1948,94 @@ void CombineUsageEvents(ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
     callback(start, end, us);
 }
 
+uint32_t CalculatePrimitiveCount(Topology topology, uint32_t vertexOrIndexCount, uint32_t instanceCount)
+{
+  if (vertexOrIndexCount == 0)
+    return 0;
+
+  if (instanceCount == 0)
+    instanceCount = 1;
+
+  uint32_t primitivesPerInstance = 0;
+
+  switch(topology)
+  {
+    case Topology::PointList:
+      primitivesPerInstance = vertexOrIndexCount;
+      break;
+    case Topology::LineList:
+      primitivesPerInstance = vertexOrIndexCount / 2;
+      break;
+    case Topology::LineStrip:
+      primitivesPerInstance = vertexOrIndexCount > 1 ? vertexOrIndexCount - 1 : 0;
+      break;
+    case Topology::TriangleList:
+      primitivesPerInstance = vertexOrIndexCount / 3;
+      break;
+    case Topology::TriangleStrip:
+      primitivesPerInstance = vertexOrIndexCount > 2 ? vertexOrIndexCount - 2 : 0;
+      break;
+    case Topology::TriangleFan:
+      primitivesPerInstance = vertexOrIndexCount > 2 ? vertexOrIndexCount - 2 : 0;
+      break;
+    case Topology::LineList_Adj:
+      primitivesPerInstance = vertexOrIndexCount / 4;
+      break;
+    case Topology::LineStrip_Adj:
+      primitivesPerInstance = vertexOrIndexCount > 3 ? vertexOrIndexCount - 3 : 0;
+      break;
+    case Topology::TriangleList_Adj:
+      primitivesPerInstance = vertexOrIndexCount / 6;
+      break;
+    case Topology::TriangleStrip_Adj:
+      primitivesPerInstance = vertexOrIndexCount > 5 ? (vertexOrIndexCount - 4) / 2 : 0;
+      break;
+    case Topology::PatchList_1CPs:
+    case Topology::PatchList_2CPs:
+    case Topology::PatchList_3CPs:
+    case Topology::PatchList_4CPs:
+    case Topology::PatchList_5CPs:
+    case Topology::PatchList_6CPs:
+    case Topology::PatchList_7CPs:
+    case Topology::PatchList_8CPs:
+    case Topology::PatchList_9CPs:
+    case Topology::PatchList_10CPs:
+    case Topology::PatchList_11CPs:
+    case Topology::PatchList_12CPs:
+    case Topology::PatchList_13CPs:
+    case Topology::PatchList_14CPs:
+    case Topology::PatchList_15CPs:
+    case Topology::PatchList_16CPs:
+    case Topology::PatchList_17CPs:
+    case Topology::PatchList_18CPs:
+    case Topology::PatchList_19CPs:
+    case Topology::PatchList_20CPs:
+    case Topology::PatchList_21CPs:
+    case Topology::PatchList_22CPs:
+    case Topology::PatchList_23CPs:
+    case Topology::PatchList_24CPs:
+    case Topology::PatchList_25CPs:
+    case Topology::PatchList_26CPs:
+    case Topology::PatchList_27CPs:
+    case Topology::PatchList_28CPs:
+    case Topology::PatchList_29CPs:
+    case Topology::PatchList_30CPs:
+    case Topology::PatchList_31CPs:
+    case Topology::PatchList_32CPs:
+    {
+      uint32_t patchSize = uint32_t(topology) - uint32_t(Topology::PatchList_1CPs) + 1;
+      primitivesPerInstance = vertexOrIndexCount / patchSize;
+      break;
+    }
+    default:
+      // Unknown topology, fallback to triangle assumption
+      primitivesPerInstance = vertexOrIndexCount / 3;
+      break;
+  }
+
+  return primitivesPerInstance * instanceCount;
+}
+
 QVariant SDObject2Variant(const SDObject *obj, bool inlineImportant)
 {
   QVariant param;
