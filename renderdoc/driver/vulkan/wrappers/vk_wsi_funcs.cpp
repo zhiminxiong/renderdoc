@@ -1177,7 +1177,7 @@ void WrappedVulkan::HandlePresent(VkQueue queue, const VkPresentInfoKHR *pPresen
 
     const bool fakeBackbuffers = AccelerationStructures() || DescriptorBuffers();
 
-    if(overlay & eRENDERDOC_Overlay_Enabled)
+    if(fakeBackbuffers || (overlay & eRENDERDOC_Overlay_Enabled))
     {
       VkRenderPass rp = swapInfo.rp;
       VkImage unwrappedRealSwapImage = swapInfo.images[imgIndex].unwrappedRealSwapImage;
@@ -1385,7 +1385,7 @@ void WrappedVulkan::HandlePresent(VkQueue queue, const VkPresentInfoKHR *pPresen
         DoPipelineBarrier(cmd, 1, &tmpBarrier);
       }
 
-      if(!overlayText.empty())
+      if(!overlayText.empty() && (overlay & eRENDERDOC_Overlay_Enabled))
       {
         m_TextRenderer->BeginText(textstate);
 
