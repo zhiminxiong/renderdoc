@@ -277,6 +277,9 @@ uint32_t GetParentMarkerEventId(ICaptureContext &ctx, uint32_t eventId);
 QString GetParentMarkerName(ICaptureContext &ctx, uint32_t eventId);
 QString GetParentMarkerPath(ICaptureContext &ctx, uint32_t eventId, bool &hasParent);
 
+// Calculate primitive count based on topology and vertex/index count
+uint32_t CalculatePrimitiveCount(Topology topology, uint32_t vertexOrIndexCount, uint32_t instanceCount = 1);
+
 class RDTreeWidgetItem;
 
 QVariant SDObject2Variant(const SDObject *obj, bool inlineImportant);
