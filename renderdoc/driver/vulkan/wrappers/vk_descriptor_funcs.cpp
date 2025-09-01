@@ -3425,11 +3425,15 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
         if(pDescriptorInfo->data.pSampler)
         {
           dstRecord = GetRecord(*pDescriptorInfo->data.pSampler);
-          // don't need to worry about the race here, worst case we save an extra descriptor
-          if(dstRecord->hasDescriptorSaved)
-            dstRecord = NULL;
-          else
-            dstRecord->hasDescriptorSaved = true;
+
+          if(dstRecord)
+          {
+            // don't need to worry about the race here, worst case we save an extra descriptor
+            if(dstRecord->hasDescriptorSaved)
+              dstRecord = NULL;
+            else
+              dstRecord->hasDescriptorSaved = true;
+          }
         }
         else
         {
@@ -3456,20 +3460,27 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
                                            : pDescriptorInfo->data.pCombinedImageSampler->imageLayout,
               pDescriptorInfo->type);
 
-          // this is internally locked
-          if(!dstRecord->resInfo->AddDescriptor(descKey))
-            dstRecord = NULL;
+          if(dstRecord)
+          {
+            // this is internally locked
+            if(!dstRecord->resInfo->AddDescriptor(descKey))
+              dstRecord = NULL;
+          }
         }
         else if(pDescriptorInfo->data.pCombinedImageSampler &&
                 pDescriptorInfo->data.pCombinedImageSampler->imageView == VK_NULL_HANDLE &&
                 pDescriptorInfo->data.pCombinedImageSampler->sampler != VK_NULL_HANDLE)
         {
           dstRecord = GetRecord(pDescriptorInfo->data.pCombinedImageSampler->sampler);
-          // don't need to worry about the race here, worst case we save an extra descriptor
-          if(dstRecord->hasNULLDescriptorSaved)
-            dstRecord = NULL;
-          else
-            dstRecord->hasNULLDescriptorSaved = true;
+
+          if(dstRecord)
+          {
+            // don't need to worry about the race here, worst case we save an extra descriptor
+            if(dstRecord->hasNULLDescriptorSaved)
+              dstRecord = NULL;
+            else
+              dstRecord->hasNULLDescriptorSaved = true;
+          }
         }
         else
         {
@@ -3523,12 +3534,15 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
 
           dstRecord = GetResourceManager()->GetResourceRecord(id);
 
-          DescriptorUniquenessKey descKey(offs, pDescriptorInfo->data.pUniformBuffer->range, fmt,
-                                          pDescriptorInfo->type);
+          if(dstRecord)
+          {
+            DescriptorUniquenessKey descKey(offs, pDescriptorInfo->data.pUniformBuffer->range, fmt,
+                                            pDescriptorInfo->type);
 
-          // this is internally locked
-          if(!dstRecord->resInfo->AddDescriptor(descKey))
-            dstRecord = NULL;
+            // this is internally locked
+            if(!dstRecord->resInfo->AddDescriptor(descKey))
+              dstRecord = NULL;
+          }
         }
         else
         {
@@ -3549,11 +3563,15 @@ void WrappedVulkan::vkGetDescriptorEXT(VkDevice device, const VkDescriptorGetInf
           }
 
           dstRecord = GetResourceManager()->GetResourceRecord(id);
-          // don't need to worry about the race here, worst case we save an extra descriptor
-          if(dstRecord->hasDescriptorSaved)
-            dstRecord = NULL;
-          else
-            dstRecord->hasDescriptorSaved = true;
+
+          if(dstRecord)
+          {
+            // don't need to worry about the race here, worst case we save an extra descriptor
+            if(dstRecord->hasDescriptorSaved)
+              dstRecord = NULL;
+            else
+              dstRecord->hasDescriptorSaved = true;
+          }
         }
         else
         {
