@@ -457,15 +457,18 @@ private:
       Key prefixAfter = prefix.ExclusiveSuffixAfter(search.size);
       Key prefixBefore = prefix.ExclusivePrefixBefore(search.size);
 
-      // the current node will be appended on after, so truncate its key
+      // the current node will be appended on as a child, it will truncate its key to prefixAfter
       NodeOrLeaf *oldRoot = root;
-      oldRoot->SetPrefix(prefixAfter);
 
       // create a new node with the prefix before
       // this can be a small2 node as we only need one child so far
       SmallNode<2> *newRoot = MakeNode<SmallNode<2>>();
-      newRoot->SetPrefix(prefixBefore);
       root = newRoot;
+
+      // set new root prefix first as this copies into the node, both prefixBefore and prefixAfter
+      // reference subsets of the old prefix (which is stored in oldRoot)
+      newRoot->SetPrefix(prefixBefore);
+      oldRoot->SetPrefix(prefixAfter);
 
       // the old root is appended on after the right child
       newRoot->childBytes[0] = firstExtraKeyByte;
