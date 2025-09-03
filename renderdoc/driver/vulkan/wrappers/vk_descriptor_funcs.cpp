@@ -1361,13 +1361,19 @@ void WrappedVulkan::RegisterDescriptor(const bytebuf &key, const DescriptorSetSl
         {key.data() + m_DescriptorLookup.combinedSamplerOffset, samplerSize}, samplerData);
   }
 
-  if((data.type == DescriptorSlotType::InputAttachment ||
-      data.type == DescriptorSlotType::StorageImage || data.type == DescriptorSlotType::SampledImage ||
+  if((data.type == DescriptorSlotType::SampledImage ||
       data.type == DescriptorSlotType::CombinedImageSampler) &&
      m_DescriptorLookup.sampled != ImageDescriptorFormat::Indexed2012)
   {
     m_CreationInfo.m_Image[m_CreationInfo.m_ImageView[data.resource].image].viewDescriptors.push_back(
         {bytebuf(key.data(), sampledSize), data.resource});
+  }
+  else if((data.type == DescriptorSlotType::InputAttachment ||
+           data.type == DescriptorSlotType::StorageImage) &&
+          m_DescriptorLookup.storage != ImageDescriptorFormat::Indexed2012)
+  {
+    m_CreationInfo.m_Image[m_CreationInfo.m_ImageView[data.resource].image].viewDescriptors.push_back(
+        {key, data.resource});
   }
 }
 
