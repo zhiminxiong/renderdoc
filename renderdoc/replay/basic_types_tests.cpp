@@ -2607,6 +2607,8 @@ TEST_CASE("Test rdcbytetrie type", "[basictypes][rdcbytetrie]")
         //
         {{1, 1, 1, 2, 3}, TrieValue(1)},
         //
+        {{1, 1, 1}, TrieValue(8)},
+        //
         {{1, 1, 1, 2, 4}, TrieValue(2)},
         //
         {{1, 1, 1, 3}, TrieValue(3)},
