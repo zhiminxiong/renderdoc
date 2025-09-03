@@ -3898,10 +3898,9 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets(
           // consume the offsets linearly along the descriptor set layouts
           for(uint32_t i = 0; i < setCount; i++)
           {
+            descsets[firstSet + i] = VulkanStatePipeline::DescriptorAndOffsets();
             descsets[firstSet + i].pipeLayout = GetResID(layout);
             descsets[firstSet + i].descSet = GetResID(pDescriptorSets[i]);
-            descsets[firstSet + i].push = false;
-            descsets[firstSet + i].offsets.clear();
 
             if(descSetLayouts[firstSet + i] == ResourceId())
               continue;
@@ -3935,6 +3934,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets(
 
       for(uint32_t i = 0; i < setCount; i++)
       {
+        descsets[firstSet + i] = VulkanStatePipeline::DescriptorAndOffsets();
         descsets[firstSet + i].descSet = GetResID(pDescriptorSets[i]);
         descsets[firstSet + i].push = false;
       }
@@ -4047,10 +4047,9 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets2(
             // consume the offsets linearly along the descriptor set layouts
             for(uint32_t i = 0; i < BindDescriptorSetsInfo.descriptorSetCount; i++)
             {
+              descsets[firstSet + i] = VulkanStatePipeline::DescriptorAndOffsets();
               descsets[firstSet + i].pipeLayout = GetResID(BindDescriptorSetsInfo.layout);
               descsets[firstSet + i].descSet = GetResID(BindDescriptorSetsInfo.pDescriptorSets[i]);
-              descsets[firstSet + i].push = false;
-              descsets[firstSet + i].offsets.clear();
 
               if(descSetLayouts[firstSet + i] == ResourceId())
                 continue;
@@ -4088,6 +4087,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorSets2(
 
         for(uint32_t i = 0; i < BindDescriptorSetsInfo.descriptorSetCount; i++)
         {
+          descsets[firstSet + i] = VulkanStatePipeline::DescriptorAndOffsets();
           descsets[firstSet + i].descSet = GetResID(BindDescriptorSetsInfo.pDescriptorSets[i]);
           descsets[firstSet + i].push = false;
         }
@@ -6189,6 +6189,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet(SerialiserType &ser,
 
           pipeline.lastBoundSet = set;
 
+          descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
           descsets[set].pipeLayout = GetResID(layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
@@ -6218,6 +6219,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet(SerialiserType &ser,
 
       // we use a 'special' ID for the push descriptor at this index, since there's no actual
       // allocated object corresponding to it.
+      descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
       descsets[set].descSet = setId;
       descsets[set].push = true;
       ResourceId setLayout = m_CreationInfo.m_PipelineLayout[GetResID(layout)].descSetLayouts[set];
@@ -6472,6 +6474,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate(
 
           pipeline.lastBoundSet = set;
 
+          descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
           descsets[set].pipeLayout = GetResID(layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
@@ -6501,6 +6504,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate(
 
       // we use a 'special' ID for the push descriptor at this index, since there's no actual
       // allocated object corresponding to it.
+      descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
       descsets[set].descSet = setId;
       descsets[set].push = true;
       ResourceId setLayout = m_CreationInfo.m_PipelineLayout[GetResID(layout)].descSetLayouts[set];
@@ -9215,6 +9219,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
           for(uint32_t set = 0; set < setCount; set++)
           {
             pipeline.descSets.resize_for_index(firstSet + set);
+            pipeline.descSets[firstSet + set] = VulkanStatePipeline::DescriptorAndOffsets();
 
             pipeline.descSets[firstSet + set].pipeLayout = GetResID(layout);
             pipeline.descSets[firstSet + set].descBufferIdx = pBufferIndices[set];
@@ -9251,6 +9256,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsetsEXT(
         {
           pipeline.descSets.resize_for_index(firstSet + set);
 
+          pipeline.descSets[firstSet + set] = VulkanStatePipeline::DescriptorAndOffsets();
           pipeline.descSets[firstSet + set].pipeLayout = GetResID(layout);
           pipeline.descSets[firstSet + set].descBufferIdx = pBufferIndices[set];
           pipeline.descSets[firstSet + set].descBufferOffset = pOffsets[set];
@@ -9342,6 +9348,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
 
           pipeline.descSets.resize_for_index(set);
 
+          pipeline.descSets[set] = VulkanStatePipeline::DescriptorAndOffsets();
           pipeline.descSets[set].pipeLayout = GetResID(layout);
           pipeline.descSets[set].descBufferIdx = ~0U;
           pipeline.descSets[set].descBufferOffset = 0;
@@ -9443,6 +9450,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsets2EXT(
           {
             pipeline.descSets.resize_for_index(firstSet + set);
 
+            pipeline.descSets[firstSet + set] = VulkanStatePipeline::DescriptorAndOffsets();
             pipeline.descSets[firstSet + set].pipeLayout =
                 GetResID(SetDescriptorBufferOffsetsInfo.layout);
             pipeline.descSets[firstSet + set].descBufferIdx =
@@ -9483,6 +9491,7 @@ bool WrappedVulkan::Serialise_vkCmdSetDescriptorBufferOffsets2EXT(
         {
           pipeline.descSets.resize_for_index(firstSet + set);
 
+          pipeline.descSets[firstSet + set] = VulkanStatePipeline::DescriptorAndOffsets();
           pipeline.descSets[firstSet + set].pipeLayout =
               GetResID(SetDescriptorBufferOffsetsInfo.layout);
           pipeline.descSets[firstSet + set].descBufferIdx =
@@ -9585,6 +9594,7 @@ bool WrappedVulkan::Serialise_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT(
 
           pipeline.descSets.resize_for_index(set);
 
+          pipeline.descSets[set] = VulkanStatePipeline::DescriptorAndOffsets();
           pipeline.descSets[set].pipeLayout =
               GetResID(BindDescriptorBufferEmbeddedSamplersInfo.layout);
           pipeline.descSets[set].descBufferIdx = ~0U;
@@ -9688,6 +9698,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2(
 
           pipeline.lastBoundSet = set;
 
+          descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
           descsets[set].pipeLayout = GetResID(PushDescriptorSetInfo.layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
@@ -9722,6 +9733,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSet2(
 
         // we use a 'special' ID for the push descriptor at this index, since there's no actual
         // allocated object corresponding to it.
+        descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
         descsets[set].descSet = setId;
         descsets[set].push = true;
         ResourceId setLayout =
@@ -9855,6 +9867,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate2(
 
           pipeline.lastBoundSet = set;
 
+          descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
           descsets[set].pipeLayout = GetResID(PushDescriptorSetWithTemplateInfo.layout);
           descsets[set].descSet = setId;
           descsets[set].push = true;
@@ -9879,6 +9892,7 @@ bool WrappedVulkan::Serialise_vkCmdPushDescriptorSetWithTemplate2(
 
       // we use a 'special' ID for the push descriptor at this index, since there's no actual
       // allocated object corresponding to it.
+      descsets[set] = VulkanStatePipeline::DescriptorAndOffsets();
       descsets[set].descSet = setId;
       descsets[set].push = true;
     }
