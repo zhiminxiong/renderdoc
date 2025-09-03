@@ -99,9 +99,17 @@ struct rdcbytetrie
         return true;
 
       // used only so the tests can EXPECT_ERROR()
-      RDResult err;
-      SET_ERROR_RESULT(err, ResultCode::InternalError, "Duplicate key with differing value located");
-      (void)err;
+      if(m_StrictErrorChecking)
+      {
+        RDResult err;
+        SET_ERROR_RESULT(err, ResultCode::InternalError,
+                         "Duplicate key with differing value located");
+        (void)err;
+      }
+      else
+      {
+        RDCWARN("Duplicate key with differing value located");
+      }
 
       return false;
     }
@@ -109,6 +117,8 @@ struct rdcbytetrie
     n->SetValue(val);
     return true;
   }
+
+  void SetStrictErrorChecking(bool check) { m_StrictErrorChecking = check; }
 
 private:
   ///////////////////////////////
@@ -615,4 +625,5 @@ private:
   ///////////////////////////////
 
   NodeOrLeaf *m_Root = NULL;
+  bool m_StrictErrorChecking = false;
 };

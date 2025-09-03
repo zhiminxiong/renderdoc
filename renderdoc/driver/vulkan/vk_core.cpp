@@ -123,7 +123,7 @@ bool DescriptorTrieNode::operator==(const DescriptorTrieNode &o) const
       return true;
   }
 
-  if(type != o.type || resource != o.resource || sampler != o.sampler || offset != o.offset)
+  if(resource != o.resource || sampler != o.sampler || offset != o.offset)
     return false;
 
   // deliberately allow imageLayout differences to be considered equal still - some drivers are
@@ -132,7 +132,30 @@ bool DescriptorTrieNode::operator==(const DescriptorTrieNode &o) const
   if((range & rangeToleranceMask) != (o.range & rangeToleranceMask))
     return false;
 
-  return true;
+  if(type == o.type)
+    return true;
+
+  // allow similar types alias based on usage if they're otherwise identical since not all descriptors
+  // vary this way and the type is provided on lookup so this won't cause any problems in practice
+  DescriptorSlotType aType = RDCMIN(type, o.type);
+  DescriptorSlotType bType = RDCMAX(type, o.type);
+
+  if(aType == DescriptorSlotType::SampledImage && bType == DescriptorSlotType::StorageImage)
+    return true;
+  if(aType == DescriptorSlotType::SampledImage && bType == DescriptorSlotType::InputAttachment)
+    return true;
+  if(aType == DescriptorSlotType::StorageImage && bType == DescriptorSlotType::InputAttachment)
+    return true;
+
+  if(aType == DescriptorSlotType::UniformBuffer && bType == DescriptorSlotType::StorageBuffer)
+    return true;
+  if(aType == DescriptorSlotType::UniformTexelBuffer &&
+     bType == DescriptorSlotType::StorageTexelBuffer)
+    return true;
+
+  // could maybe allow all buffer types to alias but we'll stick to this for now
+
+  return false;
 }
 
 uint64_t DescriptorTrieNode::rangeToleranceMask = ~0ULL;

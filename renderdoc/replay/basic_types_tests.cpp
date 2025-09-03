@@ -2585,6 +2585,8 @@ TEST_CASE("Test rdcbytetrie type", "[basictypes][rdcbytetrie]")
 {
   rdcbytetrie<TrieValue> trie;
 
+  trie.SetStrictErrorChecking(true);
+
   SECTION("Simple lookups")
   {
     KV keyVals[] = {
