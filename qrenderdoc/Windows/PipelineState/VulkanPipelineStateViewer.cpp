@@ -2245,6 +2245,11 @@ void VulkanPipelineStateViewer::setState()
       }
     }
 
+    for(const VKPipe::DescriptorBuffer &buf : pipeline.descriptorBuffers)
+    {
+      descSets.push_back(buf.buffer);
+    }
+
     std::sort(descriptors.begin(), descriptors.end(),
               [descSets](const UsedDescriptor &a, const UsedDescriptor &b) {
                 int32_t a_set = descSets.indexOf(a.access.descriptorStore);
