@@ -272,6 +272,9 @@ void Editor::SetName(Id id, const rdcstr &name)
       break;
   }
 
+  if(End(Section::DebugNames) < it)
+    it = End(Section::DebugNames);
+
   InsertOperation(op, it.offs());
 }
 
