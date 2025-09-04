@@ -55,6 +55,7 @@ Current Common Feature set
 
 * Custom visualisation shader support - e.g. decode custom packed formats or gbuffers.
 * Hot shader editing and replacement.
+* Pixel history support to determine the set of changes of a given pixel.
 * Auto-range fitting to min/max values in texture data, and histogram display.
 * Simple per-action timings and tabular view of GPU counter data.
 * Python scripting console with full documented API, giving complete access to RenderDoc internals, core data structures, and the Qt UI itself.
@@ -72,7 +73,6 @@ D3D11
 
 * Support for D3D11 up to D3D11.4, Windows Vista and above. Where hardware support isn't available for feature level 11, WARP will be used.
 * Debug marker support comes from any available D3D interface (ID3DUserDefinedAnnotation, D3DPERF\_ functions, etc)
-* Pixel history view.
 * Vertex, Pixel and Compute shader debugging.
 * Detailed statistics on API call usage throughout the frame.
 
