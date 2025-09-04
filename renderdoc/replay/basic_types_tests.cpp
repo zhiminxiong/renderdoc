@@ -2520,6 +2520,25 @@ TEST_CASE("Test rdcfixedarray type", "[basictypes][rdcfixedarray]")
   };
 };
 
+void Permute(rdcarray<uint32_t> &order, size_t l, rdcarray<rdcarray<uint32_t>> &permutations)
+{
+  if(l == order.size())
+    permutations.push_back(order);
+
+  for(size_t i = l; i < order.size(); ++i)
+  {
+    uint32_t temp = order[l];
+    order[l] = order[i];
+    order[i] = temp;
+
+    Permute(order, l + 1, permutations);
+
+    temp = order[l];
+    order[l] = order[i];
+    order[i] = temp;
+  }
+}
+
 template <typename container>
 void CheckKeyValues(container &trie, KV *keyVals, size_t numKeyVals, const bytebuf &missing)
 {
@@ -2624,6 +2643,70 @@ TEST_CASE("Test rdcbytetrie type", "[basictypes][rdcbytetrie]")
     bytebuf d = {1, 3};
 
     CheckKeyValues(trie, keyVals, ARRAY_COUNT(keyVals), d);
+  }
+
+  SECTION("Varying key size with common prefixes, adding in all possible orders")
+  {
+    // Create keys in chunks of two identical bytes
+    rdcarray<KV> rawKeyVals;
+    uint32_t id = 1;
+    for(uint32_t i = 0; i < 2; ++i)
+    {
+      for(uint32_t j = 0; j < 2; ++j)
+      {
+        for(uint32_t k = 0; k < 2; ++k)
+        {
+          bytebuf key;
+          key.push_back((byte)(1 + i));
+          key.push_back((byte)(1 + i));
+          key.push_back((byte)(1 + i + j));
+          key.push_back((byte)(1 + i + j));
+          if(k > 0)
+          {
+            key.push_back((byte)(1 + i + j + k));
+            key.push_back((byte)(1 + i + j + k));
+          }
+          KV kv;
+          kv.first = key;
+          kv.second = TrieValue(id);
+          rawKeyVals.push_back(kv);
+          ++id;
+        }
+      }
+    }
+
+    // Insert the keys in all possible orders
+    size_t countKeys = rawKeyVals.size();
+    rdcarray<uint32_t> baseOrder;
+    baseOrder.resize(countKeys);
+    for(uint32_t i = 0; i < countKeys; ++i)
+      baseOrder[i] = i;
+
+    // Eight keys is approx 40,000 permutations
+    rdcarray<rdcarray<uint32_t>> permutations;
+    Permute(baseOrder, 0, permutations);
+
+    for(const rdcarray<uint32_t> &order : permutations)
+    {
+      rdcarray<KV> keyVals;
+      keyVals.resize(countKeys);
+      for(uint32_t i = 0; i < countKeys; ++i)
+      {
+        uint32_t idx = order[i];
+        keyVals[i] = rawKeyVals[idx];
+      }
+      rdcbytetrie<TrieValue> t;
+      // Add all the keys
+      for(size_t i = 0; i < countKeys; i++)
+        CHECK(t.insert(keyVals[i].first, keyVals[i].second));
+
+      // check all keys are contained
+      for(size_t j = 0; j < countKeys; j++)
+      {
+        CHECK(t.contains(keyVals[j].first));
+        CHECK(t.lookup(keyVals[j].first) == keyVals[j].second);
+      }
+    }
   }
 
   SECTION("Invalid key size")
