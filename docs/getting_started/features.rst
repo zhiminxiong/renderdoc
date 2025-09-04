@@ -86,7 +86,7 @@ D3D12
 Vulkan
 ------
 
-* Support for Vulkan 1.3 on Windows, Linux, and Android.
+* Support for Vulkan 1.4 on Windows, Linux, and Android.
 * Event markers and object naming both come from ``VK_EXT_debug_utils`` or deprecated ``VK_EXT_debug_marker``.
 * Vertex, Pixel, Mesh, and Compute shader debugging.
 
