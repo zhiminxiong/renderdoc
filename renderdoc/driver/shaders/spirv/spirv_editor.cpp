@@ -263,17 +263,7 @@ void Editor::SetName(Id id, const rdcstr &name)
 {
   Operation op = OpName(id, name);
 
-  Iter it;
-
-  // OpName/OpMemberName must be before OpModuleProcessed.
-  for(it = Begin(Section::DebugNames); it < End(Section::DebugNames); ++it)
-  {
-    if(it.opcode() == Op::ModuleProcessed)
-      break;
-  }
-
-  if(End(Section::DebugNames) < it)
-    it = End(Section::DebugNames);
+  Iter it = End(Section::DebugNames);
 
   InsertOperation(op, it.offs());
 }
