@@ -2339,6 +2339,11 @@ as well as messages generated during replay and analysis.
 )");
   virtual void AddMessages(const rdcarray<DebugMessage> &msgs) = 0;
 
+  DOCUMENT(R"(Clear the currently stored messages, and mark all as unread. This can be used in
+combination with :meth:`DebugMessages` and :meth:`AddMessages` to filter the current set of messages.
+)");
+  virtual void ClearMessages() = 0;
+
   DOCUMENT(R"(Retrieve the contents for a given notes field.
 
 Examples of fields are:

@@ -195,6 +195,7 @@ public:
   int32_t UnreadMessageCount() override { return m_UnreadMessageCount; }
   void MarkMessagesRead() override { m_UnreadMessageCount = 0; }
   void AddMessages(const rdcarray<DebugMessage> &msgs) override;
+  void ClearMessages() override;
 
   void ConnectToRemoteServer(RemoteHost host) override;
 
