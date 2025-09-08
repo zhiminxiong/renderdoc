@@ -1799,6 +1799,11 @@ void CaptureContext::RemoveBookmark(uint32_t EID)
   RefreshUIStatus({}, true, true);
 }
 
+void CaptureContext::DelayedCallback(uint32_t milliseconds, std::function<void()> callback)
+{
+  QTimer::singleShot(milliseconds, callback);
+}
+
 void CaptureContext::SetModification(CaptureModifications mod)
 {
   m_CaptureMods |= mod;

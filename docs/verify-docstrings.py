@@ -100,6 +100,8 @@ def make_c_type(ret: str, pattern: bool, typelist: List[str]):
         ret = 'rdcstrpairs'
     elif ret == 'Tuple[str,str]': # special case
         ret = 'rdcstrpair'
+    elif ret == 'Callable[[], None]': # callbacks with parameters or return type should have a *Callback typedef
+        ret = 'std::function<void\(\)>' if pattern else 'std::function'
     elif ret[0:5] == 'List[':
         inner = make_c_type(ret[5:-1], pattern, typelist)
         ret = '(const )?rdcarray<{}> ?[&*]?'.format(inner) if pattern else 'rdcarray<{}>'.format(inner)

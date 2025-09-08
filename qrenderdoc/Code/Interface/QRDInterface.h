@@ -2394,6 +2394,14 @@ If no bookmark exists, this function will do nothing.
 )");
   virtual void RemoveBookmark(uint32_t eventId) = 0;
 
+  DOCUMENT(R"(Registers a delayed callback to be called after a certain number of milliseconds
+on the UI thread.
+
+:param int milliseconds: The number of milliseconds (approximately) to wait before the callback.
+:param Callable[[], None] callback: The function to call
+)");
+  virtual void DelayedCallback(uint32_t milliseconds, std::function<void()> callback) = 0;
+
   DOCUMENT(R"(Retrieve the current singleton :class:`MainWindow`.
 
 :return: The current window.

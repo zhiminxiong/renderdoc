@@ -629,6 +629,7 @@ struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
   {
     InvokeVoidFunction(&ICaptureContext::AddMessages, msgs);
   }
+  virtual void ClearMessages() override { InvokeVoidFunction(&ICaptureContext::ClearMessages); }
   virtual void SetResourceCustomName(ResourceId id, const rdcstr &name) override
   {
     InvokeVoidFunction(&ICaptureContext::SetResourceCustomName, id, name);
@@ -645,6 +646,10 @@ struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
   virtual void RemoveBookmark(uint32_t EID) override
   {
     InvokeVoidFunction(&ICaptureContext::RemoveBookmark, EID);
+  }
+  virtual void DelayedCallback(uint32_t milliseconds, std::function<void()> callback) override
+  {
+    InvokeVoidFunction(&ICaptureContext::DelayedCallback, milliseconds, callback);
   }
   virtual IMainWindow *GetMainWindow() override
   {

@@ -205,6 +205,8 @@ public:
   void SetBookmark(const EventBookmark &mark) override;
   void RemoveBookmark(uint32_t EID) override;
 
+  void DelayedCallback(uint32_t milliseconds, std::function<void()> callback) override;
+
   IMainWindow *GetMainWindow() override;
   IEventBrowser *GetEventBrowser() override;
   IAPIInspector *GetAPIInspector() override;
