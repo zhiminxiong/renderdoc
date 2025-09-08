@@ -1055,7 +1055,7 @@ void ImageViewer::CreateProxyTexture(TextureDescription &texDetails, read_tex_da
           const uint32_t slice = i / texDetails.mips;
 
           // size of each subresource is 1/Nth for an N-sized array
-          size_t size = oldSubs[mip].second / texDetails.arraysize;
+          size_t size = oldSubs[mip].second / RDCMAX(1U, texDetails.arraysize >> mip);
 
           // and the offset is slice steps further on
           size_t offset = oldSubs[mip].first + size * slice;
