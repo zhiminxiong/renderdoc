@@ -1682,8 +1682,48 @@ ParsedFormat BufferFormatter::ParseFormatString(const QString &formatString, uin
 
             el.type.flags |= ShaderVariableFlags::R11G11B10;
           }
-          else if(annot.param.toLower() == lit("r10g10b10a2") ||
-                  annot.param.toLower() == lit("r10g10b10a2_uint"))
+          else if(annot.param.toLower() == lit("r10g10b10a2"))
+          {
+            // check if there's a (legacy) separate snorm
+            bool snorm = false;
+
+            for(const Annotation &normAnnot : annotations)
+            {
+              if(normAnnot.name == lit("snorm"))
+              {
+                snorm = true;
+                break;
+              }
+            }
+
+            // if we've specified snorm check for signed type
+            if(snorm)
+            {
+              if(el.type.columns != 4 || el.type.baseType != VarType::SInt)
+              {
+                reportError(
+                    tr("R10G10B10A2 packing must be specified on a 'int4' variable when used "
+                       "with [[snorm]]."));
+                success = false;
+                break;
+              }
+            }
+            // otherwise assume unorm and enforce unsigned type
+            else
+            {
+              if(el.type.columns != 4 || el.type.baseType != VarType::UInt)
+              {
+                reportError(
+                    tr("R10G10B10A2 packing must be specified on a 'uint4' variable "
+                       "(optionally an 'int4' with preceeding [[snorm]])."));
+                success = false;
+                break;
+              }
+            }
+
+            el.type.flags |= ShaderVariableFlags::R10G10B10A2;
+          }
+          else if(annot.param.toLower() == lit("r10g10b10a2_uint"))
           {
             if(el.type.columns != 4 || el.type.baseType != VarType::UInt)
             {
@@ -2669,6 +2709,12 @@ uint32_t BufferFormatter::GetVarSizeAndTrail(const ShaderConstant &var)
     else
       return var.type.matrixByteStride * var.type.columns;
   }
+
+  // special packed formats that only consume one dword
+  if(var.type.flags & ShaderVariableFlags::R10G10B10A2)
+    return 4;
+  if(var.type.flags & ShaderVariableFlags::R11G11B10)
+    return 4;
 
   return VarTypeByteSize(var.type.baseType) * var.type.columns;
 }
@@ -5957,6 +6003,12 @@ struct outer
       expected_type.columns = 4;
       expected_type.arrayByteStride = 4;
 
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 1);
+      CHECK(parsed.fixed.type.members[0].name == "a");
+      CHECK((parsed.fixed.type.members[0].type == expected_type));
+
       parsed =
           BufferFormatter::ParseFormatString(lit("[[packed(r10g10b10a2_uint)]] uint4 a;"), 0, true);
 
@@ -5965,6 +6017,12 @@ struct outer
       expected_type.flags |= ShaderVariableFlags::R10G10B10A2;
       expected_type.columns = 4;
       expected_type.arrayByteStride = 4;
+
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 1);
+      CHECK(parsed.fixed.type.members[0].name == "a");
+      CHECK((parsed.fixed.type.members[0].type == expected_type));
 
       parsed = BufferFormatter::ParseFormatString(lit("[[unorm]] [[packed(r10g10b10a2)]] uint4 a;"),
                                                   0, true);
@@ -5975,14 +6033,11 @@ struct outer
       expected_type.columns = 4;
       expected_type.arrayByteStride = 4;
 
-      parsed = BufferFormatter::ParseFormatString(lit("[[snorm]] [[packed(r10g10b10a2)]] uint4 a;"),
-                                                  0, true);
-
-      expected_type = uint_type;
-      expected_type.name = "uint4";
-      expected_type.flags |= ShaderVariableFlags::R10G10B10A2 | ShaderVariableFlags::SNorm;
-      expected_type.columns = 4;
-      expected_type.arrayByteStride = 4;
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 1);
+      CHECK(parsed.fixed.type.members[0].name == "a");
+      CHECK((parsed.fixed.type.members[0].type == expected_type));
 
       parsed =
           BufferFormatter::ParseFormatString(lit("[[packed(r10g10b10a2_unorm)]] uint4 a;"), 0, true);
@@ -5993,14 +6048,11 @@ struct outer
       expected_type.columns = 4;
       expected_type.arrayByteStride = 4;
 
-      parsed =
-          BufferFormatter::ParseFormatString(lit("[[packed(r10g10b10a2_snorm)]] uint4 a;"), 0, true);
-
-      expected_type = uint_type;
-      expected_type.name = "uint4";
-      expected_type.flags |= ShaderVariableFlags::R10G10B10A2 | ShaderVariableFlags::SNorm;
-      expected_type.columns = 4;
-      expected_type.arrayByteStride = 4;
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 1);
+      CHECK(parsed.fixed.type.members[0].name == "a");
+      CHECK((parsed.fixed.type.members[0].type == expected_type));
 
       parsed = BufferFormatter::ParseFormatString(lit("[[snorm]] [[packed(r10g10b10a2)]] int4 a;"),
                                                   0, true);
@@ -6011,6 +6063,12 @@ struct outer
       expected_type.columns = 4;
       expected_type.arrayByteStride = 4;
 
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 1);
+      CHECK(parsed.fixed.type.members[0].name == "a");
+      CHECK((parsed.fixed.type.members[0].type == expected_type));
+
       parsed =
           BufferFormatter::ParseFormatString(lit("[[packed(r10g10b10a2_snorm)]] int4 a;"), 0, true);
 
@@ -6019,6 +6077,73 @@ struct outer
       expected_type.flags |= ShaderVariableFlags::R10G10B10A2 | ShaderVariableFlags::SNorm;
       expected_type.columns = 4;
       expected_type.arrayByteStride = 4;
+
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 1);
+      CHECK(parsed.fixed.type.members[0].name == "a");
+      CHECK((parsed.fixed.type.members[0].type == expected_type));
+    };
+
+    SECTION("[[packed]] offsets")
+    {
+      def = R"(
+[[packed(r10g10b10a2_snorm)]] int4 a;
+float b;
+)";
+
+      parsed = BufferFormatter::ParseFormatString(def, 0, true);
+
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 2);
+      CHECK(parsed.fixed.type.members[0].byteOffset == 0);
+      CHECK(parsed.fixed.type.members[0].type.flags & ShaderVariableFlags::R10G10B10A2);
+      CHECK(parsed.fixed.type.members[0].type.flags & ShaderVariableFlags::SNorm);
+      CHECK(parsed.fixed.type.members[1].byteOffset == 4);
+
+      def = R"(
+float a;
+[[packed(r10g10b10a2_unorm)]] uint4 b;
+)";
+
+      parsed = BufferFormatter::ParseFormatString(def, 0, true);
+
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 2);
+      CHECK(parsed.fixed.type.members[0].byteOffset == 0);
+      CHECK(parsed.fixed.type.members[1].byteOffset == 4);
+      CHECK(parsed.fixed.type.members[1].type.flags & ShaderVariableFlags::R10G10B10A2);
+      CHECK(parsed.fixed.type.members[1].type.flags & ShaderVariableFlags::UNorm);
+
+      def = R"(
+[[packed(r11g11b10)]] float3 a;
+uint b;
+)";
+
+      parsed = BufferFormatter::ParseFormatString(def, 0, true);
+
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 2);
+      CHECK(parsed.fixed.type.members[0].byteOffset == 0);
+      CHECK(parsed.fixed.type.members[0].type.flags & ShaderVariableFlags::R11G11B10);
+      CHECK(parsed.fixed.type.members[1].byteOffset == 4);
+
+      def = R"(
+uint a;
+[[packed(r11g11b10)]] float3 b;
+)";
+
+      parsed = BufferFormatter::ParseFormatString(def, 0, true);
+
+      CHECK(parsed.errors.isEmpty());
+      CHECK(parsed.repeating.type.members.empty());
+      REQUIRE(parsed.fixed.type.members.size() == 2);
+      CHECK(parsed.fixed.type.members[0].byteOffset == 0);
+      CHECK(parsed.fixed.type.members[1].byteOffset == 4);
+      CHECK(parsed.fixed.type.members[1].type.flags & ShaderVariableFlags::R11G11B10);
     };
 
     SECTION("[[single]]")
