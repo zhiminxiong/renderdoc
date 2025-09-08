@@ -2841,12 +2841,18 @@ bool WrappedID3D12Device::EndFrameCapture(DeviceOwnedWindow devWnd)
 
   rdcarray<WrappedID3D12CommandQueue *> queues;
 
+  rdcarray<ID3D12Resource *> refBuffers;
+  rdcarray<WrappedID3D12CommandQueue *> refQueues;
+
   // transition back to IDLE and readback initial states atomically
   {
     SCOPED_WRITELOCK(m_CapTransitionLock);
     EndCaptureFrame();
 
     queues = m_Queues;
+
+    refBuffers.swap(m_RefBuffers);
+    refQueues.swap(m_RefQueues);
 
     bool ContainsExecuteIndirect = false;
 
@@ -3178,10 +3184,10 @@ bool WrappedID3D12Device::EndFrameCapture(DeviceOwnedWindow devWnd)
     (*it)->ClearAfterCapture();
 
   // remove the references held during capture, potentially releasing the queue/buffer.
-  for(WrappedID3D12CommandQueue *q : m_RefQueues)
+  for(WrappedID3D12CommandQueue *q : refQueues)
     q->Release();
 
-  for(ID3D12Resource *r : m_RefBuffers)
+  for(ID3D12Resource *r : refBuffers)
     r->Release();
 
   for(ID3D12Heap *h : m_InitialStateHeaps)
@@ -3221,6 +3227,13 @@ bool WrappedID3D12Device::DiscardFrameCapture(DeviceOwnedWindow devWnd)
     DeviceWaitForIdle();
 
     queues = m_Queues;
+
+    // remove the reference held during capture, potentially releasing the queue.
+    for(WrappedID3D12CommandQueue *q : m_RefQueues)
+      q->Release();
+
+    for(ID3D12Resource *r : m_RefBuffers)
+      r->Release();
   }
 
   rdcarray<MapState> maps = GetMaps();
@@ -3232,13 +3245,6 @@ bool WrappedID3D12Device::DiscardFrameCapture(DeviceOwnedWindow devWnd)
 
   for(auto it = queues.begin(); it != queues.end(); ++it)
     (*it)->ClearAfterCapture();
-
-  // remove the reference held during capture, potentially releasing the queue.
-  for(WrappedID3D12CommandQueue *q : m_RefQueues)
-    q->Release();
-
-  for(ID3D12Resource *r : m_RefBuffers)
-    r->Release();
 
   for(ID3D12Heap *h : m_InitialStateHeaps)
     h->Release();
