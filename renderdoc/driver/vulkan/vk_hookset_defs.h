@@ -1103,7 +1103,7 @@
   HookInitExtension(EXT_descriptor_buffer, GetAccelerationStructureOpaqueCaptureDescriptorDataEXT);  \
   HookInitPromotedExtension(KHR_map_memory2, MapMemory2, KHR);                                       \
   HookInitPromotedExtension(KHR_map_memory2, UnmapMemory2, KHR);                                     \
-  HookInitExtension(KHR_present_wait, WaitForPresent2KHR);                                           \
+  HookInitExtension(KHR_present_wait2, WaitForPresent2KHR);                                          \
   HookInitExtension_Device_Win32();                                                                  \
   HookInitExtension_Device_Linux();                                                                  \
   HookInitExtension_Device_Android();                                                                \
