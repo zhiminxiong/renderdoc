@@ -1446,6 +1446,55 @@ struct OutMeshletLayout
 static void LayOutStorageStruct(rdcspv::Editor &editor, const rdcarray<SpecConstant> &specInfo,
                                 rdcspv::SparseIdMap<rdcspv::Id> &outputTypeReplacements,
                                 const rdcspv::DataType &type, rdcspv::Id &structType,
+                                uint32_t &byteSize);
+
+static rdcspv::Id GetArraySizeAndAlign(rdcspv::Editor &editor, const rdcarray<SpecConstant> &specInfo,
+                                       rdcspv::SparseIdMap<rdcspv::Id> &outputTypeReplacements,
+                                       const rdcspv::DataType &type, uint32_t &size)
+{
+  const rdcspv::DataType &arrayInnerType = editor.GetDataType(type.InnerType());
+
+  rdcspv::Id innerId;
+
+  // handle arrays-of-arrays and arrays-of-struts
+  if(arrayInnerType.type == rdcspv::DataType::StructType)
+  {
+    innerId = arrayInnerType.InnerType();
+    LayOutStorageStruct(editor, specInfo, outputTypeReplacements,
+                        editor.GetDataType(arrayInnerType.InnerType()), innerId, size);
+  }
+  else if(arrayInnerType.type == rdcspv::DataType::ArrayType)
+  {
+    innerId = GetArraySizeAndAlign(editor, specInfo, outputTypeReplacements,
+                                   editor.GetDataType(arrayInnerType.InnerType()), size);
+  }
+  else
+  {
+    size = VarTypeByteSize(arrayInnerType.scalar().Type());
+    if(arrayInnerType.type == rdcspv::DataType::VectorType)
+      size *= arrayInnerType.vector().count;
+
+    // use the same type, nothing changed
+    innerId = type.InnerType();
+  }
+
+  // make a new array type so we can decorate it with a stride
+  rdcspv::Id memberTypeId =
+      editor.AddType(rdcspv::OpTypeArray(editor.MakeId(), innerId, type.length));
+  outputTypeReplacements[type.id] = memberTypeId;
+  editor.SetName(memberTypeId, StringFormat::Fmt("stridedArray%d", type.id.value()));
+
+  editor.AddDecoration(rdcspv::OpDecorate(
+      memberTypeId, rdcspv::DecorationParam<rdcspv::Decoration::ArrayStride>(size)));
+
+  size *= editor.EvaluateConstant(type.length, specInfo).value.u32v[0];
+
+  return memberTypeId;
+}
+
+static void LayOutStorageStruct(rdcspv::Editor &editor, const rdcarray<SpecConstant> &specInfo,
+                                rdcspv::SparseIdMap<rdcspv::Id> &outputTypeReplacements,
+                                const rdcspv::DataType &type, rdcspv::Id &structType,
                                 uint32_t &byteSize)
 {
   rdcarray<rdcspv::Id> members;
@@ -1468,9 +1517,6 @@ static void LayOutStorageStruct(rdcspv::Editor &editor, const rdcarray<SpecConst
     uint32_t size = 1;
     const rdcspv::DataType &childType = editor.GetDataType(type.children[i].type);
 
-    if(childType.type == rdcspv::DataType::ArrayType)
-      memberTypeId = childType.InnerType();
-
     if(childType.type == rdcspv::DataType::StructType)
     {
       offset = AlignUp16(offset);
@@ -1485,11 +1531,9 @@ static void LayOutStorageStruct(rdcspv::Editor &editor, const rdcarray<SpecConst
     }
     else if(childType.type == rdcspv::DataType::ArrayType)
     {
-      const rdcspv::DataType &arrayInnerType = editor.GetDataType(childType.InnerType());
-      size = VarTypeByteSize(arrayInnerType.scalar().Type());
-      offset = AlignUp(offset, size);
-      if(arrayInnerType.type == rdcspv::DataType::VectorType)
-        size *= arrayInnerType.vector().count;
+      memberTypeId = GetArraySizeAndAlign(editor, specInfo, outputTypeReplacements, childType, size);
+
+      offset = AlignUp16(offset);
     }
     else
     {
@@ -1504,24 +1548,7 @@ static void LayOutStorageStruct(rdcspv::Editor &editor, const rdcarray<SpecConst
 
     offsets.push_back(offset);
 
-    if(childType.type == rdcspv::DataType::ArrayType)
-    {
-      // make a new array type so we can decorate it with a stride
-      memberTypeId =
-          editor.AddType(rdcspv::OpTypeArray(editor.MakeId(), memberTypeId, childType.length));
-      outputTypeReplacements[type.children[i].type] = memberTypeId;
-      editor.SetName(memberTypeId,
-                     StringFormat::Fmt("stridedArray%d", type.children[i].type.value()));
-
-      editor.AddDecoration(rdcspv::OpDecorate(
-          memberTypeId, rdcspv::DecorationParam<rdcspv::Decoration::ArrayStride>(size)));
-
-      offset += size * editor.EvaluateConstant(childType.length, specInfo).value.u32v[0];
-    }
-    else
-    {
-      offset += size;
-    }
+    offset += size;
 
     members.push_back(memberTypeId);
   }
@@ -2290,9 +2317,43 @@ static void AddMeshShaderOutputStores(const ShaderReflection &refl,
           stride,
       };
     }
+    else if(type.type == rdcspv::DataType::ArrayType)
+    {
+      // handle arrays-of-arrays and arrays-of-structs here
+      arrayInnerType = GetArraySizeAndAlign(editor, specInfo, outputTypeReplacements, type, byteSize);
+
+      stride = byteSize;
+
+      outputTypeReplacements[type.id] = arrayInnerType;
+
+      uint32_t offset = 0;
+      bool perPrim = false;
+
+      if(d.others.contains(rdcspv::Decoration::PerPrimitiveEXT))
+      {
+        primOutByteCount = AlignUp16(primOutByteCount);
+        offset = primOutByteCount;
+        perPrim = true;
+        primOutByteCount += byteSize * arrayLength;
+      }
+      else
+      {
+        vertOutByteCount = AlignUp16(vertOutByteCount);
+        offset = vertOutByteCount;
+        perPrim = false;
+        vertOutByteCount += byteSize * arrayLength;
+      }
+
+      outputGlobals[var.id] = {
+          offset,
+          perPrim,
+          false,
+          byteSize,
+      };
+    }
     else
     {
-      // loose variable
+      // loose variable, vector/matrix/scalar
       const uint32_t scalarAlign = VarTypeByteSize(type.scalar().Type());
       byteSize = scalarAlign;
       if(type.type == rdcspv::DataType::VectorType)
