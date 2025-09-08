@@ -96,6 +96,9 @@ struct VulkanRenderState
   void BeginRenderPassAndApplyState(WrappedVulkan *vk, VkCommandBuffer cmd, PipelineBinding binding,
                                     bool obeySuspending);
   void BindPipeline(WrappedVulkan *vk, VkCommandBuffer cmd, PipelineBinding binding, bool subpass0);
+
+  void BindDescriptorBuffers(WrappedVulkan *vk, VkCommandBuffer cmd);
+
   void BindShaderObjects(WrappedVulkan *vk, VkCommandBuffer cmd, PipelineBinding binding);
   void BindDynamicState(WrappedVulkan *vk, VkCommandBuffer cmd);
 

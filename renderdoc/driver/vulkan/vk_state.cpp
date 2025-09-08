@@ -332,16 +332,8 @@ bool VulkanRenderState::IsConditionalRenderingEnabled()
   return conditionalRendering.buffer != ResourceId() && !conditionalRendering.forceDisable;
 }
 
-void VulkanRenderState::BindPipeline(WrappedVulkan *vk, VkCommandBuffer cmd,
-                                     PipelineBinding binding, bool subpass0)
+void VulkanRenderState::BindDescriptorBuffers(WrappedVulkan *vk, VkCommandBuffer cmd)
 {
-  // subpass0 is a patched version of the pipeline created against subpass 0, in case for old style
-  // renderpasses we need to use a pipeline that was previously in subpass 1 against our loadrp with
-  // only one subpass. It's not needed for dynamic rendering, we can always use the original
-  // pipeline
-  if(subpass0 && dynamicRendering.active)
-    subpass0 = false;
-
   if(!descBufs.empty())
   {
     VkDescriptorBufferBindingPushDescriptorBufferHandleEXT push;
@@ -387,6 +379,19 @@ void VulkanRenderState::BindPipeline(WrappedVulkan *vk, VkCommandBuffer cmd,
 
     ObjDisp(cmd)->CmdBindDescriptorBuffersEXT(Unwrap(cmd), bufferCount, bind.data());
   }
+}
+
+void VulkanRenderState::BindPipeline(WrappedVulkan *vk, VkCommandBuffer cmd,
+                                     PipelineBinding binding, bool subpass0)
+{
+  // subpass0 is a patched version of the pipeline created against subpass 0, in case for old style
+  // renderpasses we need to use a pipeline that was previously in subpass 1 against our loadrp with
+  // only one subpass. It's not needed for dynamic rendering, we can always use the original
+  // pipeline
+  if(subpass0 && dynamicRendering.active)
+    subpass0 = false;
+
+  BindDescriptorBuffers(vk, cmd);
 
   if(binding == BindGraphics || binding == BindInitial)
   {
@@ -492,6 +497,8 @@ void VulkanRenderState::BindPipeline(WrappedVulkan *vk, VkCommandBuffer cmd,
 void VulkanRenderState::BindShaderObjects(WrappedVulkan *vk, VkCommandBuffer cmd,
                                           PipelineBinding binding)
 {
+  BindDescriptorBuffers(vk, cmd);
+
   if(binding == BindGraphics || binding == BindInitial)
   {
     if(graphics.shaderObject)
