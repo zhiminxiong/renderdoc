@@ -335,6 +335,7 @@ void WrappedVulkan::VersionDescriptorBuffers(VkCommandBuffer cmd)
 
   uint64_t neededBytes = 0;
 
+  offsets.clear();
   for(uint32_t i = 0; i < renderstate.descBufs.size(); i++)
   {
     offsets.push_back(neededBytes);
