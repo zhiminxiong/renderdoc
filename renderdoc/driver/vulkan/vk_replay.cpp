@@ -2890,6 +2890,9 @@ rdcarray<DescriptorAccess> VulkanReplay::GetDescriptorAccess(uint32_t eventId)
 
   rdcarray<DescriptorAccess> ret;
 
+  const ActionDescription *action = m_pDriver->GetAction(eventId);
+  const bool compute = action && bool(action->flags & ActionFlags::Dispatch);
+
   if(state.graphics.pipeline != ResourceId())
     ret.append(m_pDriver->m_CreationInfo.m_Pipeline[state.graphics.pipeline].staticDescriptorAccess);
 
@@ -2939,6 +2942,15 @@ rdcarray<DescriptorAccess> VulkanReplay::GetDescriptorAccess(uint32_t eventId)
         {
           access.descriptorStore = rm->GetOriginalID(descSets[setIdx].descSet);
         }
+      }
+      else if(action == NULL || ((!compute && access.stage == ShaderStage::Compute) ||
+                                 (compute && access.stage != ShaderStage::Compute)))
+      {
+        // descriptor buffer state can be temporarily invalid due to multiple stage binding and be
+        // perturbed across stages if buffers are rebound without offsets or vice-versa, do not
+        // display descriptor access for descriptor buffers if no action is selected, or the access
+        // comes from the alternate pipeline
+        access.descriptorStore = ResourceId();
       }
       else if(bufSetIdx >= 0 || inlinebufSetIdx >= 0)
       {
