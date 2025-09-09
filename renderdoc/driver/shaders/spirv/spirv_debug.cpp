@@ -636,6 +636,9 @@ ShaderVariable ThreadState::CalcDeriv(ThreadState::DerivDir dir, ThreadState::De
   ShaderVariable bval = b->GetSrc(val);
   ShaderVariable var = aval;
 
+  RDCASSERTEQUAL(currentInstruction, b->currentInstruction);
+  RDCASSERTEQUAL(currentInstruction, a->currentInstruction);
+
   for(uint8_t c = 0; c < var.columns; c++)
   {
 #undef _IMPL
