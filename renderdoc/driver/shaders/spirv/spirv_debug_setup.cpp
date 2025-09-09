@@ -4706,6 +4706,17 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
 
     if(stepMode == StepThreadMode::RUN_SINGLE_STEP)
       break;
+
+    simulateStep = thread.CanRunAnotherStep();
+    if(simulateStep)
+    {
+      RDCASSERT(thread.IsSimulationStepActive());
+    }
+    if(simulateStep)
+      thread.SetStepQueued();
+
+    if(stepMode == StepThreadMode::QUEUE_MULTIPLE_STEPS)
+      break;
   };
   // Update the number of simulation steps
   if(isActiveThread)
@@ -4730,6 +4741,13 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode, rdcarray<Shade
   {
     RDCASSERT(!simulateStep);
     QueueDeviceThreadStep(lane);
+    return;
+  }
+
+  if(simulateStep)
+  {
+    RDCASSERTEQUAL(stepMode, StepThreadMode::QUEUE_MULTIPLE_STEPS);
+    QueueJob(lane, ret);
     return;
   }
   RDCASSERT(!thread.IsPendingResultPending());

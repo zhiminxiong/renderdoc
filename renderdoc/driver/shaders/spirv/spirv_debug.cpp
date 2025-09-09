@@ -5338,6 +5338,118 @@ void ThreadState::QueueSampleGather(Op opcode, DebugAPIWrapper::TextureType texT
   SetStepNeedsGpuSampleGatherOp();
 }
 
+// The conditions where it is not safe to run another step are based on:
+// the current simulation state and the next instruction to simulate
+bool ThreadState::CanRunAnotherStep() const
+{
+  // Thread has finished
+  if(Finished())
+    return false;
+
+  // Current Simulated State that prevents running another step:
+  // Any control flow state changes i.e. branch, convergence point, function return
+  if(diverged)
+    return false;
+  if(!enteredPoints.empty())
+    return false;
+  if(convergenceInstruction != INVALID_EXECUTION_POINT)
+    return false;
+  if(functionReturnPoint != INVALID_EXECUTION_POINT)
+    return false;
+
+  // Any pending result i.e. pending GPU math operation, need to run on the device thread
+  if(IsPendingResultPending())
+    return false;
+
+  // Next instructions that prevent running another step:
+  // any instruction that requires threads in the tangle to be in lockstep
+  ConstIter it = debugger.GetIterForInstruction(nextInstruction);
+  OpDecoder opdata(it);
+  switch(opdata.op)
+  {
+    // thread barriers require threads in the tangle to be in lockstep
+    case Op::ControlBarrier: return false;
+    // Image operations require threads in the tangle to be in lockstep
+    case Op::ImageQueryLevels:
+    case Op::ImageQuerySamples:
+    case Op::ImageQuerySize:
+    case Op::ImageQuerySizeLod:
+    case Op::ImageFetch:
+    case Op::ImageGather:
+    case Op::ImageDrefGather:
+    case Op::ImageQueryLod:
+    case Op::ImageSampleExplicitLod:
+    case Op::ImageSampleImplicitLod:
+    case Op::ImageSampleDrefExplicitLod:
+    case Op::ImageSampleDrefImplicitLod:
+    case Op::ImageSampleProjExplicitLod:
+    case Op::ImageSampleProjImplicitLod:
+    case Op::ImageSampleProjDrefExplicitLod:
+    case Op::ImageSampleProjDrefImplicitLod: return false;
+    // derivatives require threads in the tangle to be in lockstep
+    case Op::DPdx:
+    case Op::DPdy:
+    case Op::DPdxCoarse:
+    case Op::DPdyCoarse:
+    case Op::DPdxFine:
+    case Op::DPdyFine:
+    case Op::Fwidth:
+    case Op::FwidthCoarse:
+    case Op::FwidthFine: return false;
+    // subgroup ops require threads in the tangle to be in lockstep
+    case Op::GroupNonUniformBallotFindLSB:
+    case Op::GroupNonUniformBallotFindMSB:
+    case Op::GroupNonUniformInverseBallot:
+    case Op::GroupNonUniformBallotBitExtract:
+    case Op::GroupNonUniformBroadcastFirst:
+    case Op::SubgroupFirstInvocationKHR:
+    case Op::GroupNonUniformBroadcast:
+    case Op::GroupNonUniformShuffle:
+    case Op::GroupNonUniformShuffleXor:
+    case Op::GroupNonUniformShuffleUp:
+    case Op::GroupNonUniformShuffleDown:
+    case Op::SubgroupReadInvocationKHR:
+    case Op::GroupNonUniformRotateKHR:
+    case Op::GroupNonUniformQuadBroadcast:
+    case Op::GroupNonUniformQuadSwap:
+    case Op::GroupNonUniformQuadAllKHR:
+    case Op::GroupNonUniformQuadAnyKHR:
+    case Op::SubgroupAllKHR:
+    case Op::SubgroupAnyKHR:
+    case Op::SubgroupAllEqualKHR:
+    case Op::GroupNonUniformAll:
+    case Op::GroupNonUniformAny:
+    case Op::GroupNonUniformAllEqual:
+    case Op::GroupNonUniformIAdd:
+    case Op::GroupNonUniformFAdd:
+    case Op::GroupNonUniformIMul:
+    case Op::GroupNonUniformFMul:
+    case Op::GroupNonUniformSMin:
+    case Op::GroupNonUniformUMin:
+    case Op::GroupNonUniformFMin:
+    case Op::GroupNonUniformSMax:
+    case Op::GroupNonUniformUMax:
+    case Op::GroupNonUniformFMax:
+    case Op::GroupNonUniformBitwiseAnd:
+    case Op::GroupNonUniformBitwiseOr:
+    case Op::GroupNonUniformBitwiseXor:
+    case Op::GroupNonUniformLogicalAnd:
+    case Op::GroupNonUniformLogicalOr:
+    case Op::GroupNonUniformLogicalXor:
+    case Op::GroupNonUniformElect:
+    case Op::GroupNonUniformBallot:
+    case Op::SubgroupBallotKHR:
+    case Op::GroupNonUniformBallotBitCount: return false;
+    // Enter/Exit Functions in lockstep
+    case Op::FunctionCall:
+    case Op::Return:
+    case Op::ReturnValue: return false;
+    default: break;
+  }
+
+  return true;
+}
+
 };    // namespace rdcspv
 
 template <>

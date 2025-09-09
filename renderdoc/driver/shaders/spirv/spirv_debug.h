@@ -419,6 +419,8 @@ struct ThreadState
     return queuedGpuSampleGatherOp;
   }
 
+  bool CanRunAnotherStep() const;
+
   void SetSimulationStepCompleted() { AtomicStore(&atomic_isSimulationStepActive, 0); }
   bool IsSimulationStepActive() const { return (AtomicLoad(&atomic_isSimulationStepActive) == 1); }
 
