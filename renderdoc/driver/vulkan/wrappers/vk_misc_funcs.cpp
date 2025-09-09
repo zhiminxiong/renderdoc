@@ -194,6 +194,20 @@ void WrappedVulkan::vkDestroyImageView(VkDevice device, VkImageView obj, const V
 {
   if(obj == VK_NULL_HANDLE)
     return;
+
+  // with descriptor buffers, extend the lifespan of image views to ensure descriptors don't falsely
+  // alias
+  if(DescriptorBuffers())
+  {
+    SCOPED_READLOCK(m_CapTransitionLock);
+    SCOPED_LOCK(m_DeviceAddressResourcesLock);
+    if(IsActiveCapturing(m_State))
+    {
+      m_DeviceAddressResources.DeadImageViews.push_back(obj);
+      return;
+    }
+  }
+
   VkImageView unwrappedObj = Unwrap(obj);
   {
     SCOPED_LOCK(m_ForcedReferencesLock);
@@ -289,9 +303,6 @@ void WrappedVulkan::vkDestroyBuffer(VkDevice device, VkBuffer buffer, const VkAl
   if(buffer == VK_NULL_HANDLE)
     return;
 
-  if(IsCaptureMode(m_State))
-    UntrackBufferAddress(device, buffer);
-
   // artificially extend the lifespan of buffer device address memory or buffers, to ensure their
   // opaque capture address isn't re-used before the capture completes
   {
@@ -304,6 +315,9 @@ void WrappedVulkan::vkDestroyBuffer(VkDevice device, VkBuffer buffer, const VkAl
     }
     m_DeviceAddressResources.IDs.removeOne(GetResID(buffer));
   }
+
+  if(IsCaptureMode(m_State))
+    UntrackBufferAddress(device, buffer);
 
   VkBuffer unwrappedObj = Unwrap(buffer);
 
@@ -386,6 +400,19 @@ void WrappedVulkan::vkDestroyImage(VkDevice device, VkImage obj, const VkAllocat
 {
   if(obj == VK_NULL_HANDLE)
     return;
+
+  // with descriptor buffers, extend the lifespan of images to ensure descriptors don't falsely
+  // alias
+  if(DescriptorBuffers())
+  {
+    SCOPED_READLOCK(m_CapTransitionLock);
+    SCOPED_LOCK(m_DeviceAddressResourcesLock);
+    if(IsActiveCapturing(m_State))
+    {
+      m_DeviceAddressResources.DeadImages.push_back(obj);
+      return;
+    }
+  }
 
   {
     SCOPED_LOCK(m_ForcedReferencesLock);

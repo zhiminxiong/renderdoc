@@ -1031,6 +1031,10 @@ private:
     rdcarray<VkDeviceMemory> DeadMemories;
     rdcarray<VkBuffer> DeadBuffers;
     rdcarray<ResourceId> IDs;
+
+    // with descriptor buffers, we also need to hold onto images and image views
+    rdcarray<VkImage> DeadImages;
+    rdcarray<VkImageView> DeadImageViews;
   } m_DeviceAddressResources;
   Threading::CriticalSection m_DeviceAddressResourcesLock;
 

@@ -2820,6 +2820,8 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
 
   rdcarray<VkDeviceMemory> DeadMemories;
   rdcarray<VkBuffer> DeadBuffers;
+  rdcarray<VkImage> DeadImages;
+  rdcarray<VkImageView> DeadImageViews;
 
   // transition back to IDLE atomically
   {
@@ -2846,6 +2848,8 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
       SCOPED_LOCK(m_DeviceAddressResourcesLock);
       DeadMemories.swap(m_DeviceAddressResources.DeadMemories);
       DeadBuffers.swap(m_DeviceAddressResources.DeadBuffers);
+      DeadImages.swap(m_DeviceAddressResources.DeadImages);
+      DeadImageViews.swap(m_DeviceAddressResources.DeadImageViews);
     }
   }
 
@@ -2854,6 +2858,12 @@ bool WrappedVulkan::EndFrameCapture(DeviceOwnedWindow devWnd)
 
   for(VkBuffer b : DeadBuffers)
     vkDestroyBuffer(m_Device, b, NULL);
+
+  for(VkImage i : DeadImages)
+    vkDestroyImage(m_Device, i, NULL);
+
+  for(VkImageView v : DeadImageViews)
+    vkDestroyImageView(m_Device, v, NULL);
 
   // gather backbuffer screenshot
   const uint32_t maxSize = 2048;
@@ -3224,6 +3234,11 @@ bool WrappedVulkan::DiscardFrameCapture(DeviceOwnedWindow devWnd)
 
   m_CapturedFrames.pop_back();
 
+  rdcarray<VkDeviceMemory> DeadMemories;
+  rdcarray<VkBuffer> DeadBuffers;
+  rdcarray<VkImage> DeadImages;
+  rdcarray<VkImageView> DeadImageViews;
+
   // transition back to IDLE atomically
   {
     SCOPED_WRITELOCK(m_CapTransitionLock);
@@ -3243,7 +3258,27 @@ bool WrappedVulkan::DiscardFrameCapture(DeviceOwnedWindow devWnd)
         (*it)->memMapState->needRefData = false;
       }
     }
+
+    {
+      SCOPED_LOCK(m_DeviceAddressResourcesLock);
+      DeadMemories.swap(m_DeviceAddressResources.DeadMemories);
+      DeadBuffers.swap(m_DeviceAddressResources.DeadBuffers);
+      DeadImages.swap(m_DeviceAddressResources.DeadImages);
+      DeadImageViews.swap(m_DeviceAddressResources.DeadImageViews);
+    }
   }
+
+  for(VkDeviceMemory m : DeadMemories)
+    vkFreeMemory(m_Device, m, NULL);
+
+  for(VkBuffer b : DeadBuffers)
+    vkDestroyBuffer(m_Device, b, NULL);
+
+  for(VkImage i : DeadImages)
+    vkDestroyImage(m_Device, i, NULL);
+
+  for(VkImageView v : DeadImageViews)
+    vkDestroyImageView(m_Device, v, NULL);
 
   Atomic::Inc32(&m_ReuseEnabled);
 
