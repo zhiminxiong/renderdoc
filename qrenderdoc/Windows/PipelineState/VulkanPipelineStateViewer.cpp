@@ -1829,6 +1829,46 @@ void VulkanPipelineStateViewer::setShaderState(const VKPipe::Pipeline &pipe,
   }
 }
 
+rdcpair<uint32_t, uint32_t> GetSetAndBind(const UsedDescriptor &a, const ShaderReflection *refl)
+{
+  rdcpair<uint32_t, uint32_t> ret = {~0U, ~0U};
+
+  if(!refl)
+    return ret;
+
+  DescriptorCategory category = CategoryForDescriptorType(a.access.type);
+  if(category == DescriptorCategory::ConstantBlock)
+  {
+    ret = {
+        refl->constantBlocks[a.access.index].fixedBindSetOrSpace,
+        refl->constantBlocks[a.access.index].fixedBindNumber,
+    };
+  }
+  else if(category == DescriptorCategory::ReadOnlyResource)
+  {
+    ret = {
+        refl->readOnlyResources[a.access.index].fixedBindSetOrSpace,
+        refl->readOnlyResources[a.access.index].fixedBindNumber,
+    };
+  }
+  else if(category == DescriptorCategory::ReadWriteResource)
+  {
+    ret = {
+        refl->readWriteResources[a.access.index].fixedBindSetOrSpace,
+        refl->readWriteResources[a.access.index].fixedBindNumber,
+    };
+  }
+  else if(category == DescriptorCategory::Sampler)
+  {
+    ret = {
+        refl->samplers[a.access.index].fixedBindSetOrSpace,
+        refl->samplers[a.access.index].fixedBindNumber,
+    };
+  }
+
+  return ret;
+}
+
 void VulkanPipelineStateViewer::setState()
 {
   if(!m_Ctx.IsCaptureLoaded())
@@ -2227,7 +2267,6 @@ void VulkanPipelineStateViewer::setState()
       shaderRefls[(uint32_t)stage] = m_Ctx.CurPipelineState().GetShaderReflection(stage);
 
     rdcarray<UsedDescriptor> descriptors = m_Ctx.CurPipelineState().GetAllUsedDescriptors();
-    rdcarray<ResourceId> descSets;
 
     const VKPipe::Pipeline &pipeline =
         (action && (action->flags & ActionFlags::Dispatch)) ? state.compute : state.graphics;
@@ -2236,8 +2275,6 @@ void VulkanPipelineStateViewer::setState()
 
     for(const VKPipe::DescriptorSet &set : pipeline.descriptorSets)
     {
-      descSets.push_back(set.descriptorSetResourceId);
-
       for(const VKPipe::DynamicOffset &offs : set.dynamicOffsets)
       {
         dynamicOffsets[{set.descriptorSetResourceId, offs.descriptorByteOffset}] =
@@ -2245,33 +2282,34 @@ void VulkanPipelineStateViewer::setState()
       }
     }
 
-    for(const VKPipe::DescriptorBuffer &buf : pipeline.descriptorBuffers)
-    {
-      descSets.push_back(buf.buffer);
-    }
-
     std::sort(descriptors.begin(), descriptors.end(),
-              [descSets](const UsedDescriptor &a, const UsedDescriptor &b) {
-                int32_t a_set = descSets.indexOf(a.access.descriptorStore);
-                int32_t b_set = descSets.indexOf(b.access.descriptorStore);
+              [&shaderRefls](const UsedDescriptor &a, const UsedDescriptor &b) {
+                // sort stages together, not really needed but keeps the code below simple
+                if(a.access.stage != b.access.stage)
+                  return a.access.stage < b.access.stage;
+
+                const ShaderReflection *refl = shaderRefls[(uint32_t)a.access.stage];
+
+                rdcpair<uint32_t, uint32_t> aBind = GetSetAndBind(a, refl);
+                rdcpair<uint32_t, uint32_t> bBind = GetSetAndBind(b, refl);
 
                 // non-set associated things (specialisation constants, push constants, etc) to the end
-                if(a_set == -1)
-                  a_set = descSets.count() + 1;
-                if(b_set == -1)
-                  b_set = descSets.count() + 1;
+                if(a.access.type == DescriptorType::ConstantBuffer &&
+                   !refl->constantBlocks[a.access.index].bufferBacked)
+                  aBind.first = ~0U;
 
-                if(a_set != b_set)
-                  return a_set < b_set;
+                if(b.access.type == DescriptorType::ConstantBuffer &&
+                   !refl->constantBlocks[b.access.index].bufferBacked)
+                  bBind.first = ~0U;
+
+                // most things will have a set and binding, that sorting is enough
+                if(aBind.first != bBind.first)
+                  return aBind.first < bBind.first;
+                if(aBind.second != bBind.second)
+                  return aBind.second < bBind.second;
 
                 // for non-sets, sort by interface index
-                if(a_set == b_set && a_set > descSets.count())
-                {
-                  return a.access.index < b.access.index;
-                }
-
-                // otherwise for normal sets, sort by byte offset
-                return a.access.byteOffset < b.access.byteOffset;
+                return a.access.index < b.access.index;
               });
 
     for(const UsedDescriptor &used : descriptors)
