@@ -315,6 +315,40 @@ struct VulkanRenderState
   // dynamic rendering
   struct DynamicRendering
   {
+    DynamicRendering() = default;
+    DynamicRendering &operator=(const DynamicRendering &o)
+    {
+      active = o.active;
+      suspended = o.suspended;
+      flags = o.flags;
+      layerCount = o.layerCount;
+      viewMask = o.viewMask;
+      color = o.color;
+      depth = o.depth;
+      stencil = o.stencil;
+
+      fragmentDensityView = o.fragmentDensityView;
+      fragmentDensityLayout = o.fragmentDensityLayout;
+
+      shadingRateView = o.shadingRateView;
+      shadingRateLayout = o.shadingRateLayout;
+      shadingRateTexelSize = o.shadingRateTexelSize;
+
+      tileOnlyMSAAEnable = o.tileOnlyMSAAEnable;
+      tileOnlyMSAASampleCount = o.tileOnlyMSAASampleCount;
+
+      localRead = o.localRead;
+
+      // this will deep copy from the incoming object
+      CopyAttachmentNexts();
+
+      return *this;
+    }
+
+    DynamicRendering(const DynamicRendering &o) { *this = o; }
+
+    void CopyAttachmentNexts();
+
     bool active = false;
     bool suspended = false;
     VkRenderingFlags flags = 0;
@@ -323,8 +357,6 @@ struct VulkanRenderState
     rdcarray<VkRenderingAttachmentInfo> color = {};
     VkRenderingAttachmentInfo depth = {};
     VkRenderingAttachmentInfo stencil = {};
-
-    void CopyAttachmentNexts();
 
     VkImageView fragmentDensityView = VK_NULL_HANDLE;
     VkImageLayout fragmentDensityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
