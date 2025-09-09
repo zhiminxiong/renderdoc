@@ -78,7 +78,6 @@ struct Layout
   DOCUMENT(R"(The semantic index for this input.
 
 :type: int
-str
 )");
   uint32_t semanticIndex = 0;
 
@@ -91,7 +90,6 @@ str
   DOCUMENT(R"(The vertex buffer input slot where the data is sourced from.
 
 :type: int
-str
 )");
   uint32_t inputSlot = 0;
 
