@@ -106,8 +106,12 @@ void WrappedVulkan::EstimateDescriptorFormats()
       size,
       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT |
           VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
   };
+
+  if(AccelerationStructures())
+    bufInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+
   VkBuffer buffer = VK_NULL_HANDLE;
   vkr = ObjDisp(m_Device)->CreateBuffer(Unwrap(m_Device), &bufInfo, NULL, &buffer);
   CHECK_VKR(this, vkr);
