@@ -183,7 +183,7 @@ static void StripUnwantedExtensions(rdcarray<rdcstr> &Extensions)
     if(ext == "VK_KHR_external_fence_fd" || ext == "VK_KHR_external_fence_win32" ||
        ext == "VK_KHR_external_memory_fd" || ext == "VK_KHR_external_memory_win32" ||
        ext == "VK_KHR_external_semaphore_fd" || ext == "VK_KHR_external_semaphore_win32" ||
-       ext == "VK_KHR_win32_keyed_mutex")
+       ext == "VK_KHR_win32_keyed_mutex" || ext == "VK_EXT_external_memory_dma_buf")
     {
       return true;
     }
