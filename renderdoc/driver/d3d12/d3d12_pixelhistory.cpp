@@ -2916,6 +2916,17 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
       resourceState = D3D12_RESOURCE_STATE_RESOLVE_DEST;
     else if(IsCopyWrite(usage))
       resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
+
+    // if we are assuming render target state but that's not allowed, this is a UAV clear
+    if(resourceState == D3D12_RESOURCE_STATE_RENDER_TARGET &&
+       (resDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) == 0)
+    {
+      RDCASSERT(usage == ResourceUsage::Clear &&
+                    (resDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+                usage, resDesc.Flags);
+      resourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+
     eventInfo.resourceState = resourceState;
 
     if(directWrite || clear)
