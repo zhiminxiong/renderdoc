@@ -287,7 +287,7 @@ private:
 
   PopulateBufferData *m_Scrolls = NULL;
 
-  QPoint m_Scroll[4];
+  QPoint m_Scroll[(int)MeshDataStage::Count];
 
   int m_Sequence = 0;
 
