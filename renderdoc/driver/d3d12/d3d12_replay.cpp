@@ -4794,7 +4794,7 @@ RDResult D3D12_CreateReplayDevice(RDCFile *rdc, const ReplayOptions &opts, IRepl
       RETURN_ERROR_RESULT(
           ResultCode::APIHardwareUnsupported,
           "This capture needs AGS extensions to replay, but device selected for replay can't "
-          "support nvapi extensions");
+          "support AGS extensions");
     }
   }
 
