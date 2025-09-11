@@ -38,7 +38,7 @@ class VK_Shader_Debug_Zoo(rdtest.TestCase):
                         self.controller.FreeTrace(trace)
                         continue
 
-                    cycles, variables = self.process_trace(trace)
+                    _, variables = self.process_trace(trace)
 
                     output: rd.SourceVariableMapping = self.find_output_source_var(trace, rd.ShaderBuiltin.ColorOutput, 0)
 
