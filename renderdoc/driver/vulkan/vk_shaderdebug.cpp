@@ -3738,7 +3738,7 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv,
       laneValue subid;
       subid.name = "__rd_subgroupid";
       subid.structIndex = structMembers.size();
-      subid.type = uint3Type;
+      subid.type = uint32Type;
       subid.base = editor.AddBuiltinInputLoad(subid.loadOps, newGlobals, stage,
                                               rdcspv::BuiltIn::SubgroupId, uint32Type);
       editor.SetName(subid.base, subid.name);
