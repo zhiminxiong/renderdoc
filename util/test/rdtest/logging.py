@@ -94,6 +94,22 @@ class TestLogger:
         self.dedent()
         self.rawprint("<< Section {}".format(name))
 
+    def auto_section(self, name: str):
+        class ScopedSection():
+            def __init__(self, logger: TestLogger, name: str):
+                self.name = name
+                self.logger = logger
+
+            def __enter__(self):
+                self.logger.begin_section(name)
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                if exc_value is not None:
+                    self.logger.failure(exc_value)
+                self.logger.end_section(name)
+            
+        return ScopedSection(self, name)
+
     def inline_file(self, name: str, path: str, with_stdout: bool = False):
         self.rawprint(">> Raw {}".format(name))
         self.indent()
