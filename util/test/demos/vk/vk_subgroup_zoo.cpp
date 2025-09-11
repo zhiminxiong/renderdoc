@@ -77,6 +77,9 @@ void main()
     vec2(-1.0f,  1.0f),
     vec2( 1.0f,  1.0f),
     vec2(-1.0f, -1.0f),
+
+    vec2( 1.0f,  1.0f),
+    vec2(-1.0f, -1.0f),
     vec2( 1.0f, -1.0f),
   };
 
@@ -341,7 +344,7 @@ void main()
 
     pipeCreateInfo.renderPass = renderPass;
     pipeCreateInfo.layout = layout;
-    pipeCreateInfo.inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    pipeCreateInfo.inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
     std::map<std::string, std::string> macros;
 
@@ -514,7 +517,7 @@ void main()
             VK_SUBPASS_CONTENTS_INLINE);
 
         vkh::cmdPushConstants(cmd, layout, i);
-        vkCmdDraw(cmd, 4, 1, 0, 0);
+        vkCmdDraw(cmd, 6, 1, 0, 0);
         vkCmdEndRenderPass(cmd);
       }
 
