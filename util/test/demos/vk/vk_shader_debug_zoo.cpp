@@ -1624,6 +1624,31 @@ void main()
       Color = vec4(imageLoad(storeTexBuffer1010102uint, int(1))) + vec4(imageLoad(storeTexBuffer1010102uint, int(5)));
       break;
     }
+    case 185:
+    {
+      // this is intended to test triggering a mixture of GPU math and GPU sample ops
+      vec2 coord = vec2(zerof + 0.5, zerof + 0.15);
+      if (localCoord.x % 2 == 0)
+      {
+        Color = textureLod(sampler2D(sampledImage, pointSampler), coord, 0.0);
+        for (int i = 0; i < 100; i++)
+        {
+          Color += textureLod(sampler2D(sampledImage, pointSampler), coord, float(i));
+        }
+      }
+      else
+      {
+        Color = vec4(pow(posone*2.5f, posone*1.3f), pow(posone*2.5f, posone*0.45f),
+                     pow(vec2(posone*2.5f, posone*1.3f), vec2(posone*0.9f, posone*8.5f)));
+        for (int i = 0; i < 100; i++)
+        {
+          vec4 value = vec4(pow(posone*2.5f+float(i), posone*1.3f), pow(posone*2.5f, posone*0.45f),
+                        pow(vec2(posone*2.5f, posone*1.3f), vec2(posone*0.9f, posone*8.5f)));
+          Color += value / 100.0;
+        }
+      }
+      break;
+    }
     default: break;
   }
 }
