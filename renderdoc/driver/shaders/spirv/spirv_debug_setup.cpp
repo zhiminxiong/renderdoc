@@ -2619,9 +2619,9 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
   rdcarray<bool> activeMask;
 
-  // continue stepping until we have 100 target steps completed in a chunk. This may involve doing
-  // more steps if our target thread is inactive
-  for(int stepEnd = steps + 100; steps < stepEnd;)
+  // continue stepping until we have 1000000 target steps completed in a chunk. This may involve
+  // doing more steps if our target thread is inactive
+  for(int stepEnd = steps + 1000000; steps < stepEnd;)
   {
     global.clock++;
 
