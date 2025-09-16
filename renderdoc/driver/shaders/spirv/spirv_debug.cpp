@@ -27,6 +27,7 @@
 #include <time.h>
 #include <limits>
 #include "common/formatting.h"
+#include "common/threading.h"
 #include "core/settings.h"
 #include "maths/half_convert.h"
 #include "os/os_specific.h"
@@ -4259,6 +4260,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     }
     case Op::AtomicLoad:
     {
+      SCOPED_LOCK(debugger.GetAtomicMemoryLock());
+
       OpAtomicLoad load(it);
 
       // ignore for now
@@ -4302,6 +4305,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     }
     case Op::AtomicStore:
     {
+      SCOPED_LOCK(debugger.GetAtomicMemoryLock());
+
       OpAtomicStore store(it);
 
       // ignore for now
@@ -4333,6 +4338,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     }
     case Op::AtomicExchange:
     {
+      SCOPED_LOCK(debugger.GetAtomicMemoryLock());
+
       OpAtomicExchange excg(it);
 
       // ignore for now
@@ -4392,6 +4399,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     }
     case Op::AtomicCompareExchange:
     {
+      SCOPED_LOCK(debugger.GetAtomicMemoryLock());
+
       OpAtomicCompareExchange cmpexcg(it);
 
       // ignore for now
@@ -4475,6 +4484,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     case Op::AtomicIIncrement:
     case Op::AtomicIDecrement:
     {
+      SCOPED_LOCK(debugger.GetAtomicMemoryLock());
+
       OpAtomicIIncrement atomic(it);
 
       // ignore for now
@@ -4560,6 +4571,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
     case Op::AtomicOr:
     case Op::AtomicXor:
     {
+      SCOPED_LOCK(debugger.GetAtomicMemoryLock());
+
       OpAtomicIAdd atomic(it);
 
       // ignore for now

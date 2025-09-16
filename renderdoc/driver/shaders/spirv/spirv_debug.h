@@ -665,6 +665,8 @@ public:
   DeviceOpResult WriteTexel(const ShaderBindIndex &imageBind, const ShaderVariable &coord,
                             uint32_t sample, const ShaderVariable &input) const;
   DeviceOpResult GetBufferLength(const ShaderBindIndex &bind, uint64_t &bufferLen) const;
+
+  Threading::CriticalSection &GetAtomicMemoryLock() const { return atomicMemoryLock; }
 private:
   virtual void PreParse(uint32_t maxId);
   virtual void PostParse();
@@ -799,6 +801,7 @@ private:
   void SyncPendingGpuOps();
   void SyncPendingLanes();
 
+  mutable Threading::CriticalSection atomicMemoryLock;
   mutable Threading::CriticalSection queuedDebugMessagesLock;
   mutable rdcarray<DebugMessage> queuedDebugMessages;
   rdcarray<bool> queuedGpuMathOps;
