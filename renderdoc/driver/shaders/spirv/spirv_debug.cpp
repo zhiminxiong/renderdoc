@@ -36,6 +36,16 @@
 
 using namespace rdcshaders;
 
+#if defined(RELEASE)
+#define CHECK_DEBUGGER_THREAD() \
+  do                            \
+  {                             \
+  } while((void)0, 0)
+#else
+#define CHECK_DEBUGGER_THREAD() \
+  RDCASSERTMSG("Function called from non-debugger thread!", debugger.IsDeviceThread());
+#endif    // #if defined(RELEASE)
+
 static bool ContainsNaNInf(const ShaderVariable &var)
 {
   bool ret = false;
@@ -196,7 +206,7 @@ void ThreadState::FillCallstack(rdcarray<Id> &funcs)
 void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
 {
   if(m_State)
-    RDCASSERT(debugger.IsDeviceThread());
+    CHECK_DEBUGGER_THREAD();
 
   ConstIter it = debugger.GetIterForInstruction(nextInstruction);
 
@@ -544,7 +554,7 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
   if(!m_State)
     return;
 
-  RDCASSERT(debugger.IsDeviceThread());
+  CHECK_DEBUGGER_THREAD();
 
   // all oldLive (except globals) are going out of scope. all newLive (except globals) are coming
   // into scope
@@ -820,7 +830,7 @@ void ThreadState::EnterEntryPoint(ShaderDebugState *state)
   m_State = state;
 
   if(m_State)
-    RDCASSERT(debugger.IsDeviceThread());
+    CHECK_DEBUGGER_THREAD();
 
   EnterFunction({});
 
