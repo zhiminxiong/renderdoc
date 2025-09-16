@@ -186,6 +186,7 @@ bool WrappedID3D12Resource::CreateAccStruct(D3D12BufferOffset bufferOffset,
 
 WrappedID3D12Resource::~WrappedID3D12Resource()
 {
+  SAFE_RELEASE(m_Pageable);
   SAFE_RELEASE(m_Heap);
 
   // perform an implicit unmap on release

@@ -336,6 +336,27 @@ struct WrappedDownlevelDevice : public ID3D12DeviceDownlevel
                        _Out_ DXGI_QUERY_VIDEO_MEMORY_INFO *pVideoMemoryInfo);
 };
 
+struct WrappedDeviceTools : public ID3D12DeviceTools
+{
+  WrappedID3D12Device &m_pDevice;
+
+  WrappedDeviceTools(WrappedID3D12Device &dev) : m_pDevice(dev) {}
+  //////////////////////////////
+  // implement IUnknown
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppvObject);
+  ULONG STDMETHODCALLTYPE AddRef();
+  ULONG STDMETHODCALLTYPE Release();
+  //////////////////////////////
+  // implement ID3D12DeviceTools
+  virtual void STDMETHODCALLTYPE SetNextAllocationAddress(UINT64 pVirtualAddress);
+  //////////////////////////////
+  // implement ID3D12DeviceTools1
+  virtual HRESULT STDMETHODCALLTYPE GetApplicationSpecificDriverState(_COM_Outptr_ ID3DBlob **ppBlob);
+
+  virtual D3D12_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS STDMETHODCALLTYPE
+  GetApplicationSpecificDriverBlobStatus(void);
+};
+
 struct WrappedDRED : public ID3D12DeviceRemovedExtendedData1
 {
   WrappedID3D12Device &m_pDevice;
@@ -587,6 +608,8 @@ private:
   ID3D12Device12 *m_pDevice12;
   ID3D12Device13 *m_pDevice13;
   ID3D12Device14 *m_pDevice14;
+  ID3D12DeviceTools *m_pDeviceTools = NULL;
+  ID3D12DeviceTools1 *m_pDeviceTools1 = NULL;
   ID3D12DeviceDownlevel *m_pDownlevel;
 
   WrappedID3D12DeviceConfiguration m_DevConfig;
@@ -646,6 +669,7 @@ private:
   ID3D12GraphicsCommandList *m_OverlayLists[MaxOverlayInFlight] = {};
 
   WrappedDownlevelDevice m_WrappedDownlevel;
+  WrappedDeviceTools m_WrappedDeviceTools;
   WrappedDRED m_DRED;
   WrappedDREDSettings m_DREDSettings;
   WrappedCompatibilityDevice m_CompatDevice;
@@ -1871,4 +1895,29 @@ public:
                                        _In_reads_(blobLengthInBytes) const void *pLibraryBlob,
                                        _In_ SIZE_T blobLengthInBytes, _In_opt_ LPCWSTR subobjectName,
                                        REFIID riid, _COM_Outptr_ void **ppvRootSignature);
+
+  //////////////////////////////
+  // implement ID3D12DeviceTools
+  virtual void STDMETHODCALLTYPE SetNextAllocationAddress(UINT64 pVirtualAddress)
+  {
+    if(m_pDeviceTools)
+      m_pDeviceTools->SetNextAllocationAddress(pVirtualAddress);
+  }
+
+  //////////////////////////////
+  // implement ID3D12DeviceTools1
+  virtual HRESULT STDMETHODCALLTYPE GetApplicationSpecificDriverState(_COM_Outptr_ ID3DBlob **ppBlob)
+  {
+    if(m_pDeviceTools1)
+      return m_pDeviceTools1->GetApplicationSpecificDriverState(ppBlob);
+    return E_NOINTERFACE;
+  }
+
+  virtual D3D12_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS STDMETHODCALLTYPE
+  GetApplicationSpecificDriverBlobStatus(void)
+  {
+    if(m_pDeviceTools1)
+      return m_pDeviceTools1->GetApplicationSpecificDriverBlobStatus();
+    return D3D12_APPLICATION_SPECIFIC_DRIVER_BLOB_UNKNOWN;
+  }
 };

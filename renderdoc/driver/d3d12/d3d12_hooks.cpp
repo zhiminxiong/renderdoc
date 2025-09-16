@@ -194,12 +194,22 @@ public:
   virtual void STDMETHODCALLTYPE SetForceLegacyBarrierValidation(BOOL Enable) {}
 };
 
-class WrappedID3D12Tools : public RefCounter12<ID3D12Tools>, public ID3D12Tools
+class WrappedID3D12Tools : public RefCounter12<ID3D12Tools2>, public ID3D12Tools2
 {
   BOOL m_Instrumentation = FALSE;
+  ID3D12Tools1 *m_Tools1 = NULL;
+  ID3D12Tools2 *m_Tools2 = NULL;
 public:
-  WrappedID3D12Tools() : RefCounter12(NULL) {}
-  virtual ~WrappedID3D12Tools() {}
+  WrappedID3D12Tools(ID3D12Tools *tools) : RefCounter12(NULL)
+  {
+    tools->QueryInterface(__uuidof(ID3D12Tools1), (void **)&m_Tools1);
+    tools->QueryInterface(__uuidof(ID3D12Tools2), (void **)&m_Tools2);
+  }
+  virtual ~WrappedID3D12Tools()
+  {
+    SAFE_RELEASE(m_Tools1);
+    SAFE_RELEASE(m_Tools2);
+  }
   //////////////////////////////
   // Implement IUnknown
   ULONG STDMETHODCALLTYPE AddRef() { return RefCounter12::AddRef(); }
@@ -218,6 +228,18 @@ public:
       AddRef();
       return S_OK;
     }
+    if(riid == __uuidof(ID3D12Tools1))
+    {
+      *ppvObject = (ID3D12Tools1 *)this;
+      AddRef();
+      return S_OK;
+    }
+    if(riid == __uuidof(ID3D12Tools2))
+    {
+      *ppvObject = (ID3D12Tools2 *)this;
+      AddRef();
+      return S_OK;
+    }
 
     return E_NOINTERFACE;
   }
@@ -230,6 +252,32 @@ public:
   }
 
   virtual BOOL STDMETHODCALLTYPE ShaderInstrumentationEnabled(void) { return m_Instrumentation; }
+
+  //////////////////////////////
+  // Implement ID3D12Tools1
+  virtual HRESULT STDMETHODCALLTYPE ReserveGPUVARangesAtCreate(D3D12_GPU_VIRTUAL_ADDRESS_RANGE *pRanges,
+                                                               UINT uiNumRanges)
+  {
+    if(m_Tools1)
+      return m_Tools1->ReserveGPUVARangesAtCreate(pRanges, uiNumRanges);
+    return E_NOINTERFACE;
+  }
+
+  virtual void STDMETHODCALLTYPE ClearReservedGPUVARangesList(void)
+  {
+    if(m_Tools1)
+      m_Tools1->ClearReservedGPUVARangesList();
+  }
+
+  //////////////////////////////
+  // Implement ID3D12Tools2
+  virtual HRESULT STDMETHODCALLTYPE SetApplicationSpecificDriverState(_In_ IUnknown *pAdapter,
+                                                                      _In_opt_ ID3DBlob *pBlob)
+  {
+    if(m_Tools2)
+      return m_Tools2->SetApplicationSpecificDriverState(pAdapter, pBlob);
+    return E_NOINTERFACE;
+  }
 };
 
 class WrappedID3D12DeviceRemovedExtendedData : public RefCounter12<ID3D12DeviceRemovedExtendedData1>,
@@ -566,7 +614,23 @@ public:
     }
     else if(riid == __uuidof(ID3D12Tools))
     {
-      *ppvInterface = (ID3D12Tools *)(new WrappedID3D12Tools());
+      ID3D12Tools *real = (ID3D12Tools *)realUnk;
+      // don't need to addref real here, WrappedID3D12Tools doesn't hold onto it but just uses it for QueryInterface
+      *ppvInterface = (ID3D12Tools *)(new WrappedID3D12Tools(real));
+      return S_OK;
+    }
+    else if(riid == __uuidof(ID3D12Tools1))
+    {
+      ID3D12Tools1 *real = (ID3D12Tools1 *)realUnk;
+      // don't need to addref real here, WrappedID3D12Tools doesn't hold onto it but just uses it for QueryInterface
+      *ppvInterface = (ID3D12Tools1 *)(new WrappedID3D12Tools(real));
+      return S_OK;
+    }
+    else if(riid == __uuidof(ID3D12Tools2))
+    {
+      ID3D12Tools2 *real = (ID3D12Tools2 *)realUnk;
+      // don't need to addref real here, WrappedID3D12Tools doesn't hold onto it but just uses it for QueryInterface
+      *ppvInterface = (ID3D12Tools2 *)(new WrappedID3D12Tools(real));
       return S_OK;
     }
     else if(riid == __uuidof(ID3D12DeviceRemovedExtendedData))

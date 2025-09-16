@@ -192,6 +192,37 @@ HRESULT STDMETHODCALLTYPE WrappedDownlevelDevice::QueryVideoMemoryInfo(
   return m_pDevice.QueryVideoMemoryInfo(NodeIndex, MemorySegmentGroup, pVideoMemoryInfo);
 }
 
+HRESULT STDMETHODCALLTYPE WrappedDeviceTools::QueryInterface(REFIID riid, void **ppvObject)
+{
+  return m_pDevice.QueryInterface(riid, ppvObject);
+}
+
+ULONG STDMETHODCALLTYPE WrappedDeviceTools::AddRef()
+{
+  return m_pDevice.AddRef();
+}
+
+ULONG STDMETHODCALLTYPE WrappedDeviceTools::Release()
+{
+  return m_pDevice.Release();
+}
+
+void STDMETHODCALLTYPE WrappedDeviceTools::SetNextAllocationAddress(UINT64 pVirtualAddress)
+{
+  return m_pDevice.SetNextAllocationAddress(pVirtualAddress);
+}
+HRESULT STDMETHODCALLTYPE
+WrappedDeviceTools::GetApplicationSpecificDriverState(_COM_Outptr_ ID3DBlob **ppBlob)
+{
+  return m_pDevice.GetApplicationSpecificDriverState(ppBlob);
+}
+
+D3D12_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS STDMETHODCALLTYPE
+WrappedDeviceTools::GetApplicationSpecificDriverBlobStatus(void)
+{
+  return m_pDevice.GetApplicationSpecificDriverBlobStatus();
+}
+
 HRESULT STDMETHODCALLTYPE WrappedID3D12SharingContract::QueryInterface(REFIID riid, void **ppvObject)
 {
   return m_pDevice.QueryInterface(riid, ppvObject);
@@ -525,6 +556,7 @@ WrappedID3D12Device::WrappedID3D12Device(ID3D12Device *realDevice, D3D12InitPara
       m_pDevice(realDevice),
       m_debugLayerEnabled(enabledDebugLayer),
       m_WrappedDownlevel(*this),
+      m_WrappedDeviceTools(*this),
       m_DRED(*this),
       m_DREDSettings(*this),
       m_SharingContract(*this),
@@ -593,6 +625,8 @@ WrappedID3D12Device::WrappedID3D12Device(ID3D12Device *realDevice, D3D12InitPara
     m_pDevice->QueryInterface(__uuidof(ID3D12DeviceRemovedExtendedDataSettings2),
                               (void **)&m_DREDSettings.m_pReal2);
     m_pDevice->QueryInterface(__uuidof(ID3D12DeviceDownlevel), (void **)&m_pDownlevel);
+    m_pDevice->QueryInterface(__uuidof(ID3D12DeviceTools), (void **)&m_pDeviceTools);
+    m_pDevice->QueryInterface(__uuidof(ID3D12DeviceTools1), (void **)&m_pDeviceTools1);
     m_pDevice->QueryInterface(__uuidof(ID3D12CompatibilityDevice), (void **)&m_CompatDevice.m_pReal);
     m_pDevice->QueryInterface(__uuidof(ID3D12SharingContract), (void **)&m_SharingContract.m_pReal);
 
@@ -1325,6 +1359,32 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
       return E_NOINTERFACE;
     }
   }
+  else if(riid == __uuidof(ID3D12DeviceTools))
+  {
+    if(m_pDeviceTools)
+    {
+      *ppvObject = &m_WrappedDeviceTools;
+      AddRef();
+      return S_OK;
+    }
+    else
+    {
+      return E_NOINTERFACE;
+    }
+  }
+  else if(riid == __uuidof(ID3D12DeviceTools1))
+  {
+    if(m_pDeviceTools1)
+    {
+      *ppvObject = &m_WrappedDeviceTools;
+      AddRef();
+      return S_OK;
+    }
+    else
+    {
+      return E_NOINTERFACE;
+    }
+  }
   else if(riid == __uuidof(ID3D12InfoQueue))
   {
     RDCWARN(
@@ -1753,7 +1813,9 @@ bool WrappedID3D12Device::Serialise_WrapSwapchainBuffer(SerialiserType &ser, IDX
                                                         DXGI_FORMAT bufferFormat, UINT Buffer,
                                                         IUnknown *realSurface)
 {
-  WrappedID3D12Resource *pRes = (WrappedID3D12Resource *)realSurface;
+  WrappedID3D12Resource *pRes =
+      (WrappedID3D12Resource *)(WrappedDeviceChild12<ID3D12Resource, ID3D12Resource1, ID3D12Resource2> *)
+          realSurface;
 
   SERIALISE_ELEMENT(Buffer);
   SERIALISE_ELEMENT_LOCAL(SwapbufferID, GetResID(pRes)).TypedAs("ID3D12Resource *"_lit);

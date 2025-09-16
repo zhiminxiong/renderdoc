@@ -2391,6 +2391,21 @@ HRESULT WrappedID3D12Device::CheckFeatureSupport(D3D12_FEATURE Feature, void *pF
 
     return S_OK;
   }
+  else if(Feature == D3D12_FEATURE_D3D12_OPTIONS5)
+  {
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 *opts =
+        (D3D12_FEATURE_DATA_D3D12_OPTIONS5 *)pFeatureSupportData;
+    if(FeatureSupportDataSize != sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))
+      return E_INVALIDARG;
+
+    // don't support DXR 1.2
+    opts->RaytracingTier = RDCMIN(opts->RaytracingTier, D3D12_RAYTRACING_TIER_1_1);
+
+    if(dolog)
+      RDCLOG("Clamping raytracing tier support");
+
+    return S_OK;
+  }
   else if(Feature == D3D12_FEATURE_D3D12_OPTIONS7)
   {
     D3D12_FEATURE_DATA_D3D12_OPTIONS7 *opts =
