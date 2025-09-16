@@ -30,6 +30,7 @@
 #include <QXmlStreamWriter>
 #include "Code/Resources.h"
 #include "Widgets/Extended/RDHeaderView.h"
+#include "flowlayout/FlowLayout.h"
 #include "toolwindowmanager/ToolWindowManager.h"
 #include "PipelineStateViewer.h"
 #include "ui_GLPipelineStateViewer.h"
@@ -89,8 +90,16 @@ GLPipelineStateViewer::GLPipelineStateViewer(ICaptureContext &ctx, PipelineState
   const QIcon &action_hover = Icons::action_hover();
 
   RDLabel *shaderLabels[] = {
-      ui->vaoLabel, ui->vsShader, ui->tcsShader, ui->tesShader,
-      ui->gsShader, ui->fsShader, ui->csShader,
+      ui->vaoLabel,
+
+      ui->vsPipeline, ui->tcsPipeline, ui->tesPipeline,
+      ui->gsPipeline, ui->fsPipeline,  ui->csPipeline,
+
+      ui->vsProgram,  ui->tcsProgram,  ui->tesProgram,
+      ui->gsProgram,  ui->fsProgram,   ui->csProgram,
+
+      ui->vsShader,   ui->tcsShader,   ui->tesShader,
+      ui->gsShader,   ui->fsShader,    ui->csShader,
   };
 
   QToolButton *viewButtons[] = {
@@ -132,6 +141,29 @@ GLPipelineStateViewer::GLPipelineStateViewer(ICaptureContext &ctx, PipelineState
       ui->gsReadWrite, ui->fsReadWrite,  ui->csReadWrite,
   };
 
+  QWidget *shaderGroups[] = {
+      ui->vsShaderGroup, ui->tcsShaderGroup, ui->tesShaderGroup,
+      ui->gsShaderGroup, ui->fsShaderGroup,  ui->csShaderGroup,
+  };
+
+  // setup FlowLayout for shader groups
+  for(QWidget *shaderGroup : shaderGroups)
+  {
+    QLayout *oldLayout = shaderGroup->layout();
+
+    QObjectList childs = shaderGroup->children();
+    childs.removeOne((QObject *)oldLayout);
+
+    delete oldLayout;
+
+    FlowLayout *shaderFlow = new FlowLayout(shaderGroup, -1, 3, 3);
+
+    for(QObject *o : childs)
+      shaderFlow->addWidget(qobject_cast<QWidget *>(o));
+
+    shaderGroup->setLayout(shaderFlow);
+  }
+
   for(QToolButton *b : viewButtons)
     QObject::connect(b, &QToolButton::clicked, this, &GLPipelineStateViewer::shaderView_clicked);
 
@@ -140,7 +172,7 @@ GLPipelineStateViewer::GLPipelineStateViewer(ICaptureContext &ctx, PipelineState
     b->setAutoFillBackground(true);
     b->setBackgroundRole(QPalette::ToolTipBase);
     b->setForegroundRole(QPalette::ToolTipText);
-    b->setMinimumSizeHint(QSize(250, 0));
+    b->setMinimumSizeHint(QSize(150, 0));
   }
 
   for(RDLabel *b : {ui->xfbObj, ui->readFBO, ui->drawFBO})
@@ -1136,10 +1168,13 @@ const GLPipe::Shader *GLPipelineStateViewer::stageForSender(QWidget *widget)
   return NULL;
 }
 
-void GLPipelineStateViewer::clearShaderState(RDLabel *shader, RDTreeWidget *tex, RDTreeWidget *samp,
+void GLPipelineStateViewer::clearShaderState(RDLabel *pipeline, RDLabel *program, RDLabel *shader,
+                                             RDTreeWidget *tex, RDTreeWidget *samp,
                                              RDTreeWidget *ubo, RDTreeWidget *sub, RDTreeWidget *rw)
 {
-  shader->setText(tr("Unbound Shader"));
+  pipeline->hide();
+  program->setText(ToQStr(ResourceId()));
+  shader->setText(ToQStr(ResourceId()));
   tex->clear();
   samp->clear();
   sub->clear();
@@ -1160,18 +1195,18 @@ void GLPipelineStateViewer::clearState()
   ui->primRestart->setVisible(false);
   ui->topologyDiagram->setPixmap(QPixmap());
 
-  clearShaderState(ui->vsShader, ui->vsTextures, ui->vsSamplers, ui->vsUBOs, ui->vsSubroutines,
-                   ui->vsReadWrite);
-  clearShaderState(ui->gsShader, ui->gsTextures, ui->gsSamplers, ui->gsUBOs, ui->gsSubroutines,
-                   ui->gsReadWrite);
-  clearShaderState(ui->tcsShader, ui->tcsTextures, ui->tcsSamplers, ui->tcsUBOs, ui->tcsSubroutines,
-                   ui->tcsReadWrite);
-  clearShaderState(ui->tesShader, ui->tesTextures, ui->tesSamplers, ui->tesUBOs, ui->tesSubroutines,
-                   ui->tesReadWrite);
-  clearShaderState(ui->fsShader, ui->fsTextures, ui->fsSamplers, ui->fsUBOs, ui->fsSubroutines,
-                   ui->fsReadWrite);
-  clearShaderState(ui->csShader, ui->csTextures, ui->csSamplers, ui->csUBOs, ui->csSubroutines,
-                   ui->csReadWrite);
+  clearShaderState(ui->vsPipeline, ui->vsProgram, ui->vsShader, ui->vsTextures, ui->vsSamplers,
+                   ui->vsUBOs, ui->vsSubroutines, ui->vsReadWrite);
+  clearShaderState(ui->gsPipeline, ui->gsProgram, ui->gsShader, ui->gsTextures, ui->gsSamplers,
+                   ui->gsUBOs, ui->gsSubroutines, ui->gsReadWrite);
+  clearShaderState(ui->tcsPipeline, ui->tcsProgram, ui->tcsShader, ui->tcsTextures, ui->tcsSamplers,
+                   ui->tcsUBOs, ui->tcsSubroutines, ui->tcsReadWrite);
+  clearShaderState(ui->tesPipeline, ui->tesProgram, ui->tesShader, ui->tesTextures, ui->tesSamplers,
+                   ui->tesUBOs, ui->tesSubroutines, ui->tesReadWrite);
+  clearShaderState(ui->fsPipeline, ui->fsProgram, ui->fsShader, ui->fsTextures, ui->fsSamplers,
+                   ui->fsUBOs, ui->fsSubroutines, ui->fsReadWrite);
+  clearShaderState(ui->csPipeline, ui->csProgram, ui->csShader, ui->csTextures, ui->csSamplers,
+                   ui->csUBOs, ui->csSubroutines, ui->csReadWrite);
 
   ui->xfbBuffers->clear();
 
@@ -1240,27 +1275,24 @@ void GLPipelineStateViewer::clearState()
   ui->stencils->clear();
 }
 
-void GLPipelineStateViewer::setShaderState(const GLPipe::Shader &stage, RDLabel *shader,
-                                           RDTreeWidget *subs)
+void GLPipelineStateViewer::setShaderState(const GLPipe::Shader &stage, RDLabel *pipeline,
+                                           RDLabel *program, RDLabel *shader, RDTreeWidget *subs)
 {
   ShaderReflection *shaderDetails = stage.reflection;
   const GLPipe::State &state = *m_Ctx.CurGLPipelineState();
 
-  if(stage.shaderResourceId == ResourceId())
+  if(state.pipelineResourceId != ResourceId())
   {
-    shader->setText(ToQStr(stage.shaderResourceId));
+    pipeline->show();
+    pipeline->setText(ToQStr(state.pipelineResourceId));
   }
   else
   {
-    QString shText = ToQStr(stage.shaderResourceId);
-
-    shText = ToQStr(stage.programResourceId) + lit(" > ") + shText;
-
-    if(state.pipelineResourceId != ResourceId())
-      shText = ToQStr(state.pipelineResourceId) + lit(" > ") + shText;
-
-    shader->setText(shText);
+    pipeline->hide();
   }
+
+  program->setText(ToQStr(stage.programResourceId));
+  shader->setText(ToQStr(stage.shaderResourceId));
 
   int vs = subs->verticalScrollBar()->value();
   subs->beginUpdate();
@@ -1835,12 +1867,18 @@ void GLPipelineStateViewer::setState()
     // UBOs don't have to be sorted because there's only one type there, the locations are already
     // in order
 
-    setShaderState(state.vertexShader, ui->vsShader, ui->vsSubroutines);
-    setShaderState(state.geometryShader, ui->gsShader, ui->gsSubroutines);
-    setShaderState(state.tessControlShader, ui->tcsShader, ui->tcsSubroutines);
-    setShaderState(state.tessEvalShader, ui->tesShader, ui->tesSubroutines);
-    setShaderState(state.fragmentShader, ui->fsShader, ui->fsSubroutines);
-    setShaderState(state.computeShader, ui->csShader, ui->csSubroutines);
+    setShaderState(state.vertexShader, ui->vsPipeline, ui->vsProgram, ui->vsShader,
+                   ui->vsSubroutines);
+    setShaderState(state.geometryShader, ui->gsPipeline, ui->gsProgram, ui->gsShader,
+                   ui->gsSubroutines);
+    setShaderState(state.tessControlShader, ui->tcsPipeline, ui->tcsProgram, ui->tcsShader,
+                   ui->tcsSubroutines);
+    setShaderState(state.tessEvalShader, ui->tesPipeline, ui->tesProgram, ui->tesShader,
+                   ui->tesSubroutines);
+    setShaderState(state.fragmentShader, ui->fsPipeline, ui->fsProgram, ui->fsShader,
+                   ui->fsSubroutines);
+    setShaderState(state.computeShader, ui->csPipeline, ui->csProgram, ui->csShader,
+                   ui->csSubroutines);
 
     ui->vsReadWrite->parentWidget()->setVisible(ui->vsReadWrite->topLevelItemCount() > 0 &&
                                                 shaderRefls[0] &&

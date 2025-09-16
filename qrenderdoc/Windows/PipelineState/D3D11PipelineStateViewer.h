@@ -89,8 +89,9 @@ private:
   PipelineStateViewer &m_Common;
   ComputeDebugSelector *m_ComputeDebugSelector;
 
-  void setShaderState(const D3D11Pipe::Shader &stage, RDLabel *shader, RDTreeWidget *tex,
-                      RDTreeWidget *samp, RDTreeWidget *cbuffer, RDTreeWidget *classes);
+  void setShaderState(const D3D11Pipe::Shader &stage, RDLabel *shader, RDLabel *shaderDebug,
+                      RDTreeWidget *tex, RDTreeWidget *samp, RDTreeWidget *cbuffer,
+                      RDTreeWidget *classes);
 
   void addResourceRow(const D3D11ViewTag &view, const ShaderResource *shaderBind, bool usedSlot,
                       RDTreeWidget *resources);
@@ -99,8 +100,8 @@ private:
   void addCBufferRow(const Descriptor &b, uint32_t reg, const ConstantBlock *shaderBind,
                      bool usedSlot, RDTreeWidget *cbuffers);
 
-  void clearShaderState(RDLabel *shader, RDTreeWidget *tex, RDTreeWidget *samp,
-                        RDTreeWidget *cbuffer, RDTreeWidget *classes);
+  void clearShaderState(RDLabel *shader, RDLabel *shaderDebug, RDTreeWidget *tex,
+                        RDTreeWidget *samp, RDTreeWidget *cbuffer, RDTreeWidget *classes);
   void setState();
   void clearState();
 

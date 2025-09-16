@@ -112,10 +112,11 @@ private:
   void addConstantBlockRow(const ConstantBlock *cblock, const UsedDescriptor &used,
                            uint32_t dynamicOffset, RDTreeWidget *ubos);
 
-  void setShaderState(const VKPipe::Pipeline &pipe, const VKPipe::Shader &stage, RDLabel *shader,
-                      RDLabel *pipeLayout, RDTreeWidget *descSets);
-  void clearShaderState(RDLabel *shader, RDLabel *pipeLayout, RDTreeWidget *resources,
-                        RDTreeWidget *cbuffers, RDTreeWidget *descSets);
+  void setShaderState(const VKPipe::Pipeline &pipe, const VKPipe::Shader &stage, RDLabel *pipeline,
+                      RDLabel *shader, RDLabel *shaderDebug, RDLabel *pipeLayout,
+                      RDTreeWidget *descSets);
+  void clearShaderState(RDLabel *pipeline, RDLabel *shader, RDLabel *shaderDebug, RDLabel *pipeLayout,
+                        RDTreeWidget *resources, RDTreeWidget *cbuffers, RDTreeWidget *descSets);
   void setState();
   void clearState();
 

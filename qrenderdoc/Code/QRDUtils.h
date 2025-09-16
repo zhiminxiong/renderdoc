@@ -1050,6 +1050,8 @@ void BringToForeground(QWidget *window);
 
 bool IsDarkTheme();
 
+void TruncateStringFromEnd(QString &name);
+
 float getLuminance(const QColor &col);
 QColor contrastingColor(const QColor &col, const QColor &defaultCol);
 

@@ -174,9 +174,8 @@ rdcstr DoStringise(const PointerVal &el)
   }
 }
 
-QString GetTruncatedResourceName(const ICaptureContext &ctx, ResourceId id)
+void TruncateStringFromEnd(QString &name)
 {
-  QString name = ctx.GetResourceName(id);
   if(name.length() > 64)
   {
     QTextBoundaryFinder boundaries(QTextBoundaryFinder::Grapheme, name.data(), name.length());
@@ -187,6 +186,12 @@ QString GetTruncatedResourceName(const ICaptureContext &ctx, ResourceId id)
     name.resize(pos);
     name += lit("...");
   }
+}
+
+QString GetTruncatedResourceName(const ICaptureContext &ctx, ResourceId id)
+{
+  QString name = ctx.GetResourceName(id);
+  TruncateStringFromEnd(name);
 
   return name;
 }

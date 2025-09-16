@@ -93,13 +93,14 @@ private:
   void setOldMeshPipeFlow();
   void setNewMeshPipeFlow();
 
-  void setShaderState(const D3D12Pipe::Shader &stage, RDLabel *shader, RDLabel *rootSig);
+  void setShaderState(const D3D12Pipe::Shader &stage, RDLabel *pipeline, RDLabel *shader,
+                      RDLabel *rootSig);
 
   void addResourceRow(const D3D12ViewTag &view, const ShaderResource *shaderInput, bool spacesUsed,
                       RDTreeWidget *resources);
 
-  void clearShaderState(RDLabel *shader, RDLabel *rootSig, RDTreeWidget *tex, RDTreeWidget *samp,
-                        RDTreeWidget *cbuffer, RDTreeWidget *uavs);
+  void clearShaderState(RDLabel *pipeline, RDLabel *shader, RDLabel *rootSig, RDTreeWidget *tex,
+                        RDTreeWidget *samp, RDTreeWidget *cbuffer, RDTreeWidget *uavs);
   void setState();
   void clearState();
 

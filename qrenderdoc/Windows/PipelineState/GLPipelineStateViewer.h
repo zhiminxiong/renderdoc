@@ -92,7 +92,8 @@ private:
                                  const GLPipe::VertexAttribute &val);
   GLReadWriteType GetGLReadWriteType(ShaderResource res);
 
-  void setShaderState(const GLPipe::Shader &stage, RDLabel *shader, RDTreeWidget *sub);
+  void setShaderState(const GLPipe::Shader &stage, RDLabel *pipeline, RDLabel *program,
+                      RDLabel *shader, RDTreeWidget *sub);
 
   void addUBORow(const Descriptor &descriptor, uint32_t reg, uint32_t index,
                  const ConstantBlock *shaderBind, bool usedSlot, RDTreeWidget *ubos);
@@ -106,8 +107,8 @@ private:
                        const GLPipe::TextureCompleteness *texCompleteness,
                        RDTreeWidgetItem *readwrites);
 
-  void clearShaderState(RDLabel *shader, RDTreeWidget *tex, RDTreeWidget *samp, RDTreeWidget *ubo,
-                        RDTreeWidget *sub, RDTreeWidget *rw);
+  void clearShaderState(RDLabel *pipeline, RDLabel *program, RDLabel *shader, RDTreeWidget *tex,
+                        RDTreeWidget *samp, RDTreeWidget *ubo, RDTreeWidget *sub, RDTreeWidget *rw);
   void setState();
   void clearState();
 
