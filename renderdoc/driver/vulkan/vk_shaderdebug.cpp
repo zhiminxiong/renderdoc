@@ -39,7 +39,6 @@ RDOC_CONFIG(rdcstr, Vulkan_Debug_PSDebugDumpDirPath, "",
             "Path to dump shader debugging generated SPIR-V files.");
 RDOC_CONFIG(bool, Vulkan_Debug_ShaderDebugLogging, false,
             "Output verbose debug logging messages when debugging shaders.");
-RDOC_EXTERN_CONFIG(bool, Vulkan_Hack_EnableGroupCaps);
 
 // needed for old linux compilers
 namespace std
@@ -6441,10 +6440,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
   if(shadRefl.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
     numThreads = RDCMAX(numThreads, maxSubgroupSize);
   if(shadRefl.patchData.threadScope & rdcspv::ThreadScope::Workgroup)
-  {
-    if(Vulkan_Hack_EnableGroupCaps())
-      numThreads = RDCMAX(numThreads, threadDim[0] * threadDim[1] * threadDim[2]);
-  }
+    numThreads = RDCMAX(numThreads, threadDim[0] * threadDim[1] * threadDim[2]);
 
   apiWrapper->thread_builtins.resize(numThreads);
   apiWrapper->thread_props.resize(numThreads);

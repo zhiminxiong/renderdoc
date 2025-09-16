@@ -33,10 +33,6 @@
 RDOC_CONFIG(bool, Vulkan_Debug_UseDebugColumnInformation, false,
             "Control whether column information should be read from vulkan debug info.");
 
-RDOC_DEBUG_CONFIG(
-    bool, Vulkan_Hack_EnableGroupCaps, false,
-    "Work in progress allow shaders to be debugged with subgroup/workgroup requirements.");
-
 RDOC_CONFIG(bool, Vulkan_Debug_EnableShaderDebugMT, true,
             "Use multiple threads to run the shader debugger simulation.");
 
@@ -644,14 +640,7 @@ void Reflector::CheckDebuggable(bool &debuggable, rdcstr &debugStatus) const
       case Capability::GroupNonUniformRotateKHR:
       case Capability::GroupNonUniformArithmetic:
       {
-        if(Vulkan_Hack_EnableGroupCaps())
-        {
-          supported = true;
-        }
-        else
-        {
-          supported = false;
-        }
+        supported = true;
         break;
       }
 
