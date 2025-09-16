@@ -755,7 +755,7 @@ void RichResourceTextPaint(const QWidget *owner, QPainter *painter, QRect rect, 
 
     static const int margin = RichResourceTextMargin;
 
-    rect.adjust(margin, 0, -margin * 2, 0);
+    rect.adjust(margin, 0, -margin, 0);
 
     QString name;
 
@@ -983,18 +983,20 @@ int RichResourceTextHeightHint(const QWidget *owner, const QFont &font, const QV
 {
   QFontMetrics metrics(font);
 
+  static const int margin = RichResourceTextMargin;
+
   if(var.userType() == qMetaTypeId<RichResourceTextPtr>())
   {
     RichResourceTextPtr linkedText = var.value<RichResourceTextPtr>();
-
-    static const int margin = RichResourceTextMargin;
 
     linkedText->cacheDocument(owner);
 
     return linkedText->numLines * (metrics.lineSpacing() + margin * 2);
   }
 
-  return metrics.height();
+  const QPixmap &px = Pixmaps::link(owner->devicePixelRatio());
+
+  return qMax(metrics.height(), px.height() + margin * 2);
 }
 
 bool RichResourceTextMouseEvent(const QWidget *owner, const QVariant &var, QRect rect,
