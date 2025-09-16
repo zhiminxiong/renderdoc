@@ -2917,14 +2917,22 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
     else if(IsCopyWrite(usage))
       resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
 
-    // if we are assuming render target state but that's not allowed, this is a UAV clear
+    // if we are assuming render target state but that's not allowed, check for other states
     if(resourceState == D3D12_RESOURCE_STATE_RENDER_TARGET &&
        (resDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) == 0)
     {
-      RDCASSERT(usage == ResourceUsage::Clear &&
-                    (resDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
-                usage, resDesc.Flags);
-      resourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+      // if D/S is allowed, assume the state is depth write
+      if(resDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
+      {
+        resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+      }
+      // if it's not D/S either this must be a UAV clear
+      else
+      {
+        RDCASSERT(usage == ResourceUsage::Clear &&
+                      (resDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+                  usage, resDesc.Flags);
+      }
     }
 
     eventInfo.resourceState = resourceState;
