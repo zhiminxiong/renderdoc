@@ -1784,6 +1784,11 @@ void WrappedVulkan::Create_InitialState(ResourceId id, WrappedVkRes *live, bool)
 
     GetResourceManager()->SetInitialContents(id, VkInitialContents(type, tag));
   }
+  else if(type == eResDeviceMemory)
+  {
+    // need to ensure there are initial contents to apply though we don't create any memory
+    GetResourceManager()->SetInitialContents(id, VkInitialContents(type, MemoryAllocation()));
+  }
   else if(type == eResDeviceMemory || type == eResBuffer || type == eResAccelerationStructureKHR)
   {
     // ignore, it was probably dirty but not referenced in the frame
@@ -2347,7 +2352,12 @@ void WrappedVulkan::Apply_InitialState(WrappedVkRes *live, VkInitialContents &in
     VkBuffer srcBuf = initial.buf;
 
     VkBuffer dstBuf = m_CreationInfo.m_Memory[id].wholeMemBuf;
-    VkDeviceSize dstBufSize = RDCMIN(initial.mem.size, m_CreationInfo.m_Memory[id].wholeMemBufSize);
+    VkDeviceSize dstBufSize = m_CreationInfo.m_Memory[id].wholeMemBufSize;
+
+    // may have no initial memory if this is a created initial contents which we only clear
+    if(initial.mem.size != 0)
+      dstBufSize = RDCMIN(initial.mem.size, dstBufSize);
+
     if(dstBuf == VK_NULL_HANDLE)
     {
       RDCERR("Whole memory buffer not present for %s", ToStr(orig).c_str());
@@ -2376,7 +2386,14 @@ void WrappedVulkan::Apply_InitialState(WrappedVkRes *live, VkInitialContents &in
       VkDeviceSize start = it->start();
       VkDeviceSize finish = RDCMIN(it->finish(), dstBufSize);
       VkDeviceSize size = finish - start;
-      switch(it->value())
+      InitReqType req = it->value();
+
+      // if we would copy, but we don't have a source buffer then there were no saved initial
+      // contents because this buffer was created mid-frame. Clear instead
+      if(req == eInitReq_Copy && srcBuf == VK_NULL_HANDLE)
+        req = eInitReq_Clear;
+
+      switch(req)
       {
         case eInitReq_Clear:
           if(finish >= dstBufSize)
