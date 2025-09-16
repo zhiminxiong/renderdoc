@@ -6655,6 +6655,7 @@ rdcarray<ShaderDebugState> VulkanReplay::ContinueDebug(ShaderDebugger *debugger)
   }
 
   rdcarray<ShaderDebugState> ret = spvDebugger->ContinueDebug();
+  Threading::JobSystem::SyncAllJobs();
 
   VulkanAPIWrapper *api = (VulkanAPIWrapper *)spvDebugger->GetAPIWrapper();
   api->ResetReplay();

@@ -37,6 +37,9 @@ RDOC_DEBUG_CONFIG(
     bool, Vulkan_Hack_EnableGroupCaps, false,
     "Work in progress allow shaders to be debugged with subgroup/workgroup requirements.");
 
+RDOC_CONFIG(bool, Vulkan_Debug_EnableShaderDebugMT, true,
+            "Use multiple threads to run the shader debugger simulation.");
+
 using namespace rdcshaders;
 
 // this could be cleaner if ShaderVariable wasn't a very public struct, but it's not worth it so
@@ -4827,7 +4830,11 @@ void Debugger::QueueJob(uint32_t lane, rdcarray<ShaderDebugState> *ret)
   CHECK_DEBUGGER_THREAD();
   ThreadState &thread = workgroup[lane];
   thread.SetStepQueued();
-  StepThread(lane, StepThreadMode::RUN_SINGLE_STEP, ret);
+  if(Vulkan_Debug_EnableShaderDebugMT())
+    Threading::JobSystem::AddJob(
+        [this, lane, ret]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS, ret); });
+  else
+    StepThread(lane, StepThreadMode::RUN_SINGLE_STEP, ret);
 }
 
 // Must be called from the replay manager thread (the debugger thread)
