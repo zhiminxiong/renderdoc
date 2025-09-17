@@ -971,7 +971,8 @@ int RichResourceTextWidthHint(const QWidget *owner, const QFont &font, const QVa
         name = lit("NULL");
     }
 
-    const QPixmap &px = Pixmaps::link(owner->devicePixelRatio());
+    // this calculation is in device independent sizes so use a ratio of 1 for the pixmap
+    const QPixmap &px = Pixmaps::link(1);
 
     int ret = margin + metrics.boundingRect(name).width() + margin + px.width() + margin;
     return ret;
@@ -999,7 +1000,8 @@ int RichResourceTextHeightHint(const QWidget *owner, const QFont &font, const QV
     return linkedText->numLines * (metrics.lineSpacing() + margin * 2);
   }
 
-  const QPixmap &px = Pixmaps::link(owner->devicePixelRatio());
+  // this calculation is in device independent sizes so use a ratio of 1 for the pixmap
+  const QPixmap &px = Pixmaps::link(1);
 
   return qMax(metrics.height(), px.height() + margin * 2);
 }
