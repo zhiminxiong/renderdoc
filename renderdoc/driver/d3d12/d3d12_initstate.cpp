@@ -2151,7 +2151,7 @@ void D3D12ResourceManager::Apply_InitialState(ID3D12DeviceChild *live, D3D12Init
 
             uint64_t *curSize = (uint64_t *)GetRTManager()->PostbuildReadbackBuffer->Map();
 
-            if(*curSize > as->Size())
+            if(curSize && *curSize > as->Size())
             {
               RDCERR("BLAS built larger than recorded size - overlap checks will be incorrect");
             }
