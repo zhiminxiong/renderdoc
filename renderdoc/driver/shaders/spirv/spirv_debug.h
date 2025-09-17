@@ -30,6 +30,22 @@
 #include "spirv_common.h"
 #include "spirv_processor.h"
 
+#if defined(RELEASE)
+#define SPIRV_DEBUG_RDCASSERT(...) \
+  do                               \
+  {                                \
+    (void)(__VA_ARGS__);           \
+  } while((void)0, 0)
+#define SPIRV_DEBUG_RDCASSERTEQUAL(...) \
+  do                                    \
+  {                                     \
+    (void)(__VA_ARGS__);                \
+  } while((void)0, 0)
+#else
+#define SPIRV_DEBUG_RDCASSERT(...) RDCASSERTMSG("", __VA_ARGS__)
+#define SPIRV_DEBUG_RDCASSERTEQUAL(a, b) RDCASSERTEQUAL(a, b)
+#endif
+
 struct SPIRVInterfaceAccess;
 struct SPIRVPatchData;
 
@@ -370,12 +386,12 @@ struct ThreadState
   void SetPendingResultUnknown() { SetPendingResultStatus(PendingResultStatus::Unknown); }
   void SetPendingResultReady()
   {
-    RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Pending);
+    SPIRV_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Pending);
     SetPendingResultStatus(PendingResultStatus::Ready);
   }
   const ShaderVariable &GetPendingResult() const
   {
-    RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Ready);
+    SPIRV_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Ready);
     return pendingResultData;
   }
   void SetStepQueued()
@@ -408,14 +424,14 @@ struct ThreadState
   bool StepNeedsDeviceThread() const { return (AtomicLoad(&atomic_stepNeedsDeviceThread) == 1); }
   const GpuMathOperation &GetQueuedGpuMathOp() const
   {
-    RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuMathOp));
-    RDCASSERT(IsPendingResultPending());
+    SPIRV_DEBUG_RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuMathOp));
+    SPIRV_DEBUG_RDCASSERT(IsPendingResultPending());
     return queuedGpuMathOp;
   }
   const GpuSampleGatherOperation &GetQueuedGpuSampleGatherOp() const
   {
-    RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuSampleGatherOp));
-    RDCASSERT(IsPendingResultPending());
+    SPIRV_DEBUG_RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuSampleGatherOp));
+    SPIRV_DEBUG_RDCASSERT(IsPendingResultPending());
     return queuedGpuSampleGatherOp;
   }
 

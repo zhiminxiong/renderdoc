@@ -398,12 +398,12 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
       if(id != ptrid && live.contains(id))
       {
         opResult = debugger.GetPointerValue(ids[id], changes[i].before);
-        RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+        SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
       }
     }
 
     opResult = debugger.WriteThroughPointer(var, val);
-    RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+    SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
 
     // now evaluate the value after
     for(size_t i = 0; i < pointers.size(); i++)
@@ -412,7 +412,7 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
       if(id != ptrid && live.contains(id))
       {
         opResult = debugger.GetPointerValue(ids[id], changes[i].after);
-        RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+        SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
       }
     }
 
@@ -421,7 +421,7 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     if(gsmPtrIt != gsmPointers.end())
     {
       opResult = debugger.WriteThroughPointer(gsmPtrIt->second, val);
-      RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+      SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
     }
 
     // if the pointer we're writing is one of the aliased pointers, be sure we add it even if
@@ -447,7 +447,7 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     // always add a change for the base storage variable written itself, even if that's a no-op.
     // This one is not included in any of the pointers lists above
     opResult = debugger.GetPointerValue(ids[ptrid], basechange.after);
-    RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+    SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
 
     // if this is the first local write, mark this variable as becoming alive here, instead of at
     // its declaration
@@ -540,7 +540,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
     {
       // The variable was live and written to, it should be cached
       opResult = debugger.GetPointerValue(prev, change.before);
-      RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+      SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
     }
     change.after = afterVal;
     pendingDebugState.changes.push_back(change);
@@ -567,7 +567,8 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
     if(liveGlobals.contains(id))
       continue;
 
-    RDCASSERTEQUAL(debugger.GetPointerValue(ids[id], val), DeviceOpResult::Succeeded);
+    DeviceOpResult opResult = debugger.GetPointerValue(ids[id], val);
+    SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
     pendingDebugState.changes.push_back({val});
 
     if(ids[id].type == VarType::GPUPointer && !debugger.IsOpaquePointer(ids[id]) &&
@@ -584,7 +585,8 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
     if(liveGlobals.contains(id))
       continue;
 
-    RDCASSERTEQUAL(debugger.GetPointerValue(ids[id], val), DeviceOpResult::Succeeded);
+    DeviceOpResult opResult = debugger.GetPointerValue(ids[id], val);
+    SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
     pendingDebugState.changes.push_back({ShaderVariable(), val});
   }
 }
@@ -1171,7 +1173,8 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
       // then evaluate it, to get the extracted value
       ShaderVariable val;
-      RDCASSERTEQUAL(debugger.ReadFromPointer(ptr, val), DeviceOpResult::Succeeded);
+      DeviceOpResult opResult = debugger.ReadFromPointer(ptr, val);
+      SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
       SetDst(extract.result, val);
 
       break;
@@ -5327,7 +5330,7 @@ void ThreadState::ExecuteMemoryBarrier(Id semanticsId)
 void ThreadState::QueueMathOp(GLSLstd450 op, const rdcarray<ShaderVariable> &paramVars,
                               const ShaderVariable &result)
 {
-  RDCASSERT(!IsPendingResultPending());
+  SPIRV_DEBUG_RDCASSERT(!IsPendingResultPending());
   pendingResultData = result;
   queuedGpuMathOp.workgroupIndex = workgroupIndex;
   queuedGpuMathOp.op = op;
@@ -5344,7 +5347,7 @@ void ThreadState::QueueSampleGather(Op opcode, DebugAPIWrapper::TextureType texT
                                     const ImageOperandsAndParamDatas &operands,
                                     const ShaderVariable &result)
 {
-  RDCASSERT(!IsPendingResultPending());
+  SPIRV_DEBUG_RDCASSERT(!IsPendingResultPending());
   pendingResultData = result;
   queuedGpuSampleGatherOp.workgroupIndex = workgroupIndex;
   queuedGpuSampleGatherOp.opcode = opcode;

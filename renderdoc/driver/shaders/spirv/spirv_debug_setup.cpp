@@ -4559,8 +4559,8 @@ void Debugger::RegisterOp(Iter it)
 void Debugger::QueueGpuMathOp(uint32_t lane)
 {
   ThreadState &thread = workgroup[lane];
-  RDCASSERT(thread.IsSimulationStepActive());
-  RDCASSERT(!queuedGpuMathOps[lane]);
+  SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+  SPIRV_DEBUG_RDCASSERT(!queuedGpuMathOps[lane]);
   queuedGpuMathOps[lane] = true;
 }
 
@@ -4568,8 +4568,8 @@ void Debugger::QueueGpuMathOp(uint32_t lane)
 void Debugger::QueueGpuSampleGatherOp(uint32_t lane)
 {
   ThreadState &thread = workgroup[lane];
-  RDCASSERT(thread.IsSimulationStepActive());
-  RDCASSERT(!queuedGpuSampleGatherOps[lane]);
+  SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+  SPIRV_DEBUG_RDCASSERT(!queuedGpuSampleGatherOps[lane]);
   queuedGpuSampleGatherOps[lane] = true;
 }
 
@@ -4623,7 +4623,7 @@ void Debugger::ProcessQueuedGpuMathOps()
         memset(&result.value, 0, sizeof(result.value));
       }
 
-      RDCASSERT(!pendingLanes[workgroupIndex]);
+      SPIRV_DEBUG_RDCASSERT(!pendingLanes[workgroupIndex]);
       pendingLanes[workgroupIndex] = true;
     }
   }
@@ -4660,7 +4660,7 @@ void Debugger::ProcessQueuedGpuSampleGatherOps()
       if(!hasResult)
         pendingGpuSampleGatherOpsResults.push_back(sampleGatherOp.result);
 
-      RDCASSERT(!pendingLanes[workgroupIndex]);
+      SPIRV_DEBUG_RDCASSERT(!pendingLanes[workgroupIndex]);
       pendingLanes[workgroupIndex] = true;
     }
   }
@@ -4709,7 +4709,7 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
   ThreadState &thread = workgroup[lane];
   bool isActiveThread = lane == activeLaneIndex;
   bool simulateStep = true;
-  RDCASSERT(thread.IsSimulationStepActive());
+  SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
   int curActiveSteps = isActiveThread ? steps : 0;
 
   while(simulateStep)
@@ -4738,7 +4738,7 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
     simulateStep = thread.CanRunAnotherStep();
     if(simulateStep)
     {
-      RDCASSERT(thread.IsSimulationStepActive());
+      SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
     }
     if(simulateStep)
       thread.SetStepQueued();
@@ -4750,35 +4750,35 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
   if(isActiveThread)
     steps = curActiveSteps;
 
-  RDCASSERT(thread.IsSimulationStepActive());
+  SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
 
   // The queueing has to be when the thread is not being simulated
   if(thread.StepNeedsGpuSampleGatherOp())
   {
-    RDCASSERT(!simulateStep);
+    SPIRV_DEBUG_RDCASSERT(!simulateStep);
     QueueGpuSampleGatherOp(lane);
     return;
   }
   if(thread.StepNeedsGpuMathOp())
   {
-    RDCASSERT(!simulateStep);
+    SPIRV_DEBUG_RDCASSERT(!simulateStep);
     QueueGpuMathOp(lane);
     return;
   }
   if(thread.StepNeedsDeviceThread())
   {
-    RDCASSERT(!simulateStep);
+    SPIRV_DEBUG_RDCASSERT(!simulateStep);
     QueueDeviceThreadStep(lane);
     return;
   }
 
   if(simulateStep)
   {
-    RDCASSERTEQUAL(stepMode, StepThreadMode::QUEUE_MULTIPLE_STEPS);
+    SPIRV_DEBUG_RDCASSERTEQUAL(stepMode, StepThreadMode::QUEUE_MULTIPLE_STEPS);
     QueueJob(lane);
     return;
   }
-  RDCASSERT(!thread.IsPendingResultPending());
+  SPIRV_DEBUG_RDCASSERT(!thread.IsPendingResultPending());
   thread.SetSimulationStepCompleted();
 }
 
@@ -4794,10 +4794,10 @@ void Debugger::InternalStepThread(uint32_t lane)
     if(retireIDs)
     {
       {
-        RDCASSERT(activeDebugState.callstack.empty());
-        RDCASSERT(activeDebugState.changes.empty());
-        RDCASSERT(activeDebugState.flags == ShaderEvents::NoEvent);
-        RDCASSERT(activeDebugState.nextInstruction == 0);
+        SPIRV_DEBUG_RDCASSERT(activeDebugState.callstack.empty());
+        SPIRV_DEBUG_RDCASSERT(activeDebugState.changes.empty());
+        SPIRV_DEBUG_RDCASSERT(activeDebugState.flags == ShaderEvents::NoEvent);
+        SPIRV_DEBUG_RDCASSERT(activeDebugState.nextInstruction == 0);
       }
       for(size_t l = 0; l < thread.live.size();)
       {
@@ -4808,7 +4808,7 @@ void Debugger::InternalStepThread(uint32_t lane)
           ShaderVariableChange change;
           DeviceOpResult opResult = GetPointerValue(thread.ids[id], change.before);
           // The variable was live and written to, it should be cached
-          RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
+          SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
           activeDebugState.changes.push_back(change);
           continue;
         }
@@ -4960,9 +4960,9 @@ void Debugger::AddDebugMessage(MessageCategory c, MessageSeverity sv, MessageSou
 void Debugger::QueueDeviceThreadStep(uint32_t lane)
 {
   ThreadState &thread = workgroup[lane];
-  RDCASSERT(thread.IsSimulationStepActive());
+  SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
   thread.SetStepQueued();
-  RDCASSERT(!queuedDeviceThreadSteps[lane]);
+  SPIRV_DEBUG_RDCASSERT(!queuedDeviceThreadSteps[lane]);
   queuedDeviceThreadSteps[lane] = true;
 }
 
@@ -4977,7 +4977,7 @@ void Debugger::ProcessQueuedDeviceThreadSteps()
       queuedDeviceThreadSteps[lane] = false;
       ThreadState &thread = workgroup[lane];
       thread.SetPendingResultUnknown();
-      RDCASSERT(thread.IsSimulationStepActive());
+      SPIRV_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
       StepThread(lane, StepThreadMode::QUEUE_MULTIPLE_STEPS);
     }
   }
