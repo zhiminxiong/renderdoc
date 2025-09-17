@@ -6187,6 +6187,49 @@ void EventBrowser::bookmarkContextMenu(QRClickToolButton *button, uint32_t EID)
   RDDialog::show(&contextMenu, QCursor::pos());
 }
 
+double EventBrowser::CalculateBookmarkTotalGPUTime()
+{
+    if(!m_Model->HasTimes())
+    {
+        return 0.0;
+    }
+
+    const rdcarray<EventBookmark> &bookmarks = m_Ctx.GetBookmarks();
+    if(bookmarks.empty())
+        return 0.0;
+
+    rdcarray<uint32_t> bookmarkEIDs;
+    for(const EventBookmark &bookmark : bookmarks)
+    {
+        bookmarkEIDs.push_back(bookmark.eventId);
+    }
+
+    double totalTime = 0.0;
+    bool completed = false;
+    
+    m_Ctx.Replay().AsyncInvoke([&](IReplayController *r) {
+        rdcarray<CounterResult> allTimes = r->FetchCounters({GPUCounter::EventGPUDuration});
+        
+        for(const CounterResult &result : allTimes)
+        {
+            if(bookmarkEIDs.contains(result.eventId))
+            {
+                totalTime += result.value.d*1000000;
+            }
+        }
+        
+        completed = true;
+    });
+
+    while(!completed)
+    {
+        QApplication::processEvents();
+        QThread::msleep(1);
+    }
+
+    return totalTime;
+}
+
 void EventBrowser::showBookmarkStatistics()
 {
   if (!m_Ctx.IsCaptureLoaded())
@@ -6198,6 +6241,36 @@ void EventBrowser::showBookmarkStatistics()
   {
     QMessageBox::information(this, tr("Bookmark statistics"), tr("no bookmards!"));
     return;
+  }
+
+  if(!m_Model->HasTimes())
+  {
+    on_timeActions_clicked();
+    QEventLoop loop;
+    QTimer timeoutTimer;
+    QTimer checkTimer;
+    
+    timeoutTimer.setSingleShot(true);
+    timeoutTimer.setInterval(5000);
+    
+    checkTimer.setInterval(100);
+    
+    connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    
+    connect(&checkTimer, &QTimer::timeout, [&]() {
+        if(m_Model->HasTimes())
+        {
+            loop.quit();
+        }
+    });
+    
+    timeoutTimer.start();
+    checkTimer.start();
+    
+    loop.exec();
+    
+    timeoutTimer.stop();
+    checkTimer.stop();
   }
 
   uint64_t totalVertices = 0;
@@ -6220,16 +6293,21 @@ void EventBrowser::showBookmarkStatistics()
     }
   }
 
+  double totalGPUTime = CalculateBookmarkTotalGPUTime();
+
   QString statisticsText = lit(
     "Bookmark statistics:\n\n"
     "bookmark count: %1\n"
     "drawcall* count: %2\n"
     "total vertices num: %3\n"
     "total primitive count: %4\n"
+    "Total GPU Time: %5 us (%6 ms)"
   ).arg(bookmarks.count())
    .arg(validDrawCalls)
    .arg(totalVertices)
-   .arg(totalTriangles);
+   .arg(totalTriangles)
+   .arg(totalGPUTime, 0, 'f', 3)
+   .arg(totalGPUTime / 1000.0, 0, 'f', 6);
 
   QDialog dialog(this);
   dialog.setWindowTitle(tr("Bookmark statistics"));

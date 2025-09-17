@@ -196,6 +196,8 @@ private slots:
   void location_keyPress(QKeyEvent *e);
 
 private:
+  double CalculateBookmarkTotalGPUTime();
+  
   void ExpandNode(QModelIndex idx);
 
   bool SelectEvent(uint32_t eventId);
