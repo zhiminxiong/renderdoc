@@ -1085,6 +1085,7 @@ void D3D11PipelineStateViewer::clearShaderState(RDLabel *shader, RDLabel *shader
                                                 RDTreeWidget *cbuffer, RDTreeWidget *sub)
 {
   shader->setText(ToQStr(ResourceId()));
+  shaderDebug->setText(QString());
   tex->clear();
   samp->clear();
   sub->clear();

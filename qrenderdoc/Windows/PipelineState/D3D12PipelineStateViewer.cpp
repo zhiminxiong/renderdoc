@@ -1040,14 +1040,13 @@ void D3D12PipelineStateViewer::setNewMeshPipeFlow()
   ui->pipeFlow->setIsolatedStage(5);    // compute shader isolated
 }
 
-void D3D12PipelineStateViewer::clearShaderState(RDLabel *shader, RDLabel *shaderDebug,
-                                                RDLabel *rootSig, RDTreeWidget *tex,
-                                                RDTreeWidget *samp, RDTreeWidget *cbuffer,
-                                                RDTreeWidget *sub)
+void D3D12PipelineStateViewer::clearShaderState(RDLabel *pipeline, RDLabel *shader, RDLabel *rootSig,
+                                                RDTreeWidget *tex, RDTreeWidget *samp,
+                                                RDTreeWidget *cbuffer, RDTreeWidget *sub)
 {
   rootSig->setText(ToQStr(ResourceId()));
-  shader->setText(ToQStr(ResourceId()));
-  shaderDebug->hide();
+  pipeline->setText(ToQStr(ResourceId()));
+  shader->hide();
   tex->clear();
   samp->clear();
   sub->clear();
