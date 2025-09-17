@@ -2120,7 +2120,7 @@ private:
         if(imgData.view == ResourceId())
         {
           // descriptor buffer, no buffer view
-          buffer = imgData.resource;
+          buffer = m_pDriver->GetResourceManager()->GetLiveID(imgData.resource);
           offset = imgData.byteOffset;
           format = MakeVkFormat(imgData.format);
           byteWidth = imgData.byteSize;
