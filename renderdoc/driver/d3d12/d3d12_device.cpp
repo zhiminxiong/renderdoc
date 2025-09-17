@@ -976,6 +976,8 @@ WrappedID3D12Device::~WrappedID3D12Device()
   SAFE_RELEASE(m_CompatDevice.m_pReal);
   SAFE_RELEASE(m_SharingContract.m_pReal);
   SAFE_RELEASE(m_pDownlevel);
+  SAFE_RELEASE(m_pDeviceTools);
+  SAFE_RELEASE(m_pDeviceTools1);
   SAFE_RELEASE(m_pDevice14);
   SAFE_RELEASE(m_pDevice13);
   SAFE_RELEASE(m_pDevice12);
