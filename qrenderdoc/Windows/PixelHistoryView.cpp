@@ -913,6 +913,14 @@ void PixelHistoryView::on_events_customContextMenuRequested(const QPoint &pos)
     debugAction.setEnabled(false);
   }
 
+  const ActionDescription *action = m_Ctx.GetAction(tag.eventId);
+  if(action == NULL ||
+     (action->flags & (ActionFlags::Drawcall | ActionFlags::MeshDispatch)) == ActionFlags::NoFlags)
+  {
+    debugAction.setToolTip(tr("This event has no shader use"));
+    debugAction.setEnabled(false);
+  }
+
   // can't check if the shader supports debugging here because we don't have its details.
 
   QObject::connect(&jumpAction, &QAction::triggered, [this, tag]() { jumpToPrimitive(tag); });
