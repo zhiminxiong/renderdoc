@@ -61,6 +61,21 @@
 #include "scintilla/include/qt/ScintillaEdit.h"
 #include "ui_EventBrowser.h"
 
+double formatDuration(double seconds, TimeUnit timeUnit)
+{
+  if(seconds < 0.0)
+    return -1.0;
+
+  if(timeUnit == TimeUnit::Milliseconds)
+    return seconds * 1000.0;
+  else if(timeUnit == TimeUnit::Microseconds)
+    return seconds * 1000000.0;
+  else if(timeUnit == TimeUnit::Nanoseconds)
+    return seconds * 1000000000.0;
+
+  return seconds;
+}
+
 struct EventBrowserPersistentStorage : public CustomPersistentStorage
 {
   EventBrowserPersistentStorage() : CustomPersistentStorage(rdcstr())
@@ -5482,7 +5497,7 @@ double EventBrowser::CalculateBookmarkTotalGPUTime()
         {
             if(bookmarkEIDs.contains(result.eventId))
             {
-                totalTime += result.value.d*1000000;
+                totalTime += result.value.d;
             }
         }
         
@@ -5569,13 +5584,14 @@ void EventBrowser::showBookmarkStatistics()
     "drawcall* count: %2\n"
     "total vertices num: %3\n"
     "total primitive count: %4\n"
-    "Total GPU Time: %5 us (%6 ms)"
+    "Total GPU Time: %5 %6 (%7 ms)"
   ).arg(bookmarks.count())
    .arg(validDrawCalls)
    .arg(totalVertices)
    .arg(totalTriangles)
-   .arg(totalGPUTime, 0, 'f', 3)
-   .arg(totalGPUTime / 1000.0, 0, 'f', 6);
+   .arg(formatDuration(totalGPUTime, m_TimeUnit), 0, 'f', 3)
+   .arg(UnitSuffix(m_TimeUnit))
+   .arg(formatDuration(totalGPUTime, TimeUnit::Milliseconds), 0, 'f', 6);
 
   QDialog dialog(this);
   dialog.setWindowTitle(tr("Bookmark statistics"));
