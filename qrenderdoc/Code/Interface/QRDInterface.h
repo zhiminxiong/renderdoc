@@ -1854,9 +1854,13 @@ struct EventBookmark
 )");
   rdcstr text;
 
+  DOCUMENT("The color associated with this bookmark - 0=default, 1=red, 2=green, 3=blue");
+  uint32_t color = 0;
+
   DOCUMENT("");
   EventBookmark() = default;
   EventBookmark(uint32_t e) : eventId(e) {}
+  EventBookmark(uint32_t e, uint32_t c) : eventId(e), color(c) {}
   bool operator==(const EventBookmark &o) const { return eventId == o.eventId; }
   bool operator!=(const EventBookmark &o) const { return eventId != o.eventId; }
   bool operator<(const EventBookmark &o) const { return eventId < o.eventId; }

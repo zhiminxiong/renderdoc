@@ -6163,11 +6163,24 @@ void EventBrowser::bookmarkContextMenu(QRClickToolButton *button, uint32_t EID)
   QAction renameBookmark(tr("&Rename"), this);
   QAction deleteBookmark(tr("&Delete"), this);
 
+  QMenu *colorMenu = contextMenu.addMenu(tr("&Color"));
+  
+  QAction *defaultColor = colorMenu->addAction(tr("&Default"));
+  QAction *redColor = colorMenu->addAction(tr("&Red"));
+  QAction *greenColor = colorMenu->addAction(tr("&Green"));
+  QAction *blueColor = colorMenu->addAction(tr("&Blue"));
+
   renameBookmark.setIcon(Icons::page_white_edit());
   deleteBookmark.setIcon(Icons::del());
 
   contextMenu.addAction(&renameBookmark);
   contextMenu.addAction(&deleteBookmark);
+
+  // color
+  QObject::connect(defaultColor, &QAction::triggered, [this, EID]() { changeBookmarkColor(EID, 0); });
+  QObject::connect(redColor, &QAction::triggered, [this, EID]() { changeBookmarkColor(EID, 1); });
+  QObject::connect(greenColor, &QAction::triggered, [this, EID]() { changeBookmarkColor(EID, 2); });
+  QObject::connect(blueColor, &QAction::triggered, [this, EID]() { changeBookmarkColor(EID, 3); });
 
   QObject::connect(&deleteBookmark, &QAction::triggered, [this, EID]() {
     m_Ctx.RemoveBookmark(EID);
@@ -6253,6 +6266,99 @@ double EventBrowser::CalculateBookmarkTotalGPUTime()
     }
 
     return totalTime;
+}
+
+QString EventBrowser::getBookmarkColorName(uint32_t color)
+{
+    switch(color)
+    {
+        case 0: return tr("Default");
+        case 1: return tr("Red");
+        case 2: return tr("Green");
+        case 3: return tr("Blue");
+        default: return tr("Default");
+    }
+}
+
+QColor EventBrowser::getBookmarkQColor(uint32_t color)
+{
+    switch(color)
+    {
+        case 0: return QColor();
+        case 1: return QColor(255, 100, 100);
+        case 2: return QColor(100, 255, 100);
+        case 3: return QColor(100, 100, 255);
+        default: return QColor();
+    }
+}
+
+void EventBrowser::updateBookmarkButtonColor(QRClickToolButton *button, uint32_t color)
+{
+    QColor bgColor = getBookmarkQColor(color);
+
+    if(bgColor.isValid() && color != 0)
+    {
+        QColor darkerColor = bgColor.darker(120);
+        QColor hoverColor = bgColor.lighter(110);
+
+        QString style = lit("QToolButton { "
+                               "background-color: %1 !important; "
+                               "border: 1px solid %2; "
+                               "padding: 1px 1px; "
+                               "margin: 0px; "
+                               "min-width: 16px; "
+                               "min-height: 16px; "
+                               "} "
+                               "QToolButton:hover { "
+                               "background-color: %3 !important; "
+                               "border: 1px solid %2; "
+                               "} "
+                               "QToolButton:pressed { "
+                               "background-color: %1 !important; "
+                               "border: 1px solid %2; "
+                               "} "
+                               "QToolButton:checked { "
+                               "background-color: %1 !important; "
+                               "border: 1px solid %2; "
+                               "} "
+                               "QToolButton:checked:hover { "
+                               "background-color: %3 !important; "
+                               "border: 1px solid %2; "
+                               "} "
+                               "QToolButton:checked:pressed { "
+                               "background-color: %1 !important; "
+                               "border: 1px solid %2; "
+                               "}").arg(bgColor.name())
+                                .arg(darkerColor.name())
+                                .arg(hoverColor.name());
+
+        button->setStyleSheet(style);
+    }
+    else
+    {
+        button->setStyleSheet(tr(""));
+    }
+    
+    button->setMinimumWidth(button->sizeHint().width());
+    button->adjustSize();
+}
+
+void EventBrowser::changeBookmarkColor(uint32_t EID, uint32_t color)
+{
+    rdcarray<EventBookmark> bookmarks = m_Ctx.GetBookmarks();
+    for(EventBookmark &bookmark : bookmarks)
+    {
+        if(bookmark.eventId == EID)
+        {
+            bookmark.color = color;
+            break;
+        }
+    }
+    
+    if(m_BookmarkButtons.contains(EID))
+    {
+        updateBookmarkButtonColor(m_BookmarkButtons[EID], color);
+    }
 }
 
 void EventBrowser::showBookmarkStatistics()
