@@ -3254,7 +3254,8 @@ void Program::MakeRDDisassemblyString(const DXBC::Reflection *reflection)
                   m_Disassembly += " " + cbVar.name;
                   if(cbType.elements > 1)
                     m_Disassembly += "[" + ToStr(cbType.elements) + "]";
-                  m_Disassembly += ";";
+                  m_Disassembly += ": packoffset(" + ToStr(cbVar.offset) + ")";
+                  m_Disassembly += "; ";
                   DisassemblyAddNewLine();
                 }
                 m_Disassembly += "};";
