@@ -294,12 +294,34 @@ struct EventItemModel : public QAbstractItemModel
       RefreshIcon(m_CurrentEID);
     }
 
-    if(m_Ctx.GetBookmarks() != m_Bookmarks)
+    rdcarray<EventBookmark> currentBookmarks = m_Ctx.GetBookmarks();
+    bool bookmarksChanged = false;
+
+    if(currentBookmarks.size() != m_LastBookmarks.size())
+    {
+      bookmarksChanged = true;
+    }
+    else
+    {
+      for(int i = 0; i < currentBookmarks.size(); i++)
+      {
+        if(currentBookmarks[i].eventId != m_LastBookmarks[i].eventId ||
+          currentBookmarks[i].text != m_LastBookmarks[i].text ||
+          currentBookmarks[i].color != m_LastBookmarks[i].color)
+        {
+          bookmarksChanged = true;
+          break;
+        }
+      }
+    }
+
+    if(bookmarksChanged)
     {
       rdcarray<QModelIndex> indices;
       indices.swap(m_BookmarkIndices);
 
-      m_Bookmarks = m_Ctx.GetBookmarks();
+      m_Bookmarks = currentBookmarks;
+      m_LastBookmarks = currentBookmarks;
 
       for(const EventBookmark &b : m_Bookmarks)
         m_BookmarkIndices.push_back(GetIndexForEID(b.eventId));
@@ -920,6 +942,7 @@ struct EventItemModel : public QAbstractItemModel
 
 private:
   ICaptureContext &m_Ctx;
+  rdcarray<EventBookmark> m_LastBookmarks;
 
   QAbstractItemView *m_View;
 
@@ -5380,6 +5403,7 @@ void EventBrowser::repopulateBookmarks()
       m_BookmarkButtons[EID] = but;
 
       highlightBookmarks();
+      updateBookmarkButtonColor(but, mark.color);
 
       m_BookmarkStripLayout->removeItem(m_BookmarkSpacer);
       m_BookmarkStripLayout->addWidget(but);
@@ -5618,7 +5642,12 @@ void EventBrowser::changeBookmarkColor(uint32_t EID, uint32_t color)
     {
         if(bookmark.eventId == EID)
         {
-            bookmark.color = color;
+            if(bookmark.color != color)
+            {
+                bookmark.color = color;
+                m_Ctx.SetBookmark(bookmark);
+            }
+            
             break;
         }
     }
