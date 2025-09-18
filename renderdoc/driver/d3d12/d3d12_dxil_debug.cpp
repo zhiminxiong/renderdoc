@@ -238,14 +238,14 @@ static void FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset
     {
       outvars[outIdx + reg].rows = 1;
       outvars[outIdx + reg].type = v.type;
-      outvars[outIdx + reg].columns = v.columns;
+      outvars[outIdx + reg].columns = v.columns + (uint8_t)outComp;
       outvars[outIdx + reg].flags = v.flags;
     }
 
     if(v.RowMajor())
     {
       for(size_t ri = 0; ri < v.rows; ri++)
-        memcpy(&outvars[outIdx + ri].value.u32v[0], &v.value.u32v[ri * v.columns],
+        memcpy(&outvars[outIdx + ri].value.u32v[outComp], &v.value.u32v[ri * v.columns],
                sizeof(uint32_t) * v.columns);
     }
     else
