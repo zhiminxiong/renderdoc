@@ -73,10 +73,12 @@ class D3D12_CBuffer_Zoo(rdtest.TestCase):
 
         refl: rd.ShaderReflection = pipe.GetShaderReflection(stage)
 
-        # Make sure we have three constant buffers - b7 normal, b1 root constants, and space9999999:b0
+        # Make sure we have five constant buffers - b7 normal, b1 root constants, b2, b3 and space9999999:b0
         binds = [
             (0, 7),
             (0, 1),
+            (0, 2),
+            (0, 3),
             (999999999, 0),
         ]
 
@@ -106,17 +108,46 @@ class D3D12_CBuffer_Zoo(rdtest.TestCase):
                                                        pipe.GetShaderEntryPoint(stage), 1,
                                                        cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
 
-        cbuf = pipe.GetConstantBlock(stage, 2, 0).descriptor
+        cbuf = pipe.GetConstantBlock(stage, 4, 0).descriptor
 
         huge_check = rdtest.ConstantBufferChecker(
+            self.controller.GetCBufferVariableContents(pipe.GetGraphicsPipelineObject(),
+                                                       pipe.GetShader(stage), stage,
+                                                       pipe.GetShaderEntryPoint(stage), 4,
+                                                       cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
+
+        cbuf = pipe.GetConstantBlock(stage, 2, 0).descriptor
+
+        packed_check = rdtest.ConstantBufferChecker(
             self.controller.GetCBufferVariableContents(pipe.GetGraphicsPipelineObject(),
                                                        pipe.GetShader(stage), stage,
                                                        pipe.GetShaderEntryPoint(stage), 2,
                                                        cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
 
-        self.check_cbuffers(var_check, root_check, huge_check)
-
+        self.check_cbuffers(var_check, root_check, huge_check, packed_check)
         rdtest.log.success("CBuffer variables are as expected")
+
+        cbuf = pipe.GetConstantBlock(stage, 3, 0).descriptor
+        arrays_check = rdtest.ConstantBufferChecker(
+            self.controller.GetCBufferVariableContents(pipe.GetGraphicsPipelineObject(),
+                                                       pipe.GetShader(stage), stage,
+                                                       pipe.GetShaderEntryPoint(stage), 3,
+                                                       cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
+        arrays_check.check('array_consts').rows(0).cols(0).structSize(1).members({
+            'a' : lambda y : y.rows(1).cols(4).value([0.0, 1.0, 0.5, 0.5])})
+        arrays_check.done()
+
+        cbuf = pipe.GetConstantBlock(stage, 3, 1).descriptor
+        arrays_check = rdtest.ConstantBufferChecker(
+            self.controller.GetCBufferVariableContents(pipe.GetGraphicsPipelineObject(),
+                                                       pipe.GetShader(stage), stage,
+                                                       pipe.GetShaderEntryPoint(stage), 3,
+                                                       cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
+        arrays_check.check('array_consts').rows(0).cols(0).structSize(1).members({
+            'a' : lambda y : y.rows(1).cols(4).value([1.0, 2.0, 0.5, 0.5])})
+        arrays_check.done()
+
+        rdtest.log.success("Array cbuffer variables are as expected")
 
         if self.controller.GetAPIProperties().shaderDebugging and pipe.GetShaderReflection(
                 rd.ShaderStage.Pixel).debugInfo.debuggable:
@@ -143,18 +174,28 @@ class D3D12_CBuffer_Zoo(rdtest.TestCase):
 
             cbufferVars = self.combine_source_vars(cbufferVars)
 
-            self.check(len(cbufferVars) == 3)
+            self.check(len(cbufferVars) == 5)
             self.check(cbufferVars[0].name == 'consts')
             self.check(cbufferVars[1].name == 'rootconsts')
-            self.check(cbufferVars[2].name == 'hugespace')
+            self.check(cbufferVars[2].name == 'packed_consts')
+            self.check(cbufferVars[3].name == 'array_consts')
+            self.check(cbufferVars[4].name == 'hugespace')
 
             var_check = rdtest.ConstantBufferChecker(cbufferVars[0].members)
             root_check = rdtest.ConstantBufferChecker(cbufferVars[1].members)
-            huge_check = rdtest.ConstantBufferChecker(cbufferVars[2].members)
+            packed_check = rdtest.ConstantBufferChecker(cbufferVars[2].members)
+            arrays_check = rdtest.ConstantBufferChecker(cbufferVars[3].members)
+            huge_check = rdtest.ConstantBufferChecker(cbufferVars[4].members)
 
-            self.check_cbuffers(var_check, root_check, huge_check)
-
+            self.check_cbuffers(var_check, root_check, huge_check, packed_check)
             rdtest.log.success("Debugged CBuffer variables are as expected")
+
+            arrays_check.check('[0]').rows(0).cols(0).members({
+                'a' : lambda y : y.rows(1).cols(4).value([0.0, 1.0, 0.5, 0.5])})
+            arrays_check.check('[1]').rows(0).cols(0).members({
+                'a' : lambda y : y.rows(1).cols(4).value([1.0, 2.0, 0.5, 0.5])})
+            arrays_check.done()
+            rdtest.log.success("Array cbuffer variables are as expected")
 
             cycles, variables = self.process_trace(trace)
 
@@ -162,20 +203,20 @@ class D3D12_CBuffer_Zoo(rdtest.TestCase):
 
             debugged = self.evaluate_source_var(output, variables)
 
-            if not rdtest.util.value_compare(debugged.value.f32v[0:4], [536.1, 537.0, 538.0, 539.0]):
+            if not rdtest.util.value_compare(debugged.value.f32v[0:4], [543.1, 546.0, 545.0, 546.0]):
                 raise rdtest.TestFailureException(
                     "Debugged output {} did not match expected {}".format(
-                        debugged.value.f32v[0:4], [536.1, 537.0, 538.0, 539.0]))
+                        debugged.value.f32v[0:4], [543.1, 546.0, 545.0, 546.0]))
 
             rdtest.log.success("Debugged output matched as expected")
 
             self.controller.FreeTrace(trace)
 
-        self.check_pixel_value(pipe.GetOutputTargets()[0].resource, 0.5, 0.5, [536.1, 537.0, 538.0, 539.0])
+        self.check_pixel_value(pipe.GetOutputTargets()[0].resource, 0.5, 0.5, [543.1, 546.0, 545.0, 546.0])
 
         rdtest.log.success("Picked value is as expected")
 
-    def check_cbuffers(self, var_check, root_check, huge_check):
+    def check_cbuffers(self, var_check, root_check, huge_check, packed_check):
         # For more detailed reference for the below checks, see the commented definition of the cbuffer
         # in the shader source code in the demo itself
 
@@ -565,5 +606,13 @@ class D3D12_CBuffer_Zoo(rdtest.TestCase):
 
         # float4 huge_val;
         huge_check.check('huge_val').rows(1).cols(4).value([64.0, 65.0, 66.0, 67.0])
+        huge_check.done()
 
         rdtest.log.success("Huge space variables are as expected")
+
+        packed_check.check('col1z').rows(1).cols(1).value([6.0])
+        packed_check.check('col2w').rows(1).cols(1).value([11.0])
+        packed_check.done()
+
+        rdtest.log.success("Packed cbuffer variables are as expected")
+

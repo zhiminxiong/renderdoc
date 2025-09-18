@@ -46,6 +46,12 @@ struct consts
   float negoneVal : NEGONE;
 };
 
+cbuffer packed_consts : register(b1)
+{
+  uint col1z : packoffset(c1.z);
+  uint col2w : packoffset(c2.w);
+};
+
 struct v2f
 {
   float4 pos : SV_POSITION;
@@ -816,6 +822,10 @@ float4 main(v2f IN) : SV_Target0
 
     return structrwtest[z2+5].b;
   }
+  if(IN.tri == 98)
+  {
+    return float4(col1z, col2w, 1.0, 2.0);
+  }
 
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }
@@ -1138,6 +1148,13 @@ float4 main(v2f IN, uint samp : SV_SampleIndex) : SV_Target0
     ctx->PSSetShaderResources(0, ARRAY_COUNT(srvs), srvs);
 
     ctx->PSSetShaderResources(102, 1, &rgbsrv.GetInterfacePtr());
+
+    float packed_consts[12];
+    for(int i = 0; i < 12; i++)
+      packed_consts[i] = (float)i;
+
+    ID3D11BufferPtr cb = MakeBuffer().Constant().Data(packed_consts);
+    ctx->PSSetConstantBuffers(1, 1, &cb.GetInterfacePtr());
 
     // Create resources for MSAA draw
     ID3DBlobPtr vsmsaablob = Compile(D3DDefaultVertex, "main", "vs_5_0");

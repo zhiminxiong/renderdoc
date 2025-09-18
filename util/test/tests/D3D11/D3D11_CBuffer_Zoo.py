@@ -23,7 +23,12 @@ class D3D11_CBuffer_Zoo(rdtest.TestCase):
                                                        pipe.GetShaderEntryPoint(stage), 0,
                                                        cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
 
-        self.check_cbuffer(var_check)
+        packed_check = rdtest.ConstantBufferChecker(
+            self.controller.GetCBufferVariableContents(pipe.GetGraphicsPipelineObject(),
+                                                       pipe.GetShader(stage), stage,
+                                                       pipe.GetShaderEntryPoint(stage), 1,
+                                                       cbuf.resource, cbuf.byteOffset, cbuf.byteSize))
+        self.check_cbuffer(var_check, packed_check)
 
         rdtest.log.success("CBuffer variables are as expected")
 
@@ -52,12 +57,12 @@ class D3D11_CBuffer_Zoo(rdtest.TestCase):
 
             cbufferVars = self.combine_source_vars(cbufferVars)
 
-            self.check(len(cbufferVars) == 1)
+            self.check(len(cbufferVars) == 2)
             self.check(cbufferVars[0].name == 'consts')
-
+            self.check(cbufferVars[1].name == 'packed_consts')
             var_check = rdtest.ConstantBufferChecker(cbufferVars[0].members)
-
-            self.check_cbuffer(var_check)
+            packed_check = rdtest.ConstantBufferChecker(cbufferVars[1].members)
+            self.check_cbuffer(var_check, packed_check)
 
             rdtest.log.success("Debugged CBuffer variables are as expected")
 
@@ -67,20 +72,20 @@ class D3D11_CBuffer_Zoo(rdtest.TestCase):
 
             debugged = self.evaluate_source_var(output, variables)
 
-            if not rdtest.util.value_compare(debugged.value.f32v[0:4], [536.1, 537.0, 538.0, 539.0]):
+            if not rdtest.util.value_compare(debugged.value.f32v[0:4], [542.1, 543.0, 544.0, 545.0]):
                 raise rdtest.TestFailureException(
                     "Debugged output {} did not match expected {}".format(
-                        debugged.value.f32v[0:4], [536.1, 537.0, 538.0, 539.0]))
+                        debugged.value.f32v[0:4], [542.1, 543.0, 544.0, 545.0]))
 
             rdtest.log.success("Debugged output matched as expected")
 
             self.controller.FreeTrace(trace)
 
-        self.check_pixel_value(pipe.GetOutputTargets()[0].resource, 0.5, 0.5, [536.1, 537.0, 538.0, 539.0])
+        self.check_pixel_value(pipe.GetOutputTargets()[0].resource, 0.5, 0.5, [542.1, 543.0, 544.0, 545.0])
 
         rdtest.log.success("Picked value is as expected")
 
-    def check_cbuffer(self, var_check):
+    def check_cbuffer(self, var_check, packed_check):
         # For more detailed reference for the below checks, see the commented definition of the cbuffer
         # in the shader source code in the demo itself
 
@@ -441,3 +446,7 @@ class D3D11_CBuffer_Zoo(rdtest.TestCase):
         var_check.check('test').rows(1).cols(4).value([536.0, 537.0, 538.0, 539.0])
 
         var_check.done()
+
+        packed_check.check('col1z').rows(1).cols(1).value([6.0])
+        packed_check.check('col2w').rows(1).cols(1).value([11.0])
+        packed_check.done()

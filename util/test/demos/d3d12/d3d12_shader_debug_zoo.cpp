@@ -1104,6 +1104,12 @@ cbuffer consts : register(b0)
   double doubleX;
 };
 
+cbuffer packed_consts : register(b1)
+{
+  uint col1z : packoffset(c1.z);
+  uint col2w : packoffset(c2.w);
+};
+
 RWStructuredBuffer<uint4> bufIn : register(u0);
 RWStructuredBuffer<uint4> bufOut : register(u1);
 
@@ -1151,6 +1157,12 @@ void main(int3 inTestIndex : SV_GroupID)
     testResult.y = testIndex;
     testResult.z = gsmStruct[gsmInt * 4].a.y;
     testResult.w = gsmInt2DArray[ZERO][idx] + gsmInt2DArray[ONE][idx];
+  }
+  else if (testIndex == 2)
+  {
+    testResult = bufOut[0];
+    testResult.x += bufIn[0].x * (uint)col1z;
+    testResult.y += bufIn[0].y * (uint)col2w;
   }
   else
   {
@@ -1890,6 +1902,7 @@ void main(int3 inTestIndex : SV_GroupID)
         uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0),
         uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 1),
         constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0, 4),
+        constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 1, 12),
         tableParam(D3D12_SHADER_VISIBILITY_ALL, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 2, 1, 3),
     });
 
@@ -2123,7 +2136,9 @@ void main(int3 inTestIndex : SV_GroupID)
         cmd->SetComputeRoot32BitConstant(2, 6, 1);
         cmd->SetComputeRoot32BitConstant(2, 7, 2);
         cmd->SetComputeRoot32BitConstant(2, 8, 3);
-        cmd->SetComputeRootDescriptorTable(3, m_CBVUAVSRV->GetGPUDescriptorHandleForHeapStart());
+        cmd->SetComputeRoot32BitConstant(3, 10, 4 + 2);    // col1z
+        cmd->SetComputeRoot32BitConstant(3, 11, 8 + 3);    // col2w
+        cmd->SetComputeRootDescriptorTable(4, m_CBVUAVSRV->GetGPUDescriptorHandleForHeapStart());
 
         cmd->SetPipelineState(computePSOs[i]);
         setMarker(cmd, computeSMs[i]);
