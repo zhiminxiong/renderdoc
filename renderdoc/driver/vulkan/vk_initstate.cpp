@@ -1786,8 +1786,10 @@ void WrappedVulkan::Create_InitialState(ResourceId id, WrappedVkRes *live, bool)
   }
   else if(type == eResDeviceMemory)
   {
+    VkBuffer dstBuf = m_CreationInfo.m_Memory[id].wholeMemBuf;
     // need to ensure there are initial contents to apply though we don't create any memory
-    GetResourceManager()->SetInitialContents(id, VkInitialContents(type, MemoryAllocation()));
+    if(dstBuf != VK_NULL_HANDLE)
+      GetResourceManager()->SetInitialContents(id, VkInitialContents(type, MemoryAllocation()));
   }
   else if(type == eResDeviceMemory || type == eResBuffer || type == eResAccelerationStructureKHR)
   {
