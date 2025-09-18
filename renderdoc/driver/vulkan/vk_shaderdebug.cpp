@@ -759,12 +759,23 @@ public:
         m_pDriver->GetResourceManager()->GetLiveHandle<VkImageView>(imageDescriptor.view);
     VkImageLayout layout = convert((DescriptorSlotImageLayout)imageDescriptor.byteOffset);
 
-    // promote view to Array view
+    // Ignore NULL view
+    if(!buffer && (view == VK_NULL_HANDLE))
+      return false;
 
-    VulkanCreationInfo::ImageView defaultViewProps;
-    VulkanCreationInfo::Image defaultImageProps;
+    // promote view to Array view
+    VulkanCreationInfo::ImageView defaultViewProps = {};
+    VulkanCreationInfo::Image defaultImageProps = {};
+    VulkanCreationInfo::Buffer defaultBufferProps = {};
+    VulkanCreationInfo::Sampler defaultSamplerProps = {};
+
     const VulkanCreationInfo::ImageView &viewProps =
         buffer ? defaultViewProps : m_Creation.GetImageViewInfo(GetResID(view));
+
+    // Ignore NULL image
+    if(!buffer && (viewProps.image == ResourceId()))
+      return false;
+
     const VulkanCreationInfo::Image &imageProps =
         buffer ? defaultImageProps : m_Creation.GetImageInfo(viewProps.image);
 
@@ -890,7 +901,9 @@ public:
             if(size == VK_WHOLE_SIZE)
             {
               const VulkanCreationInfo::Buffer &bufProps =
-                  m_Creation.GetBufferInfo(bufViewProps.buffer);
+                  bufViewProps.buffer == ResourceId()
+                      ? defaultBufferProps
+                      : m_Creation.GetBufferInfo(bufViewProps.buffer);
               size = bufProps.size - bufViewProps.offset;
             }
           }
@@ -957,7 +970,9 @@ public:
         auto insertIt = m_BiasSamplers.insert(std::make_pair(key, VkSampler()));
         if(insertIt.second)
         {
-          const VulkanCreationInfo::Sampler &samplerProps = m_Creation.GetSamplerInfo(key.first);
+          const VulkanCreationInfo::Sampler &samplerProps =
+              (sampler == VK_NULL_HANDLE) ? defaultSamplerProps
+                                          : m_Creation.GetSamplerInfo(key.first);
 
           VkSamplerCreateInfo sampInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
           sampInfo.magFilter = samplerProps.magFilter;
@@ -2135,7 +2150,9 @@ private:
           byteWidth = viewProps.size;
         }
 
-        const VulkanCreationInfo::Buffer &bufferProps = m_Creation.GetBufferInfo(buffer);
+        VulkanCreationInfo::Buffer defaultBufferProps = {};
+        const VulkanCreationInfo::Buffer &bufferProps =
+            (buffer == ResourceId()) ? defaultBufferProps : m_Creation.GetBufferInfo(buffer);
 
         // width in bytes, either from the view or from the remainder of the buffer
         if(byteWidth == VK_WHOLE_SIZE)
@@ -2159,55 +2176,58 @@ private:
       {
         const VulkanCreationInfo::ImageView &viewProps =
             m_Creation.GetImageViewInfo(m_pDriver->GetResourceManager()->GetLiveID(imgData.view));
-        const VulkanCreationInfo::Image &imageProps = m_Creation.GetImageInfo(viewProps.image);
-
-        uint32_t mip = viewProps.range.baseMipLevel;
-
-        data.width = RDCMAX(1U, imageProps.extent.width >> mip);
-        data.height = RDCMAX(1U, imageProps.extent.height >> mip);
-        if(imageProps.type == VK_IMAGE_TYPE_3D)
+        if(viewProps.image != ResourceId())
         {
-          data.depth = RDCMAX(1U, imageProps.extent.depth >> mip);
-        }
-        else
-        {
-          data.depth = viewProps.range.layerCount;
-          if(data.depth == VK_REMAINING_ARRAY_LAYERS)
-            data.depth = imageProps.arrayLayers - viewProps.range.baseArrayLayer;
-        }
+          const VulkanCreationInfo::Image &imageProps = m_Creation.GetImageInfo(viewProps.image);
 
-        ResourceFormat fmt = MakeResourceFormat(imageProps.format);
+          uint32_t mip = viewProps.range.baseMipLevel;
 
-        data.fmt = MakeResourceFormat(imageProps.format);
-        data.texelSize = (uint32_t)GetByteSize(1, 1, 1, imageProps.format, 0);
-        data.rowPitch = (uint32_t)GetByteSize(data.width, 1, 1, imageProps.format, 0);
-        data.slicePitch = GetByteSize(data.width, data.height, 1, imageProps.format, 0);
-        data.samplePitch = GetByteSize(data.width, data.height, data.depth, imageProps.format, 0);
-
-        const uint32_t numSlices = imageProps.type == VK_IMAGE_TYPE_3D ? 1 : data.depth;
-        const uint32_t numSamples = (uint32_t)imageProps.samples;
-
-        data.bytes.reserve(size_t(data.samplePitch * numSamples));
-
-        // defaults are fine - no interpretation. Maybe we could use the view's typecast?
-        const GetTextureDataParams params = GetTextureDataParams();
-
-        for(uint32_t sample = 0; sample < numSamples; sample++)
-        {
-          for(uint32_t slice = 0; slice < numSlices; slice++)
+          data.width = RDCMAX(1U, imageProps.extent.width >> mip);
+          data.height = RDCMAX(1U, imageProps.extent.height >> mip);
+          if(imageProps.type == VK_IMAGE_TYPE_3D)
           {
-            bytebuf subBytes;
-            m_pDriver->GetReplay()->GetTextureData(viewProps.image, Subresource(mip, slice, sample),
-                                                   params, subBytes);
+            data.depth = RDCMAX(1U, imageProps.extent.depth >> mip);
+          }
+          else
+          {
+            data.depth = viewProps.range.layerCount;
+            if(data.depth == VK_REMAINING_ARRAY_LAYERS)
+              data.depth = imageProps.arrayLayers - viewProps.range.baseArrayLayer;
+          }
 
-            // fast path, swap into output if there's only one slice and one sample (common case)
-            if(numSlices == 1 && numSamples == 1)
+          ResourceFormat fmt = MakeResourceFormat(imageProps.format);
+
+          data.fmt = MakeResourceFormat(imageProps.format);
+          data.texelSize = (uint32_t)GetByteSize(1, 1, 1, imageProps.format, 0);
+          data.rowPitch = (uint32_t)GetByteSize(data.width, 1, 1, imageProps.format, 0);
+          data.slicePitch = GetByteSize(data.width, data.height, 1, imageProps.format, 0);
+          data.samplePitch = GetByteSize(data.width, data.height, data.depth, imageProps.format, 0);
+
+          const uint32_t numSlices = imageProps.type == VK_IMAGE_TYPE_3D ? 1 : data.depth;
+          const uint32_t numSamples = (uint32_t)imageProps.samples;
+
+          data.bytes.reserve(size_t(data.samplePitch * numSamples));
+
+          // defaults are fine - no interpretation. Maybe we could use the view's typecast?
+          const GetTextureDataParams params = GetTextureDataParams();
+
+          for(uint32_t sample = 0; sample < numSamples; sample++)
+          {
+            for(uint32_t slice = 0; slice < numSlices; slice++)
             {
-              subBytes.swap(data.bytes);
-            }
-            else
-            {
-              data.bytes.append(subBytes);
+              bytebuf subBytes;
+              m_pDriver->GetReplay()->GetTextureData(
+                  viewProps.image, Subresource(mip, slice, sample), params, subBytes);
+
+              // fast path, swap into output if there's only one slice and one sample (common case)
+              if(numSlices == 1 && numSamples == 1)
+              {
+                subBytes.swap(data.bytes);
+              }
+              else
+              {
+                data.bytes.append(subBytes);
+              }
             }
           }
         }
