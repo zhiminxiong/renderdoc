@@ -1781,7 +1781,7 @@ void CaptureContext::SetBookmark(const EventBookmark &mark)
   if(index >= 0)
   {
     // ignore no-op bookmarks
-    if(m_Bookmarks[index].text == mark.text)
+    if(m_Bookmarks[index].text == mark.text && m_Bookmarks[index].color == mark.color)
       return;
 
     m_Bookmarks[index] = mark;
@@ -1905,6 +1905,7 @@ bool CaptureContext::SaveBookmarks()
     QVariantMap variantmark;
     variantmark[lit("eventId")] = mark.eventId;
     variantmark[lit("text")] = mark.text;
+    variantmark[lit("color")] = mark.color;
 
     bookmarks.push_back(variantmark);
   }
@@ -1936,6 +1937,7 @@ void CaptureContext::LoadBookmarks(const QString &data)
       EventBookmark mark;
       mark.eventId = variantmark[lit("eventId")].toUInt();
       mark.text = variantmark[lit("text")].toString();
+      mark.color = variantmark[lit("color")].toUInt();
 
       if(mark.eventId != 0)
         m_Bookmarks.push_back(mark);
