@@ -6213,33 +6213,43 @@ double EventBrowser::CalculateBookmarkTotalGPUTime()
     if(bookmarks.empty())
         return 0.0;
 
-    rdcarray<uint32_t> bookmarkEIDs;
+    // rdcarray<uint32_t> bookmarkEIDs;
+    // for(const EventBookmark &bookmark : bookmarks)
+    // {
+    //     bookmarkEIDs.push_back(bookmark.eventId);
+    // }
+
+    // double totalTime = 0.0;
+    // bool completed = false;
+    
+    // m_Ctx.Replay().AsyncInvoke([&](IReplayController *r) {
+    //     rdcarray<CounterResult> allTimes = r->FetchCounters({GPUCounter::EventGPUDuration});
+        
+    //     for(const CounterResult &result : allTimes)
+    //     {
+    //         if(bookmarkEIDs.contains(result.eventId))
+    //         {
+    //             totalTime += result.value.d;
+    //         }
+    //     }
+        
+    //     completed = true;
+    // });
+
+    // while(!completed)
+    // {
+    //     QApplication::processEvents();
+    //     QThread::msleep(1);
+    // }
+    double totalTime = 0.0;
+    
     for(const EventBookmark &bookmark : bookmarks)
     {
-        bookmarkEIDs.push_back(bookmark.eventId);
-    }
-
-    double totalTime = 0.0;
-    bool completed = false;
-    
-    m_Ctx.Replay().AsyncInvoke([&](IReplayController *r) {
-        rdcarray<CounterResult> allTimes = r->FetchCounters({GPUCounter::EventGPUDuration});
-        
-        for(const CounterResult &result : allTimes)
-        {
-            if(bookmarkEIDs.contains(result.eventId))
-            {
-                totalTime += result.value.d;
-            }
-        }
-        
-        completed = true;
-    });
-
-    while(!completed)
-    {
-        QApplication::processEvents();
-        QThread::msleep(1);
+      double timeValue = m_Model->GetSecondsDurationForEID(bookmark.eventId);
+      if(timeValue > 0.0)
+      {
+        totalTime += timeValue;
+      }
     }
 
     return totalTime;
