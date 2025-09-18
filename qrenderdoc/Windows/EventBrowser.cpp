@@ -3840,7 +3840,8 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->bookmarkStrip->hide();
 
   m_BookmarkStripLayout = new FlowLayout(ui->bookmarkStrip, 0, 3, 3);
-  m_BookmarkSpacer = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
+  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);    // 底下 8px 间隔
+  m_BookmarkSpacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
   ui->bookmarkStrip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
   m_BookmarkStripLayout->addWidget(ui->bookmarkStripHeader);
@@ -5676,6 +5677,16 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
                                     {{"eventId", m_Ctx.CurEvent()}});
 
   RDDialog::show(&contextMenu, ui->events->viewport()->mapToGlobal(pos));
+}
+
+void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
+{
+  if(idx.isValid())
+  {
+    EventBookmark mark(GetSelectedEID(idx));
+    mark.color = color; // 1=Red, 2=Green, 3=Blue（你项目的color含义）
+    m_Ctx.SetBookmark(mark);
+  }
 }
 
 static QString GetBookmarkDisplayText(const EventBookmark &bookmark)
