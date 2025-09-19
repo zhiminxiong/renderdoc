@@ -731,10 +731,19 @@ void ReplayOutput::DisplayContext()
                                           RDCMAX(1U, m_TextureDim.second >> disp.subresource.mip)};
 
     x = int((float(x) / float(m_TextureDim.first) + 1e-6f) * mipDim.first);
-    x = int((float(x) / float(mipDim.first) + 1e-6f) * m_TextureDim.first);
-
     y = int((float(y) / float(m_TextureDim.second) + 1e-6f) * mipDim.second);
-    y = int((float(y) / float(mipDim.second) + 1e-6f) * m_TextureDim.second);
+
+    float fx = float(x) / mipDim.first;
+    float fy = float(y) / mipDim.second;
+
+    float mipAdjustFactor =
+        RDCMAX(float(mipDim.first) / float(m_TextureDim.first) * float(1 << disp.subresource.mip),
+               float(mipDim.second) / float(m_TextureDim.second) * float(1 << disp.subresource.mip));
+
+    disp.scale *= mipAdjustFactor;
+
+    disp.xOffset = -(float)(fx * m_TextureDim.first) * disp.scale;
+    disp.yOffset = -(float)(fy * m_TextureDim.second) * disp.scale;
   }
   else
   {
@@ -743,10 +752,10 @@ void ReplayOutput::DisplayContext()
 
     y >>= disp.subresource.mip;
     y <<= disp.subresource.mip;
-  }
 
-  disp.xOffset = -(float)x * disp.scale;
-  disp.yOffset = -(float)y * disp.scale;
+    disp.xOffset = -(float)x * disp.scale;
+    disp.yOffset = -(float)y * disp.scale;
+  }
 
   disp.xOffset += w / 2.0f;
   disp.yOffset += h / 2.0f;
