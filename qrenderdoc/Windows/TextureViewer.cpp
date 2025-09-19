@@ -2754,26 +2754,27 @@ void TextureViewer::render_keyPress(QKeyEvent *e)
 
   bool nudged = false;
 
-  int increment = 1 << (int)m_TexDisplay.subresource.mip;
+  uint32_t mipx = MipCoordFromBase(m_PickedPoint.x(), texptr->width);
+  uint32_t mipy = MipCoordFromBase(m_PickedPoint.y(), texptr->height);
 
   if(e->key() == Qt::Key_Up && m_PickedPoint.y() > 0)
   {
-    m_PickedPoint -= QPoint(0, increment);
+    m_PickedPoint.setY(BaseCoordFromMip(mipy - 1, texptr->height));
     nudged = true;
   }
   else if(e->key() == Qt::Key_Down && m_PickedPoint.y() < (int)texptr->height - 1)
   {
-    m_PickedPoint += QPoint(0, increment);
+    m_PickedPoint.setY(BaseCoordFromMip(mipy + 1, texptr->height));
     nudged = true;
   }
   else if(e->key() == Qt::Key_Left && m_PickedPoint.x() > 0)
   {
-    m_PickedPoint -= QPoint(increment, 0);
+    m_PickedPoint.setX(BaseCoordFromMip(mipx - 1, texptr->width));
     nudged = true;
   }
   else if(e->key() == Qt::Key_Right && m_PickedPoint.x() < (int)texptr->width - 1)
   {
-    m_PickedPoint += QPoint(increment, 0);
+    m_PickedPoint.setX(BaseCoordFromMip(mipx + 1, texptr->width));
     nudged = true;
   }
 
