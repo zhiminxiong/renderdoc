@@ -3519,7 +3519,9 @@ void TextureViewer::on_zoomOption_currentIndexChanged(int index)
 
 void TextureViewer::zoomOption_returnPressed()
 {
-  UI_SetScale(GetZoomLevel());
+  ui->fitToWindow->setChecked(false);
+  float zoom = GetZoomLevel();
+  UI_SetScale(zoom);
 }
 
 void TextureViewer::on_overlay_currentIndexChanged(int index)
