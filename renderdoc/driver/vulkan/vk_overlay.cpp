@@ -3327,7 +3327,7 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
         Vec4f *ubo = (Vec4f *)m_Overlay.m_TriSizeUBO.Map(&viewOffs);
         if(!ubo)
           return ResourceId();
-        *ubo = Vec4f(state.views[0].width, state.views[0].height);
+        *ubo = Vec4f(state.views[0].width, state.views[0].height, 0.0f, 0.0f);
         m_Overlay.m_TriSizeUBO.Unmap();
 
         uint32_t offsets[2] = {meshOffs, viewOffs};

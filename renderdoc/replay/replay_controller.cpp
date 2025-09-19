@@ -1144,7 +1144,7 @@ ResultDetails ReplayController::SaveTexture(const TextureSave &saveData, const r
 
         if(sd.alpha != AlphaMapping::Discard)
         {
-          Vec4f col = Vec4f(sd.alphaCol.x, sd.alphaCol.y, sd.alphaCol.z);
+          Vec4f col = Vec4f(sd.alphaCol.x, sd.alphaCol.y, sd.alphaCol.z, 0.0f);
           if(sd.alpha == AlphaMapping::BlendToCheckerboard)
           {
             bool lightSquare = ((x / 64) % 2) == ((y / 64) % 2);

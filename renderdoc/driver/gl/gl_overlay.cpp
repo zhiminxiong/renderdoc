@@ -1628,7 +1628,7 @@ ResourceId GLReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, Debug
       return ResourceId();
     }
 
-    *v = Vec4f(rs.Viewports[0].width, rs.Viewports[0].height);
+    *v = Vec4f(rs.Viewports[0].width, rs.Viewports[0].height, 0.0f, 0.0f);
     drv.glUnmapBuffer(eGL_COPY_WRITE_BUFFER);
 
     rdcarray<uint32_t> events = passEvents;

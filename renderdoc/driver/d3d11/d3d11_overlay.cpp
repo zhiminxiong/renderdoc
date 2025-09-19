@@ -556,7 +556,7 @@ ResourceId D3D11Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
 
     m_pImmediateContext->RSSetState(rs);
 
-    CheckerboardCBuffer pixelData = {0};
+    CheckerboardCBuffer pixelData = {};
 
     UINT dummy = 1;
     D3D11_VIEWPORT views[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE] = {0};
@@ -824,7 +824,7 @@ ResourceId D3D11Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
 
     D3D11_VIEWPORT view = m_pImmediateContext->GetCurrentPipelineState()->RS.Viewports[0];
 
-    Vec4f viewport = Vec4f(view.Width, view.Height);
+    Vec4f viewport = Vec4f(view.Width, view.Height, 0.0f, 0.0f);
     ID3D11Buffer *gsbuf = GetDebugManager()->MakeCBuffer(&viewport.x, sizeof(viewport));
 
     for(size_t i = 0; i < events.size(); i++)

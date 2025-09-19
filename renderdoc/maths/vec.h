@@ -34,11 +34,12 @@
 
 struct Vec2f
 {
-  Vec2f(float X = 0.0f, float Y = 0.0f)
+  Vec2f(float X, float Y)
   {
     x = X;
     y = Y;
   }
+  Vec2f() { x = y = 0.0f; }
 
   union
   {
@@ -53,7 +54,8 @@ struct Vec2f
 class Vec3f
 {
 public:
-  Vec3f(const float X = 0.0f, const float Y = 0.0f, const float Z = 0.0f) : x(X), y(Y), z(Z) {}
+  Vec3f(const float X, const float Y, const float Z) : x(X), y(Y), z(Z) {}
+  Vec3f() { x = y = z = 0.0f; }
   inline float Dot(const Vec3f &o) const { return x * o.x + y * o.y + z * o.z; }
   inline Vec3f Cross(const Vec3f &o) const
   {
@@ -83,13 +85,14 @@ struct FloatVector;
 
 struct Vec4f
 {
-  Vec4f(float X = 0.0f, float Y = 0.0f, float Z = 0.0f, float W = 0.0f)
+  Vec4f(float X, float Y, float Z, float W)
   {
     x = X;
     y = Y;
     z = Z;
     w = W;
   }
+  Vec4f() { x = y = z = w = 0.0f; }
   Vec4f(const FloatVector &v);
   operator Vec3f() const { return Vec3f(x, y, z); }
   operator FloatVector() const;
@@ -169,11 +172,12 @@ inline Vec4f operator+=(Vec4f &a, const Vec4f &b)
 
 struct Vec2u
 {
-  Vec2u(uint32_t X = 0, uint32_t Y = 0)
+  Vec2u(uint32_t X, uint32_t Y)
   {
     x = X;
     y = Y;
   }
+  Vec2u() { x = y = 0; }
   union
   {
     struct
@@ -186,13 +190,14 @@ struct Vec2u
 
 struct Vec4u
 {
-  Vec4u(uint32_t X = 0, uint32_t Y = 0, uint32_t Z = 0, uint32_t W = 0)
+  Vec4u(uint32_t X, uint32_t Y, uint32_t Z, uint32_t W)
   {
     x = X;
     y = Y;
     z = Z;
     w = W;
   }
+  Vec4u() { x = y = z = w = 0; }
   union
   {
     struct
@@ -205,12 +210,13 @@ struct Vec4u
 
 struct Vec3u
 {
-  Vec3u(uint32_t X = 0, uint32_t Y = 0, uint32_t Z = 0)
+  Vec3u(uint32_t X, uint32_t Y, uint32_t Z)
   {
     x = X;
     y = Y;
     z = Z;
   }
+  Vec3u() { x = y = z = 0; }
   union
   {
     struct
@@ -223,13 +229,14 @@ struct Vec3u
 
 struct Vec4i
 {
-  Vec4i(int32_t X = 0, int32_t Y = 0, int32_t Z = 0, int32_t W = 0)
+  Vec4i(int32_t X, int32_t Y, int32_t Z, int32_t W)
   {
     x = X;
     y = Y;
     z = Z;
     w = W;
   }
+  Vec4i() { x = y = z = w = 0; }
   union
   {
     struct

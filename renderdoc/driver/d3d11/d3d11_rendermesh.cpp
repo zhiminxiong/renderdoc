@@ -326,7 +326,7 @@ void D3D11Replay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &secon
 
       pixelData.MeshDisplayFormat = MESHDISPLAY_SOLID;
       pixelData.MeshColour =
-          Vec4f(cfg.position.meshColor.x, cfg.position.meshColor.y, cfg.position.meshColor.z);
+          Vec4f(cfg.position.meshColor.x, cfg.position.meshColor.y, cfg.position.meshColor.z, 0.0f);
       GetDebugManager()->FillCBuffer(psCBuf, &pixelData, sizeof(pixelData));
       m_pImmediateContext->PSSetConstantBuffers(0, 1, &psCBuf);
 
