@@ -2404,6 +2404,7 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
 
       // save original state
       VkBool32 origDepthTest = prevstate.depthTestEnable;
+      VkBool32 origDepthBoundsTest = prevstate.depthBoundsTestEnable;
       VkBool32 origStencilTest = prevstate.stencilTestEnable;
 
       // make patched pipeline
@@ -2479,7 +2480,10 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
         if(depthRP != VK_NULL_HANDLE)
         {
           if(overlay == DebugOverlay::Depth)
+          {
             ds->depthTestEnable = origDepthTest;
+            ds->depthBoundsTestEnable = origDepthBoundsTest;
+          }
           else
           {
             ds->front.passOp = ds->front.failOp = ds->front.depthFailOp = VK_STENCIL_OP_KEEP;
@@ -2584,6 +2588,7 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
         if(overlay == DebugOverlay::Depth)
         {
           state.depthTestEnable = origDepthTest;
+          state.depthBoundsTestEnable = origDepthBoundsTest;
         }
         else
         {
@@ -2630,9 +2635,14 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
       }
 
       if(overlay == DebugOverlay::Depth)
+      {
         state.depthTestEnable = origDepthTest;
+        state.depthBoundsTestEnable = origDepthBoundsTest;
+      }
       else
+      {
         state.stencilTestEnable = origStencilTest;
+      }
 
       if(useDepthWriteStencilPass)
       {
