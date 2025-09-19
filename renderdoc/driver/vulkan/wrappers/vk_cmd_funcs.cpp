@@ -2186,6 +2186,8 @@ bool WrappedVulkan::Serialise_vkCmdBeginRenderPass(SerialiserType &ser, VkComman
           renderstate.renderArea = RenderPassBegin.renderArea;
           renderstate.subpassContents = contents;
 
+          renderstate.fragmentDensityMapOffsets.clear();
+
           const VkRenderPassAttachmentBeginInfo *attachmentsInfo =
               (const VkRenderPassAttachmentBeginInfo *)FindNextStruct(
                   &RenderPassBegin, VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO);
@@ -2803,6 +2805,8 @@ bool WrappedVulkan::Serialise_vkCmdBeginRenderPass2(SerialiserType &ser,
           renderstate.SetRenderPass(GetResID(RenderPassBegin.renderPass));
           renderstate.renderArea = RenderPassBegin.renderArea;
           renderstate.subpassContents = SubpassBegin.contents;
+
+          renderstate.fragmentDensityMapOffsets.clear();
 
           const VkRenderPassAttachmentBeginInfo *attachmentsInfo =
               (const VkRenderPassAttachmentBeginInfo *)FindNextStruct(
@@ -7646,6 +7650,8 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
             renderstate.dynamicRendering.stencil = *RenderingInfo.pStencilAttachment;
 
           renderstate.dynamicRendering.CopyAttachmentNexts();
+
+          renderstate.fragmentDensityMapOffsets.clear();
 
           const VkRenderingFragmentDensityMapAttachmentInfoEXT *fragmentDensityAttachment =
               (const VkRenderingFragmentDensityMapAttachmentInfoEXT *)FindNextStruct(

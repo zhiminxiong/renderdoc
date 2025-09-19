@@ -275,14 +275,51 @@ void VulkanRenderState::BeginRenderPassAndApplyState(WrappedVulkan *vk, VkComman
 
 void VulkanRenderState::EndRenderPass(VkCommandBuffer cmd)
 {
+  VkRenderPassFragmentDensityMapOffsetEndInfoEXT fragmentDensityOffsetStruct = {
+      VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_OFFSET_END_INFO_EXT,
+      NULL,
+      (uint32_t)fragmentDensityMapOffsets.size(),
+      fragmentDensityMapOffsets.data(),
+  };
+
   if(dynamicRendering.active)
   {
     if(!dynamicRendering.suspended)
-      ObjDisp(cmd)->CmdEndRendering(Unwrap(cmd));
+    {
+      if(fragmentDensityMapOffsets.empty())
+      {
+        ObjDisp(cmd)->CmdEndRendering(Unwrap(cmd));
+      }
+      else
+      {
+        VkRenderingEndInfoEXT endInfo = {
+            VK_STRUCTURE_TYPE_RENDERING_END_INFO_EXT,
+            &fragmentDensityOffsetStruct,
+        };
+
+        // the only time we can possibly have fragment offsets and be using dynamic rendering is if
+        // this function is available by definition, so we don't have to check for it
+        ObjDisp(cmd)->CmdEndRendering2EXT(Unwrap(cmd), &endInfo);
+      }
+    }
   }
   else
   {
-    ObjDisp(cmd)->CmdEndRenderPass(Unwrap(cmd));
+    if(fragmentDensityMapOffsets.empty())
+    {
+      ObjDisp(cmd)->CmdEndRenderPass(Unwrap(cmd));
+    }
+    else
+    {
+      VkSubpassEndInfo endInfo = {
+          VK_STRUCTURE_TYPE_SUBPASS_END_INFO,
+          &fragmentDensityOffsetStruct,
+      };
+
+      // the only time we can possibly have fragment offsets and be using a normal render pass is if
+      // this function is available by definition, so we don't have to check for it
+      ObjDisp(cmd)->CmdEndRenderPass2(Unwrap(cmd), &endInfo);
+    }
   }
 }
 
