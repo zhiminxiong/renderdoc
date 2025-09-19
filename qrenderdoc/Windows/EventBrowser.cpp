@@ -6468,6 +6468,9 @@ void EventBrowser::showBookmarkStatistics()
   }
 
   double totalGPUTime = CalculateBookmarkTotalGPUTime();
+  double redGPUTime = CalculateBookmarkTotalGPUTime(1);
+  double greenGPUTime = CalculateBookmarkTotalGPUTime(2);
+  double blueGPUTime = CalculateBookmarkTotalGPUTime(3);
 
   QString statisticsText = lit(
     "Bookmark statistics:\n\n"
@@ -6475,14 +6478,23 @@ void EventBrowser::showBookmarkStatistics()
     "drawcall* count: %2\n"
     "total vertices num: %3\n"
     "total primitive count: %4\n"
-    "Total GPU Time: %5 %6 (%7 ms)"
+    "Total GPU Time: %5 %6 (%7 ms)\n"
+    "Red GPU Time: %8 %6 (%9 ms)\n"
+    "Green GPU Time: %10 %6 (%11 ms)\n"
+    "Blue GPU Time: %12 %6 (%13 ms)"
   ).arg(bookmarks.count())
    .arg(validDrawCalls)
    .arg(totalVertices)
    .arg(totalTriangles)
    .arg(formatDuration(totalGPUTime, m_TimeUnit), 0, 'f', 3)
    .arg(UnitSuffix(m_TimeUnit))
-   .arg(formatDuration(totalGPUTime, TimeUnit::Milliseconds), 0, 'f', 6);
+   .arg(formatDuration(totalGPUTime, TimeUnit::Milliseconds), 0, 'f', 6)
+   .arg(formatDuration(redGPUTime, m_TimeUnit), 0, 'f', 3)
+   .arg(formatDuration(redGPUTime, TimeUnit::Milliseconds), 0, 'f', 6)
+   .arg(formatDuration(greenGPUTime, m_TimeUnit), 0, 'f', 3)
+   .arg(formatDuration(greenGPUTime, TimeUnit::Milliseconds), 0, 'f', 6)
+   .arg(formatDuration(blueGPUTime, m_TimeUnit), 0, 'f', 3)
+   .arg(formatDuration(blueGPUTime, TimeUnit::Milliseconds), 0, 'f', 6);
 
   QDialog dialog(this);
   dialog.setWindowTitle(tr("Bookmark statistics"));
