@@ -6239,7 +6239,7 @@ void EventBrowser::bookmarkContextMenu(QRClickToolButton *button, uint32_t EID)
   RDDialog::show(&contextMenu, QCursor::pos());
 }
 
-double EventBrowser::CalculateBookmarkTotalGPUTime()
+double EventBrowser::CalculateBookmarkTotalGPUTime(uint32_t color)
 {
     if(!m_Model->HasTimes())
     {
@@ -6280,12 +6280,26 @@ double EventBrowser::CalculateBookmarkTotalGPUTime()
     // }
     double totalTime = 0.0;
     
-    for(const EventBookmark &bookmark : bookmarks)
+    if (color > 3)
     {
-      double timeValue = m_Model->GetSecondsDurationForEID(bookmark.eventId);
-      if(timeValue > 0.0)
+      for(const EventBookmark &bookmark : bookmarks)
       {
-        totalTime += timeValue;
+        double timeValue = m_Model->GetSecondsDurationForEID(bookmark.eventId);
+        if(timeValue > 0.0)
+        {
+          totalTime += timeValue;
+        }
+      }
+    }
+    else
+    {
+      for(const EventBookmark &bookmark : bookmarks)
+      {
+        double timeValue = m_Model->GetSecondsDurationForEID(bookmark.eventId);
+        if(timeValue > 0.0 && bookmark.color == color)
+        {
+          totalTime += timeValue;
+        }
       }
     }
 
