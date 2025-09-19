@@ -667,7 +667,7 @@ void main() {
     {
       CHECK(refl.debugInfo.files[0].filename == "source0.glsl");
 
-      REQUIRE(refl.debugInfo.compileFlags.flags.size() == 2);
+      REQUIRE(refl.debugInfo.compileFlags.flags.size() == 3);
 
       CHECK(refl.debugInfo.compileFlags.flags[0].name == "@cmdline");
 
@@ -680,6 +680,9 @@ void main() {
 
       CHECK(refl.debugInfo.compileFlags.flags[1].name == "@spirver");
       CHECK(refl.debugInfo.compileFlags.flags[1].value == "spirv1.0");
+
+      CHECK(refl.debugInfo.compileFlags.flags[2].name == "preferSourceDebug");
+      CHECK(refl.debugInfo.compileFlags.flags[2].value == "1");
     }
   };
 
