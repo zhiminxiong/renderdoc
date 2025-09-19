@@ -94,7 +94,7 @@ void main(void)
 
   scr /= texdisplay.Scale;
 
-  scr /= vec2(texdisplay.MipShift, texdisplay.MipShift);
+  scr /= texdisplay.MipShift;
   vec2 scr2 = scr;
 
 #ifdef VULKAN

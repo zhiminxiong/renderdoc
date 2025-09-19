@@ -107,9 +107,8 @@ BINDING(0) uniform TexDisplayUBOData
   float Slice;
 
   int SampleIdx;
-  float MipShift;
   int DecodeYUV;
-  float Padding;
+  vec2 MipShift;
 
   uvec4 YUVDownsampleRate;
   uvec4 YUVAChannels;

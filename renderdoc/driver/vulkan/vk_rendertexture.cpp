@@ -246,8 +246,6 @@ bool VulkanReplay::RenderTextureInternal(TextureDisplay cfg, const ImageState &i
   if(!data)
     return false;
 
-  data->Padding = 0;
-
   float x = cfg.xOffset;
   float y = cfg.yOffset;
 
@@ -332,9 +330,14 @@ bool VulkanReplay::RenderTextureInternal(TextureDisplay cfg, const ImageState &i
   data->TextureResolutionPS.z = float(RDCMAX(1, tex_z >> cfg.subresource.mip));
 
   if(mipShift)
-    data->MipShift = float(1 << cfg.subresource.mip);
+  {
+    data->MipShift.x = float(tex_x) / float(RDCMAX(1, tex_x >> cfg.subresource.mip));
+    data->MipShift.y = float(tex_y) / float(RDCMAX(1, tex_y >> cfg.subresource.mip));
+  }
   else
-    data->MipShift = 1.0f;
+  {
+    data->MipShift.x = data->MipShift.y = 1.0f;
+  }
 
   data->Scale = cfg.scale;
 
