@@ -118,6 +118,8 @@ private:
   virtual void RegisterOp(Iter iter);
   virtual void UnregisterOp(Iter iter);
 
+  void ProcessFakeModuleProcessed(rdcstr &src);
+
   void CalculateArrayTypeName(DataType &type);
 
   rdcstr StringiseConstant(rdcspv::Id id) const;

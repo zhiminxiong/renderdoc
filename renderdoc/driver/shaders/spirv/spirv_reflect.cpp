@@ -580,47 +580,7 @@ void Reflector::RegisterOp(Iter it)
   {
     OpSource source(it);
 
-    // glslang based tools output fake OpModuleProcessed comments at the start of pre-1.3
-    // shaders source before OpModuleProcessed existed (in SPIR-V 1.1)
-    if(m_MajorVersion == 1 && m_MinorVersion < 1 && HasCommandLineInModuleProcessed(m_Generator))
-    {
-      rdcstr &src = source.source;
-
-      const char compileFlagPrefix[] = "// OpModuleProcessed ";
-      const char endMarker[] = "#line 1\n";
-      if(src.find(compileFlagPrefix) == 0)
-      {
-        // process compile flags
-        int32_t nextLine = src.indexOf('\n');
-        while(nextLine > 0)
-        {
-          bool finished = false;
-          if(src.find(compileFlagPrefix) == 0)
-          {
-            size_t offs = sizeof(compileFlagPrefix) - 1;
-            cmdline += " --" + src.substr(offs, nextLine - offs);
-          }
-          else if(src.find(endMarker) == 0)
-          {
-            finished = true;
-          }
-          else
-          {
-            RDCERR("Unexpected preamble line with OpModuleProcessed: %s",
-                   src.substr(0, nextLine).c_str());
-            break;
-          }
-
-          // erase this line
-          src.erase(0, nextLine + 1);
-
-          nextLine = src.indexOf('\n');
-
-          if(finished)
-            break;
-        }
-      }
-    }
+    ProcessFakeModuleProcessed(source.source);
 
     sourceLanguage = source.sourceLanguage;
 
@@ -663,6 +623,8 @@ void Reflector::RegisterOp(Iter it)
       {
         rdcstr name = strings[dbg.arg<Id>(0)];
         rdcstr source = dbg.params.size() > 1 ? strings[dbg.arg<Id>(1)] : rdcstr();
+
+        ProcessFakeModuleProcessed(source);
 
         // don't add empty source statements as actual files
         if(!name.empty() || !source.empty())
@@ -727,6 +689,49 @@ void Reflector::RegisterOp(Iter it)
 void Reflector::UnregisterOp(Iter it)
 {
   RDCFATAL("Reflector should not be used for editing! UnregisterOp() call invalid");
+}
+
+void Reflector::ProcessFakeModuleProcessed(rdcstr &src)
+{
+  // glslang based tools output fake OpModuleProcessed comments at the start of pre-1.3
+  // shaders source before OpModuleProcessed existed (in SPIR-V 1.1)
+  if(m_MajorVersion == 1 && m_MinorVersion < 1 && HasCommandLineInModuleProcessed(m_Generator))
+  {
+    const char compileFlagPrefix[] = "// OpModuleProcessed ";
+    const char endMarker[] = "#line 1\n";
+    if(src.find(compileFlagPrefix) == 0)
+    {
+      // process compile flags
+      int32_t nextLine = src.indexOf('\n');
+      while(nextLine > 0)
+      {
+        bool finished = false;
+        if(src.find(compileFlagPrefix) == 0)
+        {
+          size_t offs = sizeof(compileFlagPrefix) - 1;
+          cmdline += " --" + src.substr(offs, nextLine - offs);
+        }
+        else if(src.find(endMarker) == 0)
+        {
+          finished = true;
+        }
+        else
+        {
+          RDCERR("Unexpected preamble line with OpModuleProcessed: %s",
+                 src.substr(0, nextLine).c_str());
+          break;
+        }
+
+        // erase this line
+        src.erase(0, nextLine + 1);
+
+        nextLine = src.indexOf('\n');
+
+        if(finished)
+          break;
+      }
+    }
+  }
 }
 
 void Reflector::CalculateArrayTypeName(DataType &type)
@@ -2428,6 +2433,8 @@ TEST_CASE("Validate SPIR-V reflection", "[spirv][reflection]")
     INFO("SPIR-V compile output: " << errors);
 
     REQUIRE(!spirv.empty());
+
+    FileIO::WriteAll("T:/tmp/a.spv", spirv);
 
     rdcspv::Reflector spv;
     spv.Parse(spirv);
