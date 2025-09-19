@@ -828,7 +828,7 @@ struct D3D12OcclusionCallback : public D3D12PixelHistoryCallback
 
     pipeState.pipe = GetResID(pso);
     // set the scissor
-    for(uint32_t i = 0; i < pipeState.views.size(); i++)
+    for(uint32_t i = 0; i < pipeState.views.size() && i < pipeState.scissors.size(); i++)
       ScissorToPixel(pipeState.views[i], pipeState.scissors[i]);
     pipeState.stencilRefFront = 0;
     pipeState.stencilRefBack = 0;
@@ -1044,7 +1044,7 @@ struct D3D12ColorAndStencilCallback : public D3D12PixelHistoryCallback
       D3D12PipelineReplacements replacements = GetPipelineReplacements(eid, pipeState);
 
       // Set scissor to only the pixel we're getting history for
-      for(uint32_t i = 0; i < pipeState.views.size(); i++)
+      for(uint32_t i = 0; i < pipeState.views.size() && i < pipeState.scissors.size(); i++)
         ScissorToPixel(pipeState.views[i], pipeState.scissors[i]);
 
       // Replay the draw with the original shader, but with state changed to
@@ -1720,7 +1720,7 @@ private:
     // TODO: Handle shader side effects?
 
     rdcarray<D3D12_RECT> prevScissors = pipeState.scissors;
-    for(uint32_t i = 0; i < pipeState.views.size(); i++)
+    for(uint32_t i = 0; i < pipeState.views.size() && i < pipeState.scissors.size(); i++)
       ScissorToPixel(pipeState.views[i], pipeState.scissors[i]);
     pipeState.ApplyState(m_pDevice, cmd);
 
@@ -1761,7 +1761,7 @@ private:
       ID3D12PipelineState *pso = CreatePipeline(pipeState, pipeFlags, outputIndex);
       // This will change the scissor for the later tests, but since those
       // tests happen later in the pipeline, it does not matter.
-      for(uint32_t i = 0; i < pipeState.views.size(); i++)
+      for(uint32_t i = 0; i < pipeState.views.size() && i < pipeState.scissors.size(); i++)
         IntersectScissors(prevScissors[i], pipeState.scissors[i]);
       D3D12MarkerRegion::Set(cmd, StringFormat::Fmt("Test scissor on %u", eid));
       ReplayDraw(cmd, pipeState, pso, eid, TestEnabled_Scissor);
@@ -2108,6 +2108,12 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
 
     rdcarray<D3D12Descriptor> origRts = state.rts;
 
+    D3D12_RECT pixelScissor;
+    pixelScissor.left = m_CallbackInfo.x;
+    pixelScissor.top = m_CallbackInfo.y;
+    pixelScissor.right = pixelScissor.left + 1;
+    pixelScissor.bottom = pixelScissor.top + 1;
+
     uint32_t maxFrags =
         (UINT)(m_CallbackInfo.dstBuffer->GetDesc().Width / sizeof(D3D12PerFragmentInfo));
     // Get primitive ID and shader output value for each fragment.
@@ -2147,7 +2153,7 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
 
         cmd->ClearDepthStencilView(m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_DSV),
                                    D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0, 1,
-                                   &state.scissors[0]);
+                                   &pixelScissor);
 
         if(isPrimPass)
         {
@@ -2221,14 +2227,14 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
       D3D12_CLEAR_FLAGS clearFlags =
           (f == 0 ? D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL : D3D12_CLEAR_FLAG_STENCIL);
       cmd->ClearDepthStencilView(m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_DSV),
-                                 clearFlags, premod.depth, 0, 1, &state.scissors[0]);
+                                 clearFlags, premod.depth, 0, 1, &pixelScissor);
 
       if(f == 0)
       {
         // Before starting the draw, initialize the pixel to the premodification value
         // for this event, for both color and depth. Depth was handled above already.
         cmd->ClearRenderTargetView(m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_RTV),
-                                   premod.col.floatValue.data(), 1, &state.scissors[0]);
+                                   premod.col.floatValue.data(), 1, &pixelScissor);
 
         // TODO: Does anything different need to happen here if the target resource is depth/stencil?
       }
@@ -2484,7 +2490,7 @@ struct D3D12PixelHistoryDiscardedFragmentsCallback : D3D12PixelHistoryCallback
     // Create a pipeline with a scissor and colorWriteMask = 0, and disable all tests.
     ID3D12PipelineState *newPso = CreateDiscardedFragmentPipeline(state, eid);
 
-    for(uint32_t i = 0; i < state.views.size(); i++)
+    for(uint32_t i = 0; i < state.views.size() && i < state.scissors.size(); i++)
       ScissorToPixel(state.views[i], state.scissors[i]);
 
     Topology topo = MakePrimitiveTopology(state.topo);
