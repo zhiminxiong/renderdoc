@@ -118,7 +118,11 @@ rdcstr rdcspv::Compile(const rdcspv::CompilationSettings &settings, const rdcarr
 
         glslang::SpvOptions opts;
         if(settings.debugInfo)
+        {
           opts.generateDebugInfo = true;
+          opts.emitNonSemanticShaderDebugInfo = true;
+          opts.emitNonSemanticShaderDebugSource = true;
+        }
 
         std::vector<uint32_t> spirvVec;
         glslang::GlslangToSpv(*intermediate, spirvVec, &opts);
