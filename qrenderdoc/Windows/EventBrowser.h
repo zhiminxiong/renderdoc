@@ -191,7 +191,6 @@ private:
   void changeBookmarkColor(uint32_t EID, uint32_t color);
   void updateBookmarkButtonColor(QRClickToolButton *button, uint32_t color);
   QString getBookmarkColorName(uint32_t color);
-  QColor getBookmarkQColor(uint32_t color);
 
   double CalculateBookmarkTotalGPUTime(uint32_t color=-1);
   

@@ -76,6 +76,18 @@ double formatDuration(double seconds, TimeUnit timeUnit)
   return seconds;
 }
 
+QColor getBookmarkQColor(uint32_t color)
+{
+    switch(color)
+    {
+        case 0: return QColor();
+        case 1: return QColor(255, 100, 100);
+        case 2: return QColor(100, 255, 100);
+        case 3: return QColor(100, 100, 255);
+        default: return QColor();
+    }
+}
+
 struct EventBrowserPersistentStorage : public CustomPersistentStorage
 {
   EventBrowserPersistentStorage() : CustomPersistentStorage(rdcstr())
@@ -768,6 +780,26 @@ struct EventItemModel : public QAbstractItemModel
     return QVariant();
   }
 
+  QIcon GetBookmarkIcon(uint32_t color) const
+  {
+    if(color == 0)
+      return Icons::asterisk_orange();
+    
+    QColor bgColor = getBookmarkQColor(color);
+    if(!bgColor.isValid())
+      return Icons::asterisk_orange();
+    
+    QPixmap baseIcon = Icons::asterisk_orange().pixmap(16, 16);
+    QPixmap coloredIcon(16, 16);
+    coloredIcon.fill(bgColor);
+    
+    QPainter painter(&coloredIcon);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.drawPixmap(0, 0, baseIcon);
+    
+    return QIcon(coloredIcon);
+  }
+
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override
   {
     if(!index.isValid())
@@ -778,7 +810,15 @@ struct EventItemModel : public QAbstractItemModel
       if(index == m_CurrentEID)
         return Icons::flag_green();
       else if(m_BookmarkIndices.contains(index))
+      {
+        uint32_t eid = index.internalId();
+        for(const EventBookmark &bookmark : m_Bookmarks)
+        {
+          if(bookmark.eventId == eid)
+            return GetBookmarkIcon(bookmark.color);
+        }
         return Icons::asterisk_orange();
+      }
       else if(m_FindResults.contains(index))
         return Icons::find();
       return QVariant();
@@ -5583,18 +5623,6 @@ QString EventBrowser::getBookmarkColorName(uint32_t color)
         case 2: return tr("Green");
         case 3: return tr("Blue");
         default: return tr("Default");
-    }
-}
-
-QColor EventBrowser::getBookmarkQColor(uint32_t color)
-{
-    switch(color)
-    {
-        case 0: return QColor();
-        case 1: return QColor(255, 100, 100);
-        case 2: return QColor(100, 255, 100);
-        case 3: return QColor(100, 100, 255);
-        default: return QColor();
     }
 }
 
