@@ -805,84 +805,21 @@ void RenderDoc::InitialiseReplay(GlobalEnvironment env, const rdcarray<rdcstr> &
 
 #if ENABLED(RDOC_WIN32)
       {
-        using PFN_GetFileVersionInfoSizeW = decltype(&GetFileVersionInfoSizeW);
-        using PFN_GetFileVersionInfoW = decltype(&GetFileVersionInfoW);
-        using PFN_VerQueryValueA = decltype(&VerQueryValueA);
+        // only print unique versions to avoid the case of loading multiple driver files and
+        // printing redundantly.
+        rdcarray<OSUtility::DLLFileVersion> versions;
 
-        PFN_GetFileVersionInfoSizeW getSize = NULL;
-        PFN_GetFileVersionInfoW getData = NULL;
-        PFN_VerQueryValueA queryValue = NULL;
-
-        HMODULE version = LoadLibraryA("version.dll");
-        if(version)
+        for(rdcstr &path : driverFilePaths)
         {
-          getSize = (PFN_GetFileVersionInfoSizeW)GetProcAddress(version, "GetFileVersionInfoSizeW");
-          getData = (PFN_GetFileVersionInfoW)GetProcAddress(version, "GetFileVersionInfoW");
-          queryValue = (PFN_VerQueryValueA)GetProcAddress(version, "VerQueryValueA");
+          OSUtility::DLLFileVersion ret = OSUtility::GetDLLVersion(path);
 
-          if(getSize && getData && queryValue)
+          if(!versions.contains(ret))
           {
-            // only print unique versions to avoid the case of loading multiple driver files and
-            // printing redundantly.
-            rdcarray<uint64_t> versions;
-
-            for(rdcstr &path : driverFilePaths)
-            {
-              rdcwstr wpath = StringFormat::UTF82Wide(path);
-              DWORD bytesNeeded = getSize(wpath.c_str(), NULL);
-
-              if(bytesNeeded > 0 && bytesNeeded < 1024 * 1024)
-              {
-                bytebuf blockData;
-                blockData.resize(bytesNeeded);
-
-                VS_FIXEDFILEINFO *verInfo = NULL;
-                UINT size = 0;
-                if(getData(wpath.c_str(), 0, bytesNeeded, blockData.data()) &&
-                   queryValue(blockData.data(), "\\", (void **)&verInfo, &size))
-                {
-                  if(size > 0 && verInfo && verInfo->dwSignature == 0xFEEF04BD)
-                  {
-                    uint64_t ver =
-                        uint64_t(verInfo->dwFileVersionMS) << 32 | verInfo->dwFileVersionLS;
-
-                    if(!versions.contains(ver))
-                    {
-                      versions.push_back(ver);
-                      RDCLOG("Driver: '%s' %u.%u.%u.%u %s", path.c_str(),
-                             verInfo->dwFileVersionMS >> 16, verInfo->dwFileVersionMS & 0xffff,
-                             verInfo->dwFileVersionLS >> 16, verInfo->dwFileVersionLS & 0xffff,
-                             StringFormat::sntimef(FileIO::GetModifiedTimestamp(path), "%Y-%m-%d")
-                                 .c_str());
-                    }
-                  }
-                  else
-                  {
-                    RDCWARN("Version data for '%s' invalid: %u %p %u", path.c_str(), size, verInfo,
-                            verInfo ? verInfo->dwSignature : 0);
-                  }
-                }
-                else
-                {
-                  RDCWARN("Couldn't get version data for '%s'", path.c_str());
-                }
-              }
-              else
-              {
-                RDCWARN("Bytes needed for '%s': %u", path.c_str(), bytesNeeded);
-              }
-            }
+            versions.push_back(ret);
+            RDCLOG("Driver: '%s' %u.%u.%u.%u %s", path.c_str(), ret.major, ret.minor, ret.build,
+                   ret.revision,
+                   StringFormat::sntimef(FileIO::GetModifiedTimestamp(path), "%Y-%m-%d").c_str());
           }
-          else
-          {
-            RDCWARN("Couldn't get version API");
-          }
-
-          FreeLibrary(version);
-        }
-        else
-        {
-          RDCWARN("Couldn't load version.dll");
         }
       }
 #endif

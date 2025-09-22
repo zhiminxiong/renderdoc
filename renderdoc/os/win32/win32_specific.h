@@ -53,6 +53,17 @@ inline bool DebuggerPresent()
 {
   return ::IsDebuggerPresent() == TRUE;
 }
+struct DLLFileVersion
+{
+  uint16_t major, minor, build, revision;
+
+  bool operator==(const DLLFileVersion &o) const
+  {
+    return major == o.major && minor == o.minor && build == o.build && revision == o.revision;
+  }
+};
+DLLFileVersion GetDLLVersion(const rdcstr &path);
+DLLFileVersion GetDLLVersion(HMODULE mod);
 };
 
 namespace Threading

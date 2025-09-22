@@ -520,7 +520,19 @@ rdcstr D3D12ShaderCache::GetShaderBlob(const char *source, const char *entry,
         if(flag.name == "@compile_option")
           argsData.push_back(StringFormat::UTF82Wide(flag.value));
       }
-      argsData.push_back(L"-select-validator internal");
+
+      OSUtility::DLLFileVersion version = OSUtility::GetDLLVersion(dxc);
+
+      // this parameter is _necessary_ on older versions of dxc to not use dxil.dll but _invalid_ on
+      // old versions, and then again invalid but not necessary for newer versions
+      //
+      // dxc versions named 10.x.x.x by windows SDKs are considered old, pre 1.7 at least
+      if(version.major != 10 && version.major == 1 && version.minor == 8 && version.build >= 2403)
+      {
+        if(version.build < 2505)
+          argsData.push_back(L"-select-validator internal");
+      }
+
       rdcarray<LPCWSTR> arguments;
       for(const rdcwstr &arg : argsData)
         arguments.push_back(arg.c_str());

@@ -1481,8 +1481,13 @@ ID3DBlobPtr D3D12GraphicsTest::Compile(std::string src, std::string entry, std::
     //
     // as extra fun, some versions are 1.7.x or 1.8.x and some are 10.0.y from SDKs. These versions
     // are not comparable! ha ha ha.
-    if(version.major != 10 && (version.major > 1 || version.minor > 8 || version.build >= 2403))
-      argStorage.push_back(L"-select-validator internal");
+    if(version.major != 10 && version.major == 1 && version.minor == 8 && version.build >= 2403)
+    {
+      // for extremely stupid reasons, this option was _removed_ in newer versions which breaks
+      // compilation for absolutely no discernable benefit
+      if(version.build < 2505)
+        argStorage.push_back(L"-select-validator internal");
+    }
 
     // Must be the final option
     argStorage.push_back(L"-Qembed_debug");
