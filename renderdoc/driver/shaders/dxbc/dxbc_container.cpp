@@ -2816,7 +2816,7 @@ void DXBCContainer::ProcessSourceInfo(const byte *chunkContents, uint32_t chunkS
           flags.flags[cmdlineIdx].value += name;
           if(value[0] != 0)
           {
-            flags.flags[cmdlineIdx].value += "=";
+            flags.flags[cmdlineIdx].value += " ";
             flags.flags[cmdlineIdx].value += value;
           }
         }
