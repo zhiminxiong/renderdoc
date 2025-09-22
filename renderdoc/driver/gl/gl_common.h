@@ -621,9 +621,9 @@ struct ShaderBindpointMapping;
 void EvaluateVertexAttributeBinds(GLuint curProg, const ShaderReflection *refl, bool spirv,
                                   rdcarray<int32_t> &vertexAttrBindings);
 
-void GetCurrentBinding(GLuint curProg, ShaderReflection *refl, const ShaderResource &resource,
+void GetCurrentBinding(GLuint curProg, const ShaderReflection *refl, const ShaderResource &resource,
                        uint32_t &slot, bool &used);
-void GetCurrentBinding(GLuint curProg, ShaderReflection *refl, const ConstantBlock &cblock,
+void GetCurrentBinding(GLuint curProg, const ShaderReflection *refl, const ConstantBlock &cblock,
                        uint32_t &slot, bool &used);
 
 // calls glBlitFramebuffer but ensures no state can interfere like scissor or color mask
@@ -917,8 +917,8 @@ template <typename SerialiserType>
 void SerialiseProgramUniforms(SerialiserType &ser, CaptureState state,
                               const PerStageReflections &stages, GLuint prog,
                               std::map<GLint, GLint> *locTranslate);
-bool CopyProgramAttribBindings(GLuint progsrc, GLuint progdst, ShaderReflection *refl);
-bool CopyProgramFragDataBindings(GLuint progsrc, GLuint progdst, ShaderReflection *refl);
+bool CopyProgramAttribBindings(GLuint progsrc, GLuint progdst, const ShaderReflection *refl);
+bool CopyProgramFragDataBindings(GLuint progsrc, GLuint progdst, const ShaderReflection *refl);
 template <typename SerialiserType>
 bool SerialiseProgramBindings(SerialiserType &ser, CaptureState state,
                               const PerStageReflections &stages, GLuint prog);

@@ -711,7 +711,7 @@ rdcarray<VertexInputAttribute> PipeState::GetVertexInputs() const
 
         if(m_D3D11->inputAssembly.bytecode != NULL)
         {
-          rdcarray<SigParameter> &sig = m_D3D11->inputAssembly.bytecode->inputSignature;
+          const rdcarray<SigParameter> &sig = m_D3D11->inputAssembly.bytecode->inputSignature;
           for(int ia = 0; ia < sig.count(); ia++)
           {
             if(striequal(semName, sig[ia].semanticName) &&
@@ -769,7 +769,7 @@ rdcarray<VertexInputAttribute> PipeState::GetVertexInputs() const
 
         if(m_D3D12->vertexShader.reflection != NULL)
         {
-          rdcarray<SigParameter> &sig = m_D3D12->vertexShader.reflection->inputSignature;
+          const rdcarray<SigParameter> &sig = m_D3D12->vertexShader.reflection->inputSignature;
           for(int ia = 0; ia < sig.count(); ia++)
           {
             if(striequal(semName, sig[ia].semanticName) &&

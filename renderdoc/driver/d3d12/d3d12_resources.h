@@ -942,7 +942,7 @@ public:
       return false;
     }
 
-    static void GetReflections(rdcarray<ShaderReflection *> &refls)
+    static void GetReflections(rdcarray<const ShaderReflection *> &refls)
     {
       refls.clear();
       for(auto it = m_Shaders.begin(); it != m_Shaders.end(); ++it)
@@ -987,7 +987,8 @@ public:
       return ret;
     }
 
-    DXBC::DXBCContainer *GetDXBC()
+    const DXBC::DXBCContainer *GetDXBC() { return GetWriteableDXBC(); }
+    DXBC::DXBCContainer *GetWriteableDXBC()
     {
       if(m_DXBCFile == NULL && !m_Bytecode.empty())
       {
@@ -996,7 +997,7 @@ public:
       }
       return m_DXBCFile;
     }
-    ShaderReflection &GetDetails()
+    const ShaderReflection &GetDetails()
     {
       if(!m_Built && GetDXBC() != NULL)
         BuildReflection();

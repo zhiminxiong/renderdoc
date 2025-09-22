@@ -1553,7 +1553,7 @@ void GLReplay::FillWithDiscardPattern(DiscardType type, ResourceId id, GLuint mi
 
   GLMarkerRegion region("FillWithDiscardPattern Texture");
 
-  auto &texDetails = drv.m_Textures[id];
+  WrappedOpenGL::TextureData &texDetails = drv.m_Textures[id];
 
   GLenum fmt = texDetails.internalFormat;
 
@@ -1684,7 +1684,7 @@ void GLReplay::PickPixel(ResourceId texture, uint32_t x, uint32_t y, const Subre
   texDisplay.xOffset = -float(x << sub.mip);
   texDisplay.yOffset = -float(y << sub.mip);
 
-  auto &texDetails = m_pDriver->m_Textures[texDisplay.resourceId];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[texDisplay.resourceId];
 
   uint32_t mipWidth = RDCMAX(1U, (uint32_t)texDetails.width >> sub.mip);
   uint32_t mipHeight = RDCMAX(1U, (uint32_t)texDetails.height >> sub.mip);
@@ -1756,7 +1756,7 @@ void GLReplay::PickPixel(ResourceId texture, uint32_t x, uint32_t y, const Subre
 bool GLReplay::GetMinMax(ResourceId texid, const Subresource &sub, CompType typeCast, float *minval,
                          float *maxval)
 {
-  auto &texDetails = m_pDriver->m_Textures[texid];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[texid];
 
   if(!IsCompressedFormat(texDetails.internalFormat) &&
      GetBaseFormat(texDetails.internalFormat) == eGL_DEPTH_STENCIL)
@@ -1814,7 +1814,7 @@ bool GLReplay::GetMinMax(ResourceId texid, const Subresource &sub, CompType type
   if(!HasExt[ARB_compute_shader] || !HasExt[ARB_shading_language_420pack])
     return false;
 
-  auto &texDetails = m_pDriver->m_Textures[texid];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[texid];
 
   TextureDescription details = GetTexture(texid);
 
@@ -2044,7 +2044,7 @@ bool GLReplay::GetHistogram(ResourceId texid, const Subresource &sub, CompType t
   // take a local copy so we can modify it
   rdcfixedarray<bool, 4> channels = channels_;
 
-  auto &texDetails = m_pDriver->m_Textures[texid];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[texid];
 
   TextureDescription details = GetTexture(texid);
 

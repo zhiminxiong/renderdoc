@@ -100,11 +100,10 @@ RDResult GLReplay::FatalErrorCheck()
 IReplayDriver *GLReplay::MakeDummyDriver()
 {
   // gather up the shaders we've allocated to pass to the dummy driver
-  rdcarray<ShaderReflection *> shaders;
+  rdcarray<const ShaderReflection *> shaders;
   for(auto it = m_pDriver->m_Shaders.begin(); it != m_pDriver->m_Shaders.end(); it++)
   {
-    shaders.push_back(it->second.reflection);
-    it->second.reflection = NULL;
+    shaders.push_back(it->second.StealReflection());
   }
 
   IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDriver->DetachStructuredFile());
@@ -390,7 +389,7 @@ void GLReplay::GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, byt
     return;
   }
 
-  auto &buf = m_pDriver->m_Buffers[buff];
+  WrappedOpenGL::BufferData &buf = m_pDriver->m_Buffers[buff];
 
   uint64_t bufsize = buf.size;
 
@@ -435,7 +434,7 @@ void GLReplay::CacheTexture(ResourceId id)
 
   MakeCurrentReplayContext(&m_ReplayCtx);
 
-  auto &res = m_pDriver->m_Textures[id];
+  WrappedOpenGL::TextureData &res = m_pDriver->m_Textures[id];
   WrappedOpenGL &drv = *m_pDriver;
 
   tex.resourceId = m_pDriver->GetResourceManager()->GetOriginalID(id);
@@ -688,7 +687,7 @@ BufferDescription GLReplay::GetBuffer(ResourceId id)
 
   MakeCurrentReplayContext(&m_ReplayCtx);
 
-  auto &res = m_pDriver->m_Buffers[id];
+  WrappedOpenGL::BufferData &res = m_pDriver->m_Buffers[id];
 
   if(res.resource.Namespace == eResUnknown)
   {
@@ -754,7 +753,7 @@ rdcarray<TextureDescription> GLReplay::GetTextures()
 
   for(auto it = m_pDriver->m_Textures.begin(); it != m_pDriver->m_Textures.end(); ++it)
   {
-    auto &res = m_pDriver->m_Textures[it->first];
+    WrappedOpenGL::TextureData &res = m_pDriver->m_Textures[it->first];
 
     // skip textures that aren't from the log (except the 'default backbuffer' textures)
     if(!(res.creationFlags & TextureCategory::SwapBuffer) &&
@@ -775,31 +774,32 @@ rdcarray<DebugMessage> GLReplay::GetDebugMessages()
 
 rdcarray<ShaderEntryPoint> GLReplay::GetShaderEntryPoints(ResourceId shader)
 {
-  if(m_pDriver->m_Shaders.find(shader) == m_pDriver->m_Shaders.end())
+  if(m_pDriver->HasShader(shader))
     return {};
 
-  WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->m_Shaders[shader];
+  const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->GetShader(shader);
 
-  if(shaderDetails.reflection->resourceId == ResourceId())
+  if(shaderDetails.GetReflection()->resourceId == ResourceId())
   {
     RDCERR("Can't get shader details without successful reflect");
     return {};
   }
 
-  return {{shaderDetails.reflection->entryPoint, shaderDetails.reflection->stage}};
+  return {{shaderDetails.GetReflection()->entryPoint, shaderDetails.GetReflection()->stage}};
 }
 
-ShaderReflection *GLReplay::GetShader(ResourceId pipeline, ResourceId shader, ShaderEntryPoint entry)
+const ShaderReflection *GLReplay::GetShader(ResourceId pipeline, ResourceId shader,
+                                            ShaderEntryPoint entry)
 {
-  auto &shaderDetails = m_pDriver->m_Shaders[shader];
+  const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->GetShader(shader);
 
-  if(shaderDetails.reflection->resourceId == ResourceId())
+  if(shaderDetails.GetReflection()->resourceId == ResourceId())
   {
     RDCERR("Can't get shader details without successful reflect");
     return NULL;
   }
 
-  return shaderDetails.reflection;
+  return shaderDetails.GetReflection();
 }
 
 rdcarray<rdcstr> GLReplay::GetDisassemblyTargets(bool withPipeline)
@@ -810,20 +810,17 @@ rdcarray<rdcstr> GLReplay::GetDisassemblyTargets(bool withPipeline)
 rdcstr GLReplay::DisassembleShader(ResourceId pipeline, const ShaderReflection *refl,
                                    const rdcstr &target)
 {
-  auto &shaderDetails =
-      m_pDriver->m_Shaders[m_pDriver->GetResourceManager()->GetLiveID(refl->resourceId)];
+  ResourceId liveId = m_pDriver->GetResourceManager()->GetLiveID(refl->resourceId);
+  const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->GetShader(liveId);
 
   if(shaderDetails.sources.empty() && shaderDetails.spirvWords.empty())
     return "; Invalid Shader Specified";
 
   if(target == SPIRVDisassemblyTarget || target.empty())
   {
-    rdcstr &disasm = shaderDetails.disassembly;
+    m_pDriver->GetWriteableShader(liveId).Disassemble(refl->entryPoint);
 
-    if(disasm.empty())
-      disasm = shaderDetails.spirv.Disassemble(refl->entryPoint, shaderDetails.spirvInstructionLines);
-
-    return disasm;
+    return shaderDetails.disassembly;
   }
 
   return StringFormat::Fmt("; Invalid disassembly target %s", target.c_str());
@@ -1058,7 +1055,7 @@ void GLReplay::SavePipelineState(uint32_t eventId)
       &pipe.vertexShader,   &pipe.tessControlShader, &pipe.tessEvalShader,
       &pipe.geometryShader, &pipe.fragmentShader,    &pipe.computeShader,
   };
-  ShaderReflection *refls[NumShaderStages] = {NULL};
+  const ShaderReflection *refls[NumShaderStages] = {NULL};
   ResourceId progIds[NumShaderStages];
   ResourceId shadIds[NumShaderStages];
   GLuint progForStage[NumShaderStages] = {};
@@ -1087,7 +1084,7 @@ void GLReplay::SavePipelineState(uint32_t eventId)
       if(curPipe != 0)
       {
         ResourceId id = rm->GetResID(ProgramPipeRes(ctx, curPipe));
-        const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->m_Pipelines[id];
+        const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
 
         pipe.pipelineResourceId = rm->GetUnreplacedOriginalID(id);
 
@@ -1109,7 +1106,7 @@ void GLReplay::SavePipelineState(uint32_t eventId)
     else
     {
       ResourceId id = rm->GetResID(ProgramRes(ctx, curProg));
-      const WrappedOpenGL::ProgramData &progDetails = m_pDriver->m_Programs[id];
+      const WrappedOpenGL::ProgramData &progDetails = m_pDriver->GetProgram(id);
 
       pipe.pipelineResourceId = ResourceId();
 
@@ -1137,12 +1134,12 @@ void GLReplay::SavePipelineState(uint32_t eventId)
       stages[i]->programResourceId = rm->GetUnreplacedOriginalID(progIds[i]);
       stages[i]->shaderResourceId = rm->GetUnreplacedOriginalID(shadIds[i]);
 
-      const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->m_Shaders[shadIds[i]];
+      const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->GetShader(shadIds[i]);
 
-      if(shaderDetails.reflection->resourceId == ResourceId())
+      if(shaderDetails.GetReflection()->resourceId == ResourceId())
         stages[i]->reflection = refls[i] = NULL;
       else
-        stages[i]->reflection = refls[i] = shaderDetails.reflection;
+        stages[i]->reflection = refls[i] = shaderDetails.GetReflection();
 
       if(!shaderDetails.spirvWords.empty())
         spirv[i] = true;
@@ -1169,7 +1166,7 @@ void GLReplay::SavePipelineState(uint32_t eventId)
 
   for(size_t s = 0; s < NumShaderStages; s++)
   {
-    ShaderReflection *refl = refls[s];
+    const ShaderReflection *refl = refls[s];
 
     if(!refl)
       continue;
@@ -1359,7 +1356,7 @@ void GLReplay::SavePipelineState(uint32_t eventId)
       if(!IsReadOnlyDescriptor(access.type))
         continue;
 
-      ShaderReflection *refl = refls[(uint32_t)access.stage];
+      const ShaderReflection *refl = refls[(uint32_t)access.stage];
       if(refl == NULL)
       {
         RDCERR("Unexpected NULL reflection on %s shader with a descriptor access",
@@ -2856,9 +2853,9 @@ void GLReplay::FillCBufferVariables(ResourceId pipeline, ResourceId shader, Shad
 
   MakeCurrentReplayContext(&m_ReplayCtx);
 
-  auto &shaderDetails = m_pDriver->m_Shaders[shader];
+  const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->GetShader(shader);
 
-  if((int32_t)cbufSlot >= shaderDetails.reflection->constantBlocks.count())
+  if((int32_t)cbufSlot >= shaderDetails.GetReflection()->constantBlocks.count())
   {
     RDCERR("Requesting invalid constant block");
     return;
@@ -2880,7 +2877,7 @@ void GLReplay::FillCBufferVariables(ResourceId pipeline, ResourceId shader, Shad
     {
       ResourceId id =
           m_pDriver->GetResourceManager()->GetResID(ProgramPipeRes(m_pDriver->GetCtx(), curProg));
-      auto &pipeDetails = m_pDriver->m_Pipelines[id];
+      const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
 
       size_t s = ShaderIdx(shaderDetails.type);
 
@@ -2889,11 +2886,11 @@ void GLReplay::FillCBufferVariables(ResourceId pipeline, ResourceId shader, Shad
     }
   }
 
-  const ConstantBlock &cblock = shaderDetails.reflection->constantBlocks[cbufSlot];
+  const ConstantBlock &cblock = shaderDetails.GetReflection()->constantBlocks[cbufSlot];
 
   if(shaderDetails.spirvWords.empty())
   {
-    OpenGLFillCBufferVariables(shaderDetails.reflection->resourceId, curProg,
+    OpenGLFillCBufferVariables(shaderDetails.GetReflection()->resourceId, curProg,
                                cblock.bufferBacked ? true : false, "", cblock.variables, outvars,
                                data);
   }
@@ -2912,18 +2909,18 @@ void GLReplay::FillCBufferVariables(ResourceId pipeline, ResourceId shader, Shad
         specconsts.push_back(spec);
       }
 
-      FillSpecConstantVariables(shaderDetails.reflection->resourceId, shaderDetails.patchData,
+      FillSpecConstantVariables(shaderDetails.GetReflection()->resourceId, shaderDetails.patchData,
                                 cblock.variables, outvars, specconsts);
     }
     else if(!cblock.bufferBacked)
     {
-      OpenGLFillCBufferVariables(shaderDetails.reflection->resourceId, curProg, false, "",
+      OpenGLFillCBufferVariables(shaderDetails.GetReflection()->resourceId, curProg, false, "",
                                  cblock.variables, outvars, data);
     }
     else
     {
-      StandardFillCBufferVariables(shaderDetails.reflection->resourceId, cblock.variables, outvars,
-                                   data);
+      StandardFillCBufferVariables(shaderDetails.GetReflection()->resourceId, cblock.variables,
+                                   outvars, data);
     }
   }
 }
@@ -3591,7 +3588,7 @@ ResourceId GLReplay::ApplyCustomShader(TextureDisplay &display)
   if(display.customShaderId == ResourceId() || display.resourceId == ResourceId())
     return ResourceId();
 
-  auto &texDetails = m_pDriver->m_Textures[display.resourceId];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[display.resourceId];
 
   MakeCurrentReplayContext(m_DebugCtx);
 
@@ -3926,7 +3923,7 @@ void GLReplay::SetProxyTextureData(ResourceId texid, const Subresource &sub, byt
 
   GLuint tex = m_pDriver->GetResourceManager()->GetCurrentResource(texid).name;
 
-  auto &texdetails = m_pDriver->m_Textures[texid];
+  WrappedOpenGL::TextureData &texdetails = m_pDriver->m_Textures[texid];
 
   if(texdetails.curType == eGL_NONE)
     return;

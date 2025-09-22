@@ -418,10 +418,9 @@ bool WrappedOpenGL::Serialise_glShaderSource(SerialiserType &ser, GLuint shaderH
     // Doing this means we support the case of recompiling a shader different ways
     // and relinking a program before use, which is still moderately crazy and
     // so people who do that should be moderately ashamed.
-    if(m_Shaders[liveId].reflection->resourceId != ResourceId())
+    if(m_Shaders[liveId].GetReflection()->resourceId != ResourceId())
     {
-      m_Shaders[liveId].spirv = rdcspv::Reflector();
-      *m_Shaders[liveId].reflection = ShaderReflection();
+      m_Shaders[liveId].ClearReflection();
     }
 
     AddResourceInitChunk(shader);
@@ -691,14 +690,14 @@ bool WrappedOpenGL::Serialise_glCreateShaderProgramv(SerialiserType &ser, GLenum
 
     ResourceId liveId = m_ResourceManager->RegisterResource(res);
 
-    auto &progDetails = m_Programs[liveId];
+    WrappedOpenGL::ProgramData &progDetails = m_Programs[liveId];
 
     progDetails.linked = true;
     progDetails.shaders.push_back(liveId);
     progDetails.stageShaders[ShaderIdx(type)] = liveId;
     progDetails.shaderProgramUnlinkable = true;
 
-    auto &shadDetails = m_Shaders[liveId];
+    WrappedOpenGL::ShaderData &shadDetails = m_Shaders[liveId];
 
     shadDetails.type = type;
     shadDetails.sources.swap(src);
@@ -846,7 +845,7 @@ bool WrappedOpenGL::Serialise_glLinkProgram(SerialiserType &ser, GLuint programH
     {
       for(size_t sh = 0; sh < progDetails.shaders.size(); sh++)
       {
-        if(m_Shaders[progDetails.shaders[sh]].type == ShaderEnum(s))
+        if(GetShader(progDetails.shaders[sh]).type == ShaderEnum(s))
           progDetails.stageShaders[s] = progDetails.shaders[sh];
       }
     }
@@ -860,14 +859,14 @@ bool WrappedOpenGL::Serialise_glLinkProgram(SerialiserType &ser, GLuint programH
         if(id == ResourceId())
           continue;
 
-        glslang::TShader *s = m_Shaders[id].glslangShader;
+        glslang::TShader *s = GetShader(id).glslangShader;
         if(s == NULL)
         {
           RDCERR("Shader attached with no compiled glslang reflection shader!");
           continue;
         }
 
-        glslangShaders.push_back(m_Shaders[id].glslangShader);
+        glslangShaders.push_back(s);
       }
 
       progDetails.glslangProgram = LinkProgramForReflection(glslangShaders);
@@ -920,7 +919,7 @@ void WrappedOpenGL::glLinkProgram(GLuint program)
     {
       for(size_t sh = 0; sh < progDetails.shaders.size(); sh++)
       {
-        if(m_Shaders[progDetails.shaders[sh]].type == ShaderEnum(s))
+        if(GetShader(progDetails.shaders[sh]).type == ShaderEnum(s))
           progDetails.stageShaders[s] = progDetails.shaders[sh];
       }
     }
@@ -934,14 +933,14 @@ void WrappedOpenGL::glLinkProgram(GLuint program)
         if(id == ResourceId())
           continue;
 
-        glslang::TShader *s = m_Shaders[id].glslangShader;
+        glslang::TShader *s = GetShader(id).glslangShader;
         if(s == NULL)
         {
           RDCERR("Shader attached with no compiled glslang reflection shader!");
           continue;
         }
 
-        glslangShaders.push_back(m_Shaders[id].glslangShader);
+        glslangShaders.push_back(s);
       }
 
       progDetails.glslangProgram = LinkProgramForReflection(glslangShaders);
@@ -1492,7 +1491,7 @@ bool WrappedOpenGL::Serialise_glUseProgramStages(SerialiserType &ser, GLuint pip
       ResourceId liveProgId = GetResourceManager()->GetResID(program);
 
       PipelineData &pipeDetails = m_Pipelines[livePipeId];
-      ProgramData &progDetails = m_Programs[liveProgId];
+      const ProgramData &progDetails = GetProgram(liveProgId);
 
       for(size_t s = 0; s < NumShaderStages; s++)
       {
@@ -1500,7 +1499,7 @@ bool WrappedOpenGL::Serialise_glUseProgramStages(SerialiserType &ser, GLuint pip
         {
           for(size_t sh = 0; sh < progDetails.shaders.size(); sh++)
           {
-            if(m_Shaders[progDetails.shaders[sh]].type == ShaderEnum(s))
+            if(GetShader(progDetails.shaders[sh]).type == ShaderEnum(s))
             {
               pipeDetails.stagePrograms[s] = liveProgId;
               pipeDetails.stageShaders[s] = progDetails.shaders[sh];
@@ -1591,7 +1590,7 @@ void WrappedOpenGL::glUseProgramStages(GLuint pipeline, GLbitfield stages, GLuin
       ResourceId progID = GetResourceManager()->GetResID(ProgramRes(GetCtx(), program));
 
       PipelineData &pipeDetails = m_Pipelines[pipeID];
-      ProgramData &progDetails = m_Programs[progID];
+      const ProgramData &progDetails = GetProgram(progID);
 
       for(size_t s = 0; s < NumShaderStages; s++)
       {
@@ -1599,7 +1598,7 @@ void WrappedOpenGL::glUseProgramStages(GLuint pipeline, GLbitfield stages, GLuin
         {
           for(size_t sh = 0; sh < progDetails.shaders.size(); sh++)
           {
-            if(m_Shaders[progDetails.shaders[sh]].type == ShaderEnum(s))
+            if(GetShader(progDetails.shaders[sh]).type == ShaderEnum(s))
             {
               pipeDetails.stagePrograms[s] = progID;
               pipeDetails.stageShaders[s] = progDetails.shaders[sh];
@@ -1878,7 +1877,7 @@ bool WrappedOpenGL::Serialise_glCompileShaderIncludeARB(SerialiserType &ser, GLu
 
     ResourceId liveId = GetResourceManager()->GetResID(shader);
 
-    auto &shadDetails = m_Shaders[liveId];
+    WrappedOpenGL::ShaderData &shadDetails = m_Shaders[liveId];
 
     shadDetails.includepaths.clear();
     shadDetails.includepaths.reserve(count);
@@ -1919,7 +1918,7 @@ void WrappedOpenGL::glCompileShaderIncludeARB(GLuint shader, GLsizei count,
   {
     ResourceId id = GetResourceManager()->GetResID(ShaderRes(GetCtx(), shader));
 
-    auto &shadDetails = m_Shaders[id];
+    WrappedOpenGL::ShaderData &shadDetails = m_Shaders[id];
 
     shadDetails.includepaths.clear();
     shadDetails.includepaths.reserve(count);

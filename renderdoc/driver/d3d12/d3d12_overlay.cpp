@@ -1991,8 +1991,8 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
         WrappedID3D12PipelineState::ShaderEntry *wrappedPS = pipe->PS();
         if(wrappedPS)
         {
-          ShaderReflection &reflection = pipe->PS()->GetDetails();
-          for(SigParameter &output : reflection.outputSignature)
+          const ShaderReflection &reflection = pipe->PS()->GetDetails();
+          for(const SigParameter &output : reflection.outputSignature)
           {
             if(output.systemValue == ShaderBuiltin::DepthOutput)
               useDepthWriteStencilPass = true;

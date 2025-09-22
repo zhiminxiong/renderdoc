@@ -1278,7 +1278,7 @@ void GLPipelineStateViewer::clearState()
 void GLPipelineStateViewer::setShaderState(const GLPipe::Shader &stage, RDLabel *pipeline,
                                            RDLabel *program, RDLabel *shader, RDTreeWidget *subs)
 {
-  ShaderReflection *shaderDetails = stage.reflection;
+  const ShaderReflection *shaderDetails = stage.reflection;
   const GLPipe::State &state = *m_Ctx.CurGLPipelineState();
 
   if(state.pipelineResourceId != ResourceId())
@@ -2876,7 +2876,7 @@ void GLPipelineStateViewer::shaderView_clicked()
   if(stage == NULL || stage->shaderResourceId == ResourceId())
     return;
 
-  ShaderReflection *shaderDetails = stage->reflection;
+  const ShaderReflection *shaderDetails = stage->reflection;
 
   if(!shaderDetails)
     return;
@@ -2893,7 +2893,7 @@ void GLPipelineStateViewer::shaderSave_clicked()
   if(stage == NULL)
     return;
 
-  ShaderReflection *shaderDetails = stage->reflection;
+  const ShaderReflection *shaderDetails = stage->reflection;
 
   if(stage->shaderResourceId == ResourceId())
     return;
@@ -3064,7 +3064,7 @@ void GLPipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const GLPipe::Vert
 void GLPipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const GLPipe::Shader &sh)
 {
   const GLPipe::State &pipe = *m_Ctx.CurGLPipelineState();
-  ShaderReflection *shaderDetails = sh.reflection;
+  const ShaderReflection *shaderDetails = sh.reflection;
 
   {
     xml.writeStartElement(tr("h3"));

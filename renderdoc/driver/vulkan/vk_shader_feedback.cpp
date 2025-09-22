@@ -1558,7 +1558,7 @@ bool VulkanReplay::FetchShaderFeedback(uint32_t eventId)
     feedbackData.feedbackStorageSize += 16 + Vulkan_Debug_PrintfBufferSize() + 1024;
   }
 
-  ShaderReflection *stageRefls[NumShaderStages] = {};
+  const ShaderReflection *stageRefls[NumShaderStages] = {};
 
   {
     const rdcarray<VulkanRenderState::DescriptorBuffer> &descBufs = state.descBufs;

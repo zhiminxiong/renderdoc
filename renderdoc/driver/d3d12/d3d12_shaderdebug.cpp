@@ -1631,7 +1631,7 @@ void GatherConstantBuffers(WrappedID3D12Device *pDevice, const DXBCBytecode::Pro
   }
 }
 
-ID3DBlob *D3D12Replay::CompileShaderDebugFetcher(DXBC::DXBCContainer *dxbc, const rdcstr &hlsl)
+ID3DBlob *D3D12Replay::CompileShaderDebugFetcher(const DXBC::DXBCContainer *dxbc, const rdcstr &hlsl)
 {
   ID3DBlob *psBlob = NULL;
 
@@ -1859,7 +1859,7 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
     return new ShaderDebugTrace;
   }
 
-  DXBC::DXBCContainer *dxbc = vs->GetDXBC();
+  const DXBC::DXBCContainer *dxbc = vs->GetDXBC();
   const ShaderReflection &refl = vs->GetDetails();
 
   if(!dxbc)
@@ -1874,7 +1874,7 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
     return new ShaderDebugTrace;
   }
 
-  dxbc->GetDisassembly(false);
+  vs->GetWriteableDXBC()->GetDisassembly(false);
 
   const ActionDescription *action = m_pDevice->GetAction(eventId);
 
@@ -2756,7 +2756,7 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
     return new ShaderDebugTrace;
   }
 
-  DXBC::DXBCContainer *dxbc = ps->GetDXBC();
+  const DXBC::DXBCContainer *dxbc = ps->GetDXBC();
   const ShaderReflection &refl = ps->GetDetails();
 
   if(!dxbc)
@@ -2771,12 +2771,12 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
     return new ShaderDebugTrace;
   }
 
-  dxbc->GetDisassembly(false);
+  ps->GetWriteableDXBC()->GetDisassembly(false);
 
   ShaderDebugTrace *ret = NULL;
 
   // Fetch the previous stage's disassembly, to match outputs to PS inputs
-  DXBC::DXBCContainer *prevDxbc = NULL;
+  const DXBC::DXBCContainer *prevDxbc = NULL;
   // Check for geometry shader first
   {
     WrappedID3D12Shader *gs = (WrappedID3D12Shader *)pso->graphics->GS.pShaderBytecode;
@@ -3334,7 +3334,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     return new ShaderDebugTrace;
   }
 
-  DXBC::DXBCContainer *dxbc = cs->GetDXBC();
+  const DXBC::DXBCContainer *dxbc = cs->GetDXBC();
   const ShaderReflection &refl = cs->GetDetails();
 
   if(!dxbc)
@@ -3349,7 +3349,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     return new ShaderDebugTrace;
   }
 
-  dxbc->GetDisassembly(false);
+  cs->GetWriteableDXBC()->GetDisassembly(false);
 
   ShaderDebugTrace *ret = NULL;
   if(dxbc->GetDXBCByteCode())

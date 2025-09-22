@@ -242,8 +242,8 @@ struct VulkanCreationInfo
     ResourceId module;
     ShaderStage stage = ShaderStage::Count;
     rdcstr entryPoint;
-    ShaderReflection *refl = NULL;
-    SPIRVPatchData *patchData = NULL;
+    const ShaderReflection *refl = NULL;
+    const SPIRVPatchData *patchData = NULL;
 
     VkPipelineShaderStageCreateFlags flags;
 

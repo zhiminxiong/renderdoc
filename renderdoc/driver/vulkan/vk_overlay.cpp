@@ -2050,10 +2050,10 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
                                           : pipeInfo.shaders[4];
           if(ps.module != ResourceId())
           {
-            ShaderReflection *reflection = ps.refl;
+            const ShaderReflection *reflection = ps.refl;
             if(reflection)
             {
-              for(SigParameter &output : reflection->outputSignature)
+              for(const SigParameter &output : reflection->outputSignature)
               {
                 if(output.systemValue == ShaderBuiltin::DepthOutput)
                   useDepthWriteStencilPass = true;

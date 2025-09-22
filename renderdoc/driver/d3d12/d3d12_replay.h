@@ -138,7 +138,7 @@ public:
   rdcarray<DebugMessage> GetDebugMessages();
 
   rdcarray<ShaderEntryPoint> GetShaderEntryPoints(ResourceId shader);
-  ShaderReflection *GetShader(ResourceId pipeline, ResourceId shader, ShaderEntryPoint entry);
+  const ShaderReflection *GetShader(ResourceId pipeline, ResourceId shader, ShaderEntryPoint entry);
 
   rdcarray<rdcstr> GetDisassemblyTargets(bool withPipeline);
   rdcstr DisassembleShader(ResourceId pipeline, const ShaderReflection *refl, const rdcstr &target);
@@ -255,7 +255,7 @@ public:
   rdcarray<PixelModification> PixelHistory(rdcarray<EventUsage> events, ResourceId target, uint32_t x,
                                            uint32_t y, const Subresource &sub, CompType typeCast);
 
-  ID3DBlob *CompileShaderDebugFetcher(DXBC::DXBCContainer *dxbc, const rdcstr &hlsl);
+  ID3DBlob *CompileShaderDebugFetcher(const DXBC::DXBCContainer *dxbc, const rdcstr &hlsl);
   ID3D12Resource *CreateInputFetchBuffer(DXDebug::InputFetcher &fetcher, uint64_t &laneDataOffset,
                                          uint64_t &evalDataOffset);
   ID3D12RootSignature *CreateInputFetchRootSig(bool compute, uint32_t &uavspace, uint32_t &sigElem);

@@ -1190,7 +1190,7 @@ template void SerialiseProgramUniforms(WriteSerialiser &ser, CaptureState state,
                                        const PerStageReflections &stages, GLuint prog,
                                        std::map<GLint, GLint> *locTranslate);
 
-bool CopyProgramAttribBindings(GLuint progsrc, GLuint progdst, ShaderReflection *refl)
+bool CopyProgramAttribBindings(GLuint progsrc, GLuint progdst, const ShaderReflection *refl)
 {
   // don't try to copy bindings for SPIR-V shaders. The queries by name may fail, and the bindings
   // are immutable anyway
@@ -1212,7 +1212,7 @@ bool CopyProgramAttribBindings(GLuint progsrc, GLuint progdst, ShaderReflection 
   return !refl->inputSignature.empty();
 }
 
-bool CopyProgramFragDataBindings(GLuint progsrc, GLuint progdst, ShaderReflection *refl)
+bool CopyProgramFragDataBindings(GLuint progsrc, GLuint progdst, const ShaderReflection *refl)
 {
   // don't try to copy bindings for SPIR-V shaders. The queries by name may fail, and the bindings
   // are immutable anyway

@@ -970,7 +970,7 @@ static bool AddArraySlots(WrappedID3D12PipelineState::ShaderEntry *shad, uint32_
 
   bool dynamicUsed = false;
 
-  ShaderReflection &refl = shad->GetDetails();
+  const ShaderReflection &refl = shad->GetDetails();
 
   for(size_t i = 0; i < refl.readOnlyResources.size(); i++)
   {

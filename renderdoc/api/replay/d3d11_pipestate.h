@@ -216,7 +216,7 @@ struct InputAssembly
 
 :type: ShaderReflection
 )");
-  ShaderReflection *bytecode = NULL;
+  const ShaderReflection *bytecode = NULL;
 
   DOCUMENT(R"(The bound vertex buffers
 
@@ -255,7 +255,7 @@ struct Shader
 
 :type: ShaderReflection
 )");
-  ShaderReflection *reflection = NULL;
+  const ShaderReflection *reflection = NULL;
 
   DOCUMENT(R"(A :class:`ShaderStage` identifying which stage this shader is bound to.
 

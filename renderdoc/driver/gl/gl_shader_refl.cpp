@@ -2473,7 +2473,7 @@ void EvaluateVertexAttributeBinds(GLuint curProg, const ShaderReflection *refl, 
   }
 }
 
-void GetCurrentBinding(GLuint curProg, ShaderReflection *refl, const ShaderResource &resource,
+void GetCurrentBinding(GLuint curProg, const ShaderReflection *refl, const ShaderResource &resource,
                        uint32_t &slot, bool &used)
 {
   // in case of bugs, we readback into this array instead of a single int
@@ -2696,7 +2696,7 @@ void GetCurrentBinding(GLuint curProg, ShaderReflection *refl, const ShaderResou
 #endif
 }
 
-void GetCurrentBinding(GLuint curProg, ShaderReflection *refl, const ConstantBlock &cblock,
+void GetCurrentBinding(GLuint curProg, const ShaderReflection *refl, const ConstantBlock &cblock,
                        uint32_t &slot, bool &used)
 {
   if(refl->encoding == ShaderEncoding::OpenGLSPIRV)

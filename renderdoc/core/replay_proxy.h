@@ -531,7 +531,7 @@ public:
                              const rdcarray<uint32_t> &passEvents);
 
   IMPLEMENT_FUNCTION_PROXIED(rdcarray<ShaderEntryPoint>, GetShaderEntryPoints, ResourceId shader);
-  IMPLEMENT_FUNCTION_PROXIED(ShaderReflection *, GetShader, ResourceId pipeline, ResourceId,
+  IMPLEMENT_FUNCTION_PROXIED(const ShaderReflection *, GetShader, ResourceId pipeline, ResourceId,
                              ShaderEntryPoint entry);
 
   IMPLEMENT_FUNCTION_PROXIED(rdcarray<rdcstr>, GetDisassemblyTargets, bool withPipeline);
@@ -679,7 +679,7 @@ private:
     }
   };
 
-  std::map<ShaderReflKey, ShaderReflection *> m_ShaderReflectionCache;
+  std::map<ShaderReflKey, const ShaderReflection *> m_ShaderReflectionCache;
 
   // reader from the other side of the host <-> remote connection
   ReadSerialiser &m_Reader;

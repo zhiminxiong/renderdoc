@@ -43,7 +43,7 @@ bool GLReplay::RenderTextureInternal(TextureDisplay cfg, TexDisplayFlags flags)
 
   WrappedOpenGL &drv = *m_pDriver;
 
-  auto &texDetails = m_pDriver->m_Textures[cfg.resourceId];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[cfg.resourceId];
 
   if(texDetails.internalFormat == eGL_NONE)
     return false;

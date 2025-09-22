@@ -33,8 +33,9 @@
 #include "gl_resources.h"
 #include "gl_shader_refl.h"
 
-static void MakeVaryingsFromShaderReflection(ShaderReflection &refl, rdcarray<const char *> &varyings,
-                                             uint32_t &stride, ShaderReflection *trimRefl = NULL)
+static void MakeVaryingsFromShaderReflection(const ShaderReflection &refl,
+                                             rdcarray<const char *> &varyings, uint32_t &stride,
+                                             ShaderReflection *trimRefl = NULL)
 {
   static rdcarray<rdcstr> tmpStrings;
   tmpStrings.reserve(refl.outputSignature.size());
@@ -249,9 +250,9 @@ void GLReplay::InitPostVSBuffers(uint32_t eventId)
     drv.glBindBuffer(eGL_QUERY_BUFFER, 0);
 
   // reflection structures
-  ShaderReflection *vsRefl = NULL;
-  ShaderReflection *tesRefl = NULL;
-  ShaderReflection *gsRefl = NULL;
+  const ShaderReflection *vsRefl = NULL;
+  const ShaderReflection *tesRefl = NULL;
+  const ShaderReflection *gsRefl = NULL;
   SPIRVPatchData vsPatch, tesPatch, gsPatch;
 
   // the program we'll be binding, that we attach shaders to
@@ -302,31 +303,31 @@ void GLReplay::InitPostVSBuffers(uint32_t eventId)
     else
     {
       ResourceId id = rm->GetResID(rs.Pipeline);
-      auto &pipeDetails = m_pDriver->m_Pipelines[id];
+      const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
 
       for(int i = 0; i < 4; i++)
       {
         if(pipeDetails.stageShaders[i] != ResourceId())
         {
-          ShaderReflection *refl = NULL;
+          const ShaderReflection *refl = NULL;
           if(i == 0)
           {
             refl = vsRefl = GetShader(ResourceId(), pipeDetails.stageShaders[i], ShaderEntryPoint());
-            glslVer = m_pDriver->m_Shaders[pipeDetails.stageShaders[0]].version;
-            vsPatch = m_pDriver->m_Shaders[pipeDetails.stageShaders[0]].patchData;
+            glslVer = m_pDriver->GetShader(pipeDetails.stageShaders[0]).version;
+            vsPatch = m_pDriver->GetShader(pipeDetails.stageShaders[0]).patchData;
 
-            CheckVertexOutputUses(m_pDriver->m_Shaders[pipeDetails.stageShaders[0]].sources,
+            CheckVertexOutputUses(m_pDriver->GetShader(pipeDetails.stageShaders[0]).sources,
                                   outputUsage);
           }
           else if(i == 2)
           {
             refl = tesRefl = GetShader(ResourceId(), pipeDetails.stageShaders[2], ShaderEntryPoint());
-            tesPatch = m_pDriver->m_Shaders[pipeDetails.stageShaders[2]].patchData;
+            tesPatch = m_pDriver->GetShader(pipeDetails.stageShaders[2]).patchData;
           }
           else if(i == 3)
           {
             refl = gsRefl = GetShader(ResourceId(), pipeDetails.stageShaders[3], ShaderEntryPoint());
-            gsPatch = m_pDriver->m_Shaders[pipeDetails.stageShaders[3]].patchData;
+            gsPatch = m_pDriver->GetShader(pipeDetails.stageShaders[3]).patchData;
           }
 
           stageShaders[i] = rm->GetCurrentResource(pipeDetails.stageShaders[i]).name;
@@ -335,7 +336,7 @@ void GLReplay::InitPostVSBuffers(uint32_t eventId)
           if(stageShaders[i] == stageSrcPrograms[i])
           {
             const WrappedOpenGL::ProgramData &progDetails =
-                m_pDriver->m_Programs[pipeDetails.stagePrograms[i]];
+                m_pDriver->GetProgram(pipeDetails.stagePrograms[i]);
 
             if(progDetails.shaderProgramUnlinkable)
             {
@@ -360,31 +361,31 @@ void GLReplay::InitPostVSBuffers(uint32_t eventId)
   }
   else
   {
-    auto &progDetails = m_pDriver->m_Programs[rm->GetResID(rs.Program)];
+    const WrappedOpenGL::ProgramData &progDetails = m_pDriver->GetProgram(rm->GetResID(rs.Program));
 
     for(int i = 0; i < 4; i++)
     {
       if(progDetails.stageShaders[0] != ResourceId())
       {
-        ShaderReflection *refl = NULL;
+        const ShaderReflection *refl = NULL;
         if(i == 0)
         {
           refl = vsRefl = GetShader(ResourceId(), progDetails.stageShaders[0], ShaderEntryPoint());
-          glslVer = m_pDriver->m_Shaders[progDetails.stageShaders[0]].version;
-          vsPatch = m_pDriver->m_Shaders[progDetails.stageShaders[0]].patchData;
+          glslVer = m_pDriver->GetShader(progDetails.stageShaders[0]).version;
+          vsPatch = m_pDriver->GetShader(progDetails.stageShaders[0]).patchData;
 
-          CheckVertexOutputUses(m_pDriver->m_Shaders[progDetails.stageShaders[0]].sources,
+          CheckVertexOutputUses(m_pDriver->GetShader(progDetails.stageShaders[0]).sources,
                                 outputUsage);
         }
         else if(i == 2 && progDetails.stageShaders[2] != ResourceId())
         {
           refl = tesRefl = GetShader(ResourceId(), progDetails.stageShaders[2], ShaderEntryPoint());
-          tesPatch = m_pDriver->m_Shaders[progDetails.stageShaders[2]].patchData;
+          tesPatch = m_pDriver->GetShader(progDetails.stageShaders[2]).patchData;
         }
         else if(i == 3 && progDetails.stageShaders[3] != ResourceId())
         {
           refl = gsRefl = GetShader(ResourceId(), progDetails.stageShaders[3], ShaderEntryPoint());
-          gsPatch = m_pDriver->m_Shaders[progDetails.stageShaders[3]].patchData;
+          gsPatch = m_pDriver->GetShader(progDetails.stageShaders[3]).patchData;
         }
 
         stageShaders[i] = rm->GetCurrentResource(progDetails.stageShaders[i]).name;
@@ -410,7 +411,7 @@ void GLReplay::InitPostVSBuffers(uint32_t eventId)
   {
     if(recompile[i] != ResourceId())
     {
-      const WrappedOpenGL::ShaderData &shadDetails = m_pDriver->m_Shaders[recompile[i]];
+      const WrappedOpenGL::ShaderData &shadDetails = m_pDriver->GetShader(recompile[i]);
 
       stageShaders[i] = tmpShaders[i] = RecompileShader(drv, shadDetails, action->drawIndex);
     }
@@ -1181,7 +1182,7 @@ void GLReplay::InitPostVSBuffers(uint32_t eventId)
   {
     ret.gsout.status.clear();
 
-    ShaderReflection *lastRefl = gsRefl;
+    const ShaderReflection *lastRefl = gsRefl;
     SPIRVPatchData lastPatch = gsPatch;
     int lastIndex = 3;
 

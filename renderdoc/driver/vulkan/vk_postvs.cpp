@@ -2877,7 +2877,7 @@ void VulkanReplay::FetchMeshOut(uint32_t eventId, VulkanRenderState &state)
                                   : pipeInfo.shaders[(size_t)ShaderStage::Mesh];
 
   const VulkanCreationInfo::ShaderModule &meshInfo = creationInfo.m_ShaderModule[meshShad.module];
-  ShaderReflection *meshrefl = meshShad.refl;
+  const ShaderReflection *meshrefl = meshShad.refl;
 
   VulkanPostVSData &ret = m_PostVS.Data[eventId];
 
@@ -4253,7 +4253,7 @@ void VulkanReplay::FetchVSOut(uint32_t eventId, VulkanRenderState &state)
 
   const VulkanCreationInfo::ShaderModule &moduleInfo = creationInfo.m_ShaderModule[vertShad.module];
 
-  ShaderReflection *refl = vertShad.refl;
+  const ShaderReflection *refl = vertShad.refl;
 
   VulkanPostVSData &ret = m_PostVS.Data[eventId];
 
@@ -5650,7 +5650,7 @@ void VulkanReplay::FetchTessGSOut(uint32_t eventId, VulkanRenderState &state)
       state.graphics.shaderObject ? creationInfo.m_ShaderObject[state.shaderObjects[stageIndex]].shad
                                   : pipeInfo.shaders[stageIndex];
 
-  ShaderReflection *lastRefl = shader.refl;
+  const ShaderReflection *lastRefl = shader.refl;
 
   RDCASSERT(lastRefl);
 

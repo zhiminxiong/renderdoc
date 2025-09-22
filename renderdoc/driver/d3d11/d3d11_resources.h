@@ -1074,7 +1074,12 @@ public:
     SCOPED_LOCK(m_ShaderListLock);
     return m_ShaderList[m_ID]->GetShaderExtSlot();
   }
-  DXBC::DXBCContainer *GetDXBC()
+  const DXBC::DXBCContainer *GetDXBC()
+  {
+    SCOPED_LOCK(m_ShaderListLock);
+    return m_ShaderList[m_ID]->GetDXBC();
+  }
+  DXBC::DXBCContainer *GetWriteableDXBC()
   {
     SCOPED_LOCK(m_ShaderListLock);
     return m_ShaderList[m_ID]->GetDXBC();
@@ -1090,7 +1095,7 @@ public:
     return m_ShaderList[m_ID]->GetDescriptorAccess();
   }
 
-  static void GetReflections(rdcarray<ShaderReflection *> &refls)
+  static void GetReflections(rdcarray<const ShaderReflection *> &refls)
   {
     SCOPED_LOCK(m_ShaderListLock);
     refls.clear();

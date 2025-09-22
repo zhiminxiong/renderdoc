@@ -94,7 +94,7 @@ RDResult D3D11Replay::FatalErrorCheck()
 IReplayDriver *D3D11Replay::MakeDummyDriver()
 {
   // gather up the shaders we've allocated to pass to the dummy driver
-  rdcarray<ShaderReflection *> shaders;
+  rdcarray<const ShaderReflection *> shaders;
   WrappedID3D11Shader<ID3D11ComputeShader>::GetReflections(shaders);
 
   IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDevice->DetachStructuredFile());

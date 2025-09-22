@@ -163,7 +163,7 @@ RDResult D3D12Replay::FatalErrorCheck()
 IReplayDriver *D3D12Replay::MakeDummyDriver()
 {
   // gather up the shaders we've allocated to pass to the dummy driver
-  rdcarray<ShaderReflection *> shaders;
+  rdcarray<const ShaderReflection *> shaders;
   WrappedID3D12Shader::GetReflections(shaders);
 
   IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDevice->DetachStructuredFile());
@@ -530,13 +530,13 @@ rdcarray<ShaderEntryPoint> D3D12Replay::GetShaderEntryPoints(ResourceId shader)
 
   WrappedID3D12Shader *sh = (WrappedID3D12Shader *)res;
 
-  ShaderReflection &ret = sh->GetDetails();
+  const ShaderReflection &ret = sh->GetDetails();
 
   return {{"main", ret.stage}};
 }
 
-ShaderReflection *D3D12Replay::GetShader(ResourceId pipeline, ResourceId shader,
-                                         ShaderEntryPoint entry)
+const ShaderReflection *D3D12Replay::GetShader(ResourceId pipeline, ResourceId shader,
+                                               ShaderEntryPoint entry)
 {
   WrappedID3D12Shader *sh =
       m_pDevice->GetResourceManager()->GetCurrentAs<WrappedID3D12Shader>(shader);
@@ -594,13 +594,11 @@ rdcstr D3D12Replay::DisassembleShader(ResourceId pipeline, const ShaderReflectio
   if(!sh)
     return "; Invalid Shader Specified";
 
-  DXBC::DXBCContainer *dxbc = sh->GetDXBC();
-
   if(target == DXBCDXILDisassemblyTarget || target.empty())
-    return dxbc->GetDisassembly(false);
+    return sh->GetWriteableDXBC()->GetDisassembly(false);
 
   if(target == DXCDXILDisassemblyTarget)
-    return dxbc->GetDisassembly(true);
+    return sh->GetWriteableDXBC()->GetDisassembly(true);
 
   if(target == LiveDriverDisassemblyTarget)
   {

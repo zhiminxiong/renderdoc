@@ -1454,13 +1454,13 @@ ShaderDebugTrace *D3D11Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
   if(!vs)
     return new ShaderDebugTrace;
 
-  DXBC::DXBCContainer *dxbc = vs->GetDXBC();
+  const DXBC::DXBCContainer *dxbc = vs->GetDXBC();
   const ShaderReflection &refl = vs->GetDetails();
 
   if(!dxbc)
     return new ShaderDebugTrace;
 
-  dxbc->GetDisassembly(false);
+  vs->GetWriteableDXBC()->GetDisassembly(false);
 
   D3D11RenderState *rs = m_pImmediateContext->GetCurrentPipelineState();
 
@@ -1842,15 +1842,15 @@ ShaderDebugTrace *D3D11Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
 
   D3D11RenderState *rs = m_pImmediateContext->GetCurrentPipelineState();
 
-  DXBC::DXBCContainer *dxbc = ps->GetDXBC();
+  const DXBC::DXBCContainer *dxbc = ps->GetDXBC();
   const ShaderReflection &refl = ps->GetDetails();
 
   if(!dxbc)
     return new ShaderDebugTrace;
 
-  dxbc->GetDisassembly(false);
+  ps->GetWriteableDXBC()->GetDisassembly(false);
 
-  DXBC::DXBCContainer *prevdxbc = NULL;
+  const DXBC::DXBCContainer *prevdxbc = NULL;
 
   if(prevdxbc == NULL && gs != NULL)
     prevdxbc = gs->GetDXBC();
@@ -2305,13 +2305,13 @@ ShaderDebugTrace *D3D11Replay::DebugThread(uint32_t eventId,
   if(!cs)
     return new ShaderDebugTrace;
 
-  DXBC::DXBCContainer *dxbc = cs->GetDXBC();
+  const DXBC::DXBCContainer *dxbc = cs->GetDXBC();
   const ShaderReflection &refl = cs->GetDetails();
 
   if(!dxbc)
     return new ShaderDebugTrace;
 
-  dxbc->GetDisassembly(false);
+  cs->GetWriteableDXBC()->GetDisassembly(false);
 
   D3D11RenderState *rs = m_pImmediateContext->GetCurrentPipelineState();
 

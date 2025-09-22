@@ -1233,13 +1233,13 @@ rdcarray<ShaderEntryPoint> ReplayProxy::GetShaderEntryPoints(ResourceId id)
 }
 
 template <typename ParamSerialiser, typename ReturnSerialiser>
-ShaderReflection *ReplayProxy::Proxied_GetShader(ParamSerialiser &paramser,
-                                                 ReturnSerialiser &retser, ResourceId pipeline,
-                                                 ResourceId shader, ShaderEntryPoint entry)
+const ShaderReflection *ReplayProxy::Proxied_GetShader(ParamSerialiser &paramser,
+                                                       ReturnSerialiser &retser, ResourceId pipeline,
+                                                       ResourceId shader, ShaderEntryPoint entry)
 {
   const ReplayProxyPacket expectedPacket = eReplayProxy_GetShader;
   ReplayProxyPacket packet = eReplayProxy_GetShader;
-  ShaderReflection *ret = NULL;
+  const ShaderReflection *ret = NULL;
 
   // only consider eventID part of the key on APIs where shaders are mutable
   ShaderReflKey key(pipeline, shader, entry);
@@ -1282,8 +1282,8 @@ ShaderReflection *ReplayProxy::Proxied_GetShader(ParamSerialiser &paramser,
   return m_ShaderReflectionCache[key];
 }
 
-ShaderReflection *ReplayProxy::GetShader(ResourceId pipeline, ResourceId shader,
-                                         ShaderEntryPoint entry)
+const ShaderReflection *ReplayProxy::GetShader(ResourceId pipeline, ResourceId shader,
+                                               ShaderEntryPoint entry)
 {
   PROXY_FUNCTION(GetShader, pipeline, shader, entry);
 }
@@ -3066,7 +3066,7 @@ RDResult ReplayProxy::FatalErrorCheck()
 IReplayDriver *ReplayProxy::MakeDummyDriver()
 {
   // gather up the shaders we've allocated to pass to the dummy driver
-  rdcarray<ShaderReflection *> shaders;
+  rdcarray<const ShaderReflection *> shaders;
   for(auto it = m_ShaderReflectionCache.begin(); it != m_ShaderReflectionCache.end(); ++it)
     shaders.push_back(it->second);
   m_ShaderReflectionCache.clear();

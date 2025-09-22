@@ -200,14 +200,14 @@ bool WrappedOpenGL::Check_SafeDraw(bool indexed)
   if(prog)
   {
     ResourceId id = GetResourceManager()->GetResID(ProgramRes(GetCtx(), prog));
-    const ProgramData &progDetails = m_Programs[id];
+    const ProgramData &progDetails = GetProgram(id);
 
     vs = progDetails.stageShaders[0];
   }
   else if(pipe)
   {
     ResourceId id = GetResourceManager()->GetResID(ProgramPipeRes(GetCtx(), pipe));
-    const PipelineData &pipeDetails = m_Pipelines[id];
+    const PipelineData &pipeDetails = GetPipeline(id);
 
     GL.glGetProgramPipelineiv(pipe, eGL_VERTEX_SHADER, (GLint *)&prog);
 
@@ -223,17 +223,17 @@ bool WrappedOpenGL::Check_SafeDraw(bool indexed)
   }
   else
   {
-    const ShaderData &shaderDetails = m_Shaders[vs];
+    const ShaderData &shaderDetails = GetShader(vs);
 
     rdcarray<int32_t> vertexAttrBindings;
-    EvaluateVertexAttributeBinds(prog, shaderDetails.reflection, !shaderDetails.spirvWords.empty(),
-                                 vertexAttrBindings);
+    EvaluateVertexAttributeBinds(prog, shaderDetails.GetReflection(),
+                                 !shaderDetails.spirvWords.empty(), vertexAttrBindings);
 
     for(int attrib = 0; attrib < vertexAttrBindings.count(); attrib++)
     {
       // skip attributes that don't map to the shader, they're unused
       int reflIndex = vertexAttrBindings[attrib];
-      if(reflIndex >= 0 && reflIndex < shaderDetails.reflection->inputSignature.count())
+      if(reflIndex >= 0 && reflIndex < shaderDetails.GetReflection()->inputSignature.count())
       {
         // check that this attribute is in-bounds, and enabled. If so then the driver will read from
         // it so we make sure there's a buffer bound
@@ -258,7 +258,7 @@ bool WrappedOpenGL::Check_SafeDraw(bool indexed)
                   "No vertex buffer bound to attribute %d: %s (buffer slot %d) at draw!\n"
                   "This can be caused by deleting a buffer early, before all draws using it "
                   "have been made",
-                  attrib, shaderDetails.reflection->inputSignature[reflIndex].varName.c_str(),
+                  attrib, shaderDetails.GetReflection()->inputSignature[reflIndex].varName.c_str(),
                   bufIdx));
 
           ret = false;
@@ -278,7 +278,7 @@ bool WrappedOpenGL::Check_SafeDraw(bool indexed)
                     "draw is 0-sized!\n"
                     "Has this buffer been initialised?",
                     ToStr(GetResourceManager()->GetOriginalID(id)).c_str(), attrib,
-                    shaderDetails.reflection->inputSignature[reflIndex].varName.c_str(), bufIdx));
+                    shaderDetails.GetReflection()->inputSignature[reflIndex].varName.c_str(), bufIdx));
 
             ret = false;
           }

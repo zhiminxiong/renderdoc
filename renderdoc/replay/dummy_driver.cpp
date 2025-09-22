@@ -24,7 +24,7 @@
 
 #include "dummy_driver.h"
 
-DummyDriver::DummyDriver(IReplayDriver *original, const rdcarray<ShaderReflection *> &shaders,
+DummyDriver::DummyDriver(IReplayDriver *original, const rdcarray<const ShaderReflection *> &shaders,
                          SDFile *sdfile)
 {
   m_Shaders = shaders;
@@ -49,7 +49,7 @@ DummyDriver::DummyDriver(IReplayDriver *original, const rdcarray<ShaderReflectio
 DummyDriver::~DummyDriver()
 {
   // we own the shaders
-  for(ShaderReflection *refl : m_Shaders)
+  for(const ShaderReflection *refl : m_Shaders)
     delete refl;
 
   // and we own the structured file

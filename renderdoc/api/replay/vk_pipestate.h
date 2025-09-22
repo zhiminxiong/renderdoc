@@ -502,7 +502,7 @@ struct Shader
 
 :type: ShaderReflection
 )");
-  ShaderReflection *reflection = NULL;
+  const ShaderReflection *reflection = NULL;
 
   DOCUMENT(R"(A :class:`ShaderStage` identifying which stage this shader is bound to.
 

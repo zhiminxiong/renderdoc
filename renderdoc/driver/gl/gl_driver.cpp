@@ -1721,10 +1721,10 @@ void WrappedOpenGL::ReplaceResource(ResourceId from, ResourceId to)
       GLuint progdst = toresource.name;
 
       if(shaderType == eGL_VERTEX_SHADER)
-        CopyProgramAttribBindings(progsrc, progdst, shadDetails.reflection);
+        CopyProgramAttribBindings(progsrc, progdst, shadDetails.GetReflection());
 
       if(shaderType == eGL_FRAGMENT_SHADER)
-        CopyProgramFragDataBindings(progsrc, progdst, shadDetails.reflection);
+        CopyProgramFragDataBindings(progsrc, progdst, shadDetails.GetReflection());
 
       {
         PerStageReflections dstStages;
@@ -1872,10 +1872,10 @@ void WrappedOpenGL::RefreshDerivedReplacements()
       ResourceId fs = progdata.stageShaders[4];
 
       if(vs != ResourceId())
-        CopyProgramAttribBindings(progsrc, progdst, m_Shaders[vs].reflection);
+        CopyProgramAttribBindings(progsrc, progdst, GetShader(vs).GetReflection());
 
       if(fs != ResourceId())
-        CopyProgramFragDataBindings(progsrc, progdst, m_Shaders[fs].reflection);
+        CopyProgramFragDataBindings(progsrc, progdst, GetShader(fs).GetReflection());
 
       // link new program
       glLinkProgram(progdst);
@@ -5460,7 +5460,7 @@ void WrappedOpenGL::AddUsage(const ActionDescription &a)
     GLRenderState rs;
     rs.FetchState(this);
 
-    ShaderReflection *refl[NumShaderStages] = {NULL};
+    const ShaderReflection *refl[NumShaderStages] = {NULL};
     GLuint progForStage[NumShaderStages] = {};
 
     GLuint curProg = 0;
@@ -5476,7 +5476,8 @@ void WrappedOpenGL::AddUsage(const ActionDescription &a)
       }
       else
       {
-        auto &pipeDetails = m_Pipelines[rm->GetResID(ProgramPipeRes(ctx, curProg))];
+        const WrappedOpenGL::PipelineData &pipeDetails =
+            GetPipeline(rm->GetResID(ProgramPipeRes(ctx, curProg)));
 
         for(size_t i = 0; i < ARRAY_COUNT(pipeDetails.stageShaders); i++)
         {
@@ -5484,7 +5485,7 @@ void WrappedOpenGL::AddUsage(const ActionDescription &a)
           {
             curProg = rm->GetCurrentResource(pipeDetails.stagePrograms[i]).name;
 
-            refl[i] = m_Shaders[pipeDetails.stageShaders[i]].reflection;
+            refl[i] = GetShader(pipeDetails.stageShaders[i]).GetReflection();
             progForStage[i] = curProg;
           }
         }
@@ -5492,13 +5493,14 @@ void WrappedOpenGL::AddUsage(const ActionDescription &a)
     }
     else
     {
-      auto &progDetails = m_Programs[rm->GetResID(ProgramRes(ctx, curProg))];
+      const WrappedOpenGL::ProgramData &progDetails =
+          GetProgram(rm->GetResID(ProgramRes(ctx, curProg)));
 
       for(size_t i = 0; i < ARRAY_COUNT(progDetails.stageShaders); i++)
       {
         if(progDetails.stageShaders[i] != ResourceId())
         {
-          refl[i] = m_Shaders[progDetails.stageShaders[i]].reflection;
+          refl[i] = GetShader(progDetails.stageShaders[i]).GetReflection();
           progForStage[i] = curProg;
         }
       }

@@ -2901,33 +2901,35 @@ void D3D12Replay::InitPostVSBuffers(uint32_t eventId)
     return;
   }
 
-  DXBC::DXBCContainer *dxbcVS = vs->GetDXBC();
+  const DXBC::DXBCContainer *dxbcVS = vs->GetDXBC();
 
   RDCASSERT(dxbcVS);
 
-  DXBC::DXBCContainer *dxbcGS = NULL;
+  const DXBC::DXBCContainer *dxbcGS = NULL;
 
   WrappedID3D12Shader *gs = origPSO->GS();
 
   if(gs)
   {
     dxbcGS = gs->GetDXBC();
+    gs->GetWriteableDXBC()->CacheOutputTopology();
 
     RDCASSERT(dxbcGS);
   }
 
-  DXBC::DXBCContainer *dxbcDS = NULL;
+  const DXBC::DXBCContainer *dxbcDS = NULL;
 
   WrappedID3D12Shader *ds = origPSO->DS();
 
   if(ds)
   {
     dxbcDS = ds->GetDXBC();
+    ds->GetWriteableDXBC()->CacheOutputTopology();
 
     RDCASSERT(dxbcDS);
   }
 
-  DXBC::DXBCContainer *lastShader = dxbcDS;
+  const DXBC::DXBCContainer *lastShader = dxbcDS;
   if(dxbcGS)
     lastShader = dxbcGS;
 

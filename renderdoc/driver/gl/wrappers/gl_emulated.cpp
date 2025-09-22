@@ -2574,15 +2574,15 @@ static glslang::TProgram *GetGlslangProgram(GLuint program, bool *hasRealProgram
 
   ResourceId id = driver->GetResourceManager()->GetResID(ProgramRes(driver->GetCtx(), program));
 
-  if(!driver->m_Programs[id].glslangProgram)
+  if(!driver->GetProgram(id).glslangProgram)
   {
     RDCERR("Don't have glslang program for reflecting program %u = %s", program, ToStr(id).c_str());
   }
 
   if(hasRealProgram)
-    *hasRealProgram = !driver->m_Programs[id].shaders.empty();
+    *hasRealProgram = !driver->GetProgram(id).shaders.empty();
 
-  return driver->m_Programs[id].glslangProgram;
+  return driver->GetProgram(id).glslangProgram;
 }
 
 void APIENTRY _glGetProgramInterfaceiv(GLuint program, GLenum programInterface, GLenum pname,
@@ -4242,7 +4242,7 @@ void MakeOfflineShaderReflection(ShaderStage stage, const rdcstr &source, const 
   REQUIRE(prog);
 
   // the lookup won't get a valid Id, so set the program to the ResourceId()
-  driver.m_Programs[ResourceId()].glslangProgram = prog;
+  driver.GetWriteableProgram(ResourceId()).glslangProgram = prog;
 
   GLuint fakeProg = 0;
 
@@ -4376,7 +4376,7 @@ void main() {
     REQUIRE(prog);
 
     // the lookup won't get a valid Id, so set the program to the ResourceId()
-    driver.m_Programs[ResourceId()].glslangProgram = prog;
+    driver.GetWriteableProgram(ResourceId()).glslangProgram = prog;
 
     GLint numUniforms = 0;
     GL.glGetProgramInterfaceiv(0, eGL_UNIFORM, eGL_ACTIVE_RESOURCES, &numUniforms);

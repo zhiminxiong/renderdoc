@@ -1184,7 +1184,7 @@ void D3D11PipelineStateViewer::setShaderState(const D3D11Pipe::Shader &stage, RD
                                               RDTreeWidget *samplers, RDTreeWidget *cbuffers,
                                               RDTreeWidget *classes)
 {
-  ShaderReflection *shaderDetails = stage.reflection;
+  const ShaderReflection *shaderDetails = stage.reflection;
 
   shader->setText(ToQStr(stage.resourceId));
 
@@ -2496,7 +2496,7 @@ void D3D11PipelineStateViewer::vertex_leave(QEvent *e)
 
 void D3D11PipelineStateViewer::shaderView_clicked()
 {
-  ShaderReflection *shaderDetails = NULL;
+  const ShaderReflection *shaderDetails = NULL;
 
   QWidget *sender = qobject_cast<QWidget *>(QObject::sender());
   if(sender == ui->iaBytecode || sender == ui->iaBytecodeViewButton)
@@ -2528,7 +2528,7 @@ void D3D11PipelineStateViewer::shaderSave_clicked()
   if(stage == NULL)
     return;
 
-  ShaderReflection *shaderDetails = stage->reflection;
+  const ShaderReflection *shaderDetails = stage->reflection;
 
   if(stage->resourceId == ResourceId())
     return;
@@ -2537,7 +2537,7 @@ void D3D11PipelineStateViewer::shaderSave_clicked()
 }
 
 QVariantList D3D11PipelineStateViewer::exportViewHTML(const Descriptor &view, uint32_t reg,
-                                                      ShaderReflection *refl,
+                                                      const ShaderReflection *refl,
                                                       const QString &extraParams)
 {
   const ShaderResource *shaderInput = NULL;
@@ -2755,7 +2755,7 @@ void D3D11PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D11Pipe
 
 void D3D11PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D11Pipe::Shader &sh)
 {
-  ShaderReflection *shaderDetails = sh.reflection;
+  const ShaderReflection *shaderDetails = sh.reflection;
 
   {
     xml.writeStartElement(lit("h3"));
@@ -2951,7 +2951,7 @@ void D3D11PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D11Pipe
 
     for(int i = 0; i < cblocks.count(); i++)
     {
-      ConstantBlock *shaderCBuf = NULL;
+      const ConstantBlock *shaderCBuf = NULL;
 
       if(cblocks[i].descriptor.resource == ResourceId())
         continue;

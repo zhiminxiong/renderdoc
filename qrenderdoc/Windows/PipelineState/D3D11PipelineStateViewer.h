@@ -105,7 +105,7 @@ private:
   void setState();
   void clearState();
 
-  QVariantList exportViewHTML(const Descriptor &view, uint32_t reg, ShaderReflection *refl,
+  QVariantList exportViewHTML(const Descriptor &view, uint32_t reg, const ShaderReflection *refl,
                               const QString &extraParams);
   void exportHTML(QXmlStreamWriter &xml, const D3D11Pipe::InputAssembly &ia);
   void exportHTML(QXmlStreamWriter &xml, const D3D11Pipe::Shader &sh);

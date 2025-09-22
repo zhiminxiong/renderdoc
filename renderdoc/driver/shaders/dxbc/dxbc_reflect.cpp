@@ -404,6 +404,7 @@ void MakeShaderReflection(DXBC::DXBCContainer *dxbc, const ShaderEntryPoint &ent
   refl->inputSignature = dxbcRefl->InputSig;
   refl->outputSignature = dxbcRefl->OutputSig;
 
+  dxbc->CacheOutputTopology();
   switch(dxbc->GetOutputTopology())
   {
     case D3D_PRIMITIVE_TOPOLOGY_POINTLIST: refl->outputTopology = Topology::PointList; break;

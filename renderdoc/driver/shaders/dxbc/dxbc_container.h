@@ -206,7 +206,8 @@ public:
   const bytebuf &GetShaderBlob() const { return m_ShaderBlob; }
   const IDebugInfo *GetDebugInfo() const { return m_DebugInfo; }
   const Reflection *GetReflection() const { return m_Reflection; }
-  D3D_PRIMITIVE_TOPOLOGY GetOutputTopology();
+  void CacheOutputTopology();
+  D3D_PRIMITIVE_TOPOLOGY GetOutputTopology() const { return m_OutputTopology; }
   ThreadScope GetThreadScope() const { return m_Threadscope; }
 
   CBufferVariableType GetRayPayload(const ShaderEntryPoint &entry)

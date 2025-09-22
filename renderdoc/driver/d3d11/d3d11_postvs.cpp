@@ -254,11 +254,11 @@ void D3D11Replay::InitPostVSBuffers(uint32_t eventId)
     return;
   }
 
-  DXBC::DXBCContainer *dxbcVS = wrappedVS->GetDXBC();
+  const DXBC::DXBCContainer *dxbcVS = wrappedVS->GetDXBC();
 
   RDCASSERT(dxbcVS);
 
-  DXBC::DXBCContainer *dxbcGS = NULL;
+  const DXBC::DXBCContainer *dxbcGS = NULL;
 
   if(gs)
   {
@@ -266,11 +266,12 @@ void D3D11Replay::InitPostVSBuffers(uint32_t eventId)
         (WrappedID3D11Shader<ID3D11GeometryShader> *)gs;
 
     dxbcGS = wrappedGS->GetDXBC();
+    wrappedGS->GetWriteableDXBC()->CacheOutputTopology();
 
     RDCASSERT(dxbcGS);
   }
 
-  DXBC::DXBCContainer *dxbcDS = NULL;
+  const DXBC::DXBCContainer *dxbcDS = NULL;
 
   if(ds)
   {
@@ -278,12 +279,13 @@ void D3D11Replay::InitPostVSBuffers(uint32_t eventId)
         (WrappedID3D11Shader<ID3D11DomainShader> *)ds;
 
     dxbcDS = wrappedDS->GetDXBC();
+    wrappedDS->GetWriteableDXBC()->CacheOutputTopology();
 
     RDCASSERT(dxbcDS);
   }
 
   ResourceId lastShaderId = GetIDForDeviceChild(ds);
-  DXBC::DXBCContainer *lastShader = dxbcDS;
+  const DXBC::DXBCContainer *lastShader = dxbcDS;
   if(dxbcGS)
   {
     lastShaderId = GetIDForDeviceChild(gs);

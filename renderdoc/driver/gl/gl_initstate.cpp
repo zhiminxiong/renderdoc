@@ -1177,7 +1177,8 @@ bool GLResourceManager::Serialise_InitialState(SerialiserType &ser, ResourceId i
 
     if(IsReplayingAndReading())
     {
-      WrappedOpenGL::ProgramData &details = m_Driver->m_Programs[GetLiveID(id)];
+      // need to write to serialise the location translation table
+      WrappedOpenGL::ProgramData &details = m_Driver->GetWriteableProgram(GetLiveID(id));
 
       m_Driver->FillReflectionArray(GetLiveID(id), stages);
 
@@ -1193,15 +1194,15 @@ bool GLResourceManager::Serialise_InitialState(SerialiserType &ser, ResourceId i
 
         numShaders++;
 
-        const auto &shadDetails = m_Driver->m_Shaders[details.stageShaders[i]];
+        const WrappedOpenGL::ShaderData &shadDetails = m_Driver->GetShader(details.stageShaders[i]);
 
-        IsProgramSPIRV |= shadDetails.reflection->encoding == ShaderEncoding::OpenGLSPIRV;
+        IsProgramSPIRV |= shadDetails.GetReflection()->encoding == ShaderEncoding::OpenGLSPIRV;
 
         GLuint shad = drv.glCreateShader(shadDetails.type);
 
         if(shadDetails.type == eGL_VERTEX_SHADER)
         {
-          for(const SigParameter &sig : shadDetails.reflection->outputSignature)
+          for(const SigParameter &sig : shadDetails.GetReflection()->outputSignature)
           {
             rdcstr name = sig.varName;
 
@@ -2224,17 +2225,19 @@ void GLResourceManager::Apply_InitialState(GLResource live, GLInitialContents &i
   {
     ResourceId Id = GetID(live);
 
-    const WrappedOpenGL::ProgramData &prog = m_Driver->m_Programs[Id];
+    const WrappedOpenGL::ProgramData &prog = m_Driver->GetProgram(Id);
 
     bool changedBindings = false;
 
     if(prog.stageShaders[0] != ResourceId())
-      changedBindings |= CopyProgramAttribBindings(
-          initial.resource.name, live.name, m_Driver->m_Shaders[prog.stageShaders[0]].reflection);
+      changedBindings |=
+          CopyProgramAttribBindings(initial.resource.name, live.name,
+                                    m_Driver->GetShader(prog.stageShaders[0]).GetReflection());
 
     if(prog.stageShaders[4] != ResourceId())
-      changedBindings |= CopyProgramFragDataBindings(
-          initial.resource.name, live.name, m_Driver->m_Shaders[prog.stageShaders[4]].reflection);
+      changedBindings |=
+          CopyProgramFragDataBindings(initial.resource.name, live.name,
+                                      m_Driver->GetShader(prog.stageShaders[4]).GetReflection());
 
     // we need to re-link the program to apply the bindings, as long as it's linkable.
     // See the comment on shaderProgramUnlinkable for more information.

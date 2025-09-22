@@ -722,8 +722,8 @@ public:
     rdcspv::Reflector spirv;
     rdcstr disassembly;
     std::map<size_t, uint32_t> spirvInstructionLines;
-    ShaderReflection *reflection;
     int version;
+    const ShaderReflection *GetReflection() const { return reflection; }
 
     // used only when we're capturing and don't have driver-side reflection so we need to emulate
     glslang::TShader *glslangShader = NULL;
@@ -741,6 +741,27 @@ public:
     void ProcessSPIRVCompilation(WrappedOpenGL &drv, ResourceId id, GLuint realShader,
                                  const GLchar *pEntryPoint, GLuint numSpecializationConstants,
                                  const GLuint *pConstantIndex, const GLuint *pConstantValue);
+
+    void ClearReflection()
+    {
+      *reflection = ShaderReflection();
+      spirv = rdcspv::Reflector();
+    }
+    const ShaderReflection *StealReflection()
+    {
+      ShaderReflection *ret = reflection;
+      reflection = NULL;
+      return ret;
+    }
+
+    void Disassemble(const rdcstr &disasmEntryPoint)
+    {
+      if(disassembly.empty())
+        disassembly = spirv.Disassemble(disasmEntryPoint, spirvInstructionLines);
+    }
+
+  private:
+    ShaderReflection *reflection;
   };
 
   struct ProgramData
@@ -787,15 +808,22 @@ public:
   std::map<ResourceId, ProgramData> m_Programs;
   std::map<ResourceId, PipelineData> m_Pipelines;
 
+  bool HasShader(ResourceId id) { return m_Shaders.find(id) != m_Shaders.end(); }
+  const ShaderData &GetShader(ResourceId id) { return m_Shaders[id]; }
+  ShaderData &GetWriteableShader(ResourceId id) { return m_Shaders[id]; }
+  const ProgramData &GetProgram(ResourceId id) { return m_Programs[id]; }
+  ProgramData &GetWriteableProgram(ResourceId id) { return m_Programs[id]; }
+  const PipelineData &GetPipeline(ResourceId id) { return m_Pipelines[id]; }
+
   void FillReflectionArray(ResourceId program, PerStageReflections &stages)
   {
-    ProgramData &progdata = m_Programs[program];
+    const ProgramData &progdata = GetProgram(program);
     for(size_t i = 0; i < ARRAY_COUNT(progdata.stageShaders); i++)
     {
       ResourceId shadId = progdata.stageShaders[i];
       if(shadId != ResourceId())
       {
-        stages.refls[i] = m_Shaders[shadId].reflection;
+        stages.refls[i] = GetShader(shadId).GetReflection();
       }
     }
   }

@@ -1171,7 +1171,7 @@ void D3D12PipelineStateViewer::clearState()
 void D3D12PipelineStateViewer::setShaderState(const D3D12Pipe::Shader &stage, RDLabel *pipeline,
                                               RDLabel *shader, RDLabel *rootSig)
 {
-  ShaderReflection *shaderDetails = stage.reflection;
+  const ShaderReflection *shaderDetails = stage.reflection;
   const D3D12Pipe::State &state = *m_Ctx.CurD3D12PipelineState();
 
   rootSig->setText(ToQStr(state.rootSignature.resourceId));
@@ -2643,7 +2643,7 @@ void D3D12PipelineStateViewer::shaderSave_clicked()
   if(stage == NULL)
     return;
 
-  ShaderReflection *shaderDetails = stage->reflection;
+  const ShaderReflection *shaderDetails = stage->reflection;
 
   if(stage->resourceId == ResourceId())
     return;
@@ -2882,7 +2882,7 @@ void D3D12PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D12Pipe
 
 void D3D12PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D12Pipe::Shader &sh)
 {
-  ShaderReflection *shaderDetails = sh.reflection;
+  const ShaderReflection *shaderDetails = sh.reflection;
 
   {
     xml.writeStartElement(lit("h3"));

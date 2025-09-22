@@ -854,7 +854,7 @@ uint32_t GetDescriptorSizeOfBind(VulkanResourceManager *resourceMan,
 }
 
 static void ProcessStaticDescriptorAccess(VulkanResourceManager *resourceMan,
-                                          ShaderReflection *refl, ResourceId specStorage,
+                                          const ShaderReflection *refl, ResourceId specStorage,
                                           rdcarray<DescriptorAccess> &descriptorAccess,
                                           rdcarray<const DescSetLayout *> setLayoutInfos)
 {

@@ -53,7 +53,7 @@ bool GLReplay::CreateFragmentShaderReplacementProgram(GLuint program, GLuint rep
   GLuint tmpShaders[4] = {0};
 
   // the reflection for the vertex shader, used to copy vertex bindings
-  ShaderReflection *vsRefl = NULL;
+  const ShaderReflection *vsRefl = NULL;
 
   bool HasSPIRVShaders = false;
   bool HasGLSLShaders = false;
@@ -67,7 +67,7 @@ bool GLReplay::CreateFragmentShaderReplacementProgram(GLuint program, GLuint rep
     else
     {
       ResourceId id = m_pDriver->GetResourceManager()->GetResID(ProgramPipeRes(ctx, pipeline));
-      const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->m_Pipelines[id];
+      const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
 
       // fetch the corresponding shaders and programs for each stage
       for(size_t i = 0; i < 4; i++)
@@ -75,9 +75,9 @@ bool GLReplay::CreateFragmentShaderReplacementProgram(GLuint program, GLuint rep
         if(pipeDetails.stageShaders[i] != ResourceId())
         {
           const WrappedOpenGL::ShaderData &shadDetails =
-              m_pDriver->m_Shaders[pipeDetails.stageShaders[i]];
+              m_pDriver->GetShader(pipeDetails.stageShaders[i]);
 
-          if(shadDetails.reflection->encoding == ShaderEncoding::OpenGLSPIRV)
+          if(shadDetails.GetReflection()->encoding == ShaderEncoding::OpenGLSPIRV)
             HasSPIRVShaders = true;
           else
             HasGLSLShaders = true;
@@ -90,7 +90,7 @@ bool GLReplay::CreateFragmentShaderReplacementProgram(GLuint program, GLuint rep
           if(pipeDetails.stagePrograms[i] == pipeDetails.stageShaders[i])
           {
             const WrappedOpenGL::ProgramData &progDetails =
-                m_pDriver->m_Programs[pipeDetails.stagePrograms[i]];
+                m_pDriver->GetProgram(pipeDetails.stagePrograms[i]);
 
             if(progDetails.shaderProgramUnlinkable)
             {
@@ -126,7 +126,7 @@ bool GLReplay::CreateFragmentShaderReplacementProgram(GLuint program, GLuint rep
   else
   {
     const WrappedOpenGL::ProgramData &progDetails =
-        m_pDriver->m_Programs[m_pDriver->GetResourceManager()->GetResID(ProgramRes(ctx, program))];
+        m_pDriver->GetProgram(m_pDriver->GetResourceManager()->GetResID(ProgramRes(ctx, program)));
 
     // fetch any and all non-fragment shader shaders
     for(size_t i = 0; i < 4; i++)
@@ -138,9 +138,9 @@ bool GLReplay::CreateFragmentShaderReplacementProgram(GLuint program, GLuint rep
             m_pDriver->GetResourceManager()->GetCurrentResource(progDetails.stageShaders[i]).name;
 
         const WrappedOpenGL::ShaderData &shadDetails =
-            m_pDriver->m_Shaders[progDetails.stageShaders[i]];
+            m_pDriver->GetShader(progDetails.stageShaders[i]);
 
-        if(shadDetails.reflection->encoding == ShaderEncoding::OpenGLSPIRV)
+        if(shadDetails.GetReflection()->encoding == ShaderEncoding::OpenGLSPIRV)
           HasSPIRVShaders = true;
         else
           HasGLSLShaders = true;
@@ -413,14 +413,14 @@ ResourceId GLReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, Debug
 
     if(rs.Program.name)
       vs =
-          m_pDriver->m_Programs[m_pDriver->GetResourceManager()->GetResID(rs.Program)].stageShaders[0];
+          m_pDriver->GetProgram(m_pDriver->GetResourceManager()->GetResID(rs.Program)).stageShaders[0];
     else
-      vs = m_pDriver->m_Pipelines[m_pDriver->GetResourceManager()->GetResID(rs.Pipeline)]
+      vs = m_pDriver->GetPipeline(m_pDriver->GetResourceManager()->GetResID(rs.Pipeline))
                .stageShaders[0];
 
     if(vs != ResourceId())
     {
-      glslVer = m_pDriver->m_Shaders[vs].version;
+      glslVer = m_pDriver->GetShader(vs).version;
       if(glslVer == 0)
         glslVer = 100;
     }
@@ -501,7 +501,7 @@ ResourceId GLReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, Debug
     overlayFixedColLocation =
         drv.glGetUniformLocation(DebugData.overlayProg, "RENDERDOC_Fixed_Color");
 
-  auto &texDetails = m_pDriver->m_Textures[texid];
+  WrappedOpenGL::TextureData &texDetails = m_pDriver->m_Textures[texid];
 
   GLenum texBindingEnum = eGL_TEXTURE_2D;
   GLenum texQueryEnum = eGL_TEXTURE_BINDING_2D;

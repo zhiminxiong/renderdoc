@@ -1722,7 +1722,7 @@ void VulkanPipelineStateViewer::setShaderState(const VKPipe::Pipeline &pipe,
                                                RDLabel *shader, RDLabel *shaderDebug,
                                                RDLabel *pipeLayout, RDTreeWidget *descSets)
 {
-  ShaderReflection *shaderDetails = stage.reflection;
+  const ShaderReflection *shaderDetails = stage.reflection;
 
   if(stage.shaderObject)
   {
@@ -2017,7 +2017,7 @@ void VulkanPipelineStateViewer::setState()
 
         if(state.vertexShader.resourceId != ResourceId())
         {
-          for(SigParameter &sigParam : state.vertexShader.reflection->inputSignature)
+          for(const SigParameter &sigParam : state.vertexShader.reflection->inputSignature)
           {
             if(sigParam.regIndex == a.location)
             {
@@ -3564,7 +3564,7 @@ void VulkanPipelineStateViewer::shaderView_clicked()
   if(stage == NULL || stage->resourceId == ResourceId())
     return;
 
-  ShaderReflection *shaderDetails = stage->reflection;
+  const ShaderReflection *shaderDetails = stage->reflection;
 
   ResourceId pipe = stage->stage == ShaderStage::Compute
                         ? m_Ctx.CurVulkanPipelineState()->compute.pipelineResourceId
@@ -3585,7 +3585,7 @@ void VulkanPipelineStateViewer::shaderSave_clicked()
   if(stage == NULL)
     return;
 
-  ShaderReflection *shaderDetails = stage->reflection;
+  const ShaderReflection *shaderDetails = stage->reflection;
 
   if(stage->resourceId == ResourceId())
     return;
@@ -3722,7 +3722,7 @@ void VulkanPipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const VKPipe::
 
 void VulkanPipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const VKPipe::Shader &sh)
 {
-  ShaderReflection *shaderDetails = sh.reflection;
+  const ShaderReflection *shaderDetails = sh.reflection;
 
   {
     xml.writeStartElement(lit("h3"));
