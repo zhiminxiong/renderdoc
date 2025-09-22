@@ -82,11 +82,13 @@ struct D3D12GraphicsTest : public GraphicsTest
     None = 0,
     SkipOptimise = 1 << 0,
     Enable16BitTypes = 1 << 1,
+    SeparateDebug = 1 << 2,
   };
 
   ID3DBlobPtr Compile(std::string src, std::string entry, std::string profile,
                       uint32_t compileOptions = CompileOptionFlags::SkipOptimise);
   void WriteBlob(std::string name, ID3DBlobPtr blob, bool compress);
+  void WriteBlob(std::string name, void *data, size_t size, bool compress);
 
   void SetBlobPath(std::string name, ID3DBlobPtr &blob);
   void SetBlobPath(std::string name, ID3D12DeviceChild *shader);

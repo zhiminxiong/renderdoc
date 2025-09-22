@@ -1407,6 +1407,7 @@ void D3D12GraphicsTest::OMSetRenderTargets(ID3D12GraphicsCommandListPtr cmd,
 
 COM_SMARTPTR(IDxcLibrary);
 COM_SMARTPTR(IDxcCompiler);
+COM_SMARTPTR(IDxcCompiler2);
 COM_SMARTPTR(IDxcBlobEncoding);
 COM_SMARTPTR(IDxcOperationResult);
 COM_SMARTPTR(IDxcBlob);
@@ -1417,6 +1418,7 @@ ID3DBlobPtr D3D12GraphicsTest::Compile(std::string src, std::string entry, std::
   ID3DBlobPtr blob = NULL;
   bool skipoptimise = ((compileOptions & CompileOptionFlags::SkipOptimise) != 0);
   bool enable16BitTypes = ((compileOptions & CompileOptionFlags::Enable16BitTypes) != 0);
+  bool separateDebug = ((compileOptions & CompileOptionFlags::SeparateDebug) != 0);
 
   if(profile[3] >= '6')
   {
@@ -1500,8 +1502,56 @@ ID3DBlobPtr D3D12GraphicsTest::Compile(std::string src, std::string entry, std::
       args[1].push_back(argStorage[i].c_str());
 
     IDxcOperationResultPtr result;
-    HRESULT hrStatus;
-    for(size_t i = 0; i < numAttempts; ++i)
+    HRESULT hrStatus = E_NOINTERFACE;
+
+    if(separateDebug)
+    {
+      IDxcCompiler2Ptr compiler2 = compiler;
+
+      if(compiler2)
+      {
+        result = NULL;
+        hrStatus = E_NOINTERFACE;
+
+        IDxcBlobPtr debugBlob = NULL;
+        LPWSTR debugBlobWideName = NULL;
+
+        // use the non-Qembed_debug version
+        hr = compiler2->CompileWithDebug(sourceBlob, UTF82Wide(entry).c_str(),
+                                         UTF82Wide(entry).c_str(), UTF82Wide(profile).c_str(),
+                                         args[1].data(), (UINT)args[1].size(), NULL, 0, NULL,
+                                         &result, &debugBlobWideName, &debugBlob);
+
+        std::string debugBlobName;
+        if(debugBlobWideName)
+        {
+          debugBlobName = Wide2UTF8(debugBlobWideName);
+          CoTaskMemFree(debugBlobWideName);
+        }
+
+        if(debugBlob)
+        {
+          std::string path = GetExecutableName();
+          path.erase(path.find_last_of("/\\"));
+          path += "/tmp/";
+          MakeDir(path.c_str());
+          path += "dxcDebugBlobs/";
+          MakeDir(path.c_str());
+
+          WriteBlob(path + debugBlobName, debugBlob->GetBufferPointer(), debugBlob->GetBufferSize(),
+                    false);
+        }
+
+        if(result)
+          result->GetStatus(&hrStatus);
+      }
+      else
+      {
+        TEST_WARN("Can't compile with separate debug info without IDxcCompiler2");
+      }
+    }
+
+    for(size_t i = 0; FAILED(hrStatus) && i < numAttempts; ++i)
     {
       result = NULL;
       hrStatus = E_NOINTERFACE;
@@ -1581,6 +1631,11 @@ ID3DBlobPtr D3D12GraphicsTest::Compile(std::string src, std::string entry, std::
 
 void D3D12GraphicsTest::WriteBlob(std::string name, ID3DBlobPtr blob, bool compress)
 {
+  WriteBlob(name, blob->GetBufferPointer(), blob->GetBufferSize(), compress);
+}
+
+void D3D12GraphicsTest::WriteBlob(std::string name, void *data, size_t size, bool compress)
+{
   FILE *f = NULL;
   fopen_s(&f, name.c_str(), "wb");
 
@@ -1592,11 +1647,10 @@ void D3D12GraphicsTest::WriteBlob(std::string name, ID3DBlobPtr blob, bool compr
 
   if(compress)
   {
-    int uncompSize = (int)blob->GetBufferSize();
+    int uncompSize = (int)size;
     char *compBuf = new char[uncompSize];
 
-    int compressedSize = LZ4_compress_default((const char *)blob->GetBufferPointer(), compBuf,
-                                              uncompSize, uncompSize);
+    int compressedSize = LZ4_compress_default((const char *)data, compBuf, uncompSize, uncompSize);
 
     fwrite(compBuf, 1, compressedSize, f);
 
@@ -1604,7 +1658,7 @@ void D3D12GraphicsTest::WriteBlob(std::string name, ID3DBlobPtr blob, bool compr
   }
   else
   {
-    fwrite(blob->GetBufferPointer(), 1, blob->GetBufferSize(), f);
+    fwrite(data, 1, size, f);
   }
 
   fclose(f);
