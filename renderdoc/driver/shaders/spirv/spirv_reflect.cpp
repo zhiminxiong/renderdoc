@@ -2434,8 +2434,6 @@ TEST_CASE("Validate SPIR-V reflection", "[spirv][reflection]")
 
     REQUIRE(!spirv.empty());
 
-    FileIO::WriteAll("T:/tmp/a.spv", spirv);
-
     rdcspv::Reflector spv;
     spv.Parse(spirv);
 
