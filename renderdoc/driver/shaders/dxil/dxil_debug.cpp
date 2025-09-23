@@ -2687,7 +2687,6 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
                           {
                             rdcstr name =
                                 resRef->resourceBase.name + StringFormat::Fmt("[%u]", arrayIndex);
-                            result = result.members[arrayIndex].members[0];
                             result.name = name;
                           }
                         }
@@ -2700,7 +2699,52 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
                     }
                   }
                   // Create the cbuffer handle reference
-                  m_ConstantBlockHandles[resultId] = {constantBlockIndex, arrayIndex};
+                  ConstantBlockReference constantBlockRef = {constantBlockIndex, arrayIndex};
+                  m_ConstantBlockHandles[resultId] = constantBlockRef;
+
+                  // Create cbuffer struct variable of N uint4's : N comes from resource metadata
+                  const size_t structSize = AlignUp16(resRef->resourceBase.cbufferData.sizeInBytes);
+                  ShaderVariable cbufferVar;
+                  cbufferVar.members.resize(structSize / 16);
+                  cbufferVar.type = VarType::Struct;
+                  cbufferVar.name = result.name;
+                  for(size_t i = 0; i < cbufferVar.members.size(); ++i)
+                  {
+                    ShaderVariable &var = cbufferVar.members[i];
+                    var.type = VarType::UInt;
+                    var.columns = 4;
+                    var.name = StringFormat::Fmt("%s[%u]", result.name.c_str(), i);
+                    var.rows = 1;
+                  }
+
+                  // Memory copy from the cbuffer data into the cbuffer variable
+                  auto it = m_GlobalState.constantBlocksDatas.find(constantBlockRef);
+                  if(it != m_GlobalState.constantBlocksDatas.end())
+                  {
+                    const bytebuf &cbufferData = it->second;
+                    if(cbufferData.size() != 0)
+                    {
+                      size_t offset = 0;
+                      const byte *data = cbufferData.data();
+                      for(size_t i = 0; i < cbufferVar.members.size(); ++i)
+                      {
+                        ShaderVariable &var = cbufferVar.members[i];
+                        memcpy(var.value.u32v.data(), data + offset, 16);
+                        offset += 16;
+                        if(offset >= cbufferData.size())
+                          break;
+                      }
+                    }
+                    else
+                    {
+                      RDCERR("No data for constant block %s", result.name.c_str());
+                    }
+                  }
+                  else
+                  {
+                    RDCERR("Can't find the data for constant block %s", result.name.c_str());
+                  }
+                  result = cbufferVar;
                 }
               }
             }
