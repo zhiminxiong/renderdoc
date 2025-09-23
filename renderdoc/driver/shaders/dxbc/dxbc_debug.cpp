@@ -1748,6 +1748,11 @@ void FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset, const
     // source mapping.
     // We should not overlap into the next register as that's not allowed.
     memcpy(&outvars[outIdx].value.u32v[outComp], &v.value.u32v[0], sizeof(uint32_t) * v.columns);
+    uint32_t oldColumns = outvars[outIdx].columns;
+    uint32_t newColumns = (uint32_t)(outComp + v.columns);
+    uint32_t numColumns = RDCMAX(oldColumns, newColumns);
+    numColumns = RDCMIN(4U, numColumns);
+    outvars[outIdx].columns = (uint8_t)numColumns;
 
     SourceVariableMapping mapping;
     mapping.name = basename;
@@ -1773,14 +1778,14 @@ void FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset, const
     {
       outvars[outIdx + reg].rows = 1;
       outvars[outIdx + reg].type = VarType::Unknown;
-      outvars[outIdx + reg].columns = v.columns;
+      outvars[outIdx + reg].columns = v.columns + (uint8_t)outComp;
       outvars[outIdx + reg].flags = v.flags;
     }
 
     if(v.RowMajor())
     {
       for(size_t ri = 0; ri < v.rows; ri++)
-        memcpy(&outvars[outIdx + ri].value.u32v[0], &v.value.u32v[ri * v.columns],
+        memcpy(&outvars[outIdx + ri].value.u32v[outComp], &v.value.u32v[ri * v.columns],
                sizeof(uint32_t) * v.columns);
     }
     else
