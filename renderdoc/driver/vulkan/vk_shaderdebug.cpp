@@ -405,7 +405,7 @@ public:
       for(int i = 0; i < 4; i++)
         coords[i] = uintComp(coord, i);
 
-      if(coords[0] > data.width || coords[1] > data.height || coords[2] > data.depth)
+      if(coords[0] >= data.width || coords[1] >= data.height || coords[2] >= data.depth)
       {
         if(!IsDeviceThread())
           return rdcspv::DeviceOpResult::NeedsDevice;
@@ -548,7 +548,7 @@ public:
       for(int i = 0; i < 4; i++)
         coords[i] = uintComp(coord, i);
 
-      if(coords[0] > data.width || coords[1] > data.height || coords[2] > data.depth)
+      if(coords[0] >= data.width || coords[1] >= data.height || coords[2] >= data.depth)
       {
         if(!IsDeviceThread())
           return rdcspv::DeviceOpResult::NeedsDevice;
