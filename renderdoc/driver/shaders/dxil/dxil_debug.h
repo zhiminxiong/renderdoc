@@ -173,13 +173,87 @@ struct ConstantBlockReference
   }
 };
 
+struct ViewFmt
+{
+  int byteWidth = 0;
+  int numComps = 0;
+  CompType compType = CompType::Typeless;
+  int stride = 0;
+};
+
+struct ResourceInfo
+{
+  ResourceInfo() : firstElement(0), numElements(0), isByteBuffer(false), isRootDescriptor(false) {}
+
+  uint32_t firstElement;
+  uint32_t numElements;
+
+  bool isByteBuffer;
+  bool isRootDescriptor;
+  // Buffer stride is stored in format.stride
+  ViewFmt format;
+};
+
+struct UAVData
+{
+  UAVData() = default;
+
+  ResourceInfo resInfo;
+  bytebuf data;
+
+  uint32_t rowPitch = 0;
+  uint32_t depthPitch = 0;
+  uint32_t hiddenCounter = 0;
+  bool tex = false;
+};
+
+struct SRVData
+{
+  SRVData() = default;
+
+  ResourceInfo resInfo;
+  bytebuf data;
+};
+
+enum class ThreadProperty : uint32_t
+{
+  Helper,
+  QuadId,
+  QuadLane,
+  Active,
+  SubgroupIdx,
+  Count,
+};
+
+struct ThreadProperties
+{
+  rdcfixedarray<uint32_t, arraydim<ThreadProperty>()> props;
+
+  uint32_t &operator[](ThreadProperty p)
+  {
+    if(p >= ThreadProperty::Count)
+      return props[0];
+    return props[(uint32_t)p];
+  }
+
+  uint32_t operator[](ThreadProperty p) const
+  {
+    if(p >= ThreadProperty::Count)
+      return 0;
+    return props[(uint32_t)p];
+  }
+};
+
+typedef rdcflatmap<ShaderBuiltin, ShaderVariable> BuiltinInputs;
+
 class DebugAPIWrapper
 {
 public:
-  // During shader debugging, when a new resource is encountered
-  // These will be called to fetch the data on demand.
-  virtual void FetchSRV(const BindingSlot &slot) = 0;
-  virtual void FetchUAV(const BindingSlot &slot) = 0;
+  virtual ~DebugAPIWrapper() {}
+
+  // These will fetch the data on demand.
+  virtual const UAVData &GetUAVData(const BindingSlot &slot) = 0;
+  virtual const SRVData &GetSRVData(const BindingSlot &slot) = 0;
 
   virtual bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
                                       ShaderVariable &output) = 0;
@@ -193,14 +267,28 @@ public:
                                      ShaderVariable &output) = 0;
   virtual ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass,
                                          const DXDebug::BindingSlot &slot, uint32_t mipLevel,
-                                         const DXBC::ShaderType shaderType, int &dim) = 0;
+                                         const DXBC::ShaderType shaderType, int &dim) const = 0;
   virtual ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                       const DXBC::ShaderType shaderType, const char *opString) = 0;
+                                       const DXBC::ShaderType shaderType,
+                                       const char *opString) const = 0;
   virtual ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
-                                                   const char *opString) = 0;
-  virtual ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) = 0;
+                                                   const char *opString) const = 0;
+  virtual ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const = 0;
   virtual ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
-                                                   const DXDebug::BindingSlot &slot) = 0;
+                                                   const DXDebug::BindingSlot &slot) const = 0;
+
+  virtual bool IsSRVCached(const DXDebug::BindingSlot &slot) = 0;
+  virtual bool IsUAVCached(const DXDebug::BindingSlot &slot) = 0;
+
+  virtual const ShaderVariable &GetInputPlaceholder() const = 0;
+  virtual const rdcarray<DXILDebug::ThreadProperties> &GetWorkgroupProperties() const = 0;
+  virtual const rdcarray<ShaderVariable> &GetConstantBlocks() const = 0;
+  virtual const std::map<ConstantBlockReference, bytebuf> &GetConstantBlocksDatas() const = 0;
+  virtual const BuiltinInputs &GetBuiltins() const = 0;
+  virtual uint32_t GetSubgroupSize() const = 0;
+  virtual const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &GetThreadsBuiltins() const = 0;
+  virtual const rdcarray<ShaderVariable> &GetThreadsInputs() const = 0;
+  virtual const rdcarray<SourceVariableMapping> &GetSourceVars() const = 0;
 };
 
 struct MemoryTracking
@@ -236,8 +324,6 @@ struct MemoryTracking
   // Pointers within a Allocation memory allocation, the allocated memory will be in m_Allocations
   std::map<Id, Pointer> m_Pointers;
 };
-
-typedef rdcflatmap<ShaderBuiltin, ShaderVariable> BuiltinInputs;
 
 struct ThreadState
 {
@@ -401,56 +487,6 @@ struct GlobalState
   uint32_t subgroupSize = 1;
   bool waveOpsIncludeHelpers = false;
 
-  struct ViewFmt
-  {
-    int byteWidth = 0;
-    int numComps = 0;
-    CompType compType = CompType::Typeless;
-    int stride = 0;
-  };
-
-  struct ResourceInfo
-  {
-    ResourceInfo() : firstElement(0), numElements(0), isByteBuffer(false), isRootDescriptor(false)
-    {
-    }
-
-    uint32_t firstElement;
-    uint32_t numElements;
-
-    bool isByteBuffer;
-    bool isRootDescriptor;
-    // Buffer stride is stored in format.stride
-    ViewFmt format;
-  };
-
-  struct UAVData
-  {
-    UAVData() : tex(false), rowPitch(0), depthPitch(0), hiddenCounter(0) {}
-
-    ResourceInfo resInfo;
-
-    bytebuf data;
-    bool tex;
-    uint32_t rowPitch, depthPitch;
-
-    uint32_t hiddenCounter;
-  };
-
-  std::map<BindingSlot, UAVData> uavs;
-  typedef std::map<BindingSlot, UAVData>::const_iterator UAVIterator;
-
-  struct SRVData
-  {
-    SRVData() {}
-
-    ResourceInfo resInfo;
-    bytebuf data;
-  };
-
-  std::map<BindingSlot, SRVData> srvs;
-  typedef std::map<BindingSlot, SRVData>::const_iterator SRVIterator;
-
   // allocated storage for opaque uniform blocks, does not change over the course of debugging
   rdcarray<ShaderVariable> constantBlocks;
   std::map<ConstantBlockReference, bytebuf> constantBlocksDatas;
@@ -556,62 +592,33 @@ struct TypeData
   bool colMajorMat = false;
 };
 
-enum class ThreadProperty : uint32_t
-{
-  Helper,
-  QuadId,
-  QuadLane,
-  Active,
-  SubgroupIdx,
-  Count,
-};
-
-struct ThreadProperties
-{
-  rdcfixedarray<uint32_t, arraydim<ThreadProperty>()> props;
-
-  uint32_t &operator[](ThreadProperty p)
-  {
-    if(p >= ThreadProperty::Count)
-      return props[0];
-    return props[(uint32_t)p];
-  }
-
-  uint32_t operator[](ThreadProperty p) const
-  {
-    if(p >= ThreadProperty::Count)
-      return 0;
-    return props[(uint32_t)p];
-  }
-};
-
 class Debugger : public DXBCContainerDebugger
 {
 public:
   Debugger() : DXBCContainerDebugger(true){};
-  ShaderDebugTrace *BeginDebug(uint32_t eventId, const DXBC::DXBCContainer *dxbcContainer,
+  ~Debugger();
+
+  ShaderDebugTrace *BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eventId,
+                               const DXBC::DXBCContainer *dxbcContainer,
                                const ShaderReflection &reflection, uint32_t activeLaneIndex,
                                uint32_t threadsInWorkgroup);
-  void InitialiseWorkgroup(const rdcarray<ThreadProperties> &workgroupProperties);
-  rdcarray<ShaderDebugState> ContinueDebug(DebugAPIWrapper *apiWrapper);
-  GlobalState &GetGlobalState() { return m_GlobalState; }
-  ThreadState &GetActiveLane() { return m_Workgroup[m_ActiveLaneIndex]; }
-  ThreadState &GetLane(const uint32_t i) { return m_Workgroup[i]; }
-  rdcarray<ThreadState> &GetWorkgroup() { return m_Workgroup; }
-  const rdcarray<bool> &GetLiveGlobals() { return m_LiveGlobals; }
-  static rdcstr GetResourceReferenceName(const DXIL::Program *program, DXIL::ResourceClass resClass,
-                                         const BindingSlot &slot);
+  rdcarray<ShaderDebugState> ContinueDebug();
+
+  const rdcarray<bool> &GetLiveGlobals() const { return m_LiveGlobals; }
+  const DXIL::Program &GetProgram() const { return *m_Program; }
+  const FunctionInfo *GetFunctionInfo(const DXIL::Function *function) const;
+
+  DebugAPIWrapper *GetAPIWrapper() const { return m_ApiWrapper; }
+
   static rdcstr GetResourceBaseName(const DXIL::Program *program,
                                     const DXIL::ResourceReference *resRef);
-  const DXIL::Program &GetProgram() const { return *m_Program; }
-  uint32_t GetEventId() { return m_EventId; }
-  const FunctionInfo *GetFunctionInfo(const DXIL::Function *function) const;
-  const rdcarray<DXIL::EntryPointInterface::Signature> &GetDXILEntryPointInputs(void) const
-  {
-    return m_EntryPointInterface->inputs;
-  }
+
+  static rdcstr GetResourceReferenceName(const DXIL::Program *program, DXIL::ResourceClass resClass,
+                                         const BindingSlot &slot);
 
 private:
+  void InitialiseWorkgroup();
+  ThreadState &GetActiveLane() { return m_Workgroup[m_ActiveLaneIndex]; }
   void ParseDbgOpDeclare(const DXIL::Instruction &inst, uint32_t instructionIndex);
   void ParseDbgOpValue(const DXIL::Instruction &inst, uint32_t instructionIndex);
   const DXIL::Metadata *GetMDScope(const DXIL::Metadata *scopeMD) const;
@@ -621,6 +628,8 @@ private:
   void AddStructMembers(const DXIL::DICompositeType *structTypeData, TypeData &structType);
   void AddLocalVariable(const DXIL::SourceMappingInfo &srcMapping, uint32_t instructionIndex);
   void ParseDebugData();
+
+  DebugAPIWrapper *m_ApiWrapper = NULL;
 
   rdcarray<ThreadState> m_Workgroup;
   std::map<const DXIL::Function *, FunctionInfo> m_FunctionInfos;
@@ -644,7 +653,6 @@ private:
   const DXIL::EntryPointInterface *m_EntryPointInterface = NULL;
   ShaderStage m_Stage;
 
-  uint32_t m_EventId = 0;
   uint32_t m_ActiveLaneIndex = 0;
   int m_Steps = 0;
 };

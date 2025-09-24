@@ -134,7 +134,7 @@ static bool IsShaderParameterVisible(DXBC::ShaderType shaderType,
   return false;
 }
 
-static void FillViewFmtFromResourceFormat(DXGI_FORMAT format, GlobalState::ViewFmt &viewFmt)
+static void FillViewFmtFromResourceFormat(DXGI_FORMAT format, ViewFmt &viewFmt)
 {
   RDCASSERT(format != DXGI_FORMAT_UNKNOWN);
   ResourceFormat fmt = MakeResourceFormat(format);
@@ -188,315 +188,6 @@ static uint32_t GetSRVBufferStrideFromShaderMetadata(const DXIL::EntryPointInter
     }
   }
   return 0;
-}
-
-static void FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset,
-                                  const rdcstr &basename, const ShaderVariable &v,
-                                  rdcarray<ShaderVariable> &outvars,
-                                  rdcarray<SourceVariableMapping> &sourcevars)
-{
-  size_t outIdx = byteOffset / 16;
-  size_t outComp = (byteOffset % 16) / 4;
-
-  if(v.RowMajor())
-    outvars.resize(RDCMAX(outIdx + v.rows, outvars.size()));
-  else
-    outvars.resize(RDCMAX(outIdx + v.columns, outvars.size()));
-
-  if(outvars[outIdx].columns > 0)
-  {
-    // if we already have a variable in this slot, just copy the data for this variable and add
-    // the source mapping. We should not overlap into the next register as that's not allowed.
-    memcpy(&outvars[outIdx].value.u32v[outComp], &v.value.u32v[0], sizeof(uint32_t) * v.columns);
-    uint32_t oldColumns = outvars[outIdx].columns;
-    uint32_t newColumns = (uint32_t)(outComp + v.columns);
-    uint32_t numColumns = RDCMAX(oldColumns, newColumns);
-    numColumns = RDCMIN(4U, numColumns);
-    outvars[outIdx].columns = (uint8_t)numColumns;
-
-    SourceVariableMapping mapping;
-    mapping.name = basename;
-    mapping.type = v.type;
-    mapping.rows = v.rows;
-    mapping.columns = v.columns;
-    mapping.offset = byteOffset;
-    mapping.variables.resize(v.columns);
-
-    for(int i = 0; i < v.columns; i++)
-    {
-      mapping.variables[i].type = DebugVariableType::Constant;
-      mapping.variables[i].name = StringFormat::Fmt("%s[%u]", cbufferName.c_str(), outIdx);
-      mapping.variables[i].component = uint16_t(outComp + i);
-    }
-
-    sourcevars.push_back(mapping);
-  }
-  else
-  {
-    const uint32_t numRegisters = v.RowMajor() ? v.rows : v.columns;
-    for(uint32_t reg = 0; reg < numRegisters; reg++)
-    {
-      outvars[outIdx + reg].rows = 1;
-      outvars[outIdx + reg].type = v.type;
-      outvars[outIdx + reg].columns = v.columns + (uint8_t)outComp;
-      outvars[outIdx + reg].flags = v.flags;
-    }
-
-    if(v.RowMajor())
-    {
-      for(size_t ri = 0; ri < v.rows; ri++)
-        memcpy(&outvars[outIdx + ri].value.u32v[outComp], &v.value.u32v[ri * v.columns],
-               sizeof(uint32_t) * v.columns);
-    }
-    else
-    {
-      // if we have a matrix stored in column major order, we need to transpose it back so we can
-      // unroll it into vectors.
-      for(size_t ci = 0; ci < v.columns; ci++)
-        for(size_t ri = 0; ri < v.rows; ri++)
-          outvars[outIdx + ci].value.u32v[ri] = v.value.u32v[ri * v.columns + ci];
-    }
-
-    SourceVariableMapping mapping;
-    mapping.name = basename;
-    mapping.type = v.type;
-    mapping.rows = v.rows;
-    mapping.columns = v.columns;
-    mapping.offset = byteOffset;
-    mapping.variables.resize(v.rows * v.columns);
-
-    RDCASSERT(outComp == 0 || v.rows == 1, outComp, v.rows);
-
-    size_t i = 0;
-    for(uint8_t r = 0; r < v.rows; r++)
-    {
-      for(uint8_t c = 0; c < v.columns; c++)
-      {
-        size_t regIndex = outIdx + (v.RowMajor() ? r : c);
-        size_t compIndex = outComp + (v.RowMajor() ? c : r);
-
-        mapping.variables[i].type = DebugVariableType::Constant;
-        mapping.variables[i].name = StringFormat::Fmt("%s[%zu]", cbufferName.c_str(), regIndex);
-        mapping.variables[i].component = uint16_t(compIndex);
-        i++;
-      }
-    }
-
-    sourcevars.push_back(mapping);
-  }
-}
-
-static void FlattenVariables(const rdcstr &cbufferName, const rdcarray<ShaderConstant> &constants,
-                             const rdcarray<ShaderVariable> &invars,
-                             rdcarray<ShaderVariable> &outvars, const rdcstr &prefix,
-                             uint32_t baseOffset, rdcarray<SourceVariableMapping> &sourceVars)
-{
-  RDCASSERTEQUAL(constants.size(), invars.size());
-
-  for(size_t i = 0; i < constants.size(); i++)
-  {
-    const ShaderConstant &c = constants[i];
-    const ShaderVariable &v = invars[i];
-
-    uint32_t byteOffset = baseOffset + c.byteOffset;
-
-    rdcstr basename = prefix + rdcstr(v.name);
-
-    if(v.type == VarType::Struct)
-    {
-      // check if this is an array of structs or not
-      if(c.type.elements == 1)
-      {
-        FlattenVariables(cbufferName, c.type.members, v.members, outvars, basename + ".",
-                         byteOffset, sourceVars);
-      }
-      else
-      {
-        for(int m = 0; m < v.members.count(); m++)
-        {
-          FlattenVariables(cbufferName, c.type.members, v.members[m].members, outvars,
-                           StringFormat::Fmt("%s[%zu].", basename.c_str(), m),
-                           byteOffset + m * c.type.arrayByteStride, sourceVars);
-        }
-      }
-    }
-    else if(c.type.elements > 1 || (v.rows == 0 && v.columns == 0) || !v.members.empty())
-    {
-      for(int m = 0; m < v.members.count(); m++)
-      {
-        FlattenSingleVariable(cbufferName, byteOffset + m * c.type.arrayByteStride,
-                              StringFormat::Fmt("%s[%zu]", basename.c_str(), m), v.members[m],
-                              outvars, sourceVars);
-      }
-    }
-    else
-    {
-      FlattenSingleVariable(cbufferName, byteOffset, basename, v, outvars, sourceVars);
-    }
-  }
-}
-static void AddCBufferToGlobalState(const DXIL::Program *program, GlobalState &global,
-                                    rdcarray<SourceVariableMapping> &sourceVars,
-                                    const ShaderReflection &refl, const BindingSlot &slot,
-                                    bytebuf &cbufData)
-{
-  // Find the identifier
-  size_t numCBs = refl.constantBlocks.size();
-  for(size_t i = 0; i < numCBs; ++i)
-  {
-    const ConstantBlock &cb = refl.constantBlocks[i];
-    if(slot.registerSpace == (uint32_t)cb.fixedBindSetOrSpace &&
-       slot.shaderRegister >= (uint32_t)cb.fixedBindNumber &&
-       slot.shaderRegister < (uint32_t)(cb.fixedBindNumber + cb.bindArraySize))
-    {
-      uint32_t arrayIndex = slot.shaderRegister - cb.fixedBindNumber;
-
-      rdcarray<ShaderVariable> &targetVars =
-          cb.bindArraySize > 1 ? global.constantBlocks[i].members[arrayIndex].members
-                               : global.constantBlocks[i].members;
-      RDCASSERTMSG("Reassigning previously filled cbuffer", targetVars.empty());
-
-      ConstantBlockReference constantBlockRef = {i, arrayIndex};
-      global.constantBlocksDatas[constantBlockRef] = cbufData;
-      rdcstr resName = Debugger::GetResourceReferenceName(program, ResourceClass::CBuffer, slot);
-      global.constantBlocks[i].name = resName;
-
-      SourceVariableMapping cbSourceMapping;
-      cbSourceMapping.name = refl.constantBlocks[i].name;
-      cbSourceMapping.variables.push_back(
-          DebugVariableReference(DebugVariableType::Constant, global.constantBlocks[i].name));
-      sourceVars.push_back(cbSourceMapping);
-
-      rdcstr identifierPrefix = global.constantBlocks[i].name;
-      rdcstr variablePrefix = refl.constantBlocks[i].name;
-      if(cb.bindArraySize > 1)
-      {
-        identifierPrefix =
-            StringFormat::Fmt("%s[%u]", global.constantBlocks[i].name.c_str(), arrayIndex);
-        variablePrefix = StringFormat::Fmt("%s[%u]", refl.constantBlocks[i].name.c_str(), arrayIndex);
-
-        // The above sourceVar is for the logical identifier, and FlattenVariables adds the
-        // individual elements of the constant buffer. For CB arrays, add an extra source
-        // var for the CB array index
-        SourceVariableMapping cbArrayMapping;
-        global.constantBlocks[i].members[arrayIndex].name = StringFormat::Fmt("[%u]", arrayIndex);
-        cbArrayMapping.name = variablePrefix;
-        cbArrayMapping.variables.push_back(
-            DebugVariableReference(DebugVariableType::Constant, identifierPrefix));
-        sourceVars.push_back(cbArrayMapping);
-      }
-      const rdcarray<ShaderConstant> &constants =
-          (cb.bindArraySize > 1) ? refl.constantBlocks[i].variables[0].type.members
-                                 : refl.constantBlocks[i].variables;
-
-      rdcarray<ShaderVariable> vars;
-      StandardFillCBufferVariables(refl.resourceId, constants, vars, cbufData);
-      FlattenVariables(identifierPrefix, constants, vars, targetVars, variablePrefix + ".", 0,
-                       sourceVars);
-      for(size_t c = 0; c < targetVars.size(); c++)
-        targetVars[c].name = StringFormat::Fmt("[%u]", (uint32_t)c);
-
-      return;
-    }
-  }
-}
-
-void FetchConstantBufferData(WrappedID3D12Device *device, const DXIL::Program *program,
-                             const D3D12RenderState::RootSignature &rootsig,
-                             const ShaderReflection &refl, GlobalState &global,
-                             rdcarray<SourceVariableMapping> &sourceVars)
-{
-  WrappedID3D12RootSignature *pD3D12RootSig =
-      device->GetResourceManager()->GetCurrentAs<WrappedID3D12RootSignature>(rootsig.rootsig);
-  const DXBC::ShaderType shaderType = program->GetShaderType();
-
-  size_t numParams = RDCMIN(pD3D12RootSig->sig.Parameters.size(), rootsig.sigelems.size());
-  for(size_t i = 0; i < numParams; i++)
-  {
-    const D3D12RootSignatureParameter &rootSigParam = pD3D12RootSig->sig.Parameters[i];
-    const D3D12RenderState::SignatureElement &element = rootsig.sigelems[i];
-    if(IsShaderParameterVisible(shaderType, rootSigParam.ShaderVisibility))
-    {
-      if(rootSigParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS &&
-         element.type == eRootConst)
-      {
-        BindingSlot slot(rootSigParam.Constants.ShaderRegister, rootSigParam.Constants.RegisterSpace);
-        UINT sizeBytes = sizeof(uint32_t) * RDCMIN(rootSigParam.Constants.Num32BitValues,
-                                                   (UINT)element.constants.size());
-        bytebuf cbufData((const byte *)element.constants.data(), sizeBytes);
-        AddCBufferToGlobalState(program, global, sourceVars, refl, slot, cbufData);
-      }
-      else if(rootSigParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV && element.type == eRootCBV)
-      {
-        BindingSlot slot(rootSigParam.Descriptor.ShaderRegister,
-                         rootSigParam.Descriptor.RegisterSpace);
-        ID3D12Resource *cbv = device->GetResourceManager()->GetCurrentAs<ID3D12Resource>(element.id);
-        bytebuf cbufData;
-        device->GetDebugManager()->GetBufferData(cbv, element.offset, 0, cbufData);
-        AddCBufferToGlobalState(program, global, sourceVars, refl, slot, cbufData);
-      }
-      else if(rootSigParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE &&
-              element.type == eRootTable)
-      {
-        UINT prevTableOffset = 0;
-        WrappedID3D12DescriptorHeap *heap =
-            device->GetResourceManager()->GetCurrentAs<WrappedID3D12DescriptorHeap>(element.id);
-
-        size_t numRanges = rootSigParam.ranges.size();
-        for(size_t r = 0; r < numRanges; r++)
-        {
-          // For this traversal we only care about CBV descriptor ranges, but we still need to
-          // calculate the table offsets in case a descriptor table has a combination of
-          // different range types
-          const D3D12_DESCRIPTOR_RANGE1 &range = rootSigParam.ranges[r];
-
-          UINT offset = range.OffsetInDescriptorsFromTableStart;
-          if(range.OffsetInDescriptorsFromTableStart == D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND)
-            offset = prevTableOffset;
-
-          D3D12Descriptor *desc = (D3D12Descriptor *)heap->GetCPUDescriptorHandleForHeapStart().ptr;
-          desc += element.offset;
-          desc += offset;
-
-          UINT numDescriptors = range.NumDescriptors;
-          if(numDescriptors == UINT_MAX)
-          {
-            // Find out how many descriptors are left after
-            numDescriptors = heap->GetNumDescriptors() - offset - (UINT)element.offset;
-
-            // TODO: Look up the bind point in the D3D12 state to try to get
-            // a better guess at the number of descriptors
-          }
-
-          prevTableOffset = offset + numDescriptors;
-
-          if(range.RangeType != D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
-            continue;
-
-          BindingSlot slot(range.BaseShaderRegister, range.RegisterSpace);
-
-          bytebuf cbufData;
-          for(UINT n = 0; n < numDescriptors; ++n, ++slot.shaderRegister)
-          {
-            const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbv = desc->GetCBV();
-            ResourceId resId;
-            uint64_t byteOffset = 0;
-            WrappedID3D12Resource::GetResIDFromAddr(cbv.BufferLocation, resId, byteOffset);
-            ID3D12Resource *pCbvResource =
-                device->GetResourceManager()->GetCurrentAs<ID3D12Resource>(resId);
-            cbufData.clear();
-
-            if(cbv.SizeInBytes > 0)
-              device->GetDebugManager()->GetBufferData(pCbvResource, byteOffset, cbv.SizeInBytes,
-                                                       cbufData);
-            AddCBufferToGlobalState(program, global, sourceVars, refl, slot, cbufData);
-
-            desc++;
-          }
-        }
-      }
-    }
-  }
 }
 
 InterpolationMode GetInterpolationModeForInputParam(const SigParameter &sig,
@@ -568,34 +259,458 @@ void GetInterpolationModeForInputParams(const rdcarray<SigParameter> &inputSig,
   }
 }
 
-D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Program &dxilProgram,
-                                 GlobalState &globalState, uint32_t eventId)
+D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Program *dxilProgram,
+                                 const ShaderReflection &refl, uint32_t eventId,
+                                 const rdcarray<SigParameter> &inputSig)
     : m_Device(device),
-      m_EntryPointInterface(dxilProgram.GetEntryPointInterface()),
-      m_GlobalState(globalState),
-      m_ShaderType(dxilProgram.GetShaderType()),
-      m_EventId(eventId)
+      m_EntryPointInterface(dxilProgram->GetEntryPointInterface()),
+      m_ShaderType(dxilProgram->GetShaderType()),
+      m_EventId(eventId),
+      m_Program(dxilProgram),
+      m_Reflection(refl)
 {
+  // Create the storage layout for the constant buffers
+  // The constant buffer data and details are filled in outside of this method
+  size_t count = refl.constantBlocks.size();
+  m_ConstantBlocks.resize(count);
+  for(uint32_t i = 0; i < count; i++)
+  {
+    m_ConstantBlocks[i].type = VarType::ConstantBlock;
+    const ConstantBlock &cb = m_Reflection.constantBlocks[i];
+    uint32_t bindCount = cb.bindArraySize;
+    if(bindCount > 1)
+    {
+      // Create nested structure for constant buffer array
+      m_ConstantBlocks[i].members.resize(bindCount);
+    }
+  }
+
+  // Add inputs to the shader trace
+  const rdcarray<EntryPointInterface::Signature> &inputs = m_EntryPointInterface->inputs;
+
+  const uint32_t countInParams = (uint32_t)inputs.size();
+  if(countInParams)
+  {
+    // Make fake ShaderVariable struct to hold all the inputs
+    ShaderVariable &inStruct = m_InputPlaceholder;
+    inStruct.name = DXIL_FAKE_INPUT_STRUCT_NAME;
+    inStruct.rows = 0;
+    inStruct.columns = 0;
+    inStruct.type = VarType::Struct;
+    inStruct.members.resize(countInParams);
+
+    for(uint32_t i = 0; i < countInParams; ++i)
+    {
+      const EntryPointInterface::Signature &sig = inputs[i];
+
+      ShaderVariable &v = inStruct.members[i];
+
+      // Get the name from the DXBC reflection
+      SigParameter sigParam;
+      if(FindSigParameter(inputSig, sig, sigParam))
+      {
+        v.name = sigParam.semanticIdxName;
+      }
+      else
+      {
+        v.name = sig.name;
+      }
+      v.rows = (uint8_t)sig.rows;
+      v.columns = (uint8_t)sig.cols;
+      v.type = VarTypeForComponentType(sig.type);
+      if(v.rows <= 1)
+      {
+        v.rows = 1;
+      }
+      else
+      {
+        v.members.resize(v.rows);
+        for(uint32_t r = 0; r < v.rows; r++)
+        {
+          v.members[r].rows = 1;
+          v.members[r].columns = (uint8_t)sig.cols;
+          v.members[r].type = v.type;
+          v.members[r].name = StringFormat::Fmt("[%u]", r);
+        }
+      }
+
+      SourceVariableMapping inputMapping;
+      inputMapping.name = v.name;
+      inputMapping.type = v.type;
+      inputMapping.rows = sig.rows;
+      inputMapping.columns = sig.cols;
+      inputMapping.variables.reserve(sig.cols);
+      inputMapping.signatureIndex = i;
+      if(v.rows <= 1)
+      {
+        inputMapping.variables.reserve(sig.cols);
+        for(uint32_t c = 0; c < sig.cols; ++c)
+        {
+          DebugVariableReference ref;
+          ref.type = DebugVariableType::Input;
+          ref.name = inStruct.name + "." + v.name;
+          ref.component = c;
+          inputMapping.variables.push_back(ref);
+        }
+      }
+      else
+      {
+        DebugVariableReference ref;
+        ref.type = DebugVariableType::Input;
+        ref.name = inStruct.name + "." + v.name;
+        inputMapping.variables.push_back(ref);
+      }
+      m_SourceVars.push_back(inputMapping);
+    }
+
+    // Make a single source variable mapping for the whole input struct
+    SourceVariableMapping inputMapping;
+    inputMapping.name = inStruct.name;
+    inputMapping.type = VarType::Struct;
+    inputMapping.rows = 0;
+    inputMapping.columns = 0;
+    inputMapping.variables.resize(1);
+    inputMapping.variables.push_back(DebugVariableReference(DebugVariableType::Input, inStruct.name));
+    m_SourceVars.push_back(inputMapping);
+  }
 }
 
 D3D12APIWrapper::~D3D12APIWrapper()
 {
-  // if we replayed to before the action for fetching some UAVs
-  // replay back to after the action to keep the state consistent.
-  if(m_DidReplay)
+  ResetReplay();
+}
+
+void D3D12APIWrapper::ResetReplay()
+{
+  if(!m_ResourcesDirty)
   {
-    D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "ResetReplay");
     // replay the action to get back to 'normal' state for this event
+    D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "ResetReplay");
     m_Device->ReplayLog(0, m_EventId, eReplay_OnlyDraw);
+    m_ResourcesDirty = true;
   }
 }
 
-void D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
+void D3D12APIWrapper::PrepareReplayForResources()
 {
+  // if the resources are dirty, replay back to right before it.
+  if(m_ResourcesDirty)
+  {
+    D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "un-dirtying resources");
+    m_Device->ReplayLog(0, m_EventId, eReplay_WithoutDraw);
+    m_ResourcesDirty = false;
+  }
+}
+
+void D3D12APIWrapper::FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset,
+                                            const rdcstr &basename, const ShaderVariable &v,
+                                            rdcarray<ShaderVariable> &outvars)
+{
+  size_t outIdx = byteOffset / 16;
+  size_t outComp = (byteOffset % 16) / 4;
+
+  if(v.RowMajor())
+    outvars.resize(RDCMAX(outIdx + v.rows, outvars.size()));
+  else
+    outvars.resize(RDCMAX(outIdx + v.columns, outvars.size()));
+
+  if(outvars[outIdx].columns > 0)
+  {
+    // if we already have a variable in this slot, just copy the data for this variable and add
+    // the source mapping. We should not overlap into the next register as that's not allowed.
+    memcpy(&outvars[outIdx].value.u32v[outComp], &v.value.u32v[0], sizeof(uint32_t) * v.columns);
+    uint32_t oldColumns = outvars[outIdx].columns;
+    uint32_t newColumns = (uint32_t)(outComp + v.columns);
+    uint32_t numColumns = RDCMAX(oldColumns, newColumns);
+    numColumns = RDCMIN(4U, numColumns);
+    outvars[outIdx].columns = (uint8_t)numColumns;
+
+    SourceVariableMapping mapping;
+    mapping.name = basename;
+    mapping.type = v.type;
+    mapping.rows = v.rows;
+    mapping.columns = v.columns;
+    mapping.offset = byteOffset;
+    mapping.variables.resize(v.columns);
+
+    for(int i = 0; i < v.columns; i++)
+    {
+      mapping.variables[i].type = DebugVariableType::Constant;
+      mapping.variables[i].name = StringFormat::Fmt("%s[%u]", cbufferName.c_str(), outIdx);
+      mapping.variables[i].component = uint16_t(outComp + i);
+    }
+
+    m_SourceVars.push_back(mapping);
+  }
+  else
+  {
+    const uint32_t numRegisters = v.RowMajor() ? v.rows : v.columns;
+    for(uint32_t reg = 0; reg < numRegisters; reg++)
+    {
+      outvars[outIdx + reg].rows = 1;
+      outvars[outIdx + reg].type = v.type;
+      outvars[outIdx + reg].columns = v.columns + (uint8_t)outComp;
+      outvars[outIdx + reg].flags = v.flags;
+    }
+
+    if(v.RowMajor())
+    {
+      for(size_t ri = 0; ri < v.rows; ri++)
+        memcpy(&outvars[outIdx + ri].value.u32v[outComp], &v.value.u32v[ri * v.columns],
+               sizeof(uint32_t) * v.columns);
+    }
+    else
+    {
+      // if we have a matrix stored in column major order, we need to transpose it back so we
+      // can unroll it into vectors.
+      for(size_t ci = 0; ci < v.columns; ci++)
+        for(size_t ri = 0; ri < v.rows; ri++)
+          outvars[outIdx + ci].value.u32v[ri] = v.value.u32v[ri * v.columns + ci];
+    }
+
+    SourceVariableMapping mapping;
+    mapping.name = basename;
+    mapping.type = v.type;
+    mapping.rows = v.rows;
+    mapping.columns = v.columns;
+    mapping.offset = byteOffset;
+    mapping.variables.resize(v.rows * v.columns);
+
+    RDCASSERT(outComp == 0 || v.rows == 1, outComp, v.rows);
+
+    size_t i = 0;
+    for(uint8_t r = 0; r < v.rows; r++)
+    {
+      for(uint8_t c = 0; c < v.columns; c++)
+      {
+        size_t regIndex = outIdx + (v.RowMajor() ? r : c);
+        size_t compIndex = outComp + (v.RowMajor() ? c : r);
+
+        mapping.variables[i].type = DebugVariableType::Constant;
+        mapping.variables[i].name = StringFormat::Fmt("%s[%zu]", cbufferName.c_str(), regIndex);
+        mapping.variables[i].component = uint16_t(compIndex);
+        i++;
+      }
+    }
+
+    m_SourceVars.push_back(mapping);
+  }
+}
+
+void D3D12APIWrapper::FlattenVariables(const rdcstr &cbufferName,
+                                       const rdcarray<ShaderConstant> &constants,
+                                       const rdcarray<ShaderVariable> &invars,
+                                       rdcarray<ShaderVariable> &outvars, const rdcstr &prefix,
+                                       uint32_t baseOffset)
+{
+  RDCASSERTEQUAL(constants.size(), invars.size());
+
+  for(size_t i = 0; i < constants.size(); i++)
+  {
+    const ShaderConstant &c = constants[i];
+    const ShaderVariable &v = invars[i];
+
+    uint32_t byteOffset = baseOffset + c.byteOffset;
+
+    rdcstr basename = prefix + rdcstr(v.name);
+
+    if(v.type == VarType::Struct)
+    {
+      // check if this is an array of structs or not
+      if(c.type.elements == 1)
+      {
+        FlattenVariables(cbufferName, c.type.members, v.members, outvars, basename + ".", byteOffset);
+      }
+      else
+      {
+        for(int m = 0; m < v.members.count(); m++)
+        {
+          FlattenVariables(cbufferName, c.type.members, v.members[m].members, outvars,
+                           StringFormat::Fmt("%s[%zu].", basename.c_str(), m),
+                           byteOffset + m * c.type.arrayByteStride);
+        }
+      }
+    }
+    else if(c.type.elements > 1 || (v.rows == 0 && v.columns == 0) || !v.members.empty())
+    {
+      for(int m = 0; m < v.members.count(); m++)
+      {
+        FlattenSingleVariable(cbufferName, byteOffset + m * c.type.arrayByteStride,
+                              StringFormat::Fmt("%s[%zu]", basename.c_str(), m), v.members[m],
+                              outvars);
+      }
+    }
+    else
+    {
+      FlattenSingleVariable(cbufferName, byteOffset, basename, v, outvars);
+    }
+  }
+}
+
+void D3D12APIWrapper::FetchConstantBufferData(const D3D12RenderState::RootSignature &rootsig)
+{
+  WrappedID3D12RootSignature *pD3D12RootSig =
+      m_Device->GetResourceManager()->GetCurrentAs<WrappedID3D12RootSignature>(rootsig.rootsig);
+  const DXBC::ShaderType shaderType = m_Program->GetShaderType();
+
+  size_t numParams = RDCMIN(pD3D12RootSig->sig.Parameters.size(), rootsig.sigelems.size());
+  for(size_t i = 0; i < numParams; i++)
+  {
+    const D3D12RootSignatureParameter &rootSigParam = pD3D12RootSig->sig.Parameters[i];
+    const D3D12RenderState::SignatureElement &element = rootsig.sigelems[i];
+    if(IsShaderParameterVisible(shaderType, rootSigParam.ShaderVisibility))
+    {
+      if(rootSigParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS &&
+         element.type == eRootConst)
+      {
+        BindingSlot slot(rootSigParam.Constants.ShaderRegister, rootSigParam.Constants.RegisterSpace);
+        UINT sizeBytes = sizeof(uint32_t) * RDCMIN(rootSigParam.Constants.Num32BitValues,
+                                                   (UINT)element.constants.size());
+        bytebuf cbufData((const byte *)element.constants.data(), sizeBytes);
+        AddCBufferToGlobalState(slot, cbufData);
+      }
+      else if(rootSigParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV && element.type == eRootCBV)
+      {
+        BindingSlot slot(rootSigParam.Descriptor.ShaderRegister,
+                         rootSigParam.Descriptor.RegisterSpace);
+        ID3D12Resource *cbv =
+            m_Device->GetResourceManager()->GetCurrentAs<ID3D12Resource>(element.id);
+        bytebuf cbufData;
+        m_Device->GetDebugManager()->GetBufferData(cbv, element.offset, 0, cbufData);
+        AddCBufferToGlobalState(slot, cbufData);
+      }
+      else if(rootSigParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE &&
+              element.type == eRootTable)
+      {
+        UINT prevTableOffset = 0;
+        WrappedID3D12DescriptorHeap *heap =
+            m_Device->GetResourceManager()->GetCurrentAs<WrappedID3D12DescriptorHeap>(element.id);
+
+        size_t numRanges = rootSigParam.ranges.size();
+        for(size_t r = 0; r < numRanges; r++)
+        {
+          // For this traversal we only care about CBV descriptor ranges, but we still need to
+          // calculate the table offsets in case a descriptor table has a combination of
+          // different range types
+          const D3D12_DESCRIPTOR_RANGE1 &range = rootSigParam.ranges[r];
+
+          UINT offset = range.OffsetInDescriptorsFromTableStart;
+          if(range.OffsetInDescriptorsFromTableStart == D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND)
+            offset = prevTableOffset;
+
+          D3D12Descriptor *desc = (D3D12Descriptor *)heap->GetCPUDescriptorHandleForHeapStart().ptr;
+          desc += element.offset;
+          desc += offset;
+
+          UINT numDescriptors = range.NumDescriptors;
+          if(numDescriptors == UINT_MAX)
+          {
+            // Find out how many descriptors are left after
+            numDescriptors = heap->GetNumDescriptors() - offset - (UINT)element.offset;
+
+            // TODO: Look up the bind point in the D3D12 state to try to get
+            // a better guess at the number of descriptors
+          }
+
+          prevTableOffset = offset + numDescriptors;
+
+          if(range.RangeType != D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
+            continue;
+
+          BindingSlot slot(range.BaseShaderRegister, range.RegisterSpace);
+
+          bytebuf cbufData;
+          for(UINT n = 0; n < numDescriptors; ++n, ++slot.shaderRegister)
+          {
+            const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbv = desc->GetCBV();
+            ResourceId resId;
+            uint64_t byteOffset = 0;
+            WrappedID3D12Resource::GetResIDFromAddr(cbv.BufferLocation, resId, byteOffset);
+            ID3D12Resource *pCbvResource =
+                m_Device->GetResourceManager()->GetCurrentAs<ID3D12Resource>(resId);
+            cbufData.clear();
+
+            if(cbv.SizeInBytes > 0)
+              m_Device->GetDebugManager()->GetBufferData(pCbvResource, byteOffset, cbv.SizeInBytes,
+                                                         cbufData);
+            AddCBufferToGlobalState(slot, cbufData);
+
+            desc++;
+          }
+        }
+      }
+    }
+  }
+}
+
+void D3D12APIWrapper::AddCBufferToGlobalState(const BindingSlot &slot, bytebuf &cbufData)
+{
+  // Find the identifier
+  size_t numCBs = m_Reflection.constantBlocks.size();
+  for(size_t i = 0; i < numCBs; ++i)
+  {
+    const ConstantBlock &cb = m_Reflection.constantBlocks[i];
+    if(slot.registerSpace == (uint32_t)cb.fixedBindSetOrSpace &&
+       slot.shaderRegister >= (uint32_t)cb.fixedBindNumber &&
+       slot.shaderRegister < (uint32_t)(cb.fixedBindNumber + cb.bindArraySize))
+    {
+      uint32_t arrayIndex = slot.shaderRegister - cb.fixedBindNumber;
+
+      rdcarray<ShaderVariable> &targetVars = cb.bindArraySize > 1
+                                                 ? m_ConstantBlocks[i].members[arrayIndex].members
+                                                 : m_ConstantBlocks[i].members;
+      RDCASSERTMSG("Reassigning previously filled cbuffer", targetVars.empty());
+
+      ConstantBlockReference constantBlockRef = {i, arrayIndex};
+      m_ConstantBlocksDatas[constantBlockRef] = cbufData;
+      rdcstr resName = Debugger::GetResourceReferenceName(m_Program, ResourceClass::CBuffer, slot);
+      m_ConstantBlocks[i].name = resName;
+
+      SourceVariableMapping cbSourceMapping;
+      cbSourceMapping.name = m_Reflection.constantBlocks[i].name;
+      cbSourceMapping.variables.push_back(
+          DebugVariableReference(DebugVariableType::Constant, m_ConstantBlocks[i].name));
+      m_SourceVars.push_back(cbSourceMapping);
+
+      rdcstr identifierPrefix = m_ConstantBlocks[i].name;
+      rdcstr variablePrefix = m_Reflection.constantBlocks[i].name;
+      if(cb.bindArraySize > 1)
+      {
+        identifierPrefix = StringFormat::Fmt("%s[%u]", m_ConstantBlocks[i].name.c_str(), arrayIndex);
+        variablePrefix =
+            StringFormat::Fmt("%s[%u]", m_Reflection.constantBlocks[i].name.c_str(), arrayIndex);
+
+        // The above sourceVar is for the logical identifier, and FlattenVariables adds the
+        // individual elements of the constant buffer. For CB arrays, add an extra source
+        // var for the CB array index
+        SourceVariableMapping cbArrayMapping;
+        m_ConstantBlocks[i].members[arrayIndex].name = StringFormat::Fmt("[%u]", arrayIndex);
+        cbArrayMapping.name = variablePrefix;
+        cbArrayMapping.variables.push_back(
+            DebugVariableReference(DebugVariableType::Constant, identifierPrefix));
+        m_SourceVars.push_back(cbArrayMapping);
+      }
+      const rdcarray<ShaderConstant> &constants =
+          (cb.bindArraySize > 1) ? m_Reflection.constantBlocks[i].variables[0].type.members
+                                 : m_Reflection.constantBlocks[i].variables;
+
+      rdcarray<ShaderVariable> vars;
+      StandardFillCBufferVariables(m_Reflection.resourceId, constants, vars, cbufData);
+      FlattenVariables(identifierPrefix, constants, vars, targetVars, variablePrefix + ".", 0);
+      for(size_t c = 0; c < targetVars.size(); c++)
+        targetVars[c].name = StringFormat::Fmt("[%u]", (uint32_t)c);
+
+      return;
+    }
+  }
+}
+
+SRVData &D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
+{
+  SRVData &srvData = m_SRVs[slot];
   if(resDescriptor)
   {
     D3D12ResourceManager *rm = m_Device->GetResourceManager();
-    DXILDebug::GlobalState::SRVData &srvData = m_GlobalState.srvs[slot];
     ResourceId srvId = resDescriptor->GetResResourceId();
     ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(srvId);
     if(pResource)
@@ -632,10 +747,14 @@ void D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const Bindi
       // Textures are sampled via a pixel shader, so there's no need to copy their data
     }
   }
+  return srvData;
 }
 
-void D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
+SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
 {
+  // the resources might be dirty from side-effects, replay back to right before it.
+  PrepareReplayForResources();
+
   // Direct access resource
   if(slot.heapType != DXDebug::HeapDescriptorType::NoHeap)
   {
@@ -680,11 +799,11 @@ void D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
           if(param.Descriptor.ShaderRegister == slot.shaderRegister &&
              param.Descriptor.RegisterSpace == slot.registerSpace)
           {
+            SRVData &srvData = m_SRVs[slot];
             // Found the requested SRV
             ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(element.id);
             if(pResource)
             {
-              DXILDebug::GlobalState::SRVData &srvData = m_GlobalState.srvs[slot];
               D3D12_RESOURCE_DESC resDesc = pResource->GetDesc();
 
               // DXC allows root buffers to have a stride of up to 16 bytes in the shader, which
@@ -713,7 +832,7 @@ void D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
                                                            srvData.data);
               }
             }
-            return;
+            return srvData;
           }
         }
         else if(param.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE &&
@@ -767,19 +886,20 @@ void D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
 
     RDCERR("Couldn't find root signature parameter corresponding to SRV %u in space %u",
            slot.shaderRegister, slot.registerSpace);
-    return;
+    return m_SRVs[slot];
   }
 
   RDCERR("No root signature bound, couldn't identify SRV %u in space %u", slot.shaderRegister,
          slot.registerSpace);
+  return m_SRVs[slot];
 }
 
-void D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
+UAVData &D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
 {
+  UAVData &uavData = m_UAVs[slot];
   if(resDescriptor)
   {
     D3D12ResourceManager *rm = m_Device->GetResourceManager();
-    DXILDebug::GlobalState::UAVData &uavData = m_GlobalState.uavs[slot];
     ResourceId uavId = resDescriptor->GetResResourceId();
     ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(uavId);
 
@@ -825,18 +945,13 @@ void D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const Bindi
       }
     }
   }
+  return uavData;
 }
 
-void D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
+UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
 {
-  // if the UAV might be dirty from side-effects from the action, replay back to right
-  // before it.
-  if(!m_DidReplay)
-  {
-    D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "un-dirtying resources");
-    m_Device->ReplayLog(0, m_EventId, eReplay_WithoutDraw);
-    m_DidReplay = true;
-  }
+  // the resources might be dirty from side-effects, replay back to right before it.
+  PrepareReplayForResources();
 
   // Direct access resource
   if(slot.heapType != DXDebug::HeapDescriptorType::NoHeap)
@@ -884,10 +999,10 @@ void D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
           {
             // Found the requested UAV
             ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(element.id);
+            UAVData &uavData = m_UAVs[slot];
 
             if(pResource)
             {
-              DXILDebug::GlobalState::UAVData &uavData = m_GlobalState.uavs[slot];
               D3D12_RESOURCE_DESC resDesc = pResource->GetDesc();
               // DXC allows root buffers to have a stride of up to 16 bytes in the shader, which
               // means encoding the byte offset into the first element here is wrong without
@@ -918,7 +1033,7 @@ void D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
               }
             }
 
-            return;
+            return uavData;
           }
         }
         else if(param.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE &&
@@ -972,11 +1087,54 @@ void D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
 
     RDCERR("Couldn't find root signature parameter corresponding to UAV %u in space %u",
            slot.shaderRegister, slot.registerSpace);
-    return;
+    return m_UAVs[slot];
   }
 
   RDCERR("No root signature bound, couldn't identify UAV %u in space %u", slot.shaderRegister,
          slot.registerSpace);
+  return m_UAVs[slot];
+}
+
+bool D3D12APIWrapper::IsSRVCached(const BindingSlot &slot)
+{
+  SCOPED_READLOCK(m_SRVsLock);
+  return m_SRVs.find(slot) != m_SRVs.end();
+}
+
+const SRVData &D3D12APIWrapper::GetSRVData(const BindingSlot &slot)
+{
+  {
+    SCOPED_READLOCK(m_SRVsLock);
+    auto it = m_SRVs.find(slot);
+    if(it != m_SRVs.end())
+      return it->second;
+  }
+
+  {
+    SCOPED_WRITELOCK(m_SRVsLock);
+    return FetchSRV(slot);
+  }
+}
+
+bool D3D12APIWrapper::IsUAVCached(const BindingSlot &slot)
+{
+  SCOPED_READLOCK(m_UAVsLock);
+  return m_UAVs.find(slot) != m_UAVs.end();
+}
+
+const UAVData &D3D12APIWrapper::GetUAVData(const BindingSlot &slot)
+{
+  {
+    SCOPED_READLOCK(m_UAVsLock);
+    auto it = m_UAVs.find(slot);
+    if(it != m_UAVs.end())
+      return it->second;
+  }
+
+  {
+    SCOPED_WRITELOCK(m_UAVsLock);
+    return FetchUAV(slot);
+  }
 }
 
 bool D3D12APIWrapper::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
@@ -1051,7 +1209,7 @@ bool D3D12APIWrapper::CalculateSampleGather(
 
 ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
                                                 const DXDebug::BindingSlot &slot, uint32_t mipLevel,
-                                                const DXBC::ShaderType shaderType, int &dim)
+                                                const DXBC::ShaderType shaderType, int &dim) const
 {
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
   switch(resClass)
@@ -1069,7 +1227,8 @@ ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
 
 ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
                                               const DXDebug::BindingSlot &slot,
-                                              const DXBC::ShaderType shaderType, const char *opString)
+                                              const DXBC::ShaderType shaderType,
+                                              const char *opString) const
 {
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
   switch(resClass)
@@ -1086,12 +1245,12 @@ ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
 }
 
 ShaderVariable D3D12APIWrapper::GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
-                                                          const char *opString)
+                                                          const char *opString) const
 {
   return D3D12ShaderDebug::GetRenderTargetSampleInfo(m_Device, shaderType, opString);
 }
 
-ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot)
+ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
 {
   const HeapDescriptorType heapType = slot.heapType;
   RDCASSERT(heapType != HeapDescriptorType::NoHeap);
@@ -1124,7 +1283,7 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
         if(srvDesc.ViewDimension == D3D12_SRV_DIMENSION_UNKNOWN)
           srvDesc = MakeSRVDesc(pResource->GetDesc());
 
-        GlobalState::ViewFmt viewFmt;
+        ViewFmt viewFmt;
         if(srvDesc.Format != DXGI_FORMAT_UNKNOWN)
         {
           resRefInfo.srvData.dim =
@@ -1189,7 +1348,7 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
 }
 
 ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorType type,
-                                                          const DXDebug::BindingSlot &slot)
+                                                          const DXDebug::BindingSlot &slot) const
 {
   const HeapDescriptorType heapType = slot.heapType;
   RDCASSERT(heapType != HeapDescriptorType::NoHeap);

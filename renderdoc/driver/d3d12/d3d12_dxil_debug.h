@@ -33,46 +33,124 @@ namespace DXILDebug
 {
 class Debugger;
 
-void FetchConstantBufferData(WrappedID3D12Device *device, const DXIL::Program *program,
-                             const D3D12RenderState::RootSignature &rootsig,
-                             const ShaderReflection &refl, DXILDebug::GlobalState &global,
-                             rdcarray<SourceVariableMapping> &sourceVars);
-
 class D3D12APIWrapper : public DebugAPIWrapper
 {
 public:
-  D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Program &dxilProgram,
-                  GlobalState &globalState, uint32_t eventId);
+  D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Program *dxilProgram,
+                  const ShaderReflection &refl, uint32_t eventId,
+                  const rdcarray<SigParameter> &inputSig);
   ~D3D12APIWrapper();
 
-  void FetchSRV(const BindingSlot &slot);
-  void FetchUAV(const BindingSlot &slot);
-  bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input, ShaderVariable &output);
+  void FetchConstantBufferData(const D3D12RenderState::RootSignature &rootsig);
+
+  const UAVData &GetUAVData(const BindingSlot &slot) override;
+  const SRVData &GetSRVData(const BindingSlot &slot) override;
+
+  bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
+                              ShaderVariable &output) override;
   bool CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
                              SampleGatherSamplerData samplerData, const ShaderVariable &uv,
                              const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
                              const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
                              float compareValue, const uint8_t swizzle[4],
                              GatherChannel gatherChannel, DXBC::ShaderType shaderType,
-                             uint32_t instructionIdx, const char *opString, ShaderVariable &output);
+                             uint32_t instructionIdx, const char *opString,
+                             ShaderVariable &output) override;
+
   ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                 uint32_t mipLevel, const DXBC::ShaderType shaderType, int &dim);
+                                 uint32_t mipLevel, const DXBC::ShaderType shaderType,
+                                 int &dim) const override;
   ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                               const DXBC::ShaderType shaderType, const char *opString);
-  ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType, const char *opString);
-  ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot);
-  ShaderDirectAccess GetShaderDirectAccess(DescriptorType type, const DXDebug::BindingSlot &slot);
+                               const DXBC::ShaderType shaderType,
+                               const char *opString) const override;
+  ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
+                                           const char *opString) const override;
+  ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const override;
+  ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
+                                           const DXDebug::BindingSlot &slot) const override;
+
+  bool IsSRVCached(const DXDebug::BindingSlot &slot) override;
+  bool IsUAVCached(const DXDebug::BindingSlot &slot) override;
+
+  void ResetReplay();
+
+  void SetBuiltins(const BuiltinInputs &builtins) { m_Builtins = builtins; }
+  void SetWorkgroupProperties(const rdcarray<DXILDebug::ThreadProperties> &workgroupProperties)
+  {
+    m_WorkgroupProperties = workgroupProperties;
+  }
+  void SetThreadsInputs(const rdcarray<ShaderVariable> &threadsInputs)
+  {
+    m_ThreadsInputs = threadsInputs;
+  }
+  void SetThreadsBuiltins(rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &threadsBuiltins)
+  {
+    m_ThreadsBuiltins = threadsBuiltins;
+  }
+  void SetSubgroupSize(uint32_t subgroupSize) { m_SubgroupSize = subgroupSize; }
+
+  const rdcarray<DXIL::EntryPointInterface::Signature> &GetDXILEntryPointInputs(void) const
+  {
+    return m_EntryPointInterface->inputs;
+  }
+
+  const rdcarray<DXILDebug::ThreadProperties> &GetWorkgroupProperties() const override
+  {
+    return m_WorkgroupProperties;
+  }
+  const rdcarray<ShaderVariable> &GetConstantBlocks() const override { return m_ConstantBlocks; }
+  const std::map<ConstantBlockReference, bytebuf> &GetConstantBlocksDatas() const override
+  {
+    return m_ConstantBlocksDatas;
+  }
+
+  const BuiltinInputs &GetBuiltins() const override { return m_Builtins; }
+  uint32_t GetSubgroupSize() const override { return m_SubgroupSize; }
+  const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &GetThreadsBuiltins() const override
+  {
+    return m_ThreadsBuiltins;
+  }
+  const rdcarray<ShaderVariable> &GetThreadsInputs() const override { return m_ThreadsInputs; }
+  const rdcarray<SourceVariableMapping> &GetSourceVars() const override { return m_SourceVars; }
+  const ShaderVariable &GetInputPlaceholder() const override { return m_InputPlaceholder; }
 
 private:
-  void FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
-  void FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
+  void PrepareReplayForResources();
+  void AddCBufferToGlobalState(const BindingSlot &slot, bytebuf &cbufData);
+  void FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset, const rdcstr &basename,
+                             const ShaderVariable &v, rdcarray<ShaderVariable> &outvars);
+  void FlattenVariables(const rdcstr &cbufferName, const rdcarray<ShaderConstant> &constants,
+                        const rdcarray<ShaderVariable> &invars, rdcarray<ShaderVariable> &outvars,
+                        const rdcstr &prefix, uint32_t baseOffset);
 
-  WrappedID3D12Device *m_Device;
-  const DXIL::EntryPointInterface *m_EntryPointInterface;
-  GlobalState &m_GlobalState;
-  DXBC::ShaderType m_ShaderType;
+  SRVData &FetchSRV(const BindingSlot &slot);
+  SRVData &FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
+
+  UAVData &FetchUAV(const BindingSlot &slot);
+  UAVData &FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
+
+  BuiltinInputs m_Builtins;
+  rdcarray<DXILDebug::ThreadProperties> m_WorkgroupProperties;
+  rdcarray<ShaderVariable> m_ThreadsInputs;
+  rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> m_ThreadsBuiltins;
+  rdcarray<SourceVariableMapping> m_SourceVars;
+  rdcarray<ShaderVariable> m_ConstantBlocks;
+  std::map<ConstantBlockReference, bytebuf> m_ConstantBlocksDatas;
+  ShaderVariable m_InputPlaceholder;
+  uint32_t m_SubgroupSize = 1;
+
+  Threading::RWLock m_UAVsLock;
+  std::map<BindingSlot, UAVData> m_UAVs;
+  Threading::RWLock m_SRVsLock;
+  std::map<BindingSlot, SRVData> m_SRVs;
+
+  const ShaderReflection &m_Reflection;
+  WrappedID3D12Device *m_Device = NULL;
+  const DXIL::Program *m_Program = NULL;
+  const DXIL::EntryPointInterface *m_EntryPointInterface = NULL;
+  const DXBC::ShaderType m_ShaderType;
   const uint32_t m_EventId;
-  bool m_DidReplay = false;
+  bool m_ResourcesDirty = true;
 };
 
 };

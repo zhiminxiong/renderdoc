@@ -2351,22 +2351,29 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
     if(buf[0].numHits > 1)
       RDCLOG("Unexpected number of vertex hits: %u!", buf[0].numHits);
 
-    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
-    ret = debugger->BeginDebug(eventId, dxbc, refl, buf->laneIndex, buf->subgroupSize);
+    DXILDebug::D3D12APIWrapper *apiWrapper = new DXILDebug::D3D12APIWrapper(
+        m_pDevice, dxbc->GetDXILByteCode(), refl, eventId, dxbc->GetReflection()->InputSig);
 
-    DXILDebug::GlobalState &globalState = debugger->GetGlobalState();
+    const uint32_t numThreads = buf->subgroupSize;
     rdcarray<DXILDebug::ThreadProperties> workgroupProperties;
-    workgroupProperties.resize(buf->subgroupSize);
-    const rdcarray<DXIL::EntryPointInterface::Signature> &dxilInputs =
-        debugger->GetDXILEntryPointInputs();
 
-    globalState.subgroupSize = buf->subgroupSize;
-    for(uint32_t t = 0; t < buf->subgroupSize; t++)
+    rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> threadsBuiltins;
+    rdcarray<ShaderVariable> threadsInputs;
+    workgroupProperties.resize(numThreads);
+    threadsBuiltins.resize(numThreads);
+    threadsInputs.resize(numThreads);
+
+    apiWrapper->SetSubgroupSize(buf->subgroupSize);
+
+    const rdcarray<DXIL::EntryPointInterface::Signature> &dxilInputs =
+        apiWrapper->GetDXILEntryPointInputs();
+
+    for(uint32_t t = 0; t < numThreads; t++)
     {
+      threadsInputs[t] = apiWrapper->GetInputPlaceholder();
       DXDebug::VSLaneData *lane = (DXDebug::VSLaneData *)(initialData.data() + laneDataOffset +
                                                           t * fetcher.laneDataBufferStride);
-      DXILDebug::ThreadState &state = debugger->GetLane(t);
-      rdcarray<ShaderVariable> &ins = state.m_Input.members;
+      rdcarray<ShaderVariable> &ins = threadsInputs[t].members;
 
       byte *data = (byte *)(lane + 1);
 
@@ -2409,7 +2416,8 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
           data += inputElement.numwords * sizeof(uint32_t);
       }
 
-      state.m_Builtins[ShaderBuiltin::IndexInSubgroup] = ShaderVariable(rdcstr(), t, 0U, 0U, 0U);
+      rdcflatmap<ShaderBuiltin, ShaderVariable> &threadBuiltins = threadsBuiltins[t];
+      threadBuiltins[ShaderBuiltin::IndexInSubgroup] = ShaderVariable(rdcstr(), t, 0U, 0U, 0U);
 
       for(const DXILDebug::InputData &input : inputDatas)
       {
@@ -2437,35 +2445,45 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
         }
 
         if(input.sysattribute != ShaderBuiltin::Undefined)
-          state.m_Builtins[input.sysattribute] = invar;
+          threadBuiltins[input.sysattribute] = invar;
       }
     }
 
+    apiWrapper->SetWorkgroupProperties(workgroupProperties);
+    apiWrapper->SetThreadsInputs(threadsInputs);
+    apiWrapper->SetThreadsBuiltins(threadsBuiltins);
+
     // Fetch constant buffer data from root signature
-    DXILDebug::FetchConstantBufferData(m_pDevice, dxbc->GetDXILByteCode(), rs.graphics, refl,
-                                       globalState, ret->sourceVars);
+    apiWrapper->FetchConstantBufferData(rs.graphics);
 
-    debugger->InitialiseWorkgroup(workgroupProperties);
+    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
+    ret = debugger->BeginDebug(apiWrapper, eventId, dxbc, refl, buf->laneIndex, buf->subgroupSize);
 
-    ret->inputs = {debugger->GetActiveLane().m_Input};
-    ret->constantBlocks = globalState.constantBlocks;
+    apiWrapper->ResetReplay();
   }
   else
   {
-    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
-    ret = debugger->BeginDebug(eventId, dxbc, refl, 0, 1);
+    const uint32_t activeLaneIndex = 0;
+    const uint32_t numThreads = 1;
+    DXILDebug::D3D12APIWrapper *apiWrapper = new DXILDebug::D3D12APIWrapper(
+        m_pDevice, dxbc->GetDXILByteCode(), refl, eventId, dxbc->GetReflection()->InputSig);
 
-    DXILDebug::GlobalState &globalState = debugger->GetGlobalState();
-    DXILDebug::ThreadState &activeState = debugger->GetActiveLane();
-    rdcarray<ShaderVariable> &inputs = activeState.m_Input.members;
     rdcarray<DXILDebug::ThreadProperties> workgroupProperties;
-    workgroupProperties.resize(1);
+    rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> threadsBuiltins;
+    rdcarray<ShaderVariable> threadsInputs;
+    workgroupProperties.resize(numThreads);
+    threadsBuiltins.resize(numThreads);
+    threadsInputs.resize(numThreads);
+    threadsInputs[activeLaneIndex] = apiWrapper->GetInputPlaceholder();
 
-    workgroupProperties[0][DXILDebug::ThreadProperty::Active] = 1;
+    workgroupProperties[activeLaneIndex][DXILDebug::ThreadProperty::Active] = 1;
+
+    rdcarray<ShaderVariable> &inputs = threadsInputs[activeLaneIndex].members;
+
+    rdcflatmap<ShaderBuiltin, ShaderVariable> &threadBuiltins = threadsBuiltins[activeLaneIndex];
 
     // Fetch constant buffer data from root signature
-    DXILDebug::FetchConstantBufferData(m_pDevice, dxbc->GetDXILByteCode(), rs.graphics, refl,
-                                       globalState, ret->sourceVars);
+    apiWrapper->FetchConstantBufferData(rs.graphics);
 
     // Set input values
     for(size_t i = 0; i < inputs.size(); i++)
@@ -2712,14 +2730,18 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
 
       if(sigParam.systemValue != ShaderBuiltin::Undefined)
       {
-        activeState.m_Builtins[sigParam.systemValue] = inputs[i];
+        threadBuiltins[sigParam.systemValue] = inputs[i];
       }
     }
 
-    debugger->InitialiseWorkgroup(workgroupProperties);
+    apiWrapper->SetWorkgroupProperties(workgroupProperties);
+    apiWrapper->SetThreadsInputs(threadsInputs);
+    apiWrapper->SetThreadsBuiltins(threadsBuiltins);
 
-    ret->inputs = {activeState.m_Input};
-    ret->constantBlocks = globalState.constantBlocks;
+    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
+    ret = debugger->BeginDebug(apiWrapper, eventId, dxbc, refl, activeLaneIndex, 1);
+
+    apiWrapper->ResetReplay();
   }
 
   if(ret)
@@ -3155,26 +3177,30 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
   }
   else
   {
-    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
-    ret = debugger->BeginDebug(eventId, dxbc, refl, hit->laneIndex, hit->subgroupSize);
+    uint32_t numThreads = hit->subgroupSize;
+    DXILDebug::D3D12APIWrapper *apiWrapper = new DXILDebug::D3D12APIWrapper(
+        m_pDevice, dxbc->GetDXILByteCode(), refl, eventId, dxbc->GetReflection()->InputSig);
 
-    DXILDebug::GlobalState &globalState = debugger->GetGlobalState();
     rdcarray<DXILDebug::ThreadProperties> workgroupProperties;
-    workgroupProperties.resize(hit->subgroupSize);
-    const rdcarray<DXIL::EntryPointInterface::Signature> &dxilInputs =
-        debugger->GetDXILEntryPointInputs();
+    rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> threadsBuiltins;
+    rdcarray<ShaderVariable> threadsInputs;
+    workgroupProperties.resize(numThreads);
+    threadsBuiltins.resize(numThreads);
+    threadsInputs.resize(numThreads);
 
     // Fetch constant buffer data from root signature
-    DXILDebug::FetchConstantBufferData(m_pDevice, dxbc->GetDXILByteCode(), rs.graphics, refl,
-                                       globalState, ret->sourceVars);
+    apiWrapper->FetchConstantBufferData(rs.graphics);
+    const rdcarray<DXIL::EntryPointInterface::Signature> &dxilInputs =
+        apiWrapper->GetDXILEntryPointInputs();
 
-    globalState.subgroupSize = hit->subgroupSize;
+    apiWrapper->SetSubgroupSize(hit->subgroupSize);
     for(uint32_t q = 0; q < hit->subgroupSize; q++)
     {
+      threadsInputs[q] = apiWrapper->GetInputPlaceholder();
       DXDebug::PSLaneData *lane = (DXDebug::PSLaneData *)data;
 
-      DXILDebug::ThreadState &state = debugger->GetLane(q);
-      rdcarray<ShaderVariable> &ins = state.m_Input.members;
+      rdcarray<ShaderVariable> &ins = threadsInputs[q].members;
+      rdcflatmap<ShaderBuiltin, ShaderVariable> &threadBuiltins = threadsBuiltins[q];
 
       workgroupProperties[q][DXILDebug::ThreadProperty::Active] = lane->active;
       workgroupProperties[q][DXILDebug::ThreadProperty::Helper] = lane->isHelper;
@@ -3223,12 +3249,12 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
           data += inputElement.numwords * sizeof(uint32_t);
       }
 
-      state.m_Builtins[ShaderBuiltin::IndexInSubgroup] = ShaderVariable(rdcstr(), q, 0U, 0U, 0U);
-      state.m_Builtins[ShaderBuiltin::PrimitiveIndex] =
+      threadBuiltins[ShaderBuiltin::IndexInSubgroup] = ShaderVariable(rdcstr(), q, 0U, 0U, 0U);
+      threadBuiltins[ShaderBuiltin::PrimitiveIndex] =
           ShaderVariable(rdcstr(), lane->primitive, 0U, 0U, 0U);
-      state.m_Builtins[ShaderBuiltin::MSAACoverage] =
+      threadBuiltins[ShaderBuiltin::MSAACoverage] =
           ShaderVariable(rdcstr(), lane->coverage, 0U, 0U, 0U);
-      state.m_Builtins[ShaderBuiltin::IsFrontFace] =
+      threadBuiltins[ShaderBuiltin::IsFrontFace] =
           ShaderVariable(rdcstr(), lane->isFrontFace, 0U, 0U, 0U);
 
       for(const DXILDebug::InputData &input : inputDatas)
@@ -3265,7 +3291,7 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
         }
 
         if(input.sysattribute != ShaderBuiltin::Undefined)
-          state.m_Builtins[input.sysattribute] = invar;
+          threadBuiltins[input.sysattribute] = invar;
       }
 
       // TODO: UPDATE INPUTS FROM SAMPLE CACHE
@@ -3292,10 +3318,14 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
 #endif
     }
 
-    debugger->InitialiseWorkgroup(workgroupProperties);
+    apiWrapper->SetWorkgroupProperties(workgroupProperties);
+    apiWrapper->SetThreadsInputs(threadsInputs);
+    apiWrapper->SetThreadsBuiltins(threadsBuiltins);
 
-    ret->inputs = {debugger->GetActiveLane().m_Input};
-    ret->constantBlocks = globalState.constantBlocks;
+    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
+    ret = debugger->BeginDebug(apiWrapper, eventId, dxbc, refl, hit->laneIndex, hit->subgroupSize);
+
+    apiWrapper->ResetReplay();
   }
 
   if(ret)
@@ -3442,13 +3472,16 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
         refl.dispatchThreadsDimension[2],
     };
 
-    uint32_t numThreads = 1;
     uint32_t subgroupSize = 1;
     uint32_t activeLaneIndex = 0;
+    uint32_t numThreads = 1;
 
-    rdcflatmap<ShaderBuiltin, ShaderVariable> globalBuiltins;
-    rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> threadBuiltins;
+    DXILDebug::D3D12APIWrapper *apiWrapper = new DXILDebug::D3D12APIWrapper(
+        m_pDevice, dxbc->GetDXILByteCode(), refl, eventId, dxbc->GetReflection()->InputSig);
+
+    DXILDebug::BuiltinInputs globalBuiltins;
     rdcarray<DXILDebug::ThreadProperties> workgroupProperties;
+    rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> threadsBuiltins;
 
     // hard case - with subgroups we want the actual layout so read that from the GPU
     if(dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup)
@@ -3594,12 +3627,12 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
       if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
         numThreads = threadDim[0] * threadDim[1] * threadDim[2];
 
+      workgroupProperties.resize(numThreads);
+      threadsBuiltins.resize(numThreads);
+
       // SV_GroupID
       globalBuiltins[ShaderBuiltin::GroupIndex] =
           ShaderVariable(rdcstr(), groupid[0], groupid[1], groupid[2], 0U);
-
-      threadBuiltins.resize(numThreads);
-      workgroupProperties.resize(numThreads);
 
       // can't know our lane index from the hit if we are simulating the whole workgroup
       if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
@@ -3632,18 +3665,19 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
         workgroupProperties[lane][DXILDebug::ThreadProperty::Active] = value->active;
         workgroupProperties[lane][DXILDebug::ThreadProperty::SubgroupIdx] = t;
 
-        threadBuiltins[lane][ShaderBuiltin::DispatchThreadIndex] =
+        rdcflatmap<ShaderBuiltin, ShaderVariable> &threadBuiltins = threadsBuiltins[lane];
+        threadBuiltins[ShaderBuiltin::DispatchThreadIndex] =
             ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + value->threadid[0],
                            groupid[1] * threadDim[1] + value->threadid[1],
                            groupid[2] * threadDim[2] + value->threadid[2], 0U);
-        threadBuiltins[lane][ShaderBuiltin::GroupThreadIndex] =
+        threadBuiltins[ShaderBuiltin::GroupThreadIndex] =
             ShaderVariable(rdcstr(), value->threadid[0], value->threadid[1], value->threadid[2], 0U);
-        threadBuiltins[lane][ShaderBuiltin::GroupFlatIndex] =
+        threadBuiltins[ShaderBuiltin::GroupFlatIndex] =
             ShaderVariable(rdcstr(),
                            value->threadid[2] * threadDim[0] * threadDim[1] +
                                value->threadid[1] * threadDim[0] + value->threadid[0],
                            0U, 0U, 0U);
-        threadBuiltins[lane][ShaderBuiltin::IndexInSubgroup] =
+        threadBuiltins[ShaderBuiltin::IndexInSubgroup] =
             ShaderVariable(rdcstr(), value->laneIndex, 0U, 0U, 0U);
       }
 
@@ -3663,7 +3697,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
           {
             for(uint32_t tx = 0; tx < threadDim[0]; tx++)
             {
-              rdcflatmap<ShaderBuiltin, ShaderVariable> &thread_builtins = threadBuiltins[i];
+              rdcflatmap<ShaderBuiltin, ShaderVariable> &thread_builtins = threadsBuiltins[i];
 
               if(workgroupProperties[i][DXILDebug::ThreadProperty::Active])
               {
@@ -3705,12 +3739,12 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     {
       numThreads = threadDim[0] * threadDim[1] * threadDim[2];
 
+      workgroupProperties.resize(numThreads);
+      threadsBuiltins.resize(numThreads);
+
       // SV_GroupID
       globalBuiltins[ShaderBuiltin::GroupIndex] =
           ShaderVariable(rdcstr(), groupid[0], groupid[1], groupid[2], 0U);
-
-      threadBuiltins.resize(numThreads);
-      workgroupProperties.resize(numThreads);
 
       // if we have workgroup scope that means we need to simulate the whole workgroup but don't
       // have subgroup ops. We assume the layout of this is irrelevant and don't attempt to read
@@ -3724,7 +3758,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
         {
           for(uint32_t tx = 0; tx < threadDim[0]; tx++)
           {
-            rdcflatmap<ShaderBuiltin, ShaderVariable> &thread_builtins = threadBuiltins[i];
+            rdcflatmap<ShaderBuiltin, ShaderVariable> &thread_builtins = threadsBuiltins[i];
             thread_builtins[ShaderBuiltin::DispatchThreadIndex] =
                 ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + tx,
                                groupid[1] * threadDim[1] + ty, groupid[2] * threadDim[2] + tz, 0U);
@@ -3744,7 +3778,9 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     }
     else
     {
-      workgroupProperties.resize(1);
+      workgroupProperties.resize(numThreads);
+      threadsBuiltins.resize(numThreads);
+
       workgroupProperties[0][DXILDebug::ThreadProperty::Active] = 1;
 
       // put everything in globals, no per-thread values
@@ -3775,6 +3811,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     {
       uint32_t newNumThreads = numThreads + numPaddingThreads;
       workgroupProperties.resize(newNumThreads);
+      threadsBuiltins.resize(newNumThreads);
       for(uint32_t i = numThreads; i < newNumThreads; ++i)
       {
         workgroupProperties[i][DXILDebug::ThreadProperty::Active] = 0;
@@ -3782,25 +3819,24 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
       }
       numThreads = newNumThreads;
     }
+    rdcarray<ShaderVariable> threadsInputs;
+    threadsInputs.resize(numThreads);
+    for(uint32_t t = 0; t < numThreads; t++)
+      threadsInputs[t] = apiWrapper->GetInputPlaceholder();
 
-    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
-    ret = debugger->BeginDebug(eventId, dxbc, refl, activeLaneIndex, numThreads);
-    DXILDebug::GlobalState &globalState = debugger->GetGlobalState();
-
-    globalState.builtins.swap(globalBuiltins);
-    globalState.subgroupSize = subgroupSize;
-
-    for(uint32_t i = 0; i < threadBuiltins.size(); i++)
-      debugger->GetLane(i).m_Builtins.swap(threadBuiltins[i]);
+    apiWrapper->SetSubgroupSize(subgroupSize);
+    apiWrapper->SetWorkgroupProperties(workgroupProperties);
+    apiWrapper->SetThreadsInputs(threadsInputs);
+    apiWrapper->SetThreadsBuiltins(threadsBuiltins);
+    apiWrapper->SetBuiltins(globalBuiltins);
 
     // Fetch constant buffer data from root signature
-    DXILDebug::FetchConstantBufferData(m_pDevice, dxbc->GetDXILByteCode(), rs.compute, refl,
-                                       globalState, ret->sourceVars);
+    apiWrapper->FetchConstantBufferData(rs.compute);
 
-    debugger->InitialiseWorkgroup(workgroupProperties);
+    DXILDebug::Debugger *debugger = new DXILDebug::Debugger();
+    ret = debugger->BeginDebug(apiWrapper, eventId, dxbc, refl, activeLaneIndex, numThreads);
 
-    // ret->inputs = state.inputs;
-    ret->constantBlocks = globalState.constantBlocks;
+    apiWrapper->ResetReplay();
   }
 
   if(ret)
@@ -3824,10 +3860,11 @@ rdcarray<ShaderDebugState> D3D12Replay::ContinueDebug(ShaderDebugger *debugger)
   if(((DXBCContainerDebugger *)debugger)->isDXIL)
   {
     DXILDebug::Debugger *dxilDebugger = (DXILDebug::Debugger *)debugger;
-    DXILDebug::D3D12APIWrapper apiWrapper(m_pDevice, dxilDebugger->GetProgram(),
-                                          dxilDebugger->GetGlobalState(), dxilDebugger->GetEventId());
     D3D12MarkerRegion region(m_pDevice->GetQueue()->GetReal(), "ContinueDebug Simulation Loop");
-    return dxilDebugger->ContinueDebug(&apiWrapper);
+    rdcarray<ShaderDebugState> ret = dxilDebugger->ContinueDebug();
+    DXILDebug::D3D12APIWrapper *api = (DXILDebug::D3D12APIWrapper *)dxilDebugger->GetAPIWrapper();
+    api->ResetReplay();
+    return ret;
   }
   else
   {

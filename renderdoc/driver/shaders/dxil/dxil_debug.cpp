@@ -1220,7 +1220,7 @@ static size_t ComputeDXILTypeByteSize(const Type *type)
   return byteSize;
 }
 
-static void TypedUAVStore(DXILDebug::GlobalState::ViewFmt &fmt, byte *d, const ShaderValue &value)
+static void TypedUAVStore(DXILDebug::ViewFmt &fmt, byte *d, const ShaderValue &value)
 {
   if(fmt.byteWidth == 10)
   {
@@ -1354,7 +1354,7 @@ static void TypedUAVStore(DXILDebug::GlobalState::ViewFmt &fmt, byte *d, const S
   }
 }
 
-static ShaderValue TypedUAVLoad(DXILDebug::GlobalState::ViewFmt &fmt, const byte *d)
+static ShaderValue TypedUAVLoad(DXILDebug::ViewFmt &fmt, const byte *d)
 {
   ShaderValue result;
   result.f32v[0] = 0.0f;
@@ -1511,7 +1511,7 @@ static ShaderValue TypedUAVLoad(DXILDebug::GlobalState::ViewFmt &fmt, const byte
   return result;
 }
 
-void ConvertTypeToViewFormat(const DXIL::Type *type, DXILDebug::GlobalState::ViewFmt &fmt)
+void ConvertTypeToViewFormat(const DXIL::Type *type, DXILDebug::ViewFmt &fmt)
 {
   // variable should be a pointer to the underlying type
   RDCASSERTEQUAL(type->type, Type::Pointer);
@@ -1562,7 +1562,7 @@ void ConvertTypeToViewFormat(const DXIL::Type *type, DXILDebug::GlobalState::Vie
   }
 }
 
-static void FillViewFmtFromVarType(VarType type, DXILDebug::GlobalState::ViewFmt &fmt)
+static void FillViewFmtFromVarType(VarType type, DXILDebug::ViewFmt &fmt)
 {
   switch(type)
   {
@@ -2343,25 +2343,19 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             uint32_t depthPitch = 0;
             uint32_t firstElem = 0;
             uint32_t numElems = 0;
-            GlobalState::ViewFmt fmt;
+            ViewFmt fmt;
 
             // Helper lanes can't modify UAVs
             if(!load && (resClass == ResourceClass::UAV) && m_Helper)
               break;
 
             RDCASSERT((resClass == ResourceClass::SRV || resClass == ResourceClass::UAV), resClass);
-            GlobalState::ResourceInfo resInfo;
+            ResourceInfo resInfo;
             switch(resClass)
             {
               case ResourceClass::UAV:
               {
-                GlobalState::UAVIterator uavIter = m_GlobalState.uavs.find(resRefInfo.binding);
-                if(uavIter == m_GlobalState.uavs.end())
-                {
-                  apiWrapper->FetchUAV(resRefInfo.binding);
-                  uavIter = m_GlobalState.uavs.find(resRefInfo.binding);
-                }
-                const GlobalState::UAVData &uav = uavIter->second;
+                const UAVData &uav = apiWrapper->GetUAVData(resRefInfo.binding);
                 resInfo = uav.resInfo;
                 data = uav.data.data();
                 dataSize = uav.data.size();
@@ -2372,13 +2366,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               }
               case ResourceClass::SRV:
               {
-                GlobalState::SRVIterator srvIter = m_GlobalState.srvs.find(resRefInfo.binding);
-                if(srvIter == m_GlobalState.srvs.end())
-                {
-                  apiWrapper->FetchSRV(resRefInfo.binding);
-                  srvIter = m_GlobalState.srvs.find(resRefInfo.binding);
-                }
-                const GlobalState::SRVData &srv = srvIter->second;
+                const SRVData &srv = apiWrapper->GetSRVData(resRefInfo.binding);
                 resInfo = srv.resInfo;
                 data = srv.data.data();
                 dataSize = srv.data.size();
@@ -2895,7 +2883,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
                   const uint32_t byteWidth = 4;
                   const byte *data = cbufferData.data() + dataOffset;
                   const uint32_t numComps = RDCMIN(4U, (bufferSize - dataOffset) / byteWidth);
-                  GlobalState::ViewFmt cbufferFmt;
+                  ViewFmt cbufferFmt;
                   cbufferFmt.byteWidth = byteWidth;
                   cbufferFmt.numComps = numComps;
                   cbufferFmt.compType = CompType::Float;
@@ -3511,17 +3499,10 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             uint32_t depthPitch = 0;
             uint32_t firstElem = 0;
             uint32_t numElems = 0;
-            GlobalState::ViewFmt fmt;
+            ViewFmt fmt;
 
-            GlobalState::ResourceInfo resInfo;
-            GlobalState::UAVIterator uavIter = m_GlobalState.uavs.find(resRefInfo.binding);
-            if(uavIter == m_GlobalState.uavs.end())
-            {
-              apiWrapper->FetchUAV(resRefInfo.binding);
-              uavIter = m_GlobalState.uavs.find(resRefInfo.binding);
-            }
-            const GlobalState::UAVData &uav = uavIter->second;
-            resInfo = uav.resInfo;
+            const UAVData &uav = apiWrapper->GetUAVData(resRefInfo.binding);
+            const ResourceInfo resInfo = uav.resInfo;
             data = uav.data.data();
             dataSize = uav.data.size();
             texData = uav.tex;
@@ -7668,6 +7649,11 @@ rdcstr Debugger::GetResourceReferenceName(const DXIL::Program *program,
   return "UNKNOWN_RESOURCE_HANDLE";
 }
 
+Debugger::~Debugger()
+{
+  SAFE_DELETE(m_ApiWrapper);
+}
+
 ScopedDebugData *Debugger::FindScopedDebugData(const DXIL::Metadata *md) const
 {
   for(ScopedDebugData *s : m_DebugInfo.scopedDebugDatas)
@@ -8887,17 +8873,19 @@ void Debugger::ParseDebugData()
   }
 }
 
-ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContainer *dxbcContainer,
+ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eventId,
+                                       const DXBC::DXBCContainer *dxbcContainer,
                                        const ShaderReflection &reflection, uint32_t activeLaneIndex,
                                        uint32_t threadsInWorkgroup)
 {
   ShaderStage shaderStage = reflection.stage;
 
+  m_ApiWrapper = apiWrapper;
   m_Program = dxbcContainer->GetDXILByteCode();
-  m_EventId = eventId;
   m_ActiveLaneIndex = activeLaneIndex;
   m_Steps = 0;
   m_Stage = shaderStage;
+  m_EntryPointInterface = m_Program->GetEntryPointInterface();
 
   uint32_t outputSSAId = m_Program->m_NextSSAId;
   uint32_t maxSSAId = outputSSAId + 1;
@@ -8905,26 +8893,29 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
   ShaderDebugTrace *ret = new ShaderDebugTrace;
   ret->stage = shaderStage;
 
+  // Get the global state from the API wrapper
+  m_GlobalState.builtins = apiWrapper->GetBuiltins();
+  m_GlobalState.subgroupSize = apiWrapper->GetSubgroupSize();
+  m_GlobalState.constantBlocks = apiWrapper->GetConstantBlocks();
+  m_GlobalState.constantBlocksDatas = apiWrapper->GetConstantBlocksDatas();
+
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
     m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId));
 
-  ThreadState &state = GetActiveLane();
+  // Get the thread state from the API wrapper
+  const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &threadsBuiltins =
+      apiWrapper->GetThreadsBuiltins();
+  const rdcarray<ShaderVariable> &threadsInputs = apiWrapper->GetThreadsInputs();
 
-  // Create the storage layout for the constant buffers
-  // The constant buffer data and details are filled in outside of this method
-  size_t count = reflection.constantBlocks.size();
-  m_GlobalState.constantBlocks.resize(count);
-  for(uint32_t i = 0; i < count; i++)
+  for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
-    m_GlobalState.constantBlocks[i].type = VarType::ConstantBlock;
-    const ConstantBlock &cbuffer = reflection.constantBlocks[i];
-    uint32_t bindCount = cbuffer.bindArraySize;
-    if(bindCount > 1)
-    {
-      // Create nested structure for constant buffer array
-      m_GlobalState.constantBlocks[i].members.resize(bindCount);
-    }
+    m_Workgroup[i].m_Builtins = threadsBuiltins[i];
+    m_Workgroup[i].m_Input = threadsInputs[i];
   }
+
+  ret->sourceVars = apiWrapper->GetSourceVars();
+
+  ThreadState &activeState = GetActiveLane();
 
   struct ResourceList
   {
@@ -8994,7 +8985,7 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
   }
 
   // Create the variables for Samplers
-  count = reflection.samplers.size();
+  size_t count = reflection.samplers.size();
   m_GlobalState.samplers.reserve(count);
   for(uint32_t i = 0; i < count; i++)
   {
@@ -9046,7 +9037,8 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
           const MemoryTracking::Allocation &allocation = itAlloc->second;
           void *allocMemoryBackingPtr = allocation.backingMemory;
           uint64_t allocSize = allocation.size;
-          state.UpdateBackingMemoryFromVariable(allocMemoryBackingPtr, allocSize, globalVar.var);
+          activeState.UpdateBackingMemoryFromVariable(allocMemoryBackingPtr, allocSize,
+                                                      globalVar.var);
           RDCASSERTEQUAL(allocSize, 0);
         }
         else
@@ -9464,120 +9456,18 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
     }
   }
 
-  // Add inputs to the shader trace
-  // Use the DXIL reflection data to map the input signature to input variables
-  const EntryPointInterface *entryPointIf = NULL;
-  for(size_t e = 0; e < m_Program->m_EntryPointInterfaces.size(); ++e)
-  {
-    if(entryFunction == m_Program->m_EntryPointInterfaces[e].name)
-    {
-      entryPointIf = &m_Program->m_EntryPointInterfaces[e];
-      break;
-    }
-  }
-  RDCASSERT(entryPointIf);
-  m_EntryPointInterface = entryPointIf;
-  const rdcarray<EntryPointInterface::Signature> &inputs = m_EntryPointInterface->inputs;
-
-  const uint32_t countInParams = (uint32_t)inputs.size();
-  if(countInParams)
-  {
-    // Make fake ShaderVariable struct to hold all the inputs
-    ShaderVariable &inStruct = state.m_Input;
-    inStruct.name = DXIL_FAKE_INPUT_STRUCT_NAME;
-    inStruct.rows = 0;
-    inStruct.columns = 0;
-    inStruct.type = VarType::Struct;
-    inStruct.members.resize(countInParams);
-
-    const rdcarray<SigParameter> &dxbcInParams = dxbcContainer->GetReflection()->InputSig;
-    for(uint32_t i = 0; i < countInParams; ++i)
-    {
-      const EntryPointInterface::Signature &sig = inputs[i];
-
-      ShaderVariable &v = inStruct.members[i];
-
-      // Get the name from the DXBC reflection
-      SigParameter sigParam;
-      if(FindSigParameter(dxbcInParams, sig, sigParam))
-      {
-        v.name = sigParam.semanticIdxName;
-      }
-      else
-      {
-        v.name = sig.name;
-      }
-      v.rows = (uint8_t)sig.rows;
-      v.columns = (uint8_t)sig.cols;
-      v.type = VarTypeForComponentType(sig.type);
-      if(v.rows <= 1)
-      {
-        v.rows = 1;
-      }
-      else
-      {
-        v.members.resize(v.rows);
-        for(uint32_t r = 0; r < v.rows; r++)
-        {
-          v.members[r].rows = 1;
-          v.members[r].columns = (uint8_t)sig.cols;
-          v.members[r].type = v.type;
-          v.members[r].name = StringFormat::Fmt("[%u]", r);
-        }
-      }
-
-      SourceVariableMapping inputMapping;
-      inputMapping.name = v.name;
-      inputMapping.type = v.type;
-      inputMapping.rows = sig.rows;
-      inputMapping.columns = sig.cols;
-      inputMapping.variables.reserve(sig.cols);
-      inputMapping.signatureIndex = i;
-      if(v.rows <= 1)
-      {
-        inputMapping.variables.reserve(sig.cols);
-        for(uint32_t c = 0; c < sig.cols; ++c)
-        {
-          DebugVariableReference ref;
-          ref.type = DebugVariableType::Input;
-          ref.name = inStruct.name + "." + v.name;
-          ref.component = c;
-          inputMapping.variables.push_back(ref);
-        }
-      }
-      else
-      {
-        DebugVariableReference ref;
-        ref.type = DebugVariableType::Input;
-        ref.name = inStruct.name + "." + v.name;
-        inputMapping.variables.push_back(ref);
-      }
-      ret->sourceVars.push_back(inputMapping);
-    }
-
-    // Make a single source variable mapping for the whole input struct
-    SourceVariableMapping inputMapping;
-    inputMapping.name = inStruct.name;
-    inputMapping.type = VarType::Struct;
-    inputMapping.rows = 0;
-    inputMapping.columns = 0;
-    inputMapping.variables.resize(1);
-    inputMapping.variables.push_back(DebugVariableReference(DebugVariableType::Input, inStruct.name));
-    ret->sourceVars.push_back(inputMapping);
-  }
-
   const rdcarray<SigParameter> &dxbcOutParams = dxbcContainer->GetReflection()->OutputSig;
   const rdcarray<EntryPointInterface::Signature> &outputs = m_EntryPointInterface->outputs;
   uint32_t countOutputs = (uint32_t)outputs.size();
 
   // Make fake ShaderVariable struct to hold all the outputs
-  ShaderVariable &outStruct = state.m_Output.var;
+  ShaderVariable &outStruct = activeState.m_Output.var;
   outStruct.name = DXIL_FAKE_OUTPUT_STRUCT_NAME;
   outStruct.rows = 0;
   outStruct.columns = 0;
   outStruct.type = VarType::Struct;
   outStruct.members.resize(countOutputs);
-  state.m_Output.id = outputSSAId;
+  activeState.m_Output.id = outputSSAId;
 
   for(uint32_t i = 0; i < countOutputs; ++i)
   {
@@ -9707,12 +9597,12 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
   {
     // Make a single source variable mapping for the whole output struct
     SourceVariableMapping outputMapping;
-    outputMapping.name = state.m_Output.var.name;
+    outputMapping.name = activeState.m_Output.var.name;
     outputMapping.type = VarType::Struct;
     outputMapping.rows = 0;
     outputMapping.columns = 0;
     outputMapping.variables.resize(1);
-    outputMapping.variables[0].name = state.m_Output.var.name;
+    outputMapping.variables[0].name = activeState.m_Output.var.name;
     outputMapping.variables[0].type = DebugVariableType::Variable;
     ret->sourceVars.push_back(outputMapping);
   }
@@ -9731,8 +9621,8 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
     ret->sourceVars.push_back(outputMapping);
   }
 
-  ret->inputs = {state.m_Input};
-  ret->inputs.append(state.m_Input.members);
+  ret->inputs = {activeState.m_Input};
+  ret->inputs.append(activeState.m_Input.members);
   ret->constantBlocks = m_GlobalState.constantBlocks;
   ret->readOnlyResources = m_GlobalState.readOnlyResources;
   ret->readWriteResources = m_GlobalState.readWriteResources;
@@ -9746,23 +9636,25 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
 
     if(i != m_ActiveLaneIndex)
     {
-      lane.m_Input = state.m_Input;
-      lane.m_Variables = state.m_Variables;
-      lane.m_Assigned = state.m_Assigned;
-      lane.m_Live = state.m_Live;
-      lane.m_IsGlobal = state.m_IsGlobal;
+      lane.m_Variables = activeState.m_Variables;
+      lane.m_Assigned = activeState.m_Assigned;
+      lane.m_Live = activeState.m_Live;
+      lane.m_IsGlobal = activeState.m_IsGlobal;
     }
   }
 
   // Add the output struct to the global state
   if(countOutputs)
-    m_GlobalState.globals.push_back(state.m_Output);
+    m_GlobalState.globals.push_back(activeState.m_Output);
+
+  InitialiseWorkgroup();
 
   return ret;
 }
 
-void Debugger::InitialiseWorkgroup(const rdcarray<ThreadProperties> &workgroupProperties)
+void Debugger::InitialiseWorkgroup()
 {
+  const rdcarray<ThreadProperties> &workgroupProperties = m_ApiWrapper->GetWorkgroupProperties();
   const uint32_t threadsInWorkgroup = (uint32_t)m_Workgroup.size();
 
   if(threadsInWorkgroup == 1)
@@ -9853,7 +9745,7 @@ void Debugger::InitialiseWorkgroup(const rdcarray<ThreadProperties> &workgroupPr
   }
 }
 
-rdcarray<ShaderDebugState> Debugger::ContinueDebug(DebugAPIWrapper *apiWrapper)
+rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 {
   ThreadState &active = GetActiveLane();
 
@@ -9987,12 +9879,12 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug(DebugAPIWrapper *apiWrapper)
         {
           hasDebugState = true;
           state.stepIndex = m_Steps;
-          thread.StepNext(&state, apiWrapper, m_Workgroup, activeMask);
+          thread.StepNext(&state, m_ApiWrapper, m_Workgroup, activeMask);
           m_Steps++;
         }
         else
         {
-          thread.StepNext(NULL, apiWrapper, m_Workgroup, activeMask);
+          thread.StepNext(NULL, m_ApiWrapper, m_Workgroup, activeMask);
         }
 
         threadExecutionStates[threadId] = thread.m_EnteredPoints;
