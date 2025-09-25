@@ -425,6 +425,7 @@ void main(uint3 inTid : SV_DispatchThreadID)
         for(int i = 0; i < numCompTests; i++)
         {
           cmd->SetComputeRoot32BitConstant(0, i, 0);
+          cmd->SetComputeRoot32BitConstant(0, i + 1, 1);
           cmd->Dispatch(2, 1, 1);
         }
 
