@@ -213,10 +213,9 @@ void ResourceRecord::Delete(ResourceRecordHandler *mgr)
   RDCASSERT(ref >= 0);
   if(ref <= 0)
   {
-    for(auto it = Parents.begin(); it != Parents.end(); ++it)
-      (*it)->Delete(mgr);
+    rdcarray<ResourceRecord *> ParentsToDelete;
+    Parents.swap(ParentsToDelete);
 
-    Parents.clear();
     Length = 0;
     DataPtr = NULL;
 
@@ -226,5 +225,8 @@ void ResourceRecord::Delete(ResourceRecordHandler *mgr)
       mgr->RemoveResourceRecord(ResID);
 
     mgr->DestroyResourceRecord(this);
+
+    for(auto it = ParentsToDelete.begin(); it != ParentsToDelete.end(); ++it)
+      (*it)->Delete(mgr);
   }
 }
