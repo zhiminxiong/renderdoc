@@ -204,6 +204,7 @@
     <ClCompile Include="d3d12\d3d12_existing_heap.cpp" />
     <ClCompile Include="d3d12\d3d12_groupshared.cpp" />
     <ClCompile Include="d3d12\d3d12_helpers.cpp" />
+    <ClCompile Include="d3d12\d3d12_memory_overlap.cpp" />
     <ClCompile Include="d3d12\d3d12_mesh_shader.cpp" />
     <ClCompile Include="d3d12\d3d12_multi_wait_before_signal.cpp" />
     <ClCompile Include="d3d12\d3d12_large_buffer.cpp" />
