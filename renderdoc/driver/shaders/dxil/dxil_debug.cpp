@@ -2715,6 +2715,8 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
                     var.columns = 4;
                     var.name = StringFormat::Fmt("%s[%u]", result.name.c_str(), i);
                     var.rows = 1;
+                    // Initialise to 0xCC to aid determinism and show unset values
+                    memset(&var.value, 0XCC, sizeof(var.value));
                   }
 
                   // Memory copy from the cbuffer data into the cbuffer variable
@@ -2729,7 +2731,8 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
                       for(size_t i = 0; i < cbufferVar.members.size(); ++i)
                       {
                         ShaderVariable &var = cbufferVar.members[i];
-                        memcpy(var.value.u32v.data(), data + offset, 16);
+                        size_t countBytes = RDCMIN((size_t)16, cbufferData.size() - offset);
+                        memcpy(var.value.u32v.data(), data + offset, countBytes);
                         offset += 16;
                         if(offset >= cbufferData.size())
                           break;
