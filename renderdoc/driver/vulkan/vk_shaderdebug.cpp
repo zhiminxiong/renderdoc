@@ -746,7 +746,10 @@ public:
 
     // if any descriptor lookup failed, return now
     if(!valid)
+    {
+      hasResult = false;
       return false;
+    }
 
     VkMarkerRegion markerRegion("QueueSampleGather");
 
@@ -759,9 +762,13 @@ public:
         m_pDriver->GetResourceManager()->GetLiveHandle<VkImageView>(imageDescriptor.view);
     VkImageLayout layout = convert((DescriptorSlotImageLayout)imageDescriptor.byteOffset);
 
-    // Ignore NULL view
+    // NULL view : return 0,0,0,0
     if(!buffer && (view == VK_NULL_HANDLE))
-      return false;
+    {
+      memset(&output.value, 0, sizeof(output.value));
+      hasResult = true;
+      return true;
+    }
 
     // promote view to Array view
     VulkanCreationInfo::ImageView defaultViewProps = {};
@@ -772,9 +779,13 @@ public:
     const VulkanCreationInfo::ImageView &viewProps =
         buffer ? defaultViewProps : m_Creation.GetImageViewInfo(GetResID(view));
 
-    // Ignore NULL image
+    // NULL image : return 0,0,0,0
     if(!buffer && (viewProps.image == ResourceId()))
-      return false;
+    {
+      memset(&output.value, 0, sizeof(output.value));
+      hasResult = true;
+      return true;
+    }
 
     const VulkanCreationInfo::Image &imageProps =
         buffer ? defaultImageProps : m_Creation.GetImageInfo(viewProps.image);
