@@ -36,6 +36,13 @@
 using namespace DXIL;
 using namespace DXILDebug;
 
+#if defined(RELEASE)
+#define CHECK_DEVICE_THREAD()
+#else
+#define CHECK_DEVICE_THREAD() \
+  RDCASSERTMSG("API Wrapper function called from non-device thread!", IsDeviceThread());
+#endif    // #if defined(RELEASE)
+
 namespace DXILDebug
 {
 static DXBC::ResourceRetType ConvertCompTypeToResourceRetType(const CompType compType)
@@ -267,7 +274,8 @@ D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Progra
       m_ShaderType(dxilProgram->GetShaderType()),
       m_EventId(eventId),
       m_Program(dxilProgram),
-      m_Reflection(refl)
+      m_Reflection(refl),
+      m_DeviceThreadID(Threading::GetCurrentID())
 {
   // Create the storage layout for the constant buffers
   // The constant buffer data and details are filled in outside of this method
@@ -375,13 +383,17 @@ D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Progra
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 D3D12APIWrapper::~D3D12APIWrapper()
 {
+  CHECK_DEVICE_THREAD();
   ResetReplay();
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void D3D12APIWrapper::ResetReplay()
 {
+  CHECK_DEVICE_THREAD();
   if(!m_ResourcesDirty)
   {
     // replay the action to get back to 'normal' state for this event
@@ -391,8 +403,10 @@ void D3D12APIWrapper::ResetReplay()
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void D3D12APIWrapper::PrepareReplayForResources()
 {
+  CHECK_DEVICE_THREAD();
   // if the resources are dirty, replay back to right before it.
   if(m_ResourcesDirty)
   {
@@ -547,8 +561,10 @@ void D3D12APIWrapper::FlattenVariables(const rdcstr &cbufferName,
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void D3D12APIWrapper::FetchConstantBufferData(const D3D12RenderState::RootSignature &rootsig)
 {
+  CHECK_DEVICE_THREAD();
   WrappedID3D12RootSignature *pD3D12RootSig =
       m_Device->GetResourceManager()->GetCurrentAs<WrappedID3D12RootSignature>(rootsig.rootsig);
   const DXBC::ShaderType shaderType = m_Program->GetShaderType();
@@ -705,8 +721,10 @@ void D3D12APIWrapper::AddCBufferToGlobalState(const BindingSlot &slot, bytebuf &
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 SRVData &D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
 {
+  CHECK_DEVICE_THREAD();
   SRVData &srvData = m_SRVs[slot];
   if(resDescriptor)
   {
@@ -750,8 +768,10 @@ SRVData &D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const B
   return srvData;
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
 {
+  CHECK_DEVICE_THREAD();
   // the resources might be dirty from side-effects, replay back to right before it.
   PrepareReplayForResources();
 
@@ -894,8 +914,10 @@ SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
   return m_SRVs[slot];
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 UAVData &D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
 {
+  CHECK_DEVICE_THREAD();
   UAVData &uavData = m_UAVs[slot];
   if(resDescriptor)
   {
@@ -948,8 +970,10 @@ UAVData &D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const B
   return uavData;
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
 {
+  CHECK_DEVICE_THREAD();
   // the resources might be dirty from side-effects, replay back to right before it.
   PrepareReplayForResources();
 
@@ -1095,14 +1119,17 @@ UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
   return m_UAVs[slot];
 }
 
+// Called from any thread
 bool D3D12APIWrapper::IsSRVCached(const BindingSlot &slot)
 {
   SCOPED_READLOCK(m_SRVsLock);
   return m_SRVs.find(slot) != m_SRVs.end();
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 const SRVData &D3D12APIWrapper::GetSRVData(const BindingSlot &slot)
 {
+  CHECK_DEVICE_THREAD();
   {
     SCOPED_READLOCK(m_SRVsLock);
     auto it = m_SRVs.find(slot);
@@ -1116,14 +1143,17 @@ const SRVData &D3D12APIWrapper::GetSRVData(const BindingSlot &slot)
   }
 }
 
+// Called from any thread
 bool D3D12APIWrapper::IsUAVCached(const BindingSlot &slot)
 {
   SCOPED_READLOCK(m_UAVsLock);
   return m_UAVs.find(slot) != m_UAVs.end();
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 const UAVData &D3D12APIWrapper::GetUAVData(const BindingSlot &slot)
 {
+  CHECK_DEVICE_THREAD();
   {
     SCOPED_READLOCK(m_UAVsLock);
     auto it = m_UAVs.find(slot);
@@ -1137,9 +1167,11 @@ const UAVData &D3D12APIWrapper::GetUAVData(const BindingSlot &slot)
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 bool D3D12APIWrapper::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
                                              ShaderVariable &output)
 {
+  CHECK_DEVICE_THREAD();
   D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "CalculateMathIntrinsic");
 
   int mathOp;
@@ -1170,12 +1202,14 @@ bool D3D12APIWrapper::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariab
   return D3D12ShaderDebug::CalculateMathIntrinsic(true, m_Device, mathOp, input, output, ignored);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 bool D3D12APIWrapper::CalculateSampleGather(
     DXIL::DXOp dxOp, SampleGatherResourceData resourceData, SampleGatherSamplerData samplerData,
     const ShaderVariable &uv, const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
     const int8_t texelOffsets[3], int multisampleIndex, float lodValue, float compareValue,
     GatherChannel gatherChannel, uint32_t instructionIdx, ShaderVariable &output)
 {
+  CHECK_DEVICE_THREAD();
   int sampleOp;
   switch(dxOp)
   {
@@ -1208,10 +1242,12 @@ bool D3D12APIWrapper::CalculateSampleGather(
       instructionIdx, opString, output);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
                                                 const DXDebug::BindingSlot &slot,
                                                 uint32_t mipLevel) const
 {
+  CHECK_DEVICE_THREAD();
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
   switch(resClass)
   {
@@ -1228,10 +1264,12 @@ ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
                                            true);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
                                               const DXDebug::BindingSlot &slot,
                                               const char *opString) const
 {
+  CHECK_DEVICE_THREAD();
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
   switch(resClass)
   {
@@ -1246,13 +1284,17 @@ ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
   return D3D12ShaderDebug::GetSampleInfo(m_Device, descType, slot, m_ShaderType, opString);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderVariable D3D12APIWrapper::GetRenderTargetSampleInfo(const char *opString) const
 {
+  CHECK_DEVICE_THREAD();
   return D3D12ShaderDebug::GetRenderTargetSampleInfo(m_Device, m_ShaderType, opString);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
 {
+  CHECK_DEVICE_THREAD();
   const HeapDescriptorType heapType = slot.heapType;
   RDCASSERT(heapType != HeapDescriptorType::NoHeap);
   const uint32_t descriptorIndex = slot.descriptorIndex;
@@ -1348,9 +1390,11 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
   return resRefInfo;
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorType type,
                                                           const DXDebug::BindingSlot &slot) const
 {
+  CHECK_DEVICE_THREAD();
   const HeapDescriptorType heapType = slot.heapType;
   RDCASSERT(heapType != HeapDescriptorType::NoHeap);
   uint32_t descriptorIndex = slot.descriptorIndex;

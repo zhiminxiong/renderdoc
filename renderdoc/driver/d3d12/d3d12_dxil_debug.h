@@ -110,6 +110,7 @@ public:
   const ShaderVariable &GetInputPlaceholder() const override { return m_InputPlaceholder; }
 
 private:
+  bool IsDeviceThread() const { return Threading::GetCurrentID() == m_DeviceThreadID; }
   void PrepareReplayForResources();
   void AddCBufferToGlobalState(const BindingSlot &slot, bytebuf &cbufData);
   void FlattenSingleVariable(const rdcstr &cbufferName, uint32_t byteOffset, const rdcstr &basename,
@@ -144,6 +145,7 @@ private:
   const DXIL::Program *m_Program = NULL;
   const DXIL::EntryPointInterface *m_EntryPointInterface = NULL;
   const DXBC::ShaderType m_ShaderType;
+  const uint64_t m_DeviceThreadID;
   const uint32_t m_EventId;
   bool m_ResourcesDirty = true;
 };
