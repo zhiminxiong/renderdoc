@@ -6246,12 +6246,26 @@ DXILDebug::Id Program::GetResultSSAId(const DXIL::Instruction &inst)
   return inst.slot;
 }
 
-void Program::MakeResultId(const DXIL::Instruction &inst, rdcstr &resultId)
+void Program::MakeResultId(const DXIL::Instruction &inst, rdcstr &resultId) const
 {
+  DXILDebug::Id id = inst.slot;
+  if(id != ~0U)
+  {
+    auto it = m_ResultNames.find(id);
+    if(it != m_ResultNames.end())
+    {
+      resultId = it->second;
+      return;
+    }
+  }
+
   if(!inst.getName().empty())
-    resultId = StringFormat::Fmt("%c%s", '_', escapeStringIfNeeded(inst.getName()).c_str());
-  else if(inst.slot != ~0U)
-    resultId = StringFormat::Fmt("%c%s", '_', ToStr(inst.slot).c_str());
+    resultId = StringFormat::Fmt("_%s", escapeStringIfNeeded(inst.getName()).c_str());
+  else if(id != ~0U)
+    resultId = StringFormat::Fmt("_%s", ToStr(id).c_str());
+
+  if(id != ~0U)
+    m_ResultNames[id] = resultId;
 }
 
 rdcpair<int32_t, int32_t> Program::ParseDIExpressionMD(const Metadata *expressionMD) const
@@ -6328,7 +6342,7 @@ SourceMappingInfo Program::ParseDbgOpDeclare(const DXIL::Instruction &inst) cons
   if(const Instruction *varInst = cast<Instruction>(value))
   {
     ret.dbgVarId = Program::GetResultSSAId(*varInst);
-    Program::MakeResultId(*varInst, ret.dbgVarName);
+    MakeResultId(*varInst, ret.dbgVarName);
   }
   else if(const GlobalVar *gv = cast<GlobalVar>(value))
   {

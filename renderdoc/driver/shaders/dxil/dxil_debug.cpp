@@ -2088,7 +2088,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
   const Type *retType = inst.type;
   // Sensible defaults
   ShaderVariable result;
-  Program::MakeResultId(inst, result.name);
+  m_Program.MakeResultId(inst, result.name);
   result.rows = 1;
   result.columns = 1;
   result.type = ConvertDXILTypeToVarType(retType);

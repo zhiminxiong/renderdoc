@@ -1729,7 +1729,7 @@ protected:
   const ResourceReference *GetResourceReference(const DXILDebug::Id handleId) const;
   rdcstr GetHandleAlias(const rdcstr &handleStr) const;
   static DXILDebug::Id GetResultSSAId(const DXIL::Instruction &inst);
-  static void MakeResultId(const Instruction &inst, rdcstr &resultId);
+  void MakeResultId(const Instruction &inst, rdcstr &resultId) const;
   rdcstr GetArgId(const Instruction &inst, uint32_t arg) const;
   rdcstr GetArgId(const Value *v) const;
   rdcstr GetArgumentName(const Value *v) const;
@@ -1808,6 +1808,7 @@ protected:
   std::map<rdcstr, rdcstr> m_SsaAliases;
   std::map<rdcstr, uint32_t> m_ResourceAnnotateCounts;
   rdcarray<LocalSourceVariable> m_Locals;
+  mutable std::map<DXILDebug::Id, rdcstr> m_ResultNames;
 
   rdcarray<ResourceReference> m_ResourceReferences;
   rdcstr m_Disassembly;
