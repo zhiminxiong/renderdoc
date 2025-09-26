@@ -9809,7 +9809,8 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
   rdcarray<bool> activeMask;
 
-  for(int stepEnd = m_Steps + 100; m_Steps < stepEnd;)
+  // continue stepping until we have 1000000 target steps completed in a chunk.
+  for(int stepEnd = m_Steps + 1000000; m_Steps < stepEnd;)
   {
     if(active.Finished())
       break;
