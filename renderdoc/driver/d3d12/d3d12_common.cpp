@@ -537,6 +537,10 @@ bool D3D12InitParams::IsSupportedVersion(uint64_t ver)
   if(ver == 0x12)
     return true;
 
+  // 0x13 -> 0x14 - Reserved/placed buffers are serialised via their heaps not per-buffer
+  if(ver == 0x13)
+    return true;
+
   return false;
 }
 

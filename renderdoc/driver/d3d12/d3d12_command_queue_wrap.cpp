@@ -102,6 +102,10 @@ void STDMETHODCALLTYPE WrappedID3D12CommandQueue::UpdateTileMappings(
     // register this heap as having been used for sparse binding
     m_pDevice->AddSparseHeap(GetResID(pHeap));
 
+    // mark the heap as dirty if this is a buffer resource
+    if(pResource->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+      GetResourceManager()->MarkDirtyResource(GetResID(pHeap));
+
 // define macros to help provide the defaults for NULL arrays
 #define REGION_START(i)                                                 \
   (pResourceRegionStartCoordinates ? pResourceRegionStartCoordinates[i] \

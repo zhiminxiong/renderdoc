@@ -159,6 +159,38 @@ D3D12AccelerationStructure::~D3D12AccelerationStructure()
   Shutdown();
 }
 
+WrappedID3D12Heap::WrappedID3D12Heap(ID3D12Heap *real, WrappedID3D12Device *device)
+    : WrappedDeviceChild12(real, device)
+{
+  D3D12_HEAP_DESC desc = GetDesc();
+  if((desc.Flags & D3D12_HEAP_FLAG_DENY_BUFFERS) == 0)
+  {
+    D3D12_RESOURCE_DESC resDesc = {};
+    resDesc.Width = GetDesc().SizeInBytes;
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resDesc.SampleDesc.Count = 1;
+
+    if(desc.Flags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER)
+      resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+
+    D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+    if(desc.Properties.Type == D3D12_HEAP_TYPE_UPLOAD)
+      state = D3D12_RESOURCE_STATE_GENERIC_READ;
+    else if(desc.Properties.Type == D3D12_HEAP_TYPE_READBACK)
+      state = D3D12_RESOURCE_STATE_COPY_DEST;
+
+    HRESULT hr =
+        device->GetReal()->CreatePlacedResource(real, 0, &resDesc, D3D12_RESOURCE_STATE_COMMON, NULL,
+                                                __uuidof(ID3D12Resource), (void **)&m_WholeMem);
+
+    RDCASSERT(SUCCEEDED(hr));
+  }
+}
+
 bool WrappedID3D12Resource::CreateAccStruct(D3D12BufferOffset bufferOffset,
                                             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE type,
                                             UINT64 byteSize, ResourceId id,
@@ -215,6 +247,8 @@ WrappedID3D12Resource::~WrappedID3D12Resource()
     for(auto it = m_accelerationStructMap.begin(); it != m_accelerationStructMap.end(); ++it)
       SAFE_RELEASE(it->second);
   }
+
+  m_pDevice->GetResourceManager()->RemovePlacedResource(GetResourceID());
 
   if(IsReplayMode(m_pDevice->GetState()))
     m_pDevice->RemoveReplayResource(GetResourceID());

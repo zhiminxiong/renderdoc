@@ -257,6 +257,7 @@ bool WrappedID3D12Device::Serialise_CreateResource(
     case D3D12Chunk::Device_CreateReservedResource2:
       APIProps.SparseResources = true;
       m_SparseResources.insert(GetResID(ret));
+      m_ModResources.insert(GetResID(ret));
     default: break;
   }
 
@@ -601,7 +602,20 @@ HRESULT WrappedID3D12Device::CreateResource(
     if(pHeap)
       record->AddParent(GetRecord(pHeap));
 
+    // all resources are marked dirty here, but we will skip the bytes of initial contents for
+    // sparse buffers (only the sparse tables get serialised) and initial contents entirely for
+    // placed buffer resources. It would be slightly better to never mark placed buffer resources
+    // dirty but the logic for dirtying resources with write references is generic and it's not much
+    // cost to skip them at initial contents prepare time.
     GetResourceManager()->MarkDirtyResource(wrapped->GetResourceID());
+
+    // for placed buffers resources, the resource itself is not going to be serialised but the heap
+    // underlying is. Sparse resources mark the heap dirty when first bound to pages
+    if(desc0.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && pHeap)
+    {
+      GetResourceManager()->MarkDirtyResource(GetResID(pHeap));
+      GetResourceManager()->AddPlacedResource(wrapped->GetResourceID(), GetResID(pHeap));
+    }
   }
   else
   {

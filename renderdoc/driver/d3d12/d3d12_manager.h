@@ -717,7 +717,9 @@ struct D3D12InitialContents
     // for created initial states we always have an identical resource
     ForceCopy,
     // for handling acceleration structures
-    AccelerationStructure
+    AccelerationStructure,
+    // for sparse buffers with no contents
+    SparseOnly,
   };
   D3D12InitialContents(D3D12Descriptor *d, uint32_t n) : D3D12InitialContents()
   {
@@ -1486,6 +1488,44 @@ public:
 
   D3D12GpuBufferAllocator &GetGPUBufferAllocator() { return m_GPUBufferAllocator; }
 
+  void AddPlacedResource(ResourceId resId, ResourceId heapId)
+  {
+    SCOPED_LOCK(m_PlacedLock);
+    m_PlacedHeapForResource[resId] = heapId;
+  }
+
+  void RemovePlacedResource(ResourceId resId)
+  {
+    SCOPED_LOCK(m_PlacedLock);
+    m_PlacedHeapForResource.erase(resId);
+  }
+
+  ResourceId GetPlacedHeapForResource(ResourceId resId)
+  {
+    SCOPED_LOCK(m_PlacedLock);
+    auto it = m_PlacedHeapForResource.find(resId);
+    if(it == m_PlacedHeapForResource.end())
+      return ResourceId();
+    return it->second;
+  }
+
+  template <typename Compose>
+  void MarkResourceFrameReferenced(ResourceId id, FrameRefType refType, Compose comp)
+  {
+    ResourceManager::MarkResourceFrameReferenced(id, refType, comp);
+    ResourceId id2 = GetPlacedHeapForResource(id);
+    if(id2 != ResourceId())
+      ResourceManager::MarkResourceFrameReferenced(id2, refType, comp);
+  }
+
+  inline void MarkResourceFrameReferenced(ResourceId id, FrameRefType refType)
+  {
+    ResourceManager::MarkResourceFrameReferenced(id, refType);
+    ResourceId id2 = GetPlacedHeapForResource(id);
+    if(id2 != ResourceId())
+      ResourceManager::MarkResourceFrameReferenced(id2, refType);
+  }
+
   template <typename SerialiserType>
   void SerialiseResourceStates(SerialiserType &ser, BarrierSet &barriers,
                                std::map<ResourceId, SubresourceStateVector> &states,
@@ -1516,6 +1556,9 @@ private:
   WrappedID3D12Device *m_Device;
   D3D12RTManager *m_RTManager;
   D3D12GpuBufferAllocator m_GPUBufferAllocator;
+
+  Threading::CriticalSection m_PlacedLock;
+  std::unordered_map<ResourceId, ResourceId> m_PlacedHeapForResource;
 
   // dummy handle to use - starting from near highest valid pointer to minimise risk of overlap with real handles
   static const uint64_t FirstDummyHandle = UINTPTR_MAX - 1024;
