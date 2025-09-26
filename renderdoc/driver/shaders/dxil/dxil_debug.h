@@ -426,6 +426,8 @@ private:
   static bool WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup);
   static bool QuadIsDiverged(const rdcarray<ThreadState> &workgroup,
                              const rdcfixedarray<uint32_t, 4> &quadNeighbours);
+  static bool SubgroupIsDiverged(const rdcarray<ThreadState> &workgroup,
+                                 const rdcarray<uint32_t> &activeLanes);
 
   bool GetShaderVariableHelper(const DXIL::Value *dxilValue, DXIL::Operation op, DXIL::DXOp dxOpCode,
                                ShaderVariable &var, bool flushDenormInput, bool isLive) const;

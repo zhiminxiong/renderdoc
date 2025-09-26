@@ -4114,6 +4114,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
             GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             result.value.u32v[0] = (m_WorkgroupIndex == activeLanes[0]) ? 1 : 0;
             break;
           }
@@ -4143,6 +4144,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
             GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             uint32_t lane = activeLanes[0];
             if(lane < workgroup.size())
             {
@@ -4182,6 +4184,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
             GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             for(uint32_t lane : activeLanes)
             {
               // stop before processing our lane
@@ -4254,6 +4257,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
             GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             uint32_t maxLane = (dxOpCode == DXOp::WavePrefixBitCount) ? m_WorkgroupIndex : UINT32_MAX;
 
@@ -4327,6 +4331,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             rdcarray<uint32_t> activeLanes;
             const uint32_t firstLaneInSub =
                 GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
             {
@@ -4408,6 +4413,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
             GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
             {
@@ -4538,6 +4544,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
             GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
             {
@@ -4603,6 +4610,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             rdcarray<uint32_t> activeLanes;
             const uint32_t firstLaneInSub =
                 GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
             {
@@ -4671,6 +4679,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             rdcarray<uint32_t> activeLanes;
             const uint32_t firstLaneInSub =
                 GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             uint32_t maxLane = m_WorkgroupIndex;
 
@@ -4783,6 +4792,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             rdcarray<uint32_t> activeLanes;
             const uint32_t firstLaneInSub =
                 GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             uint32_t maxLane = m_WorkgroupIndex;
 
@@ -7601,6 +7611,31 @@ bool ThreadState::WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup)
       return true;
     // not executing the same instruction
     if(workgroup[i].m_ActiveGlobalInstructionIdx != instr0)
+      return true;
+  }
+  return false;
+}
+
+bool ThreadState::SubgroupIsDiverged(const rdcarray<ThreadState> &workgroup,
+                                     const rdcarray<uint32_t> &activeLanes)
+{
+  uint32_t block0 = ~0U;
+  uint32_t instr0 = ~0U;
+  for(uint32_t lane : activeLanes)
+  {
+    if(workgroup[lane].Finished())
+      continue;
+    if(block0 == ~0U)
+    {
+      block0 = workgroup[lane].m_Block;
+      instr0 = workgroup[lane].m_ActiveGlobalInstructionIdx;
+      continue;
+    }
+    // not in the same basic block
+    if(workgroup[lane].m_Block != block0)
+      return true;
+    // not executing the same instruction
+    if(workgroup[lane].m_ActiveGlobalInstructionIdx != instr0)
       return true;
   }
   return false;
