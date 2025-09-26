@@ -42,6 +42,16 @@ RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_Logging, false,
   RDCASSERTMSG("Debugger function called from non-device thread!", IsDeviceThread());
 #endif    // #if defined(RELEASE)
 
+#if defined(RELEASE)
+#define THREADSTATE_CHECK_DEBUGGER_THREAD() \
+  do                                        \
+  {                                         \
+  } while((void)0, 0)
+#else
+#define THREADSTATE_CHECK_DEBUGGER_THREAD() \
+  RDCASSERTMSG("Function called from non-debugger thread!", m_Debugger.IsDeviceThread());
+#endif    // #if defined(RELEASE)
+
 using namespace rdcshaders;
 
 // TODO: Extend support for Compound Constants: arithmetic, logical ops
@@ -1790,6 +1800,7 @@ void MemoryTracking::ConvertGlobalAllocToLocal(Id allocId)
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
                          uint32_t laneIndex)
     : m_Debugger(debugger),
@@ -1798,14 +1809,17 @@ ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uin
       m_MaxSSAId(maxSSAId),
       m_WorkgroupIndex(laneIndex)
 {
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
   m_ShaderType = m_Program.GetShaderType();
   m_Assigned.resize(maxSSAId);
   m_Live.resize(maxSSAId);
   m_Variables.resize(maxSSAId);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ThreadState::~ThreadState()
 {
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
   for(auto it : m_Memory.m_Allocations)
   {
     if(it.second.localMemory)
@@ -1823,8 +1837,10 @@ bool ThreadState::InUniformBlock() const
   return m_FunctionInfo->uniformBlocks.contains(m_Block);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarray<bool> &newLive)
 {
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
   // nothing to do if we aren't tracking into a state
   if(!m_State)
     return;
@@ -1851,8 +1867,10 @@ void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarr
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void ThreadState::EnterFunction(const Function *function, const rdcarray<Value *> &args)
 {
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
   StackFrame *frame = new StackFrame(function);
   m_FunctionInstructionIdx = 0;
   m_FunctionInfo = m_Debugger.GetFunctionInfo(function);
@@ -1881,8 +1899,10 @@ void ThreadState::EnterFunction(const Function *function, const rdcarray<Value *
   StepOverNopInstructions();
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void ThreadState::EnterEntryPoint(const Function *function, ShaderDebugState *state)
 {
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
   m_State = state;
 
   EnterFunction(function, {});
@@ -1922,8 +1942,10 @@ void ThreadState::EnterEntryPoint(const Function *function, ShaderDebugState *st
   m_State = NULL;
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void ThreadState::FillCallstack(ShaderDebugState &state)
 {
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
   if(m_FunctionInfo->callstacks.size() == 1)
   {
     state.callstack = m_FunctionInfo->callstacks.begin()->second;
