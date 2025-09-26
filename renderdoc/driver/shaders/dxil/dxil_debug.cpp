@@ -32,6 +32,16 @@
 RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_Logging, false,
             "Debug logging for the DXIL shader debugger");
 
+#if defined(RELEASE)
+#define CHECK_DEBUGGER_THREAD() \
+  do                            \
+  {                             \
+  } while((void)0, 0)
+#else
+#define CHECK_DEBUGGER_THREAD() \
+  RDCASSERTMSG("Debugger function called from non-device thread!", IsDeviceThread());
+#endif    // #if defined(RELEASE)
+
 using namespace rdcshaders;
 
 // TODO: Extend support for Compound Constants: arithmetic, logical ops
@@ -7652,8 +7662,12 @@ rdcstr Debugger::GetResourceReferenceName(const DXIL::Program *program,
   return "UNKNOWN_RESOURCE_HANDLE";
 }
 
+Debugger::Debugger() : DXBCContainerDebugger(true), m_DeviceThreadID(Threading::GetCurrentID()){};
+
+// Must be called from the replay manager thread (the debugger thread)
 Debugger::~Debugger()
 {
+  CHECK_DEBUGGER_THREAD();
   SAFE_DELETE(m_ApiWrapper);
 }
 
@@ -8052,8 +8066,10 @@ void Debugger::ParseDbgOpValue(const DXIL::Instruction &inst, uint32_t instructi
   AddLocalVariable(sourceMappingInfo, instructionIndex);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void Debugger::ParseDebugData()
 {
+  CHECK_DEBUGGER_THREAD();
   // The scopes will have been created when parsing to generate the callstack information
   for(const Function *f : m_Program->m_Functions)
   {
@@ -8876,11 +8892,13 @@ void Debugger::ParseDebugData()
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eventId,
                                        const DXBC::DXBCContainer *dxbcContainer,
                                        const ShaderReflection &reflection, uint32_t activeLaneIndex,
                                        uint32_t threadsInWorkgroup)
 {
+  CHECK_DEBUGGER_THREAD();
   ShaderStage shaderStage = reflection.stage;
 
   m_ApiWrapper = apiWrapper;
@@ -9647,8 +9665,10 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   return ret;
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 void Debugger::InitialiseWorkgroup()
 {
+  CHECK_DEBUGGER_THREAD();
   const rdcarray<ThreadProperties> &workgroupProperties = m_ApiWrapper->GetWorkgroupProperties();
   const uint32_t threadsInWorkgroup = (uint32_t)m_Workgroup.size();
 
@@ -9740,8 +9760,10 @@ void Debugger::InitialiseWorkgroup()
   }
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 {
+  CHECK_DEBUGGER_THREAD();
   ThreadState &active = GetActiveLane();
 
   rdcarray<ShaderDebugState> ret;
@@ -9980,22 +10002,29 @@ const FunctionInfo *Debugger::GetFunctionInfo(const DXIL::Function *function) co
   return &m_FunctionInfos.at(function);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 const UAVData &Debugger::GetUAVData(const BindingSlot &slot) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetUAVData(slot);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 const SRVData &Debugger::GetSRVData(const BindingSlot &slot) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetSRVData(slot);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 bool Debugger::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
                                       ShaderVariable &output) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->CalculateMathIntrinsic(dxOp, input, output);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 bool Debugger::CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
                                      SampleGatherSamplerData samplerData, const ShaderVariable &uv,
                                      const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
@@ -10003,36 +10032,47 @@ bool Debugger::CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData r
                                      float lodValue, float compareValue, GatherChannel gatherChannel,
                                      uint32_t instructionIdx, ShaderVariable &output) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->CalculateSampleGather(dxOp, resourceData, samplerData, uv, ddxCalc, ddyCalc,
                                              texelOffsets, multisampleIndex, lodValue, compareValue,
                                              gatherChannel, instructionIdx, output);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderVariable Debugger::GetResourceInfo(DXIL::ResourceClass resClass,
                                          const DXDebug::BindingSlot &slot, uint32_t mipLevel) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetResourceInfo(resClass, slot, mipLevel);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderVariable Debugger::GetSampleInfo(DXIL::ResourceClass resClass,
                                        const DXDebug::BindingSlot &slot, const char *opString) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetSampleInfo(resClass, slot, opString);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderVariable Debugger::GetRenderTargetSampleInfo(const char *opString) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetRenderTargetSampleInfo(opString);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ResourceReferenceInfo Debugger::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetResourceReferenceInfo(slot);
 }
 
+// Must be called from the replay manager thread (the debugger thread)
 ShaderDirectAccess Debugger::GetShaderDirectAccess(DescriptorType type,
                                                    const DXDebug::BindingSlot &slot) const
 {
+  CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetShaderDirectAccess(type, slot);
 }
 };    // namespace DXILDebug

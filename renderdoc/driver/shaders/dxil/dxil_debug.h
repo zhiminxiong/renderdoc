@@ -629,7 +629,7 @@ struct TypeData
 class Debugger : public DXBCContainerDebugger
 {
 public:
-  Debugger() : DXBCContainerDebugger(true){};
+  Debugger();
   ~Debugger();
 
   ShaderDebugTrace *BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eventId,
@@ -670,6 +670,7 @@ public:
   ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
                                            const DXDebug::BindingSlot &slot) const;
 
+  bool IsDeviceThread() const { return Threading::GetCurrentID() == m_DeviceThreadID; }
 private:
   void InitialiseWorkgroup();
   ThreadState &GetActiveLane() { return m_Workgroup[m_ActiveLaneIndex]; }
@@ -707,6 +708,7 @@ private:
   const DXIL::EntryPointInterface *m_EntryPointInterface = NULL;
   ShaderStage m_Stage;
 
+  const uint64_t m_DeviceThreadID;
   uint32_t m_ActiveLaneIndex = 0;
   int m_Steps = 0;
 };
