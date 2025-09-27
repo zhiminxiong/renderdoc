@@ -5387,10 +5387,20 @@ bool ThreadState::CanRunAnotherStep() const
   if(IsPendingResultPending())
     return false;
 
+  // current instructions that require full lockstep
+  ConstIter it = debugger.GetIterForInstruction(nextInstruction - 1);
+  OpDecoder opdata(it);
+  switch(opdata.op)
+  {
+    // no thread can continue until all threads execute the barrier
+    case Op::ControlBarrier: return false;
+    default: break;
+  }
+
   // Next instructions that prevent running another step:
   // any instruction that requires threads in the tangle to be in lockstep
-  ConstIter it = debugger.GetIterForInstruction(nextInstruction);
-  OpDecoder opdata(it);
+  it = debugger.GetIterForInstruction(nextInstruction);
+  opdata = it;
   switch(opdata.op)
   {
     // thread barriers require threads in the tangle to be in lockstep
