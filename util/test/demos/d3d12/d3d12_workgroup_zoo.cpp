@@ -60,7 +60,7 @@ void SetOutput(float4 val)
 
 void Init(float4 val)
 {
-  flatId = WaveGetLaneIndex();
+  flatId = tid.z * GROUP_SIZE_X * GROUP_SIZE_Y + tid.y * GROUP_SIZE_X + tid.x;
   gsmUint4[flatId].xyz = tid;
   gsmUint4[flatId].z = tid.x;
   SetOutput(val);
@@ -138,8 +138,8 @@ float4 ComplexPartialReconvergence(uint id)
   return result;
 }
 
-[numthreads(GROUP_SIZE_X, GROUP_SIZE_Y, 1)]
-void main(uint3 inTid : SV_DispatchThreadID)
+[numthreads(GROUP_SIZE_X, GROUP_SIZE_Y, GROUP_SIZE_Z)]
+void main(uint3 inTid : SV_GroupThreadID)
 {
   tid = inTid;
   float4 testResult = 0.0f.xxxx;
