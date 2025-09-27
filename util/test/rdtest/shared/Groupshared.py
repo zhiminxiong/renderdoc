@@ -6,12 +6,6 @@ class Groupshared(rdtest.TestCase):
     internal = True
     demos_test_name = None
 
-    def check_support(self, **kwargs):
-        # Only allow this if explicitly run
-        if kwargs['test_include'] == self.demos_test_name:
-            return True, ''
-        return False, 'Disabled test'
-
     def check_compute_thread_result(self, test, action, x, y, z, expected):
         try:
             workgroup = (0, 0, 0)
