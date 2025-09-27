@@ -86,8 +86,10 @@ void main(uint3 gid : SV_GroupThreadID)
     outval.z = GetGSMValue(gid.x ^ 1);
 
     // do calculation with our neighbour
-    gsmData[gid.x] = (1.0f + GetGSMValue(gid.x)) * (1.0f + GetGSMValue(gid.x ^ 1));
+    float value = (1.0f + GetGSMValue(gid.x)) * (1.0f + GetGSMValue(gid.x ^ 1));
 
+    GroupMemoryBarrierWithGroupSync();
+    gsmData[gid.x] = value;
     GroupMemoryBarrierWithGroupSync();
 
     // fourth write, our neighbour should be identical to our value
