@@ -122,6 +122,7 @@ struct GlobalVariable
 {
   Id id;
   ShaderVariable var;
+  bool gsm;
 };
 
 struct GlobalConstant
@@ -203,7 +204,9 @@ public:
 
 struct MemoryTracking
 {
-  void AllocateMemoryForType(const DXIL::Type *type, Id allocId, bool global, ShaderVariable &var);
+  void AllocateMemoryForType(const DXIL::Type *type, Id allocId, bool globalVar, bool gsm,
+                             ShaderVariable &var);
+  void ConvertGlobalAllocToLocal(Id allocId);
 
   // Represents actual memory allocations (think of it like a memory heap)
   struct Allocation
@@ -212,6 +215,7 @@ struct MemoryTracking
     void *backingMemory;
     uint64_t size;
     bool globalVarAlloc;
+    bool gsm;
     bool localMemory;
   };
 

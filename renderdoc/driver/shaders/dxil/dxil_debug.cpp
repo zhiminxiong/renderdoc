@@ -1686,8 +1686,8 @@ void ResourceReferenceInfo::Create(const DXIL::ResourceReference *resRef, uint32
   }
 }
 
-void MemoryTracking::AllocateMemoryForType(const DXIL::Type *type, Id allocId, bool global,
-                                           ShaderVariable &var)
+void MemoryTracking::AllocateMemoryForType(const DXIL::Type *type, Id allocId, bool globalVar,
+                                           bool gsm, ShaderVariable &var)
 {
   RDCASSERTEQUAL(type->type, Type::TypeKind::Pointer);
   ConvertDXILTypeToShaderVariable(type->inner, var);
@@ -1696,10 +1696,55 @@ void MemoryTracking::AllocateMemoryForType(const DXIL::Type *type, Id allocId, b
   size_t byteSize = ComputeDXILTypeByteSize(type->inner);
   void *backingMem = malloc(byteSize);
   memset(backingMem, 0, byteSize);
-  m_Allocations[allocId] = {backingMem, byteSize, global, !global};
+  // Invalid: gsm = false and globalVar = true
+  RDCASSERT(!gsm || globalVar);
+  m_Allocations[allocId] = {backingMem, byteSize, globalVar, gsm, !globalVar};
 
   // Create a pointer to represent this allocation
   m_Pointers[allocId] = {allocId, backingMem, byteSize};
+}
+
+void MemoryTracking::ConvertGlobalAllocToLocal(Id allocId)
+{
+  MemoryTracking::Allocation &alloc = m_Allocations[allocId];
+  RDCASSERT(alloc.globalVarAlloc);
+  RDCASSERT(!alloc.localMemory);
+  void *globalBackingMemory = alloc.backingMemory;
+  const size_t allocSize = (size_t)alloc.size;
+  void *localBackingMemory = malloc(allocSize);
+  memcpy(localBackingMemory, globalBackingMemory, allocSize);
+  alloc.backingMemory = localBackingMemory;
+  alloc.localMemory = true;
+
+  // Update the pointer for the base memory allocation
+  MemoryTracking::Pointer &allocPtr = m_Pointers[allocId];
+  allocPtr.memory = localBackingMemory;
+  RDCASSERTEQUAL(allocPtr.baseMemoryId, allocId);
+  RDCASSERTEQUAL(allocPtr.size, alloc.size);
+
+  // Update pointers which pointed to within the memory allocation
+  for(auto &itPtr : m_Pointers)
+  {
+    MemoryTracking::Pointer &ptr = itPtr.second;
+    Id baseMemoryId = ptr.baseMemoryId;
+    if(baseMemoryId != allocId)
+      continue;
+
+    Id ptrId = itPtr.first;
+    // pointers for backing allocations have already have been updated
+    if(ptrId == baseMemoryId)
+      continue;
+
+    ptrdiff_t offset = (uintptr_t)ptr.memory - (uintptr_t)globalBackingMemory;
+    if(offset < 0)
+    {
+      RDCERR("Invalid memory allocation offset ptrId %u BaseMemoryId %u", ptrId, baseMemoryId);
+      continue;
+    }
+    void *localMemory = (void *)((uintptr_t)localBackingMemory + offset);
+    RDCASSERTEQUAL(ptr.baseMemoryId, baseMemoryId);
+    ptr.memory = localMemory;
+  }
 }
 
 ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId)
@@ -1809,6 +1854,17 @@ void ThreadState::EnterEntryPoint(const Function *function, ShaderDebugState *st
 
   // Start with the global memory allocations
   m_Memory = m_GlobalState.memory;
+
+  // Create per thread memory for non-groupshared global memory
+  for(auto &it : m_Memory.m_Allocations)
+  {
+    Id allocId = it.first;
+    MemoryTracking::Allocation &alloc = it.second;
+
+    RDCASSERT(alloc.globalVarAlloc);
+    if(!alloc.gsm)
+      m_Memory.ConvertGlobalAllocToLocal(allocId);
+  }
 
   m_State = NULL;
 }
@@ -5335,7 +5391,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
     case Operation::Alloca:
     {
       result.name = DXBC::BasicDemangle(result.name);
-      m_Memory.AllocateMemoryForType(inst.type, resultId, false, result);
+      m_Memory.AllocateMemoryForType(inst.type, resultId, false, false, result);
       break;
     }
     case Operation::GetElementPtr:
@@ -8854,7 +8910,8 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
     DXIL::SanitiseName(n);
     globalVar.var.name = n;
     globalVar.id = gv->ssaId;
-    globalMemory.AllocateMemoryForType(gv->type, globalVar.id, true, globalVar.var);
+    globalVar.gsm = (gv->type->addrSpace == DXIL::Type::PointerAddrSpace::GroupShared);
+    globalMemory.AllocateMemoryForType(gv->type, globalVar.id, true, globalVar.gsm, globalVar.var);
     if(gv->initialiser)
     {
       const Constant *initialData = gv->initialiser;
@@ -8877,7 +8934,7 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
         }
       }
     }
-    if(gv->type->addrSpace == DXIL::Type::PointerAddrSpace::GroupShared)
+    if(globalVar.gsm)
       m_GlobalState.groupSharedMemoryIds.push_back(globalVar.id);
     m_GlobalState.globals.push_back(globalVar);
     m_LiveGlobals[globalVar.id] = true;
@@ -9679,59 +9736,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug(DebugAPIWrapper *apiWrapper)
 
     // active lane : needs it own local backing memory, copied from global at the start
     for(Id id : m_GlobalState.groupSharedMemoryIds)
-    {
-      MemoryTracking::Allocation &globalAlloc = m_GlobalState.memory.m_Allocations[id];
-      RDCASSERT(globalAlloc.globalVarAlloc);
-      const size_t allocSize = (size_t)globalAlloc.size;
-      void *localBackingMem = malloc(allocSize);
-      memcpy(localBackingMem, globalAlloc.backingMemory, allocSize);
-      active.m_Memory.m_Allocations[id] = {localBackingMem, globalAlloc.size, true, true};
-      active.m_Memory.m_Pointers[id] = {id, localBackingMem, globalAlloc.size};
-    }
-    // active lane: update the backing memory pointer of any pointers to the new local allocations
-    for(const auto &itGlobalPtr : m_GlobalState.memory.m_Pointers)
-    {
-      const MemoryTracking::Pointer &globalPtr = itGlobalPtr.second;
-      Id ptrId = itGlobalPtr.first;
-      Id baseMemoryId = globalPtr.baseMemoryId;
-      // pointers for backing allocations have already have been updated
-      if(ptrId == baseMemoryId)
-        continue;
-
-      auto itAlloc = m_GlobalState.memory.m_Allocations.find(baseMemoryId);
-      if(itAlloc == m_GlobalState.memory.m_Allocations.end())
-      {
-        RDCERR("Could not find global backing memory allocation for ptr %u BaseMemoryId %u", ptrId,
-               baseMemoryId);
-        continue;
-      }
-      const MemoryTracking::Allocation &globalAlloc = itAlloc->second;
-      ptrdiff_t offset = (uintptr_t)globalPtr.memory - (uintptr_t)globalAlloc.backingMemory;
-      if(offset < 0)
-      {
-        RDCERR("Invalid memory allocation offset ptrId %u BaseMemoryId %u", ptrId, baseMemoryId);
-        continue;
-      }
-      itAlloc = active.m_Memory.m_Allocations.find(baseMemoryId);
-      if(itAlloc == active.m_Memory.m_Allocations.end())
-      {
-        RDCERR("Could not find local backing memory allocation for ptr %u BaseMemoryId %u", ptrId,
-               baseMemoryId);
-        continue;
-      }
-      const MemoryTracking::Allocation &localAlloc = itAlloc->second;
-      void *localMemory = (void *)((uintptr_t)localAlloc.backingMemory + offset);
-      auto itLocalPtr = active.m_Memory.m_Pointers.find(ptrId);
-      if(itLocalPtr == active.m_Memory.m_Pointers.end())
-      {
-        RDCERR("Could not find local ptr %u", ptrId);
-        continue;
-      }
-      MemoryTracking::Pointer &localPtr = itLocalPtr->second;
-      RDCASSERTEQUAL(localPtr.baseMemoryId, baseMemoryId);
-      RDCASSERTEQUAL(localPtr.size, globalPtr.size);
-      localPtr.memory = localMemory;
-    }
+      active.m_Memory.ConvertGlobalAllocToLocal(id);
 
     // globals won't be filled out by entering the entry point, ensure their change is registered.
     for(const GlobalVariable &gv : m_GlobalState.globals)
