@@ -1000,7 +1000,7 @@ float4 main(v2f IN) : SV_Target0
     // idx = 0
     int idx = intval - IN.tri - 7;
     int prev = gInt;
-    gInt += (idx+1);
+    gInt += (idx+1) + IN.s.x + IN.s.y;
     gIntArray[idx] = gInt;
     return float4(prev, gInt, gIntArray[idx], gIntArray[idx+1]);
   }
