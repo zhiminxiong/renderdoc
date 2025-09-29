@@ -222,13 +222,6 @@ private:
 
 struct GpuMathOperation
 {
-  void Clear()
-  {
-    workgroupIndex = 0;
-    op = GLSLstd450::Invalid;
-    paramVars.clear();
-    result = NULL;
-  }
   uint32_t workgroupIndex;
   GLSLstd450 op;
   rdcarray<ShaderVariable> paramVars;
@@ -237,18 +230,6 @@ struct GpuMathOperation
 
 struct GpuSampleGatherOperation
 {
-  void Clear()
-  {
-    workgroupIndex = 0;
-    opcode = Op::Max;
-    texType = DebugAPIWrapper::TextureType::Float_Texture;
-    imageBind = ShaderBindIndex();
-    samplerBind = ShaderBindIndex();
-    uv = ddxCalc = ddyCalc = compare = ShaderVariable();
-    gatherChannel = GatherChannel::Red;
-    operands.setNone();
-    result = NULL;
-  }
   uint32_t workgroupIndex;
   Op opcode;
   DebugAPIWrapper::TextureType texType;
