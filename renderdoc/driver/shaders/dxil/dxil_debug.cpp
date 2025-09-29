@@ -2306,6 +2306,22 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::TextureGatherCmp:
           case DXOp::CalculateLOD:
           {
+            if(IsPendingResultReady())
+            {
+              const ShaderVariable &data = GetPendingResult();
+              ConvertSampleGatherReturn(dxOpCode, inst, data, result);
+              if(dxOpCode == DXOp::CalculateLOD)
+              {
+                // clamped is in arg 6
+                ShaderVariable arg;
+                RDCASSERT(GetShaderVariable(inst.args[6], opCode, dxOpCode, arg, false));
+                // CalculateSampleGather returns {CalculateLevelOfDetail(), CalculateLevelOfDetailUnclamped()}
+                if(arg.value.u32v[0] == 0)
+                  result.value.u32v[0] = data.value.u32v[1];
+              }
+              eventFlags |= ShaderEvents::SampleLoadGather;
+              break;
+            }
             Id handleId = GetArgumentId(1);
             bool annotatedHandle;
             ShaderVariable handleVar;
@@ -2314,8 +2330,10 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
               break;
             MarkResourceAccess(handleVar);
 
-            PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result);
-            eventFlags |= ShaderEvents::SampleLoadGather;
+            if(!PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result))
+              break;
+
+            DXIL_DEBUG_RDCASSERT(IsPendingResultPending());
             break;
           }
           case DXOp::TextureLoad:
@@ -2337,16 +2355,28 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
             if(!resRefInfo.Valid())
               break;
-            MarkResourceAccess(handleVar);
 
             ResourceClass resClass = resRefInfo.resClass;
             // SRV TextureLoad is done on the GPU
             if((dxOpCode == DXOp::TextureLoad) && (resClass == ResourceClass::SRV))
             {
-              PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result);
-              eventFlags |= ShaderEvents::SampleLoadGather;
+              if(IsPendingResultReady())
+              {
+                const ShaderVariable &data = GetPendingResult();
+                ConvertSampleGatherReturn(dxOpCode, inst, data, result);
+                MarkResourceAccess(handleVar);
+                eventFlags |= ShaderEvents::SampleLoadGather;
+              }
+              else
+              {
+                if(PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result))
+                {
+                  DXIL_DEBUG_RDCASSERT(IsPendingResultPending());
+                }
+              }
               break;
             }
+            MarkResourceAccess(handleVar);
 
             const bool load = (dxOpCode == DXOp::TextureLoad) || (dxOpCode == DXOp::BufferLoad) ||
                               (dxOpCode == DXOp::RawBufferLoad);
@@ -3019,9 +3049,16 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::Sqrt:
           case DXOp::Rsqrt:
           {
-            ShaderVariable arg;
-            RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
-            m_Debugger.CalculateMathIntrinsic(dxOpCode, arg, result);
+            if(IsPendingResultReady())
+            {
+              result = GetPendingResult();
+            }
+            else
+            {
+              ShaderVariable arg;
+              RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
+              QueueMathOp(dxOpCode, arg, result);
+            }
             break;
           }
           case DXOp::Round_ne:
@@ -7106,10 +7143,11 @@ void ThreadState::UpdateGlobalBackingMemory(Id ptrId, const MemoryTracking::Poin
   }
 }
 
-void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, Operation opCode,
+bool ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, Operation opCode,
                                        DXOp dxOpCode, const ResourceReferenceInfo &resRefInfo,
                                        const DXIL::Instruction &inst, ShaderVariable &result)
 {
+  DXIL_DEBUG_RDCASSERT(!IsPendingResultPending());
   // TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
   // Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
   // SampleBias(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,bias,clamp)
@@ -7124,24 +7162,6 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
 
   // TextureGather(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,channel)
   // TextureGatherCmp(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,channel,compareValue)
-
-  // DXIL reports the vector result as a struct of N members of Element type, plus an int.
-  const Type *retType = inst.type;
-  if(dxOpCode != DXOp::CalculateLOD)
-  {
-    RDCASSERTEQUAL(retType->type, Type::TypeKind::Struct);
-    const Type *baseType = retType->members[0];
-    RDCASSERTEQUAL(baseType->type, Type::TypeKind::Scalar);
-    result.type = ConvertDXILTypeToVarType(baseType);
-    result.columns = (uint8_t)(retType->members.size() - 1);
-  }
-  else
-  {
-    RDCASSERTEQUAL(retType->type, Type::TypeKind::Scalar);
-    RDCASSERTEQUAL(retType->scalarType, Type::Float);
-    RDCASSERTEQUAL(result.rows, 1);
-    RDCASSERTEQUAL(result.columns, 1);
-  }
 
   // CalculateSampleGather is only valid for SRV resources
   ResourceClass resClass = resRefInfo.resClass;
@@ -7217,7 +7237,7 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
     ShaderVariable handleVar;
     ResourceReferenceInfo samplerRef = GetResource(samplerId, annotatedHandle, handleVar);
     if(!samplerRef.Valid())
-      return;
+      return false;
     MarkResourceAccess(handleVar);
 
     RDCASSERTEQUAL(samplerRef.resClass, ResourceClass::Sampler);
@@ -7386,10 +7406,32 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
   // DXGI_FORMAT_R32_UINT : u32
   // DXGI_FORMAT_R32G32_UINT : u32x2
 
-  ShaderVariable data;
-  m_Debugger.CalculateSampleGather(dxOpCode, resourceData, samplerData, uv, ddx, ddy, texelOffsets,
-                                   msIndex, lodValue, compareValue, gatherChannel, instructionIdx,
-                                   data);
+  QueueSampleGather(dxOpCode, resourceData, samplerData, uv, ddx, ddy, texelOffsets, msIndex,
+                    lodValue, compareValue, gatherChannel, instructionIdx, result);
+  return true;
+}
+
+void ThreadState::ConvertSampleGatherReturn(DXIL::DXOp dxOpCode, const DXIL::Instruction &inst,
+                                            const ShaderVariable &data, ShaderVariable &result) const
+{
+  // DXIL reports the vector result as a struct of N
+  // members of Element type, plus an int.
+  const Type *retType = inst.type;
+  if(dxOpCode != DXOp::CalculateLOD)
+  {
+    RDCASSERTEQUAL(retType->type, Type::TypeKind::Struct);
+    const Type *baseType = retType->members[0];
+    RDCASSERTEQUAL(baseType->type, Type::TypeKind::Scalar);
+    result.type = ConvertDXILTypeToVarType(baseType);
+    result.columns = (uint8_t)(retType->members.size() - 1);
+  }
+  else
+  {
+    RDCASSERTEQUAL(retType->type, Type::TypeKind::Scalar);
+    RDCASSERTEQUAL(retType->scalarType, Type::Float);
+    RDCASSERTEQUAL(result.rows, 1);
+    RDCASSERTEQUAL(result.columns, 1);
+  }
 
   // Do conversion to the return type
   if((result.type == VarType::Float) || (result.type == VarType::SInt) ||
@@ -7416,16 +7458,6 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
   {
     RDCERR("Unhandled return type %s", ToStr(result.type).c_str());
     return;
-  }
-
-  if(dxOpCode == DXOp::CalculateLOD)
-  {
-    // clamped is in arg 6
-    ShaderVariable arg;
-    RDCASSERT(GetShaderVariable(inst.args[6], opCode, dxOpCode, arg, false));
-    // CalculateSampleGather returns {CalculateLevelOfDetail(), CalculateLevelOfDetailUnclamped()}
-    if(arg.value.u32v[0] == 0)
-      result.value.u32v[0] = data.value.u32v[1];
   }
 }
 
@@ -7848,6 +7880,46 @@ bool ThreadState::CanRunAnotherStep() const
     default: break;
   }
   return true;
+}
+
+void ThreadState::QueueMathOp(DXIL::DXOp dxOp, const ShaderVariable &input, ShaderVariable &result)
+{
+  DXIL_DEBUG_RDCASSERT(!IsPendingResultPending());
+  m_PendingResultData = result;
+  m_QueuedGpuMathOp.workgroupIndex = m_WorkgroupIndex;
+  m_QueuedGpuMathOp.dxOp = dxOp;
+  m_QueuedGpuMathOp.input = input;
+  m_QueuedGpuMathOp.result = &m_PendingResultData;
+  SetStepNeedsGpuMathOp();
+}
+
+void ThreadState::QueueSampleGather(DXIL::DXOp dxOp, const SampleGatherResourceData &resourceData,
+                                    const SampleGatherSamplerData &samplerData,
+                                    const ShaderVariable &uv, const ShaderVariable &ddxCalc,
+                                    const ShaderVariable &ddyCalc, const int8_t texelOffsets[3],
+                                    int multisampleIndex, float lodValue, float compareValue,
+                                    GatherChannel gatherChannel, uint32_t instructionIdx,
+                                    ShaderVariable &result)
+{
+  DXIL_DEBUG_RDCASSERT(!IsPendingResultPending());
+  m_PendingResultData = result;
+  m_QueuedGpuSampleGatherOp.workgroupIndex = m_WorkgroupIndex;
+  m_QueuedGpuSampleGatherOp.dxOp = dxOp;
+  m_QueuedGpuSampleGatherOp.resourceData = resourceData;
+  m_QueuedGpuSampleGatherOp.samplerData = samplerData;
+  m_QueuedGpuSampleGatherOp.uv = uv;
+  m_QueuedGpuSampleGatherOp.ddxCalc = ddxCalc;
+  m_QueuedGpuSampleGatherOp.ddyCalc = ddyCalc;
+  m_QueuedGpuSampleGatherOp.texelOffsets[0] = texelOffsets[0];
+  m_QueuedGpuSampleGatherOp.texelOffsets[1] = texelOffsets[1];
+  m_QueuedGpuSampleGatherOp.texelOffsets[2] = texelOffsets[2];
+  m_QueuedGpuSampleGatherOp.multisampleIndex = multisampleIndex;
+  m_QueuedGpuSampleGatherOp.lodValue = lodValue;
+  m_QueuedGpuSampleGatherOp.compareValue = compareValue;
+  m_QueuedGpuSampleGatherOp.gatherChannel = gatherChannel;
+  m_QueuedGpuSampleGatherOp.instructionIdx = instructionIdx;
+  m_QueuedGpuSampleGatherOp.result = &m_PendingResultData;
+  SetStepNeedsGpuSampleGatherOp();
 }
 
 Debugger::DebugInfo::~DebugInfo()
@@ -9142,6 +9214,9 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   m_Stage = shaderStage;
   m_EntryPointInterface = m_Program->GetEntryPointInterface();
   m_QueuedDeviceThreadSteps.resize(threadsInWorkgroup);
+  m_QueuedGpuMathOps.resize(threadsInWorkgroup);
+  m_QueuedGpuSampleGatherOps.resize(threadsInWorkgroup);
+  m_PendingLanes.resize(threadsInWorkgroup);
 
   uint32_t outputSSAId = m_Program->m_NextSSAId;
   uint32_t maxSSAId = outputSSAId + 1;
@@ -9159,6 +9234,9 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   {
     m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId, i, threadsInWorkgroup));
     m_QueuedDeviceThreadSteps[i] = false;
+    m_QueuedGpuMathOps[i] = false;
+    m_QueuedGpuSampleGatherOps[i] = false;
+    m_PendingLanes[i] = false;
   }
 
   // Get the thread state from the API wrapper
@@ -10130,6 +10208,10 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
     do
     {
       ProcessQueuedDeviceThreadSteps();
+      // Convert the simulation threads queued operations into pending operations i.e. GPU commands
+      ProcessQueuedOps();
+      // Sync any pending GPU operations and set the results to the pending threads
+      SyncPendingLanes();
 
       allStepsCompleted = true;
       for(const Tangle &tangle : tangles)
@@ -10305,28 +10387,6 @@ const SRVData &Debugger::GetSRVData(const BindingSlot &slot) const
   return m_ApiWrapper->GetSRVData(slot);
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-bool Debugger::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
-                                      ShaderVariable &output) const
-{
-  CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->CalculateMathIntrinsic(dxOp, input, output);
-}
-
-// Must be called from the replay manager thread (the debugger thread)
-bool Debugger::CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
-                                     SampleGatherSamplerData samplerData, const ShaderVariable &uv,
-                                     const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
-                                     const int8_t texelOffsets[3], int multisampleIndex,
-                                     float lodValue, float compareValue, GatherChannel gatherChannel,
-                                     uint32_t instructionIdx, ShaderVariable &output) const
-{
-  CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->CalculateSampleGather(dxOp, resourceData, samplerData, uv, ddxCalc, ddyCalc,
-                                             texelOffsets, multisampleIndex, lodValue, compareValue,
-                                             gatherChannel, instructionIdx, output);
-}
-
 // Called from any thread
 DeviceOpResult Debugger::GetResourceInfo(DXIL::ResourceClass resClass,
                                          const DXDebug::BindingSlot &slot, uint32_t mipLevel,
@@ -10406,7 +10466,11 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
       InternalStepThread(lane);
       thread.ClearPendingDebugState();
     }
-    if(thread.StepNeedsDeviceThread())
+    if(thread.StepNeedsGpuSampleGatherOp())
+      break;
+    else if(thread.StepNeedsGpuMathOp())
+      break;
+    else if(thread.StepNeedsDeviceThread())
       break;
 
     if(isActiveThread)
@@ -10436,6 +10500,18 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
   DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
 
   // The queueing has to be when the thread is not being simulated
+  if(thread.StepNeedsGpuSampleGatherOp())
+  {
+    DXIL_DEBUG_RDCASSERT(!simulateStep);
+    QueueGpuSampleGatherOp(lane);
+    return;
+  }
+  if(thread.StepNeedsGpuMathOp())
+  {
+    DXIL_DEBUG_RDCASSERT(!simulateStep);
+    QueueGpuMathOp(lane);
+    return;
+  }
   if(thread.StepNeedsDeviceThread())
   {
     DXIL_DEBUG_RDCASSERT(!simulateStep);
@@ -10467,8 +10543,13 @@ void Debugger::InternalStepThread(uint32_t lane)
       thread.ClearPendingDebugState();
     }
     thread.StepNext(true, m_Workgroup);
+    if(thread.StepNeedsGpuSampleGatherOp())
+      return;
+    if(thread.StepNeedsGpuMathOp())
+      return;
     if(thread.StepNeedsDeviceThread())
       return;
+
     m_ActiveDebugState.nextInstruction = thread.GetActiveGlobalInstructionIdx();
     thread.FillCallstack(m_ActiveDebugState);
 
@@ -10490,6 +10571,10 @@ void Debugger::InternalStepThread(uint32_t lane)
   else
   {
     thread.StepNext(false, m_Workgroup);
+    if(thread.StepNeedsGpuSampleGatherOp())
+      return;
+    if(thread.StepNeedsGpuMathOp())
+      return;
     if(thread.StepNeedsDeviceThread())
       return;
   }
@@ -10528,6 +10613,110 @@ void Debugger::ProcessQueuedDeviceThreadSteps()
       thread.SetPendingResultUnknown();
       DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
       StepThread(lane, StepThreadMode::QUEUE_MULTIPLE_STEPS);
+    }
+  }
+}
+
+// Can be called from any thread
+void Debugger::QueueGpuMathOp(uint32_t lane)
+{
+  ThreadState &thread = m_Workgroup[lane];
+  DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+  DXIL_DEBUG_RDCASSERT(!m_QueuedGpuMathOps[lane]);
+  m_QueuedGpuMathOps[lane] = true;
+}
+
+// Can be called from any thread
+void Debugger::QueueGpuSampleGatherOp(uint32_t lane)
+{
+  ThreadState &thread = m_Workgroup[lane];
+  DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+  DXIL_DEBUG_RDCASSERT(!m_QueuedGpuSampleGatherOps[lane]);
+  m_QueuedGpuSampleGatherOps[lane] = true;
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::ProcessQueuedOps()
+{
+  CHECK_DEBUGGER_THREAD();
+  ProcessQueuedGpuMathOps();
+  ProcessQueuedGpuSampleGatherOps();
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::SyncPendingLanes()
+{
+  CHECK_DEBUGGER_THREAD();
+  for(uint32_t lane = 0; lane < m_PendingLanes.size(); ++lane)
+  {
+    if(m_PendingLanes[lane])
+    {
+      m_PendingLanes[lane] = false;
+      ThreadState &thread = m_Workgroup[lane];
+      thread.SetPendingResultReady();
+      QueueJob(lane);
+    }
+  }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::ProcessQueuedGpuMathOps()
+{
+  CHECK_DEBUGGER_THREAD();
+  for(uint32_t lane = 0; lane < m_QueuedGpuMathOps.size(); ++lane)
+  {
+    if(m_QueuedGpuMathOps[lane])
+    {
+      m_QueuedGpuMathOps[lane] = false;
+      const GpuMathOperation &mathOp = m_Workgroup[lane].GetQueuedGpuMathOp();
+
+      uint32_t workgroupIndex = mathOp.workgroupIndex;
+      if(m_ApiWrapper->CalculateMathIntrinsic(mathOp.dxOp, mathOp.input, *mathOp.result))
+      {
+        m_PendingGpuMathsOpsResults.push_back(mathOp.result);
+      }
+      else
+      {
+        ShaderVariable &result = *mathOp.result;
+        memset(&result.value, 0, sizeof(result.value));
+      }
+
+      DXIL_DEBUG_RDCASSERT(!m_PendingLanes[workgroupIndex]);
+      m_PendingLanes[workgroupIndex] = true;
+    }
+  }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::ProcessQueuedGpuSampleGatherOps()
+{
+  CHECK_DEBUGGER_THREAD();
+  for(uint32_t lane = 0; lane < m_QueuedGpuSampleGatherOps.size(); ++lane)
+  {
+    if(m_QueuedGpuSampleGatherOps[lane])
+    {
+      m_QueuedGpuSampleGatherOps[lane] = false;
+      const GpuSampleGatherOperation &sampleGatherOp = m_Workgroup[lane].GetQueuedGpuSampleGatherOp();
+
+      uint32_t workgroupIndex = sampleGatherOp.workgroupIndex;
+      ShaderVariable &result = *sampleGatherOp.result;
+      bool hasResult = false;
+      if(!m_ApiWrapper->CalculateSampleGather(
+             sampleGatherOp.dxOp, sampleGatherOp.resourceData, sampleGatherOp.samplerData,
+             sampleGatherOp.uv, sampleGatherOp.ddxCalc, sampleGatherOp.ddyCalc,
+             sampleGatherOp.texelOffsets, sampleGatherOp.multisampleIndex, sampleGatherOp.lodValue,
+             sampleGatherOp.compareValue, sampleGatherOp.gatherChannel,
+             sampleGatherOp.instructionIdx, *sampleGatherOp.result))
+      {
+        // sample failed. Pretend we got 0 columns back
+        set0001(result);
+        hasResult = true;
+      }
+      if(!hasResult)
+        m_PendingGpuSampleGatherOpsResults.push_back(sampleGatherOp.result);
+
+      DXIL_DEBUG_RDCASSERT(!m_PendingLanes[workgroupIndex]);
+      m_PendingLanes[workgroupIndex] = true;
     }
   }
 }

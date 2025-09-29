@@ -364,6 +364,56 @@ struct MemoryTracking
   std::map<Id, Pointer> m_Pointers;
 };
 
+struct GpuMathOperation
+{
+  void Clear()
+  {
+    workgroupIndex = 0;
+    dxOp = DXIL::DXOp::NumOpCodes;
+    input = ShaderVariable();
+    result = NULL;
+  }
+  uint32_t workgroupIndex;
+  DXIL::DXOp dxOp;
+  ShaderVariable input;
+  ShaderVariable *result;
+};
+
+struct GpuSampleGatherOperation
+{
+  void Clear()
+  {
+    workgroupIndex = 0;
+    dxOp = DXIL::DXOp::NumOpCodes;
+    resourceData = SampleGatherResourceData();
+    samplerData = SampleGatherSamplerData();
+    uv = ddxCalc = ddyCalc = ShaderVariable();
+    texelOffsets[0] = 0;
+    texelOffsets[1] = 0;
+    texelOffsets[2] = 0;
+    multisampleIndex = ~0U;
+    lodValue = 0.0f;
+    compareValue = 0.0f;
+    gatherChannel = GatherChannel::Red;
+    instructionIdx = ~0U;
+    result = NULL;
+  }
+  uint32_t workgroupIndex;
+  DXIL::DXOp dxOp;
+  SampleGatherResourceData resourceData;
+  SampleGatherSamplerData samplerData;
+  ShaderVariable uv;
+  ShaderVariable ddxCalc;
+  ShaderVariable ddyCalc;
+  int8_t texelOffsets[3];
+  int multisampleIndex;
+  float lodValue;
+  float compareValue;
+  GatherChannel gatherChannel;
+  uint32_t instructionIdx;
+  ShaderVariable *result = NULL;
+};
+
 struct ThreadState
 {
   ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
@@ -393,7 +443,24 @@ struct ThreadState
     return &m_PartialConvergencePoints;
   }
   const ShaderDebugState &GetPendingDebugState() const { return m_PendingDebugState; }
+  const GpuMathOperation &GetQueuedGpuMathOp() const
+  {
+    DXIL_DEBUG_RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuMathOp));
+    DXIL_DEBUG_RDCASSERT(IsPendingResultPending());
+    return m_QueuedGpuMathOp;
+  }
+  const GpuSampleGatherOperation &GetQueuedGpuSampleGatherOp() const
+  {
+    DXIL_DEBUG_RDCASSERT(AtomicLoad(&atomic_stepNeedsGpuSampleGatherOp));
+    DXIL_DEBUG_RDCASSERT(IsPendingResultPending());
+    return m_QueuedGpuSampleGatherOp;
+  }
   bool StepNeedsDeviceThread() const { return (AtomicLoad(&atomic_stepNeedsDeviceThread) == 1); }
+  bool StepNeedsGpuSampleGatherOp() const
+  {
+    return (AtomicLoad(&atomic_stepNeedsGpuSampleGatherOp) == 1);
+  }
+  bool StepNeedsGpuMathOp() const { return (AtomicLoad(&atomic_stepNeedsGpuMathOp) == 1); }
 
   void SetBuiltins(const BuiltinInputs &builtins) { m_Builtins = builtins; }
   void SetInput(const ShaderVariable &input) { m_Input = input; }
@@ -422,9 +489,16 @@ struct ThreadState
   void SetStepQueued()
   {
     AtomicStore(&atomic_isSimulationStepActive, 1);
+    AtomicStore(&atomic_stepNeedsGpuSampleGatherOp, 0);
+    AtomicStore(&atomic_stepNeedsGpuMathOp, 0);
     AtomicStore(&atomic_stepNeedsDeviceThread, 0);
   }
   void SetPendingResultUnknown() { SetPendingResultStatus(PendingResultStatus::Unknown); }
+  void SetPendingResultReady()
+  {
+    DXIL_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Pending);
+    SetPendingResultStatus(PendingResultStatus::Ready);
+  }
 
   void InitialiseFromActive(const ThreadState &active)
   {
@@ -470,15 +544,20 @@ private:
   {
     return GetPendingResultStatus() == PendingResultStatus::Ready;
   }
-  void SetPendingResultReady()
-  {
-    DXIL_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Pending);
-    SetPendingResultStatus(PendingResultStatus::Ready);
-  }
   const ShaderVariable &GetPendingResult() const
   {
     DXIL_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Ready);
     return m_PendingResultData;
+  }
+  void SetStepNeedsGpuSampleGatherOp()
+  {
+    AtomicStore(&atomic_stepNeedsGpuSampleGatherOp, 1);
+    SetPendingResultStatus(PendingResultStatus::Pending);
+  }
+  void SetStepNeedsGpuMathOp()
+  {
+    AtomicStore(&atomic_stepNeedsGpuMathOp, 1);
+    SetPendingResultStatus(PendingResultStatus::Pending);
   }
   void SetStepNeedsDeviceThread()
   {
@@ -530,9 +609,11 @@ private:
                                  const MemoryTracking::Allocation &allocation,
                                  const ShaderVariable &val);
 
-  void PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, DXIL::Operation opCode,
+  bool PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, DXIL::Operation opCode,
                             DXIL::DXOp dxOpCode, const ResourceReferenceInfo &resRef,
                             const DXIL::Instruction &inst, ShaderVariable &result);
+  void ConvertSampleGatherReturn(DXIL::DXOp dxOpCode, const DXIL::Instruction &inst,
+                                 const ShaderVariable &data, ShaderVariable &result) const;
   void Sub(const ShaderVariable &a, const ShaderVariable &b, ShaderValue &ret) const;
 
   ShaderValue DDX(bool fine, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
@@ -558,6 +639,14 @@ private:
   ShaderVariable GetBuiltin(ShaderBuiltin builtin) const;
   uint32_t GetSubgroupActiveLanes(const rdcarray<ThreadState> &workgroup,
                                   rdcarray<uint32_t> &activeLanes) const;
+
+  void QueueMathOp(DXIL::DXOp dxOp, const ShaderVariable &input, ShaderVariable &result);
+  void QueueSampleGather(DXIL::DXOp dxOp, const SampleGatherResourceData &resourceData,
+                         const SampleGatherSamplerData &samplerData, const ShaderVariable &uv,
+                         const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                         const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
+                         float compareValue, GatherChannel gatherChannel, uint32_t instructionIdx,
+                         ShaderVariable &result);
 
   struct AnnotationProperties
   {
@@ -602,6 +691,8 @@ private:
 
   ShaderDebugState m_PendingDebugState;
   ShaderVariable m_PendingResultData;
+  GpuMathOperation m_QueuedGpuMathOp;
+  GpuSampleGatherOperation m_QueuedGpuSampleGatherOp;
 
   // Track memory allocations
   // For stack allocations do not bother freeing when leaving functions
@@ -645,6 +736,8 @@ private:
 
   // These need to be accessed using atomics
   int32_t atomic_pendingResultStatus = (int32_t)PendingResultStatus::Unknown;
+  int32_t atomic_stepNeedsGpuSampleGatherOp = 0;
+  int32_t atomic_stepNeedsGpuMathOp = 0;
   int32_t atomic_stepNeedsDeviceThread = 0;
   int32_t atomic_isSimulationStepActive = 0;
 };
@@ -797,14 +890,6 @@ public:
   const UAVData &GetUAVData(const BindingSlot &slot) const;
   const SRVData &GetSRVData(const BindingSlot &slot) const;
 
-  bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
-                              ShaderVariable &output) const;
-  bool CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
-                             SampleGatherSamplerData samplerData, const ShaderVariable &uv,
-                             const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
-                             const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
-                             float compareValue, GatherChannel gatherChannel,
-                             uint32_t instructionIdx, ShaderVariable &output) const;
   DeviceOpResult GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
                                  uint32_t mipLevel, ShaderVariable &result) const;
   DeviceOpResult GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
@@ -834,7 +919,15 @@ private:
   void InternalStepThread(uint32_t lane);
   void SimulationJobHelper();
   void QueueDeviceThreadStep(uint32_t lane);
+
   void ProcessQueuedDeviceThreadSteps();
+  void ProcessQueuedOps();
+  void ProcessQueuedGpuMathOps();
+  void ProcessQueuedGpuSampleGatherOps();
+  void SyncPendingLanes();
+
+  void QueueGpuMathOp(uint32_t lane);
+  void QueueGpuSampleGatherOp(uint32_t lane);
 
   DebugAPIWrapper *m_ApiWrapper = NULL;
 
@@ -846,6 +939,11 @@ private:
   ShaderDebugState m_ActiveDebugState;
 
   rdcarray<bool> m_QueuedDeviceThreadSteps;
+  rdcarray<bool> m_QueuedGpuMathOps;
+  rdcarray<bool> m_QueuedGpuSampleGatherOps;
+  rdcarray<bool> m_PendingLanes;
+  rdcarray<ShaderVariable *> m_PendingGpuMathsOpsResults;
+  rdcarray<ShaderVariable *> m_PendingGpuSampleGatherOpsResults;
 
   // the live mutable global variables, to initialise a stack frame's live list
   rdcarray<bool> m_LiveGlobals;

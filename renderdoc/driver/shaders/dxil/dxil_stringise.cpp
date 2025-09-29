@@ -916,3 +916,15 @@ rdcstr DoStringise(const DXILDebug::DeviceOpResult &el)
   }
   END_ENUM_STRINGISE();
 };
+
+template <>
+rdcstr DoStringise(const DXILDebug::ThreadState::PendingResultStatus &el)
+{
+  BEGIN_ENUM_STRINGISE(DXILDebug::ThreadState::PendingResultStatus)
+  {
+    STRINGISE_ENUM_CLASS(Unknown)
+    STRINGISE_ENUM_CLASS(Pending)
+    STRINGISE_ENUM_CLASS(Ready)
+  }
+  END_ENUM_STRINGISE();
+};
