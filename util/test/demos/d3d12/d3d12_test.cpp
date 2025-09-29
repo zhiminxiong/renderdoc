@@ -354,6 +354,41 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
       dyn_serializeRootSigOld =
           (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(d3d12, "D3D12SerializeRootSignature");
     }
+
+    if(d3d12 && dxgi && factory && dyn_D3D12CreateDevice)
+    {
+      devFactory = PrepareCreateDeviceFromDLL(d3d12path, debugDevice, gpuva).factory;
+
+      ID3D12DevicePtr tmpdev = CreateDevice(adapters, minFeatureLevel);
+
+      devFactory = NULL;
+
+      if(tmpdev)
+      {
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &opts, sizeof(opts));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &opts1, sizeof(opts1));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS2, &opts2, sizeof(opts2));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &opts3, sizeof(opts3));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &opts4, sizeof(opts4));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &opts5, sizeof(opts5));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &opts6, sizeof(opts6));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &opts7, sizeof(opts7));
+        D3D12_FEATURE_DATA_SHADER_MODEL oShaderModel = {};
+        oShaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_7;
+        while(oShaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_0)
+        {
+          HRESULT hr = tmpdev->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &oShaderModel,
+                                                   sizeof(oShaderModel));
+          if(SUCCEEDED(hr))
+          {
+            m_HighestShaderModel = oShaderModel.HighestShaderModel;
+            break;
+          }
+
+          oShaderModel.HighestShaderModel = D3D_SHADER_MODEL(oShaderModel.HighestShaderModel - 1);
+        }
+      }
+    }
   }
 
   if(!d3d12)
@@ -401,41 +436,6 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
   }
 
   m_Factory = factory;
-
-  if(Avail.empty())
-  {
-    devFactory = PrepareCreateDeviceFromDLL(d3d12path, debugDevice, gpuva).factory;
-
-    ID3D12DevicePtr tmpdev = CreateDevice(adapters, minFeatureLevel);
-
-    devFactory = NULL;
-
-    if(tmpdev)
-    {
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &opts, sizeof(opts));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &opts1, sizeof(opts1));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS2, &opts2, sizeof(opts2));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &opts3, sizeof(opts3));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &opts4, sizeof(opts4));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &opts5, sizeof(opts5));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &opts6, sizeof(opts6));
-      tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &opts7, sizeof(opts7));
-      D3D12_FEATURE_DATA_SHADER_MODEL oShaderModel = {};
-      oShaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_7;
-      while(oShaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_0)
-      {
-        HRESULT hr = tmpdev->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &oShaderModel,
-                                                 sizeof(oShaderModel));
-        if(SUCCEEDED(hr))
-        {
-          m_HighestShaderModel = oShaderModel.HighestShaderModel;
-          break;
-        }
-
-        oShaderModel.HighestShaderModel = D3D_SHADER_MODEL(oShaderModel.HighestShaderModel - 1);
-      }
-    }
-  }
 }
 
 bool D3D12GraphicsTest::Init()

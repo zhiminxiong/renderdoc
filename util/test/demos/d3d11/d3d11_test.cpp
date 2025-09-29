@@ -98,6 +98,22 @@ void D3D11GraphicsTest::Prepare(int argc, char **argv)
       if(SUCCEEDED(hr))
         adapters = FindD3DAdapters(factory, argc, argv, warp);
     }
+
+    if(dyn_D3D11CreateDevice)
+    {
+      D3D_FEATURE_LEVEL features[] = {D3D_FEATURE_LEVEL_11_0};
+      hr = CreateDevice(NULL, NULL, features, 0);
+
+      if(SUCCEEDED(hr))
+      {
+        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &opts, sizeof(opts));
+        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS1, &opts1, sizeof(opts1));
+        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &opts2, sizeof(opts2));
+      }
+
+      // This device was only used  to get feature support. Set it back to NULL
+      dev = NULL;
+    }
   }
 
   if(!d3d11)
@@ -111,22 +127,6 @@ void D3D11GraphicsTest::Prepare(int argc, char **argv)
   else if(!dyn_D3D11CreateDevice || !dyn_D3D11CreateDeviceAndSwapChain || !dyn_D3DCompile ||
           !dyn_D3DStripShader || !dyn_D3DSetBlobPart)
     Avail = "Missing required entry point";
-
-  if(dyn_D3D11CreateDevice)
-  {
-    D3D_FEATURE_LEVEL features[] = {D3D_FEATURE_LEVEL_11_0};
-    HRESULT hr = CreateDevice(NULL, NULL, features, 0);
-
-    if(SUCCEEDED(hr))
-    {
-      dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &opts, sizeof(opts));
-      dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS1, &opts1, sizeof(opts1));
-      dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &opts2, sizeof(opts2));
-    }
-
-    // This device was only used  to get feature support. Set it back to NULL
-    dev = NULL;
-  }
 }
 
 bool D3D11GraphicsTest::Init(IDXGIAdapterPtr pAdapter)

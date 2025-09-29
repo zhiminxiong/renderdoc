@@ -297,8 +297,6 @@ bool SpvCompilationSupported()
     if(!pipe)
       continue;
 
-    msleep(500);
-
     int code = pclose(pipe);
 
     if(WEXITSTATUS(code) == 0)
