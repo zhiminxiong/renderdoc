@@ -183,9 +183,8 @@ WrappedID3D12Heap::WrappedID3D12Heap(ID3D12Heap *real, WrappedID3D12Device *devi
     else if(desc.Properties.Type == D3D12_HEAP_TYPE_READBACK)
       state = D3D12_RESOURCE_STATE_COPY_DEST;
 
-    HRESULT hr =
-        device->GetReal()->CreatePlacedResource(real, 0, &resDesc, D3D12_RESOURCE_STATE_COMMON, NULL,
-                                                __uuidof(ID3D12Resource), (void **)&m_WholeMem);
+    HRESULT hr = device->GetReal()->CreatePlacedResource(
+        real, 0, &resDesc, state, NULL, __uuidof(ID3D12Resource), (void **)&m_WholeMem);
 
     RDCASSERT(SUCCEEDED(hr));
   }
