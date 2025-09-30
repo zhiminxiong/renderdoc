@@ -71,6 +71,19 @@ struct DLLFileVersion
   uint16_t major, minor, build, revision;
 };
 
+struct Capabilities
+{
+  D3D12_FEATURE_DATA_D3D12_OPTIONS opts = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS1 opts1 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS2 opts2 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS3 opts3 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS4 opts4 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS5 opts5 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS6 opts6 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7 = {};
+  D3D_SHADER_MODEL sm = D3D_SHADER_MODEL_5_1;
+} caps;
+
 DLLFileVersion GetDLLFileVersion(HMODULE mod)
 {
   DLLFileVersion ret = {};
@@ -365,14 +378,14 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
 
       if(tmpdev)
       {
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &opts, sizeof(opts));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &opts1, sizeof(opts1));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS2, &opts2, sizeof(opts2));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &opts3, sizeof(opts3));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &opts4, sizeof(opts4));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &opts5, sizeof(opts5));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &opts6, sizeof(opts6));
-        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &opts7, sizeof(opts7));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps.opts, sizeof(caps.opts));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &caps.opts1, sizeof(caps.opts1));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS2, &caps.opts2, sizeof(caps.opts2));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &caps.opts3, sizeof(caps.opts3));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &caps.opts4, sizeof(caps.opts4));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps.opts5, sizeof(caps.opts5));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps.opts6, sizeof(caps.opts6));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps.opts7, sizeof(caps.opts7));
         D3D12_FEATURE_DATA_SHADER_MODEL oShaderModel = {};
         oShaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_7;
         while(oShaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_0)
@@ -381,7 +394,7 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
                                                    sizeof(oShaderModel));
           if(SUCCEEDED(hr))
           {
-            m_HighestShaderModel = oShaderModel.HighestShaderModel;
+            caps.sm = oShaderModel.HighestShaderModel;
             break;
           }
 
@@ -408,6 +421,15 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
   m_12On7 = d3d12on7;
 
   m_DXILSupport = (dxcompiler != NULL);
+  m_HighestShaderModel = caps.sm;
+  opts = caps.opts;
+  opts1 = caps.opts1;
+  opts2 = caps.opts2;
+  opts3 = caps.opts3;
+  opts4 = caps.opts4;
+  opts5 = caps.opts5;
+  opts6 = caps.opts6;
+  opts7 = caps.opts7;
 
   for(int i = 0; i < argc; i++)
   {

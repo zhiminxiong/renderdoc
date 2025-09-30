@@ -41,6 +41,13 @@ IDXGIFactory1Ptr factory;
 std::vector<IDXGIAdapterPtr> adapters;
 bool warp = false;
 
+struct Capabilities
+{
+  D3D11_FEATURE_DATA_D3D11_OPTIONS opts = {};
+  D3D11_FEATURE_DATA_D3D11_OPTIONS1 opts1 = {};
+  D3D11_FEATURE_DATA_D3D11_OPTIONS2 opts2 = {};
+} caps;
+
 pD3DCompile dyn_D3DCompile = NULL;
 pD3DStripShader dyn_D3DStripShader = NULL;
 pD3DSetBlobPart dyn_D3DSetBlobPart = NULL;
@@ -106,15 +113,19 @@ void D3D11GraphicsTest::Prepare(int argc, char **argv)
 
       if(SUCCEEDED(hr))
       {
-        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &opts, sizeof(opts));
-        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS1, &opts1, sizeof(opts1));
-        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &opts2, sizeof(opts2));
+        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &caps.opts, sizeof(caps.opts));
+        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS1, &caps.opts1, sizeof(caps.opts1));
+        dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &caps.opts2, sizeof(caps.opts2));
       }
 
       // This device was only used  to get feature support. Set it back to NULL
       dev = NULL;
     }
   }
+
+  opts = caps.opts;
+  opts1 = caps.opts1;
+  opts2 = caps.opts2;
 
   if(!d3d11)
     Avail = "d3d11.dll is not available";
