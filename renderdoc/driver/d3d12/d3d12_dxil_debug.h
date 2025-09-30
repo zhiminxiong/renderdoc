@@ -43,8 +43,16 @@ public:
 
   void FetchConstantBufferData(const D3D12RenderState::RootSignature &rootsig);
 
-  const UAVData &GetUAVData(const BindingSlot &slot) override;
-  const SRVData &GetSRVData(const BindingSlot &slot) override;
+  ShaderValue TypedUAVLoad(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                           uint64_t dataOffset) const override;
+  ShaderValue TypedSRVLoad(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                           uint64_t dataOffset) const override;
+  bool TypedUAVStore(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt, uint64_t dataOffset,
+                     const ShaderValue &value) override;
+  bool TypedSRVStore(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt, uint64_t dataOffset,
+                     const ShaderValue &value) override;
+  UAVInfo GetUAV(const BindingSlot &slot) override;
+  SRVInfo GetSRV(const BindingSlot &slot) override;
 
   bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
                               ShaderVariable &output) override;
@@ -56,16 +64,21 @@ public:
                              uint32_t instructionIdx, ShaderVariable &output) override;
 
   ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                 uint32_t mipLevel) const override;
+                                 uint32_t mipLevel) override;
   ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                               const char *opString) const override;
-  ShaderVariable GetRenderTargetSampleInfo(const char *opString) const override;
-  ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const override;
+                               const char *opString) override;
+  ShaderVariable GetRenderTargetSampleInfo(const char *opString) override;
+  ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) override;
   ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
-                                           const DXDebug::BindingSlot &slot) const override;
+                                           const DXDebug::BindingSlot &slot) override;
 
-  bool IsSRVCached(const DXDebug::BindingSlot &slot) override;
-  bool IsUAVCached(const DXDebug::BindingSlot &slot) override;
+  bool IsSRVCached(const DXDebug::BindingSlot &slot) const override;
+  bool IsUAVCached(const DXDebug::BindingSlot &slot) const override;
+  bool IsResourceInfoCached(const DXDebug::BindingSlot &slot, uint32_t mipLevel) override;
+  bool IsSampleInfoCached(const DXDebug::BindingSlot &slot) override;
+  bool IsRenderTargetSampleInfoCached() override;
+  bool IsResourceReferenceInfoCached(const DXDebug::BindingSlot &slot) override;
+  bool IsShaderDirectAccessCached(const DXDebug::BindingSlot &slot) override;
 
   void ResetReplay();
 
@@ -119,11 +132,18 @@ private:
                         const rdcarray<ShaderVariable> &invars, rdcarray<ShaderVariable> &outvars,
                         const rdcstr &prefix, uint32_t baseOffset);
 
-  SRVData &FetchSRV(const BindingSlot &slot);
-  SRVData &FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
+  SRVInfo FetchSRV(const BindingSlot &slot);
+  SRVInfo FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
 
-  UAVData &FetchUAV(const BindingSlot &slot);
-  UAVData &FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
+  UAVInfo FetchUAV(const BindingSlot &slot);
+  UAVInfo FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot);
+
+  ShaderVariable FetchResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                                   uint32_t mipLevel);
+  ShaderVariable FetchSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                                 const char *opString);
+  ResourceReferenceInfo FetchResourceReferenceInfo(const DXDebug::BindingSlot &slot);
+  ShaderDirectAccess FetchShaderDirectAccess(DescriptorType type, const DXDebug::BindingSlot &slot);
 
   BuiltinInputs m_Builtins;
   rdcarray<DXILDebug::ThreadProperties> m_WorkgroupProperties;
@@ -135,10 +155,43 @@ private:
   ShaderVariable m_InputPlaceholder;
   uint32_t m_SubgroupSize = 1;
 
-  Threading::RWLock m_UAVsLock;
-  std::map<BindingSlot, UAVData> m_UAVs;
-  Threading::RWLock m_SRVsLock;
-  std::map<BindingSlot, SRVData> m_SRVs;
+  struct ResourceInfoMiplevel
+  {
+    BindingSlot slot;
+    uint32_t mipLevel;
+
+    bool operator<(const ResourceInfoMiplevel &o) const
+    {
+      if(mipLevel == o.mipLevel)
+        return slot < o.slot;
+      return mipLevel < o.mipLevel;
+    }
+
+    bool operator==(const ResourceInfoMiplevel &o) const
+    {
+      return slot == o.slot && mipLevel == o.mipLevel;
+    }
+  };
+
+  mutable Threading::RWLock m_UAVsLock;
+  std::map<BindingSlot, UAVInfo> m_UAVInfos;
+  std::map<BindingSlot, bytebuf> m_UAVBuffers;
+  mutable Threading::RWLock m_SRVsLock;
+  std::map<BindingSlot, SRVInfo> m_SRVInfos;
+  std::map<BindingSlot, bytebuf> m_SRVBuffers;
+  Threading::RWLock m_ResourceInfosLock;
+  std::map<ResourceInfoMiplevel, ShaderVariable> m_ResourceInfos;
+  Threading::RWLock m_SampleInfosLock;
+  std::map<BindingSlot, ShaderVariable> m_SampleInfos;
+  Threading::RWLock m_ResourceReferenceInfosLock;
+  std::map<BindingSlot, ResourceReferenceInfo> m_ResourceReferenceInfos;
+
+  Threading::RWLock m_RenderTargetSampleInfoLock;
+  ShaderVariable m_RenderTargetSampleInfo;
+  bool m_RenderTargetSampleInfoValid = false;
+
+  Threading::RWLock m_ShaderDirectAccessesLock;
+  std::map<BindingSlot, ShaderDirectAccess> m_ShaderDirectAccesses;
 
   const ShaderReflection &m_Reflection;
   WrappedID3D12Device *m_Device = NULL;

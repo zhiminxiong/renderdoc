@@ -228,21 +228,22 @@ struct ResourceInfo
 {
   ResourceInfo() : firstElement(0), numElements(0), isByteBuffer(false), isRootDescriptor(false) {}
 
+  size_t dataSize = 0;
   uint32_t firstElement;
   uint32_t numElements;
 
+  bool hasData = false;
   bool isByteBuffer;
   bool isRootDescriptor;
   // Buffer stride is stored in format.stride
   ViewFmt format;
 };
 
-struct UAVData
+struct UAVInfo
 {
-  UAVData() = default;
+  UAVInfo() = default;
 
   ResourceInfo resInfo;
-  bytebuf data;
 
   uint32_t rowPitch = 0;
   uint32_t depthPitch = 0;
@@ -250,12 +251,11 @@ struct UAVData
   bool tex = false;
 };
 
-struct SRVData
+struct SRVInfo
 {
-  SRVData() = default;
+  SRVInfo() = default;
 
   ResourceInfo resInfo;
-  bytebuf data;
 };
 
 enum class ThreadProperty : uint32_t
@@ -294,9 +294,18 @@ class DebugAPIWrapper
 public:
   virtual ~DebugAPIWrapper() {}
 
+  virtual ShaderValue TypedUAVLoad(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                                   uint64_t dataOffset) const = 0;
+  virtual ShaderValue TypedSRVLoad(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                                   uint64_t dataOffset) const = 0;
+  virtual bool TypedUAVStore(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                             uint64_t dataOffset, const ShaderValue &value) = 0;
+  virtual bool TypedSRVStore(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                             uint64_t dataOffset, const ShaderValue &value) = 0;
+
   // These will fetch the data on demand.
-  virtual const UAVData &GetUAVData(const BindingSlot &slot) = 0;
-  virtual const SRVData &GetSRVData(const BindingSlot &slot) = 0;
+  virtual UAVInfo GetUAV(const BindingSlot &slot) = 0;
+  virtual SRVInfo GetSRV(const BindingSlot &slot) = 0;
 
   virtual bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
                                       ShaderVariable &output) = 0;
@@ -307,17 +316,21 @@ public:
                                      float lodValue, float compareValue, GatherChannel gatherChannel,
                                      uint32_t instructionIdx, ShaderVariable &output) = 0;
   virtual ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass,
-                                         const DXDebug::BindingSlot &slot,
-                                         uint32_t mipLevel) const = 0;
-  virtual ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                       const char *opString) const = 0;
-  virtual ShaderVariable GetRenderTargetSampleInfo(const char *opString) const = 0;
-  virtual ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const = 0;
+                                         const DXDebug::BindingSlot &slot, uint32_t mipLevel) = 0;
+  virtual ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass,
+                                       const DXDebug::BindingSlot &slot, const char *opString) = 0;
+  virtual ShaderVariable GetRenderTargetSampleInfo(const char *opString) = 0;
+  virtual ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) = 0;
   virtual ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
-                                                   const DXDebug::BindingSlot &slot) const = 0;
+                                                   const DXDebug::BindingSlot &slot) = 0;
 
-  virtual bool IsSRVCached(const DXDebug::BindingSlot &slot) = 0;
-  virtual bool IsUAVCached(const DXDebug::BindingSlot &slot) = 0;
+  virtual bool IsSRVCached(const DXDebug::BindingSlot &slot) const = 0;
+  virtual bool IsUAVCached(const DXDebug::BindingSlot &slot) const = 0;
+  virtual bool IsResourceInfoCached(const DXDebug::BindingSlot &slot, uint32_t mipLevel) = 0;
+  virtual bool IsSampleInfoCached(const DXDebug::BindingSlot &slot) = 0;
+  virtual bool IsRenderTargetSampleInfoCached() = 0;
+  virtual bool IsResourceReferenceInfoCached(const DXDebug::BindingSlot &slot) = 0;
+  virtual bool IsShaderDirectAccessCached(const DXDebug::BindingSlot &slot) = 0;
 
   virtual const ShaderVariable &GetInputPlaceholder() const = 0;
   virtual const rdcarray<DXILDebug::ThreadProperties> &GetWorkgroupProperties() const = 0;
@@ -887,8 +900,13 @@ public:
   static rdcstr GetResourceReferenceName(const DXIL::Program *program, DXIL::ResourceClass resClass,
                                          const BindingSlot &slot);
 
-  const UAVData &GetUAVData(const BindingSlot &slot) const;
-  const SRVData &GetSRVData(const BindingSlot &slot) const;
+  ShaderValue TypedResourceLoad(DXIL::ResourceClass resClass, const BindingSlot &slot,
+                                const DXILDebug::ViewFmt &fmt, uint64_t dataOffset);
+  bool TypedResourceStore(DXIL::ResourceClass resClass, const BindingSlot &slot,
+                          const DXILDebug::ViewFmt &fmt, uint64_t dataOffset, ShaderValue &value);
+
+  DeviceOpResult GetUAV(const BindingSlot &slot, UAVInfo &uavInfo) const;
+  DeviceOpResult GetSRV(const BindingSlot &slot, SRVInfo &srvInfo) const;
 
   DeviceOpResult GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
                                  uint32_t mipLevel, ShaderVariable &result) const;

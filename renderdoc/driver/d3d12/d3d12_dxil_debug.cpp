@@ -27,6 +27,7 @@
 #include "d3d12_dxil_debug.h"
 #include "data/hlsl/hlsl_cbuffers.h"
 #include "driver/dxgi/dxgi_common.h"
+#include "maths/formatpacking.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_debug.h"
 #include "d3d12_replay.h"
@@ -45,6 +46,300 @@ using namespace DXILDebug;
 
 namespace DXILDebug
 {
+static ShaderValue TypedUAVLoad(const DXILDebug::ViewFmt &fmt, const byte *base, uint64_t offset)
+{
+  const byte *data = base + offset;
+  ShaderValue result;
+  result.f32v[0] = 0.0f;
+  result.f32v[1] = 0.0f;
+  result.f32v[2] = 0.0f;
+  result.f32v[3] = 0.0f;
+
+  if(fmt.byteWidth == 10)
+  {
+    uint32_t u;
+    memcpy(&u, data, sizeof(uint32_t));
+
+    if(fmt.compType == CompType::UInt)
+    {
+      result.u32v[0] = (u >> 0) & 0x3ff;
+      result.u32v[1] = (u >> 10) & 0x3ff;
+      result.u32v[2] = (u >> 20) & 0x3ff;
+      result.u32v[3] = (u >> 30) & 0x003;
+    }
+    else if(fmt.compType == CompType::UNorm)
+    {
+      Vec4f res = ConvertFromR10G10B10A2(u);
+      result.f32v[0] = res.x;
+      result.f32v[1] = res.y;
+      result.f32v[2] = res.z;
+      result.f32v[3] = res.w;
+    }
+    else
+    {
+      RDCERR("Unexpected format type on buffer resource");
+    }
+  }
+  else if(fmt.byteWidth == 11)
+  {
+    uint32_t u;
+    memcpy(&u, data, sizeof(uint32_t));
+
+    Vec3f res = ConvertFromR11G11B10(u);
+    result.f32v[0] = res.x;
+    result.f32v[1] = res.y;
+    result.f32v[2] = res.z;
+    result.f32v[3] = 1.0f;
+  }
+  else
+  {
+    if(fmt.byteWidth == 4)
+    {
+      const uint32_t *u = (const uint32_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+        result.u32v[c] = u[c];
+    }
+    else if(fmt.byteWidth == 2)
+    {
+      if(fmt.compType == CompType::Float)
+      {
+        const uint16_t *u = (const uint16_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.f32v[c] = ConvertFromHalf(u[c]);
+      }
+      else if(fmt.compType == CompType::UInt)
+      {
+        const uint16_t *u = (const uint16_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.u32v[c] = u[c];
+      }
+      else if(fmt.compType == CompType::SInt)
+      {
+        const int16_t *in = (const int16_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.s32v[c] = in[c];
+      }
+      else if(fmt.compType == CompType::UNorm || fmt.compType == CompType::UNormSRGB)
+      {
+        const uint16_t *u = (const uint16_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.f32v[c] = float(u[c]) / float(0xffff);
+      }
+      else if(fmt.compType == CompType::SNorm)
+      {
+        const int16_t *in = (const int16_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+        {
+          // -32768 is mapped to -1, then -32767 to -32767 are mapped to -1 to 1
+          if(in[c] == -32768)
+            result.f32v[c] = -1.0f;
+          else
+            result.f32v[c] = float(in[c]) / 32767.0f;
+        }
+      }
+      else
+      {
+        RDCERR("Unexpected format type on buffer resource");
+      }
+    }
+    else if(fmt.byteWidth == 1)
+    {
+      if(fmt.compType == CompType::UInt)
+      {
+        const uint8_t *u = (const uint8_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.u32v[c] = u[c];
+      }
+      else if(fmt.compType == CompType::SInt)
+      {
+        const int8_t *in = (const int8_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.s32v[c] = in[c];
+      }
+      else if(fmt.compType == CompType::UNorm || fmt.compType == CompType::UNormSRGB)
+      {
+        const uint8_t *u = (const uint8_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+          result.f32v[c] = float(u[c]) / float(0xff);
+      }
+      else if(fmt.compType == CompType::SNorm)
+      {
+        const int8_t *in = (const int8_t *)data;
+
+        for(int c = 0; c < fmt.numComps; c++)
+        {
+          // -128 is mapped to -1, then -127 to -127 are mapped to -1 to 1
+          if(in[c] == -128)
+            result.f32v[c] = -1.0f;
+          else
+            result.f32v[c] = float(in[c]) / 127.0f;
+        }
+      }
+      else
+      {
+        RDCERR("Unexpected format type on buffer resource");
+      }
+    }
+
+    // fill in alpha with 1.0 or 1 as appropriate
+    if(fmt.numComps < 4)
+    {
+      if(fmt.compType == CompType::UNorm || fmt.compType == CompType::UNormSRGB ||
+         fmt.compType == CompType::SNorm || fmt.compType == CompType::Float)
+        result.f32v[3] = 1.0f;
+      else
+        result.u32v[3] = 1;
+    }
+  }
+
+  return result;
+}
+
+static void TypedUAVStore(const DXILDebug::ViewFmt &fmt, byte *base, uint64_t offset,
+                          const ShaderValue &value)
+{
+  byte *data = base + offset;
+  if(fmt.byteWidth == 10)
+  {
+    uint32_t u = 0;
+
+    if(fmt.compType == CompType::UInt)
+    {
+      u |= (value.u32v[0] & 0x3ff) << 0;
+      u |= (value.u32v[1] & 0x3ff) << 10;
+      u |= (value.u32v[2] & 0x3ff) << 20;
+      u |= (value.u32v[3] & 0x3) << 30;
+    }
+    else if(fmt.compType == CompType::UNorm)
+    {
+      u = ConvertToR10G10B10A2(Vec4f(value.f32v[0], value.f32v[1], value.f32v[2], value.f32v[3]));
+    }
+    else
+    {
+      RDCERR("Unexpected format type on buffer resource");
+    }
+    memcpy(data, &u, sizeof(uint32_t));
+  }
+  else if(fmt.byteWidth == 11)
+  {
+    uint32_t u = ConvertToR11G11B10(Vec3f(value.f32v[0], value.f32v[1], value.f32v[2]));
+    memcpy(data, &u, sizeof(uint32_t));
+  }
+  else if(fmt.byteWidth == 4)
+  {
+    uint32_t *u = (uint32_t *)data;
+
+    for(int c = 0; c < fmt.numComps; c++)
+      u[c] = value.u32v[c];
+  }
+  else if(fmt.byteWidth == 2)
+  {
+    if(fmt.compType == CompType::Float)
+    {
+      uint16_t *u = (uint16_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+        u[c] = ConvertToHalf(value.f32v[c]);
+    }
+    else if(fmt.compType == CompType::UInt)
+    {
+      uint16_t *u = (uint16_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+        u[c] = value.u32v[c] & 0xffff;
+    }
+    else if(fmt.compType == CompType::SInt)
+    {
+      int16_t *i = (int16_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+        i[c] = (int16_t)RDCCLAMP(value.s32v[c], (int32_t)INT16_MIN, (int32_t)INT16_MAX);
+    }
+    else if(fmt.compType == CompType::UNorm || fmt.compType == CompType::UNormSRGB)
+    {
+      uint16_t *u = (uint16_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+      {
+        float f = RDCCLAMP(value.f32v[c], 0.0f, 1.0f) * float(0xffff) + 0.5f;
+        u[c] = uint16_t(f);
+      }
+    }
+    else if(fmt.compType == CompType::SNorm)
+    {
+      int16_t *i = (int16_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+      {
+        float f = RDCCLAMP(value.f32v[c], -1.0f, 1.0f) * 0x7fff;
+
+        if(f < 0.0f)
+          i[c] = int16_t(f - 0.5f);
+        else
+          i[c] = int16_t(f + 0.5f);
+      }
+    }
+    else
+    {
+      RDCERR("Unexpected format type on buffer resource");
+    }
+  }
+  else if(fmt.byteWidth == 1)
+  {
+    if(fmt.compType == CompType::UInt)
+    {
+      uint8_t *u = (uint8_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+        u[c] = value.u32v[c] & 0xff;
+    }
+    else if(fmt.compType == CompType::SInt)
+    {
+      int8_t *i = (int8_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+        i[c] = (int8_t)RDCCLAMP(value.s32v[c], (int32_t)INT8_MIN, (int32_t)INT8_MAX);
+    }
+    else if(fmt.compType == CompType::UNorm || fmt.compType == CompType::UNormSRGB)
+    {
+      uint8_t *u = (uint8_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+      {
+        float f = RDCCLAMP(value.f32v[c], 0.0f, 1.0f) * float(0xff) + 0.5f;
+        u[c] = uint8_t(f);
+      }
+    }
+    else if(fmt.compType == CompType::SNorm)
+    {
+      int8_t *i = (int8_t *)data;
+
+      for(int c = 0; c < fmt.numComps; c++)
+      {
+        float f = RDCCLAMP(value.f32v[c], -1.0f, 1.0f) * 0x7f;
+
+        if(f < 0.0f)
+          i[c] = int8_t(f - 0.5f);
+        else
+          i[c] = int8_t(f + 0.5f);
+      }
+    }
+    else
+    {
+      RDCERR("Unexpected format type on buffer resource");
+    }
+  }
+}
+
 static DXBC::ResourceRetType ConvertCompTypeToResourceRetType(const CompType compType)
 {
   switch(compType)
@@ -721,11 +1016,45 @@ void D3D12APIWrapper::AddCBufferToGlobalState(const BindingSlot &slot, bytebuf &
   }
 }
 
+// Called from any thread
+// Resource must be cached
+ShaderValue D3D12APIWrapper::TypedSRVLoad(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                                          uint64_t dataOffset) const
+{
+  SCOPED_READLOCK(m_SRVsLock);
+  auto it = m_SRVBuffers.find(slot);
+  if(it == m_SRVBuffers.end())
+  {
+    RDCERR("Load SRV slot %u space %u no cached data", slot.shaderRegister, slot.registerSpace);
+    return ShaderValue();
+  }
+  const bytebuf &data = it->second;
+  return DXILDebug::TypedUAVLoad(fmt, data.data(), dataOffset);
+}
+
+// Called from any thread
+// Resource must be cached
+bool D3D12APIWrapper::TypedSRVStore(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                                    uint64_t dataOffset, const ShaderValue &value)
+{
+  SCOPED_READLOCK(m_SRVsLock);
+  auto it = m_SRVBuffers.find(slot);
+  if(it == m_SRVBuffers.end())
+  {
+    RDCERR("Store SRV slot %u space %u no cached data", slot.shaderRegister, slot.registerSpace);
+    return false;
+  }
+  bytebuf &data = it->second;
+  DXILDebug::TypedUAVStore(fmt, data.data(), dataOffset, value);
+  return true;
+}
+
 // Must be called from the replay manager thread (the debugger thread)
-SRVData &D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
+SRVInfo D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
 {
   CHECK_DEVICE_THREAD();
-  SRVData &srvData = m_SRVs[slot];
+  SRVInfo srvData;
+  bytebuf data;
   if(resDescriptor)
   {
     D3D12ResourceManager *rm = m_Device->GetResourceManager();
@@ -760,16 +1089,25 @@ SRVData &D3D12APIWrapper::FetchSRV(const D3D12Descriptor *resDescriptor, const B
         if(mdStride != 0)
           srvData.resInfo.format.stride = mdStride;
 
-        m_Device->GetDebugManager()->GetBufferData(pResource, 0, 0, srvData.data);
+        m_Device->GetDebugManager()->GetBufferData(pResource, 0, 0, data);
       }
       // Textures are sampled via a pixel shader, so there's no need to copy their data
     }
+  }
+  srvData.resInfo.hasData = data.data() != NULL;
+  srvData.resInfo.dataSize = data.size();
+  {
+    SCOPED_WRITELOCK(m_SRVsLock);
+    auto it = m_SRVInfos.insert(std::make_pair(slot, srvData));
+    RDCASSERT(it.second);
+    auto bufferIt = m_SRVBuffers.insert(std::make_pair(slot, data));
+    RDCASSERT(bufferIt.second);
   }
   return srvData;
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
+SRVInfo D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
 {
   CHECK_DEVICE_THREAD();
   // the resources might be dirty from side-effects, replay back to right before it.
@@ -785,6 +1123,8 @@ SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
     return FetchSRV(&srvDesc, slot);
   }
 
+  SRVInfo srvData;
+  bytebuf data;
   const D3D12RenderState &rs = m_Device->GetQueue()->GetCommandData()->m_RenderState;
   D3D12ResourceManager *rm = m_Device->GetResourceManager();
 
@@ -819,7 +1159,6 @@ SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
           if(param.Descriptor.ShaderRegister == slot.shaderRegister &&
              param.Descriptor.RegisterSpace == slot.registerSpace)
           {
-            SRVData &srvData = m_SRVs[slot];
             // Found the requested SRV
             ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(element.id);
             if(pResource)
@@ -848,9 +1187,17 @@ SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
                     DXILDebug::GetSRVBufferStrideFromShaderMetadata(m_EntryPointInterface, slot);
                 if(mdStride != 0)
                   srvData.resInfo.format.stride = mdStride;
-                m_Device->GetDebugManager()->GetBufferData(pResource, element.offset, 0,
-                                                           srvData.data);
+                m_Device->GetDebugManager()->GetBufferData(pResource, element.offset, 0, data);
               }
+            }
+            srvData.resInfo.hasData = data.data() != NULL;
+            srvData.resInfo.dataSize = data.size();
+            {
+              SCOPED_WRITELOCK(m_SRVsLock);
+              auto it = m_SRVInfos.insert(std::make_pair(slot, srvData));
+              RDCASSERT(it.second);
+              auto bufferIt = m_SRVBuffers.insert(std::make_pair(slot, data));
+              RDCASSERT(bufferIt.second);
             }
             return srvData;
           }
@@ -906,19 +1253,61 @@ SRVData &D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
 
     RDCERR("Couldn't find root signature parameter corresponding to SRV %u in space %u",
            slot.shaderRegister, slot.registerSpace);
-    return m_SRVs[slot];
+    {
+      SCOPED_WRITELOCK(m_SRVsLock);
+      m_SRVInfos[slot] = srvData;
+    }
+    return srvData;
   }
 
   RDCERR("No root signature bound, couldn't identify SRV %u in space %u", slot.shaderRegister,
          slot.registerSpace);
-  return m_SRVs[slot];
+  {
+    SCOPED_WRITELOCK(m_SRVsLock);
+    m_SRVInfos[slot] = srvData;
+  }
+  return srvData;
+}
+
+// Called from any thread
+// Resource must be cached
+ShaderValue D3D12APIWrapper::TypedUAVLoad(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                                          uint64_t dataOffset) const
+{
+  SCOPED_READLOCK(m_UAVsLock);
+  auto it = m_UAVBuffers.find(slot);
+  if(it == m_UAVBuffers.end())
+  {
+    RDCERR("Load UAV slot %u space %u no cached data", slot.shaderRegister, slot.registerSpace);
+    return ShaderValue();
+  }
+  const bytebuf &data = it->second;
+  return DXILDebug::TypedUAVLoad(fmt, data.data(), dataOffset);
+}
+
+// Called from any thread
+// Resource must be cached
+bool D3D12APIWrapper::TypedUAVStore(const BindingSlot &slot, const DXILDebug::ViewFmt &fmt,
+                                    uint64_t dataOffset, const ShaderValue &value)
+{
+  SCOPED_READLOCK(m_UAVsLock);
+  auto it = m_UAVBuffers.find(slot);
+  if(it == m_UAVBuffers.end())
+  {
+    RDCERR("Store UAV slot %u space %u no cached data", slot.shaderRegister, slot.registerSpace);
+    return false;
+  }
+  bytebuf &data = it->second;
+  DXILDebug::TypedUAVStore(fmt, data.data(), dataOffset, value);
+  return true;
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-UAVData &D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
+UAVInfo D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const BindingSlot &slot)
 {
   CHECK_DEVICE_THREAD();
-  UAVData &uavData = m_UAVs[slot];
+  UAVInfo uavData;
+  bytebuf data;
   if(resDescriptor)
   {
     D3D12ResourceManager *rm = m_Device->GetResourceManager();
@@ -950,13 +1339,12 @@ UAVData &D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const B
         if(mdStride != 0)
           uavData.resInfo.format.stride = mdStride;
 
-        m_Device->GetDebugManager()->GetBufferData(pResource, 0, 0, uavData.data);
+        m_Device->GetDebugManager()->GetBufferData(pResource, 0, 0, data);
       }
       else
       {
         uavData.tex = true;
-        m_Device->GetReplay()->GetTextureData(uavId, Subresource(), GetTextureDataParams(),
-                                              uavData.data);
+        m_Device->GetReplay()->GetTextureData(uavId, Subresource(), GetTextureDataParams(), data);
 
         uavDesc.Format = D3D12ShaderDebug::GetUAVResourceFormat(uavDesc, pResource);
         DXILDebug::FillViewFmtFromResourceFormat(uavDesc.Format, uavData.resInfo.format);
@@ -967,11 +1355,20 @@ UAVData &D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const B
       }
     }
   }
+  uavData.resInfo.hasData = data.data() != NULL;
+  uavData.resInfo.dataSize = data.size();
+  {
+    SCOPED_WRITELOCK(m_UAVsLock);
+    auto it = m_UAVInfos.insert(std::make_pair(slot, uavData));
+    RDCASSERT(it.second);
+    auto bufferIt = m_UAVBuffers.insert(std::make_pair(slot, data));
+    RDCASSERT(bufferIt.second);
+  }
   return uavData;
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
+UAVInfo D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
 {
   CHECK_DEVICE_THREAD();
   // the resources might be dirty from side-effects, replay back to right before it.
@@ -987,6 +1384,8 @@ UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
     return FetchUAV(&uavDesc, slot);
   }
 
+  UAVInfo uavData;
+  bytebuf data;
   const D3D12RenderState &rs = m_Device->GetQueue()->GetCommandData()->m_RenderState;
   D3D12ResourceManager *rm = m_Device->GetResourceManager();
 
@@ -1023,7 +1422,6 @@ UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
           {
             // Found the requested UAV
             ID3D12Resource *pResource = rm->GetCurrentAs<ID3D12Resource>(element.id);
-            UAVData &uavData = m_UAVs[slot];
 
             if(pResource)
             {
@@ -1052,11 +1450,19 @@ UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
                     DXILDebug::GetUAVBufferStrideFromShaderMetadata(m_EntryPointInterface, slot);
                 if(mdStride != 0)
                   uavData.resInfo.format.stride = mdStride;
-                m_Device->GetDebugManager()->GetBufferData(pResource, element.offset, 0,
-                                                           uavData.data);
+                m_Device->GetDebugManager()->GetBufferData(pResource, element.offset, 0, data);
               }
             }
 
+            uavData.resInfo.hasData = data.data() != NULL;
+            uavData.resInfo.dataSize = data.size();
+            {
+              SCOPED_WRITELOCK(m_UAVsLock);
+              auto it = m_UAVInfos.insert(std::make_pair(slot, uavData));
+              RDCASSERT(it.second);
+              auto bufferIt = m_UAVBuffers.insert(std::make_pair(slot, data));
+              RDCASSERT(bufferIt.second);
+            }
             return uavData;
           }
         }
@@ -1111,60 +1517,60 @@ UAVData &D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
 
     RDCERR("Couldn't find root signature parameter corresponding to UAV %u in space %u",
            slot.shaderRegister, slot.registerSpace);
-    return m_UAVs[slot];
+    {
+      SCOPED_WRITELOCK(m_UAVsLock);
+      m_UAVInfos[slot] = uavData;
+    }
+    return uavData;
   }
 
   RDCERR("No root signature bound, couldn't identify UAV %u in space %u", slot.shaderRegister,
          slot.registerSpace);
-  return m_UAVs[slot];
-}
-
-// Called from any thread
-bool D3D12APIWrapper::IsSRVCached(const BindingSlot &slot)
-{
-  SCOPED_READLOCK(m_SRVsLock);
-  return m_SRVs.find(slot) != m_SRVs.end();
-}
-
-// Must be called from the replay manager thread (the debugger thread)
-const SRVData &D3D12APIWrapper::GetSRVData(const BindingSlot &slot)
-{
-  CHECK_DEVICE_THREAD();
-  {
-    SCOPED_READLOCK(m_SRVsLock);
-    auto it = m_SRVs.find(slot);
-    if(it != m_SRVs.end())
-      return it->second;
-  }
-
-  {
-    SCOPED_WRITELOCK(m_SRVsLock);
-    return FetchSRV(slot);
-  }
-}
-
-// Called from any thread
-bool D3D12APIWrapper::IsUAVCached(const BindingSlot &slot)
-{
-  SCOPED_READLOCK(m_UAVsLock);
-  return m_UAVs.find(slot) != m_UAVs.end();
-}
-
-// Must be called from the replay manager thread (the debugger thread)
-const UAVData &D3D12APIWrapper::GetUAVData(const BindingSlot &slot)
-{
-  CHECK_DEVICE_THREAD();
-  {
-    SCOPED_READLOCK(m_UAVsLock);
-    auto it = m_UAVs.find(slot);
-    if(it != m_UAVs.end())
-      return it->second;
-  }
-
   {
     SCOPED_WRITELOCK(m_UAVsLock);
-    return FetchUAV(slot);
+    m_UAVInfos[slot] = uavData;
   }
+  return uavData;
+}
+
+// Called from any thread
+bool D3D12APIWrapper::IsSRVCached(const BindingSlot &slot) const
+{
+  SCOPED_READLOCK(m_SRVsLock);
+  return m_SRVInfos.find(slot) != m_SRVInfos.end();
+}
+
+// Called from any thread
+SRVInfo D3D12APIWrapper::GetSRV(const BindingSlot &slot)
+{
+  {
+    SCOPED_READLOCK(m_SRVsLock);
+    auto it = m_SRVInfos.find(slot);
+    if(it != m_SRVInfos.end())
+      return it->second;
+  }
+
+  return FetchSRV(slot);
+}
+
+// Called from any thread
+bool D3D12APIWrapper::IsUAVCached(const BindingSlot &slot) const
+{
+  SCOPED_READLOCK(m_UAVsLock);
+  return m_UAVInfos.find(slot) != m_UAVInfos.end();
+}
+
+// Called from any thread
+UAVInfo D3D12APIWrapper::GetUAV(const BindingSlot &slot)
+{
+  {
+    SCOPED_READLOCK(m_UAVsLock);
+    auto it = m_UAVInfos.find(slot);
+    if(it != m_UAVInfos.end())
+      return it->second;
+  }
+
+  return FetchUAV(slot);
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -1242,10 +1648,38 @@ bool D3D12APIWrapper::CalculateSampleGather(
       instructionIdx, opString, output);
 }
 
-// Must be called from the replay manager thread (the debugger thread)
+// Called from any thread
+bool D3D12APIWrapper::IsResourceInfoCached(const DXDebug::BindingSlot &slot, uint32_t mipLevel)
+{
+  SCOPED_READLOCK(m_ResourceInfosLock);
+  ResourceInfoMiplevel resInfoMip = {slot, mipLevel};
+  return m_ResourceInfos.find(resInfoMip) != m_ResourceInfos.end();
+}
+
+// Called from any thread
+// Caller guarantees that if the data is not cached then we are on the device thread
 ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
-                                                const DXDebug::BindingSlot &slot,
-                                                uint32_t mipLevel) const
+                                                const DXDebug::BindingSlot &slot, uint32_t mipLevel)
+{
+  ResourceInfoMiplevel resInfoMip = {slot, mipLevel};
+  {
+    SCOPED_READLOCK(m_ResourceInfosLock);
+    auto it = m_ResourceInfos.find(resInfoMip);
+    if(it != m_ResourceInfos.end())
+      return it->second;
+  }
+  CHECK_DEVICE_THREAD();
+  ShaderVariable resourceInfo = FetchResourceInfo(resClass, slot, mipLevel);
+  {
+    SCOPED_WRITELOCK(m_ResourceInfosLock);
+    m_ResourceInfos[resInfoMip] = resourceInfo;
+    return resourceInfo;
+  }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+ShaderVariable D3D12APIWrapper::FetchResourceInfo(DXIL::ResourceClass resClass,
+                                                  const DXDebug::BindingSlot &slot, uint32_t mipLevel)
 {
   CHECK_DEVICE_THREAD();
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
@@ -1264,10 +1698,37 @@ ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
                                            true);
 }
 
-// Must be called from the replay manager thread (the debugger thread)
+// Called from any thread
+bool D3D12APIWrapper::IsSampleInfoCached(const DXDebug::BindingSlot &slot)
+{
+  SCOPED_READLOCK(m_SampleInfosLock);
+  return m_SampleInfos.find(slot) != m_SampleInfos.end();
+}
+
+// Called from any thread
+// Caller guarantees that if the data is not cached then we are on the device thread
 ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
-                                              const DXDebug::BindingSlot &slot,
-                                              const char *opString) const
+                                              const DXDebug::BindingSlot &slot, const char *opString)
+{
+  {
+    SCOPED_READLOCK(m_SampleInfosLock);
+    auto it = m_SampleInfos.find(slot);
+    if(it != m_SampleInfos.end())
+      return it->second;
+  }
+  CHECK_DEVICE_THREAD();
+  ShaderVariable sampleInfo = FetchSampleInfo(resClass, slot, opString);
+  {
+    SCOPED_WRITELOCK(m_SampleInfosLock);
+    m_SampleInfos[slot] = sampleInfo;
+    return sampleInfo;
+  }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+ShaderVariable D3D12APIWrapper::FetchSampleInfo(DXIL::ResourceClass resClass,
+                                                const DXDebug::BindingSlot &slot,
+                                                const char *opString)
 {
   CHECK_DEVICE_THREAD();
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
@@ -1284,15 +1745,61 @@ ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
   return D3D12ShaderDebug::GetSampleInfo(m_Device, descType, slot, m_ShaderType, opString);
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-ShaderVariable D3D12APIWrapper::GetRenderTargetSampleInfo(const char *opString) const
+// Called from any thread
+bool D3D12APIWrapper::IsRenderTargetSampleInfoCached()
 {
+  SCOPED_READLOCK(m_RenderTargetSampleInfoLock);
+  return m_RenderTargetSampleInfoValid;
+}
+
+// Called from any thread
+// Caller guarantees that if the data is not cached then we are on the device thread
+ShaderVariable D3D12APIWrapper::GetRenderTargetSampleInfo(const char *opString)
+{
+  {
+    SCOPED_READLOCK(m_RenderTargetSampleInfoLock);
+    if(m_RenderTargetSampleInfoValid)
+      return m_RenderTargetSampleInfo;
+  }
   CHECK_DEVICE_THREAD();
-  return D3D12ShaderDebug::GetRenderTargetSampleInfo(m_Device, m_ShaderType, opString);
+  ShaderVariable renderTargetSampleInfo =
+      D3D12ShaderDebug::GetRenderTargetSampleInfo(m_Device, m_ShaderType, opString);
+  {
+    SCOPED_WRITELOCK(m_RenderTargetSampleInfoLock);
+    m_RenderTargetSampleInfoValid = true;
+    m_RenderTargetSampleInfo = renderTargetSampleInfo;
+    return m_RenderTargetSampleInfo;
+  }
+}
+
+// Called from any thread
+bool D3D12APIWrapper::IsResourceReferenceInfoCached(const DXDebug::BindingSlot &slot)
+{
+  SCOPED_READLOCK(m_ResourceReferenceInfosLock);
+  return m_ResourceReferenceInfos.find(slot) != m_ResourceReferenceInfos.end();
+}
+
+// Called from any thread
+// Caller guarantees that if the data is not cached then we are on the device thread
+ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot)
+{
+  {
+    SCOPED_READLOCK(m_ResourceReferenceInfosLock);
+    auto it = m_ResourceReferenceInfos.find(slot);
+    if(it != m_ResourceReferenceInfos.end())
+      return it->second;
+  }
+  CHECK_DEVICE_THREAD();
+  ResourceReferenceInfo resRefInfo = FetchResourceReferenceInfo(slot);
+  {
+    SCOPED_WRITELOCK(m_ResourceReferenceInfosLock);
+    m_ResourceReferenceInfos[slot] = resRefInfo;
+    return resRefInfo;
+  }
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
+ResourceReferenceInfo D3D12APIWrapper::FetchResourceReferenceInfo(const DXDebug::BindingSlot &slot)
 {
   CHECK_DEVICE_THREAD();
   const HeapDescriptorType heapType = slot.heapType;
@@ -1390,9 +1897,36 @@ ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::B
   return resRefInfo;
 }
 
-// Must be called from the replay manager thread (the debugger thread)
+// Called from any thread
+bool D3D12APIWrapper::IsShaderDirectAccessCached(const DXDebug::BindingSlot &slot)
+{
+  SCOPED_READLOCK(m_ShaderDirectAccessesLock);
+  return m_ShaderDirectAccesses.find(slot) != m_ShaderDirectAccesses.end();
+}
+
+// Called from any thread
+// Caller guarantees that if the data is not cached then we are on the device thread
 ShaderDirectAccess D3D12APIWrapper::GetShaderDirectAccess(DescriptorType type,
-                                                          const DXDebug::BindingSlot &slot) const
+                                                          const DXDebug::BindingSlot &slot)
+{
+  {
+    SCOPED_READLOCK(m_ShaderDirectAccessesLock);
+    auto it = m_ShaderDirectAccesses.find(slot);
+    if(it != m_ShaderDirectAccesses.end())
+      return it->second;
+  }
+  CHECK_DEVICE_THREAD();
+  ShaderDirectAccess access = FetchShaderDirectAccess(type, slot);
+  {
+    SCOPED_WRITELOCK(m_ShaderDirectAccessesLock);
+    m_ShaderDirectAccesses[slot] = access;
+    return access;
+  }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+ShaderDirectAccess D3D12APIWrapper::FetchShaderDirectAccess(DescriptorType type,
+                                                            const DXDebug::BindingSlot &slot)
 {
   CHECK_DEVICE_THREAD();
   const HeapDescriptorType heapType = slot.heapType;
