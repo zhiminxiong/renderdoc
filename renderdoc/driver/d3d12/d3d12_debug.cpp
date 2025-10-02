@@ -1394,8 +1394,15 @@ void D3D12DebugManager::FillWithDiscardPattern(ID3D12GraphicsCommandListX *cmd,
       FillBuffer(patternBuf, 0, pattern.data(), size);
     }
 
+    D3D12_RESOURCE_BARRIER b = {};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_ALIASING;
+
+    cmd->ResourceBarrier(1, &b);
+
     // fill the destination with a copy from the pattern buffer
     cmd->CopyBufferRegion(res, 0, patternBuf, 0, size);
+
+    cmd->ResourceBarrier(1, &b);
 
     return;
   }
