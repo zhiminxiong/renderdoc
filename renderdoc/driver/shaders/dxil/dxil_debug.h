@@ -956,6 +956,7 @@ private:
   rdcarray<ShaderDebugState> *m_ShaderChangesReturn = NULL;
   ShaderDebugState m_ActiveDebugState;
 
+  rdcarray<int32_t> m_QueuedJobs;
   rdcarray<bool> m_QueuedDeviceThreadSteps;
   rdcarray<bool> m_QueuedGpuMathOps;
   rdcarray<bool> m_QueuedGpuSampleGatherOps;
@@ -985,6 +986,10 @@ private:
   uint32_t m_ActiveLaneIndex = 0;
   int m_Steps = 0;
   bool m_RetireIDs = true;
+  bool m_MTSimulation;
+
+  // These need to be accessed using atomics
+  int32_t atomic_simulationFinished;
 };
 
 };    // namespace DXILDebug

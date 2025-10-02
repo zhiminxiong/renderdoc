@@ -24,6 +24,7 @@
 
 #include "dxil_debug.h"
 #include "common/formatting.h"
+#include "common/threading.h"
 #include "core/settings.h"
 #include "maths/formatpacking.h"
 #include "replay/common/var_dispatch_helpers.h"
@@ -31,6 +32,12 @@
 
 RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_Logging, false,
             "Debug logging for the DXIL shader debugger");
+
+RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_EnableMT, true,
+            "Use multiple threads to run the shader debugger simulation.");
+
+RDOC_DEBUG_CONFIG(bool, D3D12_Hack_ShaderDebugUsesJobSystemJobs, false,
+                  "Use individual job system jobs to run shader debugging simulation.");
 
 #if defined(RELEASE)
 #define CHECK_DEBUGGER_THREAD() \
@@ -7689,6 +7696,8 @@ Debugger::Debugger() : DXBCContainerDebugger(true), m_DeviceThreadID(Threading::
 Debugger::~Debugger()
 {
   CHECK_DEBUGGER_THREAD();
+  AtomicStore(&atomic_simulationFinished, 1);
+  Threading::JobSystem::SyncAllJobs();
   SAFE_DELETE(m_ApiWrapper);
 }
 
@@ -8932,6 +8941,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   m_QueuedGpuMathOps.resize(threadsInWorkgroup);
   m_QueuedGpuSampleGatherOps.resize(threadsInWorkgroup);
   m_PendingLanes.resize(threadsInWorkgroup);
+  m_QueuedJobs.resize(threadsInWorkgroup);
 
   uint32_t outputSSAId = m_Program->m_NextSSAId;
   uint32_t maxSSAId = outputSSAId + 1;
@@ -8952,6 +8962,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
     m_QueuedGpuMathOps[i] = false;
     m_QueuedGpuSampleGatherOps[i] = false;
     m_PendingLanes[i] = false;
+    m_QueuedJobs[i] = 0;
   }
 
   // Get the thread state from the API wrapper
@@ -9693,6 +9704,20 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
 
   InitialiseWorkgroup();
 
+  m_MTSimulation = D3D12_DXILShaderDebugger_EnableMT();
+  if(threadsInWorkgroup < 4)
+    m_MTSimulation = false;
+
+  AtomicStore(&atomic_simulationFinished, 0);
+  if(m_MTSimulation)
+  {
+    if(!D3D12_Hack_ShaderDebugUsesJobSystemJobs())
+    {
+      uint32_t countJobs = RDCMIN(threadsInWorkgroup, Threading::JobSystem::GetCountWorkers() / 2U);
+      for(uint32_t i = 0; i < countJobs; ++i)
+        Threading::JobSystem::AddJob([this]() { SimulationJobHelper(); });
+    }
+  }
   return ret;
 }
 
@@ -9856,7 +9881,11 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
   // if we've finished, return an empty set to signify that
   if(active.Finished())
+  {
+    AtomicStore(&atomic_simulationFinished, 1);
+    Threading::JobSystem::SyncAllJobs();
     return ret;
+  }
 
   bool allStepsCompleted = true;
   m_ShaderChangesReturn = &ret;
@@ -10341,8 +10370,22 @@ void Debugger::QueueJob(uint32_t lane)
   CHECK_DEBUGGER_THREAD();
   ThreadState &thread = m_Workgroup[lane];
   thread.SetStepQueued();
-  // StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS);
-  StepThread(lane, StepThreadMode::RUN_SINGLE_STEP);
+  if(m_MTSimulation)
+  {
+    if(D3D12_Hack_ShaderDebugUsesJobSystemJobs())
+    {
+      Threading::JobSystem::AddJob(
+          [this, lane]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS); });
+    }
+    else
+    {
+      RDCASSERT(Atomic::CmpExch32(&m_QueuedJobs[lane], 0, 1) == 0);
+    }
+  }
+  else
+  {
+    StepThread(lane, StepThreadMode::RUN_SINGLE_STEP);
+  }
 }
 
 // Can be called from any thread
@@ -10475,4 +10518,19 @@ void Debugger::ProcessQueuedGpuSampleGatherOps()
     }
   }
 }
+
+void Debugger::SimulationJobHelper()
+{
+  while(AtomicLoad(&atomic_simulationFinished) == 0)
+  {
+    for(uint32_t lane = 0; lane < m_Workgroup.size(); ++lane)
+    {
+      if(Atomic::CmpExch32(&m_QueuedJobs[lane], 1, 0) == 1)
+      {
+        StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS);
+      }
+    }
+  };
+}
+
 };    // namespace DXILDebug
