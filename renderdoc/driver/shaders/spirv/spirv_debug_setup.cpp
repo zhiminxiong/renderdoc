@@ -36,8 +36,8 @@ RDOC_CONFIG(bool, Vulkan_Debug_UseDebugColumnInformation, false,
 RDOC_CONFIG(bool, Vulkan_Debug_EnableShaderDebugMT, true,
             "Use multiple threads to run the shader debugger simulation.");
 
-RDOC_DEBUG_CONFIG(bool, Vulkan_Hack_ShaderDebugUsesJobSystemQueue, false,
-                  "Work in progress run shader debugging simulation in job system queue.");
+RDOC_DEBUG_CONFIG(bool, Vulkan_Hack_ShaderDebugUsesJobSystemJobs, false,
+                  "Use individual job system jobs to run shader debugging simulation.");
 
 using namespace rdcshaders;
 
@@ -292,7 +292,7 @@ Debugger::Debugger() : deviceThreadID(Threading::GetCurrentID())
 
 Debugger::~Debugger()
 {
-  AtomicStore(&simulationFinished, 1);
+  AtomicStore(&atomic_simulationFinished, 1);
   Threading::JobSystem::SyncAllJobs();
   SAFE_DELETE(apiWrapper);
 }
@@ -1783,10 +1783,10 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   if(threadsInWorkgroup < 4)
     mtSimulation = false;
 
-  AtomicStore(&simulationFinished, 0);
+  AtomicStore(&atomic_simulationFinished, 0);
   if(mtSimulation)
   {
-    if(!Vulkan_Hack_ShaderDebugUsesJobSystemQueue())
+    if(!Vulkan_Hack_ShaderDebugUsesJobSystemJobs())
     {
       uint32_t countJobs = RDCMIN(threadsInWorkgroup, Threading::JobSystem::GetCountWorkers() / 2U);
       for(uint32_t i = 0; i < countJobs; ++i)
@@ -2651,7 +2651,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
   // if we've finished, return an empty set to signify that
   if(active.Finished())
   {
-    AtomicStore(&simulationFinished, 1);
+    AtomicStore(&atomic_simulationFinished, 1);
     Threading::JobSystem::SyncAllJobs();
     return ret;
   }
@@ -4691,7 +4691,7 @@ DebugAPIWrapper *Debugger::GetAPIWrapper() const
 
 void Debugger::SimulationJobHelper()
 {
-  while(AtomicLoad(&simulationFinished) == 0)
+  while(AtomicLoad(&atomic_simulationFinished) == 0)
   {
     for(uint32_t lane = 0; lane < workgroup.size(); ++lane)
     {
@@ -4921,7 +4921,7 @@ void Debugger::QueueJob(uint32_t lane)
   thread.SetStepQueued();
   if(mtSimulation)
   {
-    if(Vulkan_Hack_ShaderDebugUsesJobSystemQueue())
+    if(Vulkan_Hack_ShaderDebugUsesJobSystemJobs())
     {
       Threading::JobSystem::AddJob(
           [this, lane]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS); });

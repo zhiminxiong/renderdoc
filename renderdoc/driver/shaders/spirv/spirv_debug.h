@@ -814,7 +814,7 @@ private:
   rdcarray<ShaderVariable *> pendingGpuSampleGatherOpsResults;
 
   uint64_t deviceThreadID;
-  int32_t simulationFinished;
+  int32_t atomic_simulationFinished;
   bool mtSimulation;
 };
 
