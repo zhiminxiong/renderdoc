@@ -209,6 +209,7 @@ private:
   T dummy;
 };
 
+// This must be a thread safe container
 template <typename T>
 class DenseIdMap : public rdcarray<T>
 {

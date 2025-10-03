@@ -286,6 +286,7 @@ struct ThreadState
   // thread-local private variables
   rdcarray<ShaderVariable> privates;
 
+  // This must be a thread safe container
   // every ID's variable, if a pointer it may be pointing at a ShaderVariable stored elsewhere
   DenseIdMap<ShaderVariable> ids;
 

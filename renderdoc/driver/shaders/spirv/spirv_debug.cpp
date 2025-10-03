@@ -329,6 +329,7 @@ void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
   SkipIgnoredInstructions();
 }
 
+// This must be thread safe : it is called from multiple threads
 const ShaderVariable &ThreadState::GetSrc(Id id) const
 {
   return ids[id];
