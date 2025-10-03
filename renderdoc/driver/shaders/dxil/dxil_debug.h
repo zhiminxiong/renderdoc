@@ -370,6 +370,7 @@ struct ThreadState
 
   bool Finished() const;
   bool IsSimulationStepActive() const { return (AtomicLoad(&atomic_isSimulationStepActive) == 1); }
+  bool CanRunAnotherStep() const;
   const ShaderVariable &GetInput() const { return m_Input; }
   const GlobalVariable &GetOutput() const { return m_Output; }
   bool IsDead() const { return m_Dead; }
@@ -403,7 +404,11 @@ struct ThreadState
     RDCASSERTEQUAL(m_ActiveMask.size(), activeMask.size());
     memcpy(m_ActiveMask.data(), activeMask.data(), activeMask.size() * sizeof(bool));
   }
-  void UpdateCurrentInstruction() { m_CurrentGlobalInstructionIdx = m_ActiveGlobalInstructionIdx; }
+  void UpdateCurrentInstruction()
+  {
+    m_CurrentGlobalInstructionIdx = m_ActiveGlobalInstructionIdx;
+    m_CurrentBlock = m_Block;
+  }
   void SetSimulationStepCompleted() { AtomicStore(&atomic_isSimulationStepActive, 0); }
   void SetStepQueued() { AtomicStore(&atomic_isSimulationStepActive, 1); }
 
@@ -438,20 +443,27 @@ private:
   Id GetArgumentId(uint32_t i) const;
   ResourceReferenceInfo GetResource(Id handleId, bool &annotatedHandle);
 
+  // This must be a thread safe operation using only thread safe containers
+  bool GetShaderVariableFromLane(const ThreadState &lane, const DXIL::Value *dxilValue,
+                                 DXIL::Operation op, DXIL::DXOp dxOpCode, ShaderVariable &var) const
+  {
+    return lane.GetShaderVariableHelper(dxilValue, op, dxOpCode, var, true, true, true);
+  }
   bool GetShaderVariable(const DXIL::Value *dxilValue, DXIL::Operation op, DXIL::DXOp dxOpCode,
                          ShaderVariable &var, bool flushDenormInput = true) const
   {
-    return GetShaderVariableHelper(dxilValue, op, dxOpCode, var, flushDenormInput, true);
+    return GetShaderVariableHelper(dxilValue, op, dxOpCode, var, flushDenormInput, true, false);
   }
 
   bool GetPhiShaderVariable(const DXIL::Value *dxilValue, DXIL::Operation op, DXIL::DXOp dxOpCode,
                             ShaderVariable &var, bool flushDenormInput = true) const
   {
-    return GetShaderVariableHelper(dxilValue, op, dxOpCode, var, flushDenormInput, false);
+    return GetShaderVariableHelper(dxilValue, op, dxOpCode, var, flushDenormInput, false, false);
   }
 
+  // This must be a thread safe operation using only thread safe containers
   bool GetLiveVariable(const Id &id, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
-                       ShaderVariable &var) const;
+                       bool ignoreLiveCheck, ShaderVariable &var) const;
   bool GetPhiVariable(const Id &id, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
                       ShaderVariable &var) const;
   bool GetVariableHelper(DXIL::Operation op, DXIL::DXOp dxOpCode, ShaderVariable &var) const;
@@ -479,8 +491,10 @@ private:
   static bool SubgroupIsDiverged(const rdcarray<ThreadState> &workgroup,
                                  const rdcarray<uint32_t> &activeLanes);
 
-  bool GetShaderVariableHelper(const DXIL::Value *dxilValue, DXIL::Operation op, DXIL::DXOp dxOpCode,
-                               ShaderVariable &var, bool flushDenormInput, bool isLive) const;
+  // When getting live variables : this must be a thread safe operation using only thread safe containers
+  bool GetShaderVariableHelper(const DXIL::Value *dxilValue, DXIL::Operation op,
+                               DXIL::DXOp dxOpCode, ShaderVariable &var, bool flushDenormInput,
+                               bool isLive, bool ignoreLiveCheck) const;
   bool IsVariableAssigned(const Id id) const;
 
   ShaderVariable GetBuiltin(ShaderBuiltin builtin) const;
@@ -542,8 +556,9 @@ private:
   uint32_t m_PreviousBlock = ~0U;
   // The global PC of the active instruction that will be executed on the next simulation step
   uint32_t m_ActiveGlobalInstructionIdx = 0;
-  // The global PC of the active instruction that was last executed
+  // The global PC and block of the instruction that was last executed
   uint32_t m_CurrentGlobalInstructionIdx = 0;
+  uint32_t m_CurrentBlock = ~0U;
 
   // true if executed an operation which could trigger divergence
   bool m_Diverged;

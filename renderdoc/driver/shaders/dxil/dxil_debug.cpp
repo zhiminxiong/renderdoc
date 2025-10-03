@@ -1939,6 +1939,7 @@ void ThreadState::EnterEntryPoint(const Function *function, bool hasDebugState)
   }
 
   m_HasDebugState = false;
+  UpdateCurrentInstruction();
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -4126,7 +4127,8 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             if(lane < workgroup.size())
             {
               ShaderVariable var;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, var));
+              RDCASSERT(
+                  GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, var));
               result.value = var.value;
             }
             else
@@ -4146,7 +4148,8 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             if(lane < workgroup.size())
             {
               ShaderVariable var;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, var));
+              RDCASSERT(
+                  GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, var));
               result.value = var.value;
             }
             else
@@ -4190,7 +4193,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
 
               for(uint8_t c = 0; c < x.columns; c++)
               {
@@ -4267,7 +4270,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
               count += x.value.u32v[0];
             }
 
@@ -4333,7 +4336,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             {
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
 
               if(dxOpCode == DXOp::WaveAnyTrue)
               {
@@ -4415,7 +4418,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             {
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
 
               for(uint8_t c = 0; c < x.columns; c++)
               {
@@ -4546,7 +4549,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             {
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
 
               for(uint8_t c = 0; c < x.columns; c++)
               {
@@ -4611,7 +4614,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             {
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
 
               bool matches = true;
               for(uint8_t c = 0; c < x.columns; c++)
@@ -4691,7 +4694,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
               for(uint8_t c = 0; c < x.columns; c++)
               {
                 switch(waveMultiPrefixOpCode)
@@ -4804,7 +4807,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
               count += x.value.u32v[0];
             }
 
@@ -4893,7 +4896,8 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             if(lane < workgroup.size())
             {
               ShaderVariable var;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, var));
+              RDCASSERT(
+                  GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, var));
               result.value = var.value;
             }
             else
@@ -4931,7 +4935,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
               RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
               ShaderVariable x;
-              RDCASSERT(workgroup[lane].GetShaderVariable(inst.args[1], opCode, dxOpCode, x));
+              RDCASSERT(GetShaderVariableFromLane(workgroup[lane], inst.args[1], opCode, dxOpCode, x));
 
               switch(quadVoteOp)
               {
@@ -6756,9 +6760,11 @@ void ThreadState::StepNext(bool hasDebugState, const rdcarray<ThreadState> &work
   m_HasDebugState = false;
 }
 
+// When getting live variables : this must be a thread safe operation using only thread safe containers
 bool ThreadState::GetShaderVariableHelper(const DXIL::Value *dxilValue, DXIL::Operation op,
                                           DXIL::DXOp dxOpCode, ShaderVariable &var,
-                                          bool flushDenormInput, bool isLive) const
+                                          bool flushDenormInput, bool isLive,
+                                          bool ignoreLiveCheck) const
 {
   var.name.clear();
   var.members.clear();
@@ -6863,7 +6869,7 @@ bool ThreadState::GetShaderVariableHelper(const DXIL::Value *dxilValue, DXIL::Op
   if(const Instruction *inst = cast<Instruction>(dxilValue))
   {
     if(isLive)
-      return GetLiveVariable(inst->slot, op, dxOpCode, var);
+      return GetLiveVariable(inst->slot, op, dxOpCode, ignoreLiveCheck, var);
     else
       return GetPhiVariable(inst->slot, op, dxOpCode, var);
   }
@@ -6899,11 +6905,13 @@ ShaderVariable ThreadState::GetBuiltin(ShaderBuiltin builtin) const
   return {};
 }
 
-bool ThreadState::GetLiveVariable(const Id &id, Operation op, DXOp dxOpCode, ShaderVariable &var) const
+// This must be a thread safe operation using only thread safe containers
+bool ThreadState::GetLiveVariable(const Id &id, Operation op, DXOp dxOpCode, bool ignoreLiveCheck,
+                                  ShaderVariable &var) const
 {
   if(id < m_Live.size())
   {
-    RDCASSERT(m_Live[id]);
+    RDCASSERT(ignoreLiveCheck || m_Live[id]);
   }
   else
   {
@@ -7476,8 +7484,10 @@ ShaderValue ThreadState::DDX(bool fine, Operation opCode, DXOp dxOpCode,
 
   ShaderVariable a;
   ShaderVariable b;
-  RDCASSERT(workgroup[m_QuadNeighbours[index + 1]].GetShaderVariable(dxilValue, opCode, dxOpCode, a));
-  RDCASSERT(workgroup[m_QuadNeighbours[index]].GetShaderVariable(dxilValue, opCode, dxOpCode, b));
+  RDCASSERT(GetShaderVariableFromLane(workgroup[m_QuadNeighbours[index + 1]], dxilValue, opCode,
+                                      dxOpCode, a));
+  RDCASSERT(GetShaderVariableFromLane(workgroup[m_QuadNeighbours[index + 0]], dxilValue, opCode,
+                                      dxOpCode, b));
   Sub(a, b, ret);
   return ret;
 }
@@ -7520,8 +7530,10 @@ ShaderValue ThreadState::DDY(bool fine, Operation opCode, DXOp dxOpCode,
 
   ShaderVariable a;
   ShaderVariable b;
-  RDCASSERT(workgroup[m_QuadNeighbours[index + 2]].GetShaderVariable(dxilValue, opCode, dxOpCode, a));
-  RDCASSERT(workgroup[m_QuadNeighbours[index]].GetShaderVariable(dxilValue, opCode, dxOpCode, b));
+  RDCASSERT(GetShaderVariableFromLane(workgroup[m_QuadNeighbours[index + 2]], dxilValue, opCode,
+                                      dxOpCode, a));
+  RDCASSERT(GetShaderVariableFromLane(workgroup[m_QuadNeighbours[index + 0]], dxilValue, opCode,
+                                      dxOpCode, b));
   Sub(a, b, ret);
   return ret;
 }
@@ -7594,12 +7606,12 @@ bool ThreadState::WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup)
       continue;
     if(block0 == ~0U)
     {
-      block0 = workgroup[i].m_Block;
+      block0 = workgroup[i].m_CurrentBlock;
       instr0 = workgroup[i].m_CurrentGlobalInstructionIdx;
       continue;
     }
     // not in the same basic block
-    if(workgroup[i].m_Block != block0)
+    if(workgroup[i].m_CurrentBlock != block0)
       return true;
     // not executing the same instruction
     if(workgroup[i].m_CurrentGlobalInstructionIdx != instr0)
@@ -7619,12 +7631,12 @@ bool ThreadState::SubgroupIsDiverged(const rdcarray<ThreadState> &workgroup,
       continue;
     if(block0 == ~0U)
     {
-      block0 = workgroup[lane].m_Block;
+      block0 = workgroup[lane].m_CurrentBlock;
       instr0 = workgroup[lane].m_CurrentGlobalInstructionIdx;
       continue;
     }
     // not in the same basic block
-    if(workgroup[lane].m_Block != block0)
+    if(workgroup[lane].m_CurrentBlock != block0)
       return true;
     // not executing the same instruction
     if(workgroup[lane].m_CurrentGlobalInstructionIdx != instr0)
@@ -7651,18 +7663,129 @@ bool ThreadState::QuadIsDiverged(const rdcarray<ThreadState> &workgroup,
       continue;
     if(block0 == ~0U)
     {
-      block0 = workgroup[i].m_Block;
+      block0 = workgroup[i].m_CurrentBlock;
       instr0 = workgroup[i].m_CurrentGlobalInstructionIdx;
       continue;
     }
     // not in the same basic block
-    if(workgroup[i].m_Block != block0)
+    if(workgroup[i].m_CurrentBlock != block0)
       return true;
     // not executing the same instruction
     if(workgroup[i].m_CurrentGlobalInstructionIdx != instr0)
       return true;
   }
   return false;
+}
+
+// The conditions where it is not safe to run another step are based on:
+// the current simulation state and the next instruction to simulate
+bool ThreadState::CanRunAnotherStep() const
+{
+  // Thread has finished
+  if(Finished())
+    return false;
+
+  // Current Simulated State that prevents running another step:
+  // Any control flow state changes i.e. branch, convergence point, partial convergence
+  if(m_Diverged)
+    return false;
+  if(!m_EnteredPoints.empty())
+    return false;
+  if(m_ConvergencePoint != INVALID_EXECUTION_POINT)
+    return false;
+  if(!m_PartialConvergencePoints.empty())
+    return false;
+
+  // current instructions that require full lockstep
+  const Instruction *inst = m_CurrentInstruction;
+  Operation opCode = inst->op;
+  DXOp dxOpCode = DXOp::NumOpCodes;
+  switch(opCode)
+  {
+    case Operation::Call:
+    {
+      const Function *callFunc = inst->getFuncCall();
+      if(callFunc->family == FunctionFamily::DXOp)
+      {
+        RDCASSERT(getival<DXOp>(inst->args[0], dxOpCode));
+        RDCASSERT(dxOpCode < DXOp::NumOpCodes, dxOpCode, DXOp::NumOpCodes);
+        switch(dxOpCode)
+        {
+          // no thread can continue until all threads execute the barrier
+          case DXOp::Barrier: return false;
+          default: break;
+        }
+      }
+    }
+    default: break;
+  }
+
+  // Next instructions that prevent running another step:
+  // any instruction that requires threads in the tangle to be in lockstep
+  inst = m_FunctionInfo->function->instructions[m_FunctionInstructionIdx];
+  opCode = inst->op;
+  dxOpCode = DXOp::NumOpCodes;
+  switch(opCode)
+  {
+    case Operation::Call:
+    {
+      const Function *callFunc = inst->getFuncCall();
+      if(callFunc->family == FunctionFamily::DXOp)
+      {
+        RDCASSERT(getival<DXOp>(inst->args[0], dxOpCode));
+        RDCASSERT(dxOpCode < DXOp::NumOpCodes, dxOpCode, DXOp::NumOpCodes);
+        switch(dxOpCode)
+        {
+          // thread barriers require threads in the tangle to be in lockstep
+          case DXOp::Barrier:
+            return false;
+            // Image operations require threads in the tangle to be in lockstep
+          case DXOp::Sample:
+          case DXOp::SampleBias:
+          case DXOp::SampleLevel:
+          case DXOp::SampleGrad:
+          case DXOp::SampleCmp:
+          case DXOp::SampleCmpBias:
+          case DXOp::SampleCmpLevel:
+          case DXOp::SampleCmpGrad:
+          case DXOp::SampleCmpLevelZero:
+          case DXOp::TextureGather:
+          case DXOp::TextureGatherCmp:
+          case DXOp::CalculateLOD: return false;
+          case DXOp::TextureLoad:
+            // TextureLoad does not require derivatives, does not have to be in lockstep
+            return true;
+            // derivatives require threads in the tangle to be in lockstep
+          case DXOp::DerivCoarseX:
+          case DXOp::DerivCoarseY:
+          case DXOp::DerivFineX:
+          case DXOp::DerivFineY: return false;
+          // wave/subgroup ops require threads in the tangle to be in lockstep
+          case DXOp::WaveIsFirstLane:
+          case DXOp::WaveReadLaneAt:
+          case DXOp::WaveReadLaneFirst:
+          case DXOp::WavePrefixOp:
+          case DXOp::WavePrefixBitCount:
+          case DXOp::WaveAllBitCount:
+          case DXOp::WaveAnyTrue:
+          case DXOp::WaveAllTrue:
+          case DXOp::WaveActiveBallot:
+          case DXOp::WaveActiveAllEqual:
+          case DXOp::WaveActiveOp:
+          case DXOp::WaveActiveBit:
+          case DXOp::WaveMatch:
+          case DXOp::WaveMultiPrefixOp:
+          case DXOp::WaveMultiPrefixBitCount:
+          case DXOp::QuadReadLaneAt:
+          case DXOp::QuadOp:
+          case DXOp::QuadVote: return false;
+          default: break;
+        }
+      }
+    }
+    default: break;
+  }
+  return true;
 }
 
 Debugger::DebugInfo::~DebugInfo()
@@ -10196,6 +10319,23 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
 
     if(isActiveThread)
       curActiveSteps++;
+
+    if(stepMode == StepThreadMode::RUN_SINGLE_STEP)
+      break;
+
+    if(stepMode == StepThreadMode::QUEUE_SINGLE_STEP)
+      break;
+
+    simulateStep = thread.CanRunAnotherStep();
+    if(simulateStep)
+    {
+      DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+    }
+    if(simulateStep)
+      thread.SetStepQueued();
+
+    if(stepMode == StepThreadMode::QUEUE_MULTIPLE_STEPS)
+      break;
   };
   // Update the number of simulation steps
   if(isActiveThread)
@@ -10227,10 +10367,10 @@ void Debugger::InternalStepThread(uint32_t lane)
       thread.ClearPendingDebugState();
     }
     thread.StepNext(true, m_Workgroup);
+    m_ActiveDebugState.nextInstruction = thread.GetActiveGlobalInstructionIdx();
     thread.FillCallstack(m_ActiveDebugState);
 
     const ShaderDebugState &pendingDebugState = thread.GetPendingDebugState();
-    m_ActiveDebugState.nextInstruction = pendingDebugState.nextInstruction;
     m_ActiveDebugState.flags = pendingDebugState.flags;
     m_ActiveDebugState.changes.append(pendingDebugState.changes);
     thread.ClearPendingDebugState();
@@ -10257,6 +10397,6 @@ void Debugger::QueueJob(uint32_t lane)
   CHECK_DEBUGGER_THREAD();
   ThreadState &thread = m_Workgroup[lane];
   thread.SetStepQueued();
-  StepThread(lane, StepThreadMode::RUN_SINGLE_STEP);
+  StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS);
 }
 };    // namespace DXILDebug
