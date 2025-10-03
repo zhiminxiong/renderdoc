@@ -2310,6 +2310,10 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             uint32_t numElems = 0;
             GlobalState::ViewFmt fmt;
 
+            // Helper lanes can't modify UAVs
+            if(!load && (resClass == ResourceClass::UAV) && m_Helper)
+              break;
+
             RDCASSERT((resClass == ResourceClass::SRV || resClass == ResourceClass::UAV), resClass);
             GlobalState::ResourceInfo resInfo;
             switch(resClass)
@@ -3669,15 +3673,19 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               RDCERR("Unhandled dxOpCode %s", ToStr(dxOpCode).c_str());
             }
 
-            // NULL resource or out of bounds
-            if((!texData && elemIdx >= numElems) || (texData && dataOffset >= dataSize))
+            // Helper lanes don't modify UAVs
+            if(!((resClass == ResourceClass::UAV) && m_Helper))
             {
-              RDCERR("Ignoring store to unbound resource or out of bounds store %s",
-                     GetArgumentName(1).c_str());
-            }
-            else
-            {
-              TypedUAVStore(fmt, (byte *)data, res.value);
+              // NULL resource or out of bounds
+              if((!texData && elemIdx >= numElems) || (texData && dataOffset >= dataSize))
+              {
+                RDCERR("Ignoring store to unbound resource or out of bounds store %s",
+                       GetArgumentName(1).c_str());
+              }
+              else
+              {
+                TypedUAVStore(fmt, (byte *)data, res.value);
+              }
             }
 
             // result is the original value
