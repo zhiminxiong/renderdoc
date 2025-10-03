@@ -1780,11 +1780,13 @@ void MemoryTracking::ConvertGlobalAllocToLocal(Id allocId)
   }
 }
 
-ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId)
+ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
+                         uint32_t laneIndex)
     : m_Debugger(debugger),
       m_GlobalState(globalState),
       m_Program(debugger.GetProgram()),
-      m_MaxSSAId(maxSSAId)
+      m_MaxSSAId(maxSSAId),
+      m_WorkgroupIndex(laneIndex)
 {
   m_ShaderType = m_Program.GetShaderType();
   m_Assigned.resize(maxSSAId);
@@ -1898,6 +1900,13 @@ void ThreadState::EnterEntryPoint(const Function *function, ShaderDebugState *st
     RDCASSERT(alloc.globalVarAlloc);
     if(!alloc.gsm)
       m_Memory.ConvertGlobalAllocToLocal(allocId);
+  }
+
+  // active lane : needs it own local backing memory for GSM
+  if(m_State)
+  {
+    for(Id id : m_GlobalState.groupSharedMemoryIds)
+      m_Memory.ConvertGlobalAllocToLocal(id);
   }
 
   m_State = NULL;
@@ -6844,7 +6853,7 @@ bool ThreadState::IsVariableAssigned(const Id id) const
   }
 }
 
-ShaderVariable ThreadState::GetBuiltin(ShaderBuiltin builtin)
+ShaderVariable ThreadState::GetBuiltin(ShaderBuiltin builtin) const
 {
   auto local = m_Builtins.find(builtin);
   if(local != m_Builtins.end())
@@ -8900,7 +8909,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   m_GlobalState.constantBlocksDatas = apiWrapper->GetConstantBlocksDatas();
 
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
-    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId));
+    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId, i));
 
   // Get the thread state from the API wrapper
   const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &threadsBuiltins =
@@ -8909,8 +8918,8 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
 
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
-    m_Workgroup[i].m_Builtins = threadsBuiltins[i];
-    m_Workgroup[i].m_Input = threadsInputs[i];
+    m_Workgroup[i].SetBuiltins(threadsBuiltins[i]);
+    m_Workgroup[i].SetInput(threadsInputs[i]);
   }
 
   ret->sourceVars = apiWrapper->GetSourceVars();
@@ -9461,13 +9470,12 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   uint32_t countOutputs = (uint32_t)outputs.size();
 
   // Make fake ShaderVariable struct to hold all the outputs
-  ShaderVariable &outStruct = activeState.m_Output.var;
+  ShaderVariable outStruct;
   outStruct.name = DXIL_FAKE_OUTPUT_STRUCT_NAME;
   outStruct.rows = 0;
   outStruct.columns = 0;
   outStruct.type = VarType::Struct;
   outStruct.members.resize(countOutputs);
-  activeState.m_Output.id = outputSSAId;
 
   for(uint32_t i = 0; i < countOutputs; ++i)
   {
@@ -9597,15 +9605,16 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   {
     // Make a single source variable mapping for the whole output struct
     SourceVariableMapping outputMapping;
-    outputMapping.name = activeState.m_Output.var.name;
+    outputMapping.name = outStruct.name;
     outputMapping.type = VarType::Struct;
     outputMapping.rows = 0;
     outputMapping.columns = 0;
     outputMapping.variables.resize(1);
-    outputMapping.variables[0].name = activeState.m_Output.var.name;
+    outputMapping.variables[0].name = outStruct.name;
     outputMapping.variables[0].type = DebugVariableType::Variable;
     ret->sourceVars.push_back(outputMapping);
   }
+  activeState.SetOutput(outputSSAId, outStruct);
 
   // Global source variable mappings valid for lifetime of the debug session
   for(const GlobalVariable &gv : m_GlobalState.globals)
@@ -9621,8 +9630,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
     ret->sourceVars.push_back(outputMapping);
   }
 
-  ret->inputs = {activeState.m_Input};
-  ret->inputs.append(activeState.m_Input.members);
+  ret->inputs = {activeState.GetInput()};
   ret->constantBlocks = m_GlobalState.constantBlocks;
   ret->readOnlyResources = m_GlobalState.readOnlyResources;
   ret->readWriteResources = m_GlobalState.readWriteResources;
@@ -9632,20 +9640,13 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
     ThreadState &lane = m_Workgroup[i];
-    lane.m_WorkgroupIndex = i;
-
     if(i != m_ActiveLaneIndex)
-    {
-      lane.m_Variables = activeState.m_Variables;
-      lane.m_Assigned = activeState.m_Assigned;
-      lane.m_Live = activeState.m_Live;
-      lane.m_IsGlobal = activeState.m_IsGlobal;
-    }
+      lane.InitialiseFromActive(activeState);
   }
 
   // Add the output struct to the global state
   if(countOutputs)
-    m_GlobalState.globals.push_back(activeState.m_Output);
+    m_GlobalState.globals.push_back(activeState.GetOutput());
 
   InitialiseWorkgroup();
 
@@ -9679,16 +9680,16 @@ void Debugger::InitialiseWorkgroup()
 
     if(m_Stage == ShaderStage::Pixel)
     {
-      lane.m_Helper = workgroupProperties[i][ThreadProperty::Helper] != 0;
-      lane.m_QuadLaneIndex = workgroupProperties[i][ThreadProperty::QuadLane];
-      lane.m_QuadId = workgroupProperties[i][ThreadProperty::QuadId];
+      lane.SetHelper(workgroupProperties[i][ThreadProperty::Helper] != 0);
+      lane.SetQuadLaneIndex(workgroupProperties[i][ThreadProperty::QuadLane]);
+      lane.SetQuadId(workgroupProperties[i][ThreadProperty::QuadId]);
     }
 
-    lane.m_Dead = workgroupProperties[i][ThreadProperty::Active] == 0;
-    lane.m_SubgroupIdx = workgroupProperties[i][ThreadProperty::SubgroupIdx];
+    lane.SetDead(workgroupProperties[i][ThreadProperty::Active] == 0);
+    lane.SetSubgroupIdx(workgroupProperties[i][ThreadProperty::SubgroupIdx]);
 
     // Only add active lanes to control flow
-    if(!lane.m_Dead)
+    if(!lane.IsDead())
       threadIds.push_back(i);
   }
 
@@ -9699,7 +9700,7 @@ void Debugger::InitialiseWorkgroup()
     rdcarray<uint32_t> processedQuads;
     for(uint32_t i = 0; i < threadsInWorkgroup; i++)
     {
-      uint32_t desiredQuad = m_Workgroup[i].m_QuadId;
+      uint32_t desiredQuad = m_Workgroup[i].GetQuadId();
 
       // ignore threads not in any quad
       if(desiredQuad == 0)
@@ -9721,14 +9722,14 @@ void Debugger::InitialiseWorkgroup()
       };
       for(uint32_t j = i + 1, t = 1; j < threadsInWorkgroup && t < 4; j++)
       {
-        if(m_Workgroup[j].m_QuadId == desiredQuad)
+        if(m_Workgroup[j].GetQuadId() == desiredQuad)
           threads[t++] = j;
       }
 
       // now swizzle the threads to know each other
       for(uint32_t src = 0; src < 4; src++)
       {
-        uint32_t lane = m_Workgroup[threads[src]].m_QuadLaneIndex;
+        uint32_t lane = m_Workgroup[threads[src]].GetQuadLaneIndex();
 
         if(lane >= 4)
           continue;
@@ -9738,7 +9739,7 @@ void Debugger::InitialiseWorkgroup()
           if(threads[dst] == ~0U)
             continue;
 
-          m_Workgroup[threads[dst]].m_QuadNeighbours[lane] = threads[src];
+          m_Workgroup[threads[dst]].SetQuadNeighbours(lane, threads[src]);
         }
       }
     }
@@ -9765,7 +9766,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
       {
         thread.EnterEntryPoint(m_EntryPointFunction, &initial);
         thread.FillCallstack(initial);
-        initial.nextInstruction = thread.m_ActiveGlobalInstructionIdx;
+        initial.nextInstruction = thread.GetActiveGlobalInstructionIdx();
         startPoint = initial.nextInstruction;
       }
       else
@@ -9773,10 +9774,6 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         thread.EnterEntryPoint(m_EntryPointFunction, NULL);
       }
     }
-
-    // active lane : needs it own local backing memory, copied from global at the start
-    for(Id id : m_GlobalState.groupSharedMemoryIds)
-      active.m_Memory.ConvertGlobalAllocToLocal(id);
 
     // globals won't be filled out by entering the entry point, ensure their change is registered.
     for(const GlobalVariable &gv : m_GlobalState.globals)
@@ -9887,9 +9884,9 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
           thread.StepNext(NULL, m_ApiWrapper, m_Workgroup, activeMask);
         }
 
-        threadExecutionStates[threadId] = thread.m_EnteredPoints;
+        threadExecutionStates[threadId] = thread.GetEnteredPoints();
 
-        uint32_t threadConvergencePoint = thread.m_ConvergencePoint;
+        const uint32_t threadConvergencePoint = thread.GetConvergencePoint();
         // the thread activated a new convergence point
         if(threadConvergencePoint != INVALID_EXECUTION_POINT)
         {
@@ -9905,11 +9902,12 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
           }
           ++countConvergePointThreads;
         }
-        if(!thread.m_PartialConvergencePoints.empty())
+        const DXIL::BlockArray *partialConvergentPoints = thread.GetPartialConvergencePoints();
+        if(!partialConvergentPoints->empty())
         {
           if(newPartialConvergentPoints == NULL)
           {
-            newPartialConvergentPoints = &thread.m_PartialConvergencePoints;
+            newPartialConvergentPoints = partialConvergentPoints;
             RDCASSERT(newPartialConvergentPoints);
             if(newPartialConvergentPoints)
               RDCASSERT(!newPartialConvergentPoints->empty());
@@ -9917,7 +9915,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
           else
           {
             // All the threads in the tangle should set the same partial convergence points
-            RDCASSERT(*newPartialConvergentPoints == thread.m_PartialConvergencePoints);
+            RDCASSERT(*newPartialConvergentPoints == *partialConvergentPoints);
           }
           ++countPartialConvergePointThreads;
         }
@@ -9925,7 +9923,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         if(thread.Finished())
           tangle.SetThreadDead(threadId);
 
-        if(thread.m_Diverged)
+        if(thread.GetDiverged())
           ++countDivergedThreads;
       }
       for(size_t lane = 0; lane < m_Workgroup.size(); lane++)
@@ -9937,7 +9935,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
       if(hasDebugState)
       {
         ThreadState &thread = m_Workgroup[m_ActiveLaneIndex];
-        state.nextInstruction = thread.m_ActiveGlobalInstructionIdx;
+        state.nextInstruction = thread.GetActiveGlobalInstructionIdx();
         thread.FillCallstack(state);
         ret.push_back(std::move(state));
       }
@@ -9972,7 +9970,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
     }
     if(!anyActiveThreads)
     {
-      active.m_Dead = true;
+      active.SetDead(true);
       m_ControlFlow.UpdateState(threadExecutionStates);
       RDCERR("No active threads in any tangle, killing active thread to terminate the debugger");
     }

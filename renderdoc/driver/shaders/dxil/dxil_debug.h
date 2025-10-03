@@ -327,16 +327,59 @@ struct MemoryTracking
 
 struct ThreadState
 {
-  ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId);
+  ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
+              uint32_t laneIndex);
   ~ThreadState();
 
-  void EnterFunction(const DXIL::Function *function, const rdcarray<DXIL::Value *> &args);
   void EnterEntryPoint(const DXIL::Function *function, ShaderDebugState *state);
   void StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
                 const rdcarray<ThreadState> &workgroup, const rdcarray<bool> &activeMask);
   void StepOverNopInstructions();
+  void FillCallstack(ShaderDebugState &state);
+  void RetireLiveIDs();
 
   bool Finished() const;
+  const ShaderVariable &GetInput() const { return m_Input; }
+  const GlobalVariable &GetOutput() const { return m_Output; }
+  bool IsDead() const { return m_Dead; }
+  uint32_t GetQuadId() const { return m_QuadId; }
+  uint32_t GetQuadLaneIndex() const { return m_QuadLaneIndex; }
+  uint32_t GetActiveGlobalInstructionIdx() const { return m_ActiveGlobalInstructionIdx; }
+  DXIL::BlockArray GetEnteredPoints() const { return m_EnteredPoints; }
+  uint32_t GetConvergencePoint() const { return m_ConvergencePoint; }
+  bool GetDiverged() const { return m_Diverged; }
+  const DXIL::BlockArray *GetPartialConvergencePoints() const
+  {
+    return &m_PartialConvergencePoints;
+  }
+
+  void SetBuiltins(const BuiltinInputs &builtins) { m_Builtins = builtins; }
+  void SetInput(const ShaderVariable &input) { m_Input = input; }
+  void SetOutput(const Id id, const ShaderVariable &var)
+  {
+    m_Output.id = id;
+    m_Output.var = var;
+  }
+  void SetDead(bool dead) { m_Dead = dead; }
+  void SetHelper(bool helper) { m_Helper = helper; }
+  void SetQuadLaneIndex(uint32_t quadLaneIndex) { m_QuadLaneIndex = quadLaneIndex; }
+  void SetQuadId(uint32_t quadId) { m_QuadId = quadId; }
+  void SetSubgroupIdx(uint32_t subgroupIdx) { m_SubgroupIdx = subgroupIdx; }
+  void SetQuadNeighbours(uint32_t lane, uint32_t index) { m_QuadNeighbours[lane] = index; }
+
+  void InitialiseFromActive(const ThreadState &active)
+  {
+    m_Variables = active.m_Variables;
+    m_Assigned = active.m_Assigned;
+    m_Live = active.m_Live;
+    m_IsGlobal = active.m_IsGlobal;
+  }
+
+  void UpdateBackingMemoryFromVariable(void *ptr, uint64_t &allocSize, const ShaderVariable &var);
+
+private:
+  void EnterFunction(const DXIL::Function *function, const rdcarray<DXIL::Value *> &args);
+
   bool InUniformBlock() const;
 
   bool JumpToBlock(const DXIL::Block *target, bool divergencePoint);
@@ -349,8 +392,6 @@ struct ThreadState
   rdcstr GetArgumentName(uint32_t i) const;
   Id GetArgumentId(uint32_t i) const;
   ResourceReferenceInfo GetResource(Id handleId, bool &annotatedHandle);
-  void FillCallstack(ShaderDebugState &state);
-  void RetireLiveIDs();
 
   bool GetShaderVariable(const DXIL::Value *dxilValue, DXIL::Operation op, DXIL::DXOp dxOpCode,
                          ShaderVariable &var, bool flushDenormInput = true) const
@@ -369,7 +410,6 @@ struct ThreadState
   bool GetPhiVariable(const Id &id, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
                       ShaderVariable &var) const;
   bool GetVariableHelper(DXIL::Operation op, DXIL::DXOp dxOpCode, ShaderVariable &var) const;
-  void UpdateBackingMemoryFromVariable(void *ptr, uint64_t &allocSize, const ShaderVariable &var);
   void UpdateMemoryVariableFromBackingMemory(Id memoryId, const void *ptr);
   void UpdateGlobalBackingMemory(Id ptrId, const MemoryTracking::Pointer &ptr,
                                  const MemoryTracking::Allocation &allocation,
@@ -397,7 +437,7 @@ struct ThreadState
                                ShaderVariable &var, bool flushDenormInput, bool isLive) const;
   bool IsVariableAssigned(const Id id) const;
 
-  ShaderVariable GetBuiltin(ShaderBuiltin builtin);
+  ShaderVariable GetBuiltin(ShaderBuiltin builtin) const;
   uint32_t GetSubgroupActiveLanes(const rdcarray<bool> &activeMask,
                                   const rdcarray<ThreadState> &workgroup,
                                   rdcarray<uint32_t> &activeLanes) const;
@@ -421,7 +461,7 @@ struct ThreadState
   ShaderVariable m_Input;
   GlobalVariable m_Output;
 
-  // Known SSA ShaderVariables
+  // Known SSA ShaderVariables : this must be a thread safe container
   rdcarray<ShaderVariable> m_Variables;
   // SSA Variables captured when a branch happens for use in phi nodes
   std::map<Id, ShaderVariable> m_PhiVariables;
@@ -429,7 +469,7 @@ struct ThreadState
   rdcarray<bool> m_Live;
   // Globals variables at the current scope
   rdcarray<bool> m_IsGlobal;
-  // If the variable has been assigned a value
+  // If the variable has been assigned a value : this must be a thread safe container
   rdcarray<bool> m_Assigned;
   // Annotated handle properties
   std::map<Id, AnnotationProperties> m_AnnotatedProperties;
