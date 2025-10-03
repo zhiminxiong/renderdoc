@@ -5423,6 +5423,9 @@ bool ThreadState::CanRunAnotherStep() const
     case Op::ImageSampleProjImplicitLod:
     case Op::ImageSampleProjDrefExplicitLod:
     case Op::ImageSampleProjDrefImplicitLod: return false;
+    case Op::ImageRead:
+      // ImageRead does not require derivatives, does not have to be in lockstep
+      return true;
     // derivatives require threads in the tangle to be in lockstep
     case Op::DPdx:
     case Op::DPdy:
