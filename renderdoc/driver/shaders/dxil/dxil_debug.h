@@ -334,7 +334,7 @@ struct ThreadState
   GlobalVariable m_Output;
 
   // Known SSA ShaderVariables
-  std::map<Id, ShaderVariable> m_Variables;
+  rdcarray<ShaderVariable> m_Variables;
   // SSA Variables captured when a branch happens for use in phi nodes
   std::map<Id, ShaderVariable> m_PhiVariables;
   // Live variables at the current scope

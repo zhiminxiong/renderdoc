@@ -1756,6 +1756,7 @@ ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uin
   m_ShaderType = m_Program.GetShaderType();
   m_Assigned.resize(maxSSAId);
   m_Live.resize(maxSSAId);
+  m_Variables.resize(maxSSAId);
 }
 
 ThreadState::~ThreadState()
@@ -2825,8 +2826,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               break;
 
             // Find the cbuffer variable from the handleId
-            auto itVar = m_Variables.find(handleId);
-            if(itVar == m_Variables.end())
+            if(!IsVariableAssigned(handleId))
             {
               RDCERR("Unknown cbuffer handle %u", handleId);
               break;
@@ -2837,7 +2837,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             uint32_t regIndex = arg.value.u32v[0];
 
             RDCASSERT(m_Live[handleId]);
-            RDCASSERT(IsVariableAssigned(handleId));
+            const ShaderVariable &handleVar = m_Variables[handleId];
 
             result.value.u32v[0] = 0;
             result.value.u32v[1] = 0;
@@ -2871,13 +2871,12 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               }
               else
               {
-                RDCERR("Failed to find data for constant block data for %s",
-                       itVar->second.name.c_str());
+                RDCERR("Failed to find data for constant block data for %s", handleVar.name.c_str());
               }
             }
             else
             {
-              RDCERR("Failed to find data for cbuffer %s", itVar->second.name.c_str());
+              RDCERR("Failed to find data for cbuffer %s", handleVar.name.c_str());
             }
 
             // DXIL will create a vector of a single type with total size of 16-bytes
@@ -5231,14 +5230,12 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
       Id src = GetArgumentId(0);
       if(src == DXILDebug::INVALID_ID)
         break;
-      auto itVar = m_Variables.find(src);
-      if(itVar == m_Variables.end())
+      if(!IsVariableAssigned(src))
       {
         RDCERR("Unknown variable Id %u", src);
         break;
       }
-      RDCASSERT(IsVariableAssigned(src));
-      const ShaderVariable &srcVal = itVar->second;
+      const ShaderVariable &srcVal = m_Variables[src];
       RDCASSERT(srcVal.members.empty());
       RDCASSERTEQUAL(inst.args.size(), 2);
       uint32_t idx = ~0U;
@@ -5408,14 +5405,12 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
       Id ptrId = GetArgumentId(0);
       if(ptrId == DXILDebug::INVALID_ID)
         break;
-      auto itVar = m_Variables.find(ptrId);
-      if(itVar == m_Variables.end())
+      if(!IsVariableAssigned(ptrId))
       {
         RDCERR("Unknown variable Id %u", ptrId);
         break;
       }
 
-      RDCASSERT(IsVariableAssigned(ptrId));
       if(m_Memory.m_Allocations.count(ptrId) == 0)
       {
         RDCERR("Unknown memory allocation Id %u", ptrId);
@@ -6540,6 +6535,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
 
     RDCASSERT(resultId < m_Live.size());
     m_Live[resultId] = true;
+    RDCASSERT(resultId < m_Variables.size());
     m_Variables[resultId] = result;
     RDCASSERT(resultId < m_Assigned.size());
     m_Assigned[resultId] = true;
@@ -6768,12 +6764,9 @@ bool ThreadState::GetLiveVariable(const Id &id, Operation op, DXOp dxOpCode, Sha
   {
     RDCERR("Unknown Live Variable Id %d", id);
   }
-  RDCASSERT(IsVariableAssigned(id));
-
-  auto it = m_Variables.find(id);
-  if(it != m_Variables.end())
+  if(IsVariableAssigned(id))
   {
-    var = it->second;
+    var = m_Variables[id];
     return GetVariableHelper(op, dxOpCode, var);
   }
   RDCERR("Unknown Variable %d", id);
@@ -7243,21 +7236,20 @@ DXILDebug::Id ThreadState::GetArgumentId(uint32_t i) const
 ResourceReferenceInfo ThreadState::GetResource(Id handleId, bool &annotatedHandle)
 {
   ResourceReferenceInfo resRefInfo;
-  auto it = m_Variables.find(handleId);
-  if(it != m_Variables.end())
+  if(IsVariableAssigned(handleId))
   {
     RDCASSERT(m_Live[handleId]);
     RDCASSERT(IsVariableAssigned(handleId));
-    const ShaderVariable &var = it->second;
-    bool directAccess = var.IsDirectAccess();
+    const ShaderVariable &handleVar = m_Variables[handleId];
+    bool directAccess = handleVar.IsDirectAccess();
     ShaderBindIndex bindIndex;
     ShaderDirectAccess access;
-    annotatedHandle = IsAnnotatedHandle(var);
+    annotatedHandle = IsAnnotatedHandle(handleVar);
     RDCASSERT(!annotatedHandle || (m_AnnotatedProperties.count(handleId) == 1));
-    rdcstr alias = var.name;
+    rdcstr alias = handleVar.name;
     if(!directAccess)
     {
-      bindIndex = var.GetBindIndex();
+      bindIndex = handleVar.GetBindIndex();
       const ResourceReference *resRef = m_Program.GetResourceReference(handleId);
       if(resRef)
       {
@@ -7271,7 +7263,7 @@ ResourceReferenceInfo ThreadState::GetResource(Id handleId, bool &annotatedHandl
     }
     else
     {
-      access = var.GetDirectAccess();
+      access = handleVar.GetDirectAccess();
       // Direct heap access bindings must be annotated
       RDCASSERT(annotatedHandle);
       auto directHeapAccessBinding = m_DirectHeapAccessBindings.find(handleId);
@@ -7282,7 +7274,7 @@ ResourceReferenceInfo ThreadState::GetResource(Id handleId, bool &annotatedHandl
       }
       resRefInfo = directHeapAccessBinding->second;
     }
-    MarkResourceAccess(var);
+    MarkResourceAccess(handleVar);
     return resRefInfo;
   }
 
@@ -7420,14 +7412,13 @@ void ThreadState::ExecuteMemoryBarrier()
     RDCASSERT(localMem->second.globalVarAlloc);
     RDCASSERT(localMem->second.localMemory);
 
-    auto localVar = m_Variables.find(id);
-    if(localVar == m_Variables.end())
+    if(!IsVariableAssigned(id))
     {
       RDCERR("Unknown local memory allocation for GSM Id %u", id);
       continue;
     }
     ShaderVariableChange change;
-    ShaderVariable &local = localVar->second;
+    const ShaderVariable &local = m_Variables[id];
     change.before = local;
     const void *globalBackingMemory = globalMem->second.backingMemory;
     UpdateMemoryVariableFromBackingMemory(id, globalBackingMemory);
