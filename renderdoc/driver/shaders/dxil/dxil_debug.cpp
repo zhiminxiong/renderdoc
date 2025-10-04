@@ -1838,13 +1838,14 @@ bool ThreadState::InUniformBlock() const
   return m_FunctionInfo->uniformBlocks.contains(m_Block);
 }
 
-// Must be called from the replay manager thread (the debugger thread)
+// Must run on the device thread for the active simulation thread
 void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarray<bool> &newLive)
 {
-  THREADSTATE_CHECK_DEBUGGER_THREAD();
   // nothing to do if we aren't tracking into a state
   if(!m_HasDebugState)
     return;
+
+  THREADSTATE_CHECK_DEBUGGER_THREAD();
 
   // all oldLive (except globals) are going out of scope. all newLive (except globals) are coming
   // into scope
@@ -1868,10 +1869,12 @@ void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarr
   }
 }
 
-// Must be called from the replay manager thread (the debugger thread)
+// Must run on the device thread for the active simulation thread
 void ThreadState::EnterFunction(const Function *function, const rdcarray<Value *> &args)
 {
-  THREADSTATE_CHECK_DEBUGGER_THREAD();
+  if(m_HasDebugState)
+    THREADSTATE_CHECK_DEBUGGER_THREAD();
+
   StackFrame *frame = new StackFrame(function);
   m_FunctionInstructionIdx = 0;
   m_FunctionInfo = m_Debugger.GetFunctionInfo(function);
@@ -2179,7 +2182,8 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             // GetDimensions(handle,mipLevel)
             Id handleId = GetArgumentId(1);
             bool annotatedHandle;
-            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle);
+            ShaderVariable handleVar;
+            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
             if(!resRefInfo.Valid())
               break;
 
@@ -2192,7 +2196,13 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
               RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, arg));
               mipLevel = arg.value.u32v[0];
             }
-            data = m_Debugger.GetResourceInfo(resRefInfo.resClass, binding, mipLevel);
+            if(m_Debugger.GetResourceInfo(resRefInfo.resClass, binding, mipLevel, data) ==
+               DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
+            MarkResourceAccess(handleVar);
 
             // Returns a vector with: w, h, d, numLevels
             result.value = data.value;
@@ -2212,15 +2222,22 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             // Texture2DMSGetSamplePosition(srv,index)
             Id handleId = GetArgumentId(1);
             bool annotatedHandle;
-            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle);
+            ShaderVariable handleVar;
+            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
             if(!resRefInfo.Valid())
               break;
 
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, arg));
             const char *opString = ToStr(dxOpCode).c_str();
-            ShaderVariable data =
-                m_Debugger.GetSampleInfo(resRefInfo.resClass, resRefInfo.binding, opString);
+            ShaderVariable data;
+            if(m_Debugger.GetSampleInfo(resRefInfo.resClass, resRefInfo.binding, opString, data) ==
+               DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
+            MarkResourceAccess(handleVar);
 
             uint32_t sampleCount = data.value.u32v[0];
             uint32_t sampleIndex = arg.value.u32v[0];
@@ -2240,14 +2257,24 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::RenderTargetGetSampleCount:
           {
             const char *opString = ToStr(dxOpCode).c_str();
-            ShaderVariable data = m_Debugger.GetRenderTargetSampleInfo(opString);
+            ShaderVariable data;
+            if(m_Debugger.GetRenderTargetSampleInfo(opString, data) == DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
             result.value.u32v[0] = data.value.u32v[0];
             break;
           }
           case DXOp::RenderTargetGetSamplePosition:
           {
             const char *opString = ToStr(dxOpCode).c_str();
-            ShaderVariable data = m_Debugger.GetRenderTargetSampleInfo(opString);
+            ShaderVariable data;
+            if(m_Debugger.GetRenderTargetSampleInfo(opString, data) == DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
 
@@ -2281,9 +2308,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           {
             Id handleId = GetArgumentId(1);
             bool annotatedHandle;
-            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle);
+            ShaderVariable handleVar;
+            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
             if(!resRefInfo.Valid())
               break;
+            MarkResourceAccess(handleVar);
 
             PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result);
             eventFlags |= ShaderEvents::SampleLoadGather;
@@ -2304,9 +2333,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             // RawBufferStore(uav,index,elementOffset,value0,value1,value2,value3,mask,alignment)
             const Id handleId = GetArgumentId(1);
             bool annotatedHandle;
-            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle);
+            ShaderVariable handleVar;
+            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
             if(!resRefInfo.Valid())
               break;
+            MarkResourceAccess(handleVar);
 
             ResourceClass resClass = resRefInfo.resClass;
             // SRV TextureLoad is done on the GPU
@@ -2590,11 +2621,22 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
             // convert the direct heap access binding into ResourceReferenceIndo
             BindingSlot slot(heapType, descriptorIndex);
-            ResourceReferenceInfo resRefInfo = m_Debugger.GetResourceReferenceInfo(slot);
+            ResourceReferenceInfo resRefInfo;
+            if(m_Debugger.GetResourceReferenceInfo(slot, resRefInfo) == DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
+            ShaderDirectAccess access;
+            if(m_Debugger.GetShaderDirectAccess(resRefInfo.descType, slot, access) ==
+               DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
             RDCASSERT(m_DirectHeapAccessBindings.count(resultId) == 0);
             m_DirectHeapAccessBindings[resultId] = resRefInfo;
 
-            ShaderDirectAccess access = m_Debugger.GetShaderDirectAccess(resRefInfo.descType, slot);
             // Default to unannotated handle
             ClearAnnotatedHandle(result);
             rdcstr resName = m_Program.GetHandleAlias(result.name);
@@ -3513,9 +3555,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             // AtomicCompareExchange(handle,offset0,offset1,offset2,compareValue,newValue)
             const Id handleId = GetArgumentId(1);
             bool annotatedHandle;
-            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle);
+            ShaderVariable handleVar;
+            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
             if(!resRefInfo.Valid())
               break;
+            MarkResourceAccess(handleVar);
 
             ResourceClass resClass = resRefInfo.resClass;
             // handle must be a UAV
@@ -6662,6 +6706,18 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
     case Operation::InsertValue: RDCERR("Unhandled LLVM opcode %s", ToStr(opCode).c_str()); break;
   };
 
+  // Waiting for result i.e. from the GPU or replay thread
+  if(IsPendingResultPending())
+  {
+    m_FunctionInstructionIdx--;
+    // This instruction is being deferred clear the pending debug state
+    if(m_HasDebugState)
+      ClearPendingDebugState();
+    m_HasDebugState = false;
+    return true;
+  }
+  SetPendingResultUnknown();
+
   // Update the result variable
   if(resultId == DXILDebug::INVALID_ID)
     RDCASSERT(result.name.empty());
@@ -7158,9 +7214,11 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
     // Sampler is in arg 2
     Id samplerId = GetArgumentId(2);
     bool annotatedHandle;
-    ResourceReferenceInfo samplerRef = GetResource(samplerId, annotatedHandle);
+    ShaderVariable handleVar;
+    ResourceReferenceInfo samplerRef = GetResource(samplerId, annotatedHandle, handleVar);
     if(!samplerRef.Valid())
       return;
+    MarkResourceAccess(handleVar);
 
     RDCASSERTEQUAL(samplerRef.resClass, ResourceClass::Sampler);
     // samplerRef->resourceBase must be a Sampler
@@ -7382,14 +7440,15 @@ DXILDebug::Id ThreadState::GetArgumentId(uint32_t i) const
   return GetSSAId(arg);
 }
 
-ResourceReferenceInfo ThreadState::GetResource(Id handleId, bool &annotatedHandle)
+ResourceReferenceInfo ThreadState::GetResource(Id handleId, bool &annotatedHandle,
+                                               ShaderVariable &handleVar) const
 {
   ResourceReferenceInfo resRefInfo;
   if(IsVariableAssigned(handleId))
   {
     RDCASSERT(m_Live[handleId]);
     RDCASSERT(IsVariableAssigned(handleId));
-    const ShaderVariable &handleVar = m_Variables[handleId];
+    handleVar = m_Variables[handleId];
     bool directAccess = handleVar.IsDirectAccess();
     ShaderBindIndex bindIndex;
     ShaderDirectAccess access;
@@ -7423,7 +7482,6 @@ ResourceReferenceInfo ThreadState::GetResource(Id handleId, bool &annotatedHandl
       }
       resRefInfo = directHeapAccessBinding->second;
     }
-    MarkResourceAccess(handleVar);
     return resRefInfo;
   }
 
@@ -7694,6 +7752,10 @@ bool ThreadState::CanRunAnotherStep() const
   if(m_ConvergencePoint != INVALID_EXECUTION_POINT)
     return false;
   if(!m_PartialConvergencePoints.empty())
+    return false;
+
+  // Any pending result i.e. pending GPU math operation, need to run on the device thread
+  if(IsPendingResultPending())
     return false;
 
   // current instructions that require full lockstep
@@ -9079,6 +9141,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   m_Steps = 0;
   m_Stage = shaderStage;
   m_EntryPointInterface = m_Program->GetEntryPointInterface();
+  m_QueuedDeviceThreadSteps.resize(threadsInWorkgroup);
 
   uint32_t outputSSAId = m_Program->m_NextSSAId;
   uint32_t maxSSAId = outputSSAId + 1;
@@ -9093,7 +9156,10 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   m_GlobalState.constantBlocksDatas = apiWrapper->GetConstantBlocksDatas();
 
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
+  {
     m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId, i, threadsInWorkgroup));
+    m_QueuedDeviceThreadSteps[i] = false;
+  }
 
   // Get the thread state from the API wrapper
   const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &threadsBuiltins =
@@ -10063,6 +10129,8 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
     do
     {
+      ProcessQueuedDeviceThreadSteps();
+
       allStepsCompleted = true;
       for(const Tangle &tangle : tangles)
       {
@@ -10259,42 +10327,64 @@ bool Debugger::CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData r
                                              gatherChannel, instructionIdx, output);
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-ShaderVariable Debugger::GetResourceInfo(DXIL::ResourceClass resClass,
-                                         const DXDebug::BindingSlot &slot, uint32_t mipLevel) const
+// Called from any thread
+DeviceOpResult Debugger::GetResourceInfo(DXIL::ResourceClass resClass,
+                                         const DXDebug::BindingSlot &slot, uint32_t mipLevel,
+                                         ShaderVariable &result) const
 {
+  if(!IsDeviceThread())
+    return DeviceOpResult::NeedsDevice;
+
   CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->GetResourceInfo(resClass, slot, mipLevel);
+  result = m_ApiWrapper->GetResourceInfo(resClass, slot, mipLevel);
+  return DeviceOpResult::Succeeded;
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-ShaderVariable Debugger::GetSampleInfo(DXIL::ResourceClass resClass,
-                                       const DXDebug::BindingSlot &slot, const char *opString) const
+// Called from any thread
+DeviceOpResult Debugger::GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                                       const char *opString, ShaderVariable &result) const
 {
+  if(!IsDeviceThread())
+    return DeviceOpResult::NeedsDevice;
+
   CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->GetSampleInfo(resClass, slot, opString);
+  result = m_ApiWrapper->GetSampleInfo(resClass, slot, opString);
+  return DeviceOpResult::Succeeded;
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-ShaderVariable Debugger::GetRenderTargetSampleInfo(const char *opString) const
+// Called from any thread
+DeviceOpResult Debugger::GetRenderTargetSampleInfo(const char *opString, ShaderVariable &result) const
 {
+  if(!IsDeviceThread())
+    return DeviceOpResult::NeedsDevice;
+
   CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->GetRenderTargetSampleInfo(opString);
+  result = m_ApiWrapper->GetRenderTargetSampleInfo(opString);
+  return DeviceOpResult::Succeeded;
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-ResourceReferenceInfo Debugger::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
+// Called from any thread
+DeviceOpResult Debugger::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot,
+                                                  ResourceReferenceInfo &result) const
 {
+  if(!IsDeviceThread())
+    return DeviceOpResult::NeedsDevice;
+
   CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->GetResourceReferenceInfo(slot);
+  result = m_ApiWrapper->GetResourceReferenceInfo(slot);
+  return DeviceOpResult::Succeeded;
 }
 
-// Must be called from the replay manager thread (the debugger thread)
-ShaderDirectAccess Debugger::GetShaderDirectAccess(DescriptorType type,
-                                                   const DXDebug::BindingSlot &slot) const
+// Called from any thread
+DeviceOpResult Debugger::GetShaderDirectAccess(DescriptorType type, const DXDebug::BindingSlot &slot,
+                                               ShaderDirectAccess &result) const
 {
+  if(!IsDeviceThread())
+    return DeviceOpResult::NeedsDevice;
+
   CHECK_DEBUGGER_THREAD();
-  return m_ApiWrapper->GetShaderDirectAccess(type, slot);
+  result = m_ApiWrapper->GetShaderDirectAccess(type, slot);
+  return DeviceOpResult::Succeeded;
 }
 
 // Called from any thread
@@ -10316,6 +10406,8 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
       InternalStepThread(lane);
       thread.ClearPendingDebugState();
     }
+    if(thread.StepNeedsDeviceThread())
+      break;
 
     if(isActiveThread)
       curActiveSteps++;
@@ -10343,6 +10435,14 @@ void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
 
   DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
 
+  // The queueing has to be when the thread is not being simulated
+  if(thread.StepNeedsDeviceThread())
+  {
+    DXIL_DEBUG_RDCASSERT(!simulateStep);
+    QueueDeviceThreadStep(lane);
+    return;
+  }
+
   if(simulateStep)
   {
     DXIL_DEBUG_RDCASSERTEQUAL(stepMode, StepThreadMode::QUEUE_MULTIPLE_STEPS);
@@ -10367,6 +10467,8 @@ void Debugger::InternalStepThread(uint32_t lane)
       thread.ClearPendingDebugState();
     }
     thread.StepNext(true, m_Workgroup);
+    if(thread.StepNeedsDeviceThread())
+      return;
     m_ActiveDebugState.nextInstruction = thread.GetActiveGlobalInstructionIdx();
     thread.FillCallstack(m_ActiveDebugState);
 
@@ -10388,6 +10490,8 @@ void Debugger::InternalStepThread(uint32_t lane)
   else
   {
     thread.StepNext(false, m_Workgroup);
+    if(thread.StepNeedsDeviceThread())
+      return;
   }
 }
 
@@ -10397,6 +10501,34 @@ void Debugger::QueueJob(uint32_t lane)
   CHECK_DEBUGGER_THREAD();
   ThreadState &thread = m_Workgroup[lane];
   thread.SetStepQueued();
-  StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS);
+  // StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS);
+  StepThread(lane, StepThreadMode::RUN_SINGLE_STEP);
+}
+
+// Can be called from any thread
+void Debugger::QueueDeviceThreadStep(uint32_t lane)
+{
+  ThreadState &thread = m_Workgroup[lane];
+  DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+  thread.SetStepQueued();
+  DXIL_DEBUG_RDCASSERT(!m_QueuedDeviceThreadSteps[lane]);
+  m_QueuedDeviceThreadSteps[lane] = true;
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::ProcessQueuedDeviceThreadSteps()
+{
+  CHECK_DEBUGGER_THREAD();
+  for(uint32_t lane = 0; lane < m_QueuedDeviceThreadSteps.size(); ++lane)
+  {
+    if(m_QueuedDeviceThreadSteps[lane])
+    {
+      m_QueuedDeviceThreadSteps[lane] = false;
+      ThreadState &thread = m_Workgroup[lane];
+      thread.SetPendingResultUnknown();
+      DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+      StepThread(lane, StepThreadMode::QUEUE_MULTIPLE_STEPS);
+    }
+  }
 }
 };    // namespace DXILDebug

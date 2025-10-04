@@ -67,6 +67,14 @@ struct GlobalState;
 // D3D12 descriptors are equal sized and treated as effectively one byte in size
 const uint32_t D3D12_DESCRIPTOR_BYTESIZE = 1;
 
+enum class DeviceOpResult : uint32_t
+{
+  Unknown,
+  Succeeded,
+  Failed,
+  NeedsDevice,
+};
+
 inline void AtomicStore(int32_t *var, int32_t newVal)
 {
   int32_t oldVal = *var;
@@ -385,6 +393,7 @@ struct ThreadState
     return &m_PartialConvergencePoints;
   }
   const ShaderDebugState &GetPendingDebugState() const { return m_PendingDebugState; }
+  bool StepNeedsDeviceThread() const { return (AtomicLoad(&atomic_stepNeedsDeviceThread) == 1); }
 
   void SetBuiltins(const BuiltinInputs &builtins) { m_Builtins = builtins; }
   void SetInput(const ShaderVariable &input) { m_Input = input; }
@@ -410,7 +419,12 @@ struct ThreadState
     m_CurrentBlock = m_Block;
   }
   void SetSimulationStepCompleted() { AtomicStore(&atomic_isSimulationStepActive, 0); }
-  void SetStepQueued() { AtomicStore(&atomic_isSimulationStepActive, 1); }
+  void SetStepQueued()
+  {
+    AtomicStore(&atomic_isSimulationStepActive, 1);
+    AtomicStore(&atomic_stepNeedsDeviceThread, 0);
+  }
+  void SetPendingResultUnknown() { SetPendingResultStatus(PendingResultStatus::Unknown); }
 
   void InitialiseFromActive(const ThreadState &active)
   {
@@ -428,7 +442,50 @@ struct ThreadState
     m_PendingDebugState.flags = ShaderEvents::NoEvent;
     m_PendingDebugState.nextInstruction = 0;
   }
+
+  enum class PendingResultStatus : int32_t
+  {
+    Unknown,
+    Pending,
+    Ready,
+    Stepped,
+  };
+
 private:
+  PendingResultStatus GetPendingResultStatus() const
+  {
+    return (PendingResultStatus)AtomicLoad(&atomic_pendingResultStatus);
+  }
+
+  void SetPendingResultStatus(PendingResultStatus status)
+  {
+    AtomicStore(&atomic_pendingResultStatus, (int32_t)status);
+  }
+
+  bool IsPendingResultPending() const
+  {
+    return GetPendingResultStatus() == PendingResultStatus::Pending;
+  }
+  bool IsPendingResultReady() const
+  {
+    return GetPendingResultStatus() == PendingResultStatus::Ready;
+  }
+  void SetPendingResultReady()
+  {
+    DXIL_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Pending);
+    SetPendingResultStatus(PendingResultStatus::Ready);
+  }
+  const ShaderVariable &GetPendingResult() const
+  {
+    DXIL_DEBUG_RDCASSERTEQUAL(GetPendingResultStatus(), PendingResultStatus::Ready);
+    return m_PendingResultData;
+  }
+  void SetStepNeedsDeviceThread()
+  {
+    AtomicStore(&atomic_stepNeedsDeviceThread, 1);
+    SetPendingResultStatus(PendingResultStatus::Pending);
+  }
+
   void EnterFunction(const DXIL::Function *function, const rdcarray<DXIL::Value *> &args);
 
   bool InUniformBlock() const;
@@ -441,7 +498,8 @@ private:
                  ShaderEvents flags);
   rdcstr GetArgumentName(uint32_t i) const;
   Id GetArgumentId(uint32_t i) const;
-  ResourceReferenceInfo GetResource(Id handleId, bool &annotatedHandle);
+  ResourceReferenceInfo GetResource(Id handleId, bool &annotatedHandle,
+                                    ShaderVariable &handleVar) const;
 
   // This must be a thread safe operation using only thread safe containers
   bool GetShaderVariableFromLane(const ThreadState &lane, const DXIL::Value *dxilValue,
@@ -543,6 +601,7 @@ private:
   rdcarray<bool> m_ActiveMask;
 
   ShaderDebugState m_PendingDebugState;
+  ShaderVariable m_PendingResultData;
 
   // Track memory allocations
   // For stack allocations do not bother freeing when leaving functions
@@ -585,6 +644,8 @@ private:
   bool m_Helper = false;
 
   // These need to be accessed using atomics
+  int32_t atomic_pendingResultStatus = (int32_t)PendingResultStatus::Unknown;
+  int32_t atomic_stepNeedsDeviceThread = 0;
   int32_t atomic_isSimulationStepActive = 0;
 };
 
@@ -744,14 +805,15 @@ public:
                              const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
                              float compareValue, GatherChannel gatherChannel,
                              uint32_t instructionIdx, ShaderVariable &output) const;
-  ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                 uint32_t mipLeveldim) const;
-  ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                               const char *opString) const;
-  ShaderVariable GetRenderTargetSampleInfo(const char *opString) const;
-  ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const;
-  ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
-                                           const DXDebug::BindingSlot &slot) const;
+  DeviceOpResult GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                                 uint32_t mipLevel, ShaderVariable &result) const;
+  DeviceOpResult GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                               const char *opString, ShaderVariable &result) const;
+  DeviceOpResult GetRenderTargetSampleInfo(const char *opString, ShaderVariable &result) const;
+  DeviceOpResult GetResourceReferenceInfo(const DXDebug::BindingSlot &slot,
+                                          ResourceReferenceInfo &result) const;
+  DeviceOpResult GetShaderDirectAccess(DescriptorType type, const DXDebug::BindingSlot &slot,
+                                       ShaderDirectAccess &result) const;
 
   bool IsDeviceThread() const { return Threading::GetCurrentID() == m_DeviceThreadID; }
 private:
@@ -771,6 +833,8 @@ private:
   void StepThread(uint32_t lane, StepThreadMode stepMode);
   void InternalStepThread(uint32_t lane);
   void SimulationJobHelper();
+  void QueueDeviceThreadStep(uint32_t lane);
+  void ProcessQueuedDeviceThreadSteps();
 
   DebugAPIWrapper *m_ApiWrapper = NULL;
 
@@ -780,6 +844,8 @@ private:
 
   rdcarray<ShaderDebugState> *m_ShaderChangesReturn = NULL;
   ShaderDebugState m_ActiveDebugState;
+
+  rdcarray<bool> m_QueuedDeviceThreadSteps;
 
   // the live mutable global variables, to initialise a stack frame's live list
   rdcarray<bool> m_LiveGlobals;
@@ -808,3 +874,5 @@ private:
 };    // namespace DXILDebug
 
 DECLARE_REFLECTION_ENUM(DXILDebug::StepThreadMode);
+DECLARE_REFLECTION_ENUM(DXILDebug::DeviceOpResult);
+DECLARE_REFLECTION_ENUM(DXILDebug::ThreadState::PendingResultStatus);
