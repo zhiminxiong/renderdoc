@@ -5240,7 +5240,17 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
       RDCASSERTEQUAL(inst.args.size(), 2);
       uint32_t idx = ~0U;
       RDCASSERT(getival(inst.args[1], idx));
-      RDCASSERT(idx < srcVal.columns);
+      ShaderVariable sourceData;
+      if(srcVal.type == VarType::Struct)
+      {
+        sourceData = srcVal.members[idx];
+        idx = 0;
+      }
+      else
+      {
+        sourceData = srcVal;
+      }
+      RDCASSERT(idx < sourceData.columns);
 
       RDCASSERTEQUAL(result.type, srcVal.type);
       switch(result.type)
