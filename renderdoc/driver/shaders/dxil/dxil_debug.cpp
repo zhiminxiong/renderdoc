@@ -3307,6 +3307,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::AtomicBinOp:
           case DXOp::AtomicCompareExchange:
           {
+            SCOPED_LOCK(m_Debugger.GetAtomicMemoryLock());
             // AtomicBinOp(handle, atomicOp, offset0, offset1, offset2, newValue)
             // AtomicCompareExchange(handle,offset0,offset1,offset2,compareValue,newValue)
             const Id handleId = GetArgumentId(1);
@@ -5200,128 +5201,26 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
       result.value = arg.value;
       break;
     }
-    case Operation::Load:
+    case Operation::Load: OperationLoad(inst, opCode, dxOpCode, resultId, result); break;
     case Operation::LoadAtomic:
     {
-      if(DXIL::IsDXCNop(inst))
-      {
-        resultId = DXILDebug::INVALID_ID;
-        result.name.clear();
-        break;
-      }
-
-      // Load(ptr)
-      Id ptrId = GetArgumentId(0);
-      if(ptrId == DXILDebug::INVALID_ID)
-        break;
-
-      auto itPtr = m_Memory.m_Pointers.find(ptrId);
-      if(itPtr == m_Memory.m_Pointers.end())
-      {
-        RDCERR("Unknown memory pointer Id %u", ptrId);
-        break;
-      }
-
-      const MemoryTracking::Pointer &ptr = itPtr->second;
-      Id baseMemoryId = ptr.baseMemoryId;
-
-      auto itAlloc = m_Memory.m_Allocations.find(baseMemoryId);
-      if(itAlloc == m_Memory.m_Allocations.end())
-      {
-        RDCERR("Unknown memory allocation Id %u", baseMemoryId);
-        break;
-      }
-      const MemoryTracking::Allocation &allocation = itAlloc->second;
-      ShaderVariable arg;
-      if(allocation.globalVarAlloc && !IsVariableAssigned(ptrId))
-      {
-        RDCASSERT(IsVariableAssigned(baseMemoryId));
-        arg = m_Variables[baseMemoryId];
-      }
-      else
-      {
-        RDCASSERT(GetShaderVariable(inst.args[0], opCode, dxOpCode, arg));
-      }
-      result.value = arg.value;
+      SCOPED_LOCK(m_Debugger.GetAtomicMemoryLock());
+      OperationLoad(inst, opCode, dxOpCode, resultId, result);
       break;
     }
     case Operation::Store:
+    {
+      OperationStore(inst, opCode, dxOpCode);
+      RDCASSERTEQUAL(resultId, DXILDebug::INVALID_ID);
+      result.name.clear();
+      resultId = INVALID_ID;
+      break;
+    }
     case Operation::StoreAtomic:
     {
-      // Store(ptr, value)
-      Id ptrId = GetArgumentId(0);
-      if(ptrId == DXILDebug::INVALID_ID)
-        break;
-      auto itPtr = m_Memory.m_Pointers.find(ptrId);
-      if(itPtr == m_Memory.m_Pointers.end())
-      {
-        RDCERR("Unknown memory pointer Id %u", ptrId);
-        break;
-      }
-
-      ShaderVariable originalValue(m_Variables[ptrId]);
-
-      const MemoryTracking::Pointer &ptr = itPtr->second;
-      const Id baseMemoryId = ptr.baseMemoryId;
-      void *const memory = ptr.memory;
-      uint64_t allocSize = ptr.size;
-
-      RDCASSERT(memory);
-      RDCASSERTNOTEQUAL(baseMemoryId, DXILDebug::INVALID_ID);
-
-      ShaderVariable val;
-      RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, val));
+      SCOPED_LOCK(m_Debugger.GetAtomicMemoryLock());
+      OperationStore(inst, opCode, dxOpCode);
       RDCASSERTEQUAL(resultId, DXILDebug::INVALID_ID);
-
-      UpdateBackingMemoryFromVariable(memory, allocSize, val);
-
-      bool recordBaseMemoryChange = m_HasDebugState && baseMemoryId != ptrId;
-      ShaderVariableChange change;
-      RDCASSERT(IsVariableAssigned(baseMemoryId));
-      if(recordBaseMemoryChange)
-        change.before = m_Variables[baseMemoryId];
-
-      auto itAlloc = m_Memory.m_Allocations.find(baseMemoryId);
-      if(itAlloc == m_Memory.m_Allocations.end())
-      {
-        RDCERR("Unknown memory allocation Id %u", baseMemoryId);
-        break;
-      }
-      const MemoryTracking::Allocation &allocation = itAlloc->second;
-      UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocation.backingMemory);
-
-      // active lane : writes to a GSM variable, write to local and global backing memory
-      if(m_HasDebugState)
-        UpdateGlobalBackingMemory(ptrId, ptr, allocation, val);
-
-      // record the change to the base memory variable if it is not the ptrId variable
-      if(recordBaseMemoryChange)
-      {
-        if(!IsVariableAssigned(baseMemoryId))
-        {
-          change.before = {};
-          m_Assigned[baseMemoryId] = true;
-        }
-        change.after = m_Variables[baseMemoryId];
-        m_PendingDebugState.changes.push_back(change);
-      }
-
-      // Update the ptr variable value and manually record the change to the ptr variable
-      RDCASSERT(IsVariableAssigned(ptrId));
-      ShaderVariable newValue(originalValue);
-      newValue.value = val.value;
-
-      m_Live[ptrId] = true;
-      m_Variables[ptrId] = newValue;
-      m_Assigned[ptrId] = true;
-
-      if(m_HasDebugState)
-      {
-        change.before = originalValue;
-        change.after = newValue;
-        m_PendingDebugState.changes.push_back(change);
-      }
-
       result.name.clear();
       resultId = INVALID_ID;
       break;
@@ -6253,223 +6152,14 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
     case Operation::AtomicMin:
     case Operation::AtomicUMax:
     case Operation::AtomicUMin:
+    {
+      SCOPED_LOCK(m_Debugger.GetAtomicMemoryLock());
+      OperationAtomic(inst, opCode, dxOpCode, resultId, result);
+      break;
+    }
     case Operation::CompareExchange:
     {
-      Id ptrId = GetArgumentId(0);
-      if(ptrId == DXILDebug::INVALID_ID)
-        break;
-
-      auto itPtr = m_Memory.m_Pointers.find(ptrId);
-      if(itPtr == m_Memory.m_Pointers.end())
-      {
-        RDCERR("Unknown memory pointer Id %u", ptrId);
-        break;
-      }
-
-      const MemoryTracking::Pointer &ptr = itPtr->second;
-      const Id baseMemoryId = ptr.baseMemoryId;
-
-      RDCASSERTNOTEQUAL(baseMemoryId, DXILDebug::INVALID_ID);
-
-      void *const memory = ptr.memory;
-      RDCASSERT(memory);
-      uint64_t allocSize = ptr.size;
-
-      auto itAlloc = m_Memory.m_Allocations.find(baseMemoryId);
-      if(itAlloc == m_Memory.m_Allocations.end())
-      {
-        RDCERR("Unknown memory allocation Id %u", ptrId);
-        break;
-      }
-      const MemoryTracking::Allocation &allocation = itAlloc->second;
-      void *allocMemoryBackingPtr = allocation.backingMemory;
-
-      RDCASSERTNOTEQUAL(resultId, DXILDebug::INVALID_ID);
-      RDCASSERT(IsVariableAssigned(ptrId));
-      ShaderVariable a;
-      if(allocation.globalVarAlloc && !IsVariableAssigned(ptrId))
-      {
-        RDCASSERT(IsVariableAssigned(baseMemoryId));
-        a = m_Variables[baseMemoryId];
-      }
-      else
-      {
-        a = m_Variables[ptrId];
-      }
-
-      size_t newValueArgIdx = (opCode == Operation::CompareExchange) ? 2 : 1;
-      ShaderVariable b;
-      RDCASSERT(GetShaderVariable(inst.args[newValueArgIdx], opCode, dxOpCode, b));
-      const uint32_t c = 0;
-
-      ShaderVariable res = a;
-      bool matched = false;
-
-      if(opCode == Operation::AtomicExchange)
-      {
-        // *ptr = val
-#undef _IMPL
-#define _IMPL(I, S, U) comp<I>(res, c) = comp<I>(b, c)
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicAdd)
-      {
-        // *ptr = *ptr + val
-#undef _IMPL
-#define _IMPL(I, S, U) comp<I>(res, c) = comp<I>(a, c) + comp<I>(b, c)
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicSub)
-      {
-        // *ptr = *ptr - val
-#undef _IMPL
-#define _IMPL(I, S, U) comp<I>(res, c) = comp<I>(a, c) - comp<I>(b, c)
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicAnd)
-      {
-        // *ptr = *ptr & val
-#undef _IMPL
-#define _IMPL(I, S, U) comp<U>(res, c) = comp<U>(a, c) & comp<U>(b, c);
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicNand)
-      {
-        // *ptr = ~(*ptr & val)
-#undef _IMPL
-#define _IMPL(I, S, U) comp<U>(res, c) = ~(comp<U>(a, c) & comp<U>(b, c));
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicOr)
-      {
-        // *ptr = *ptr | val
-#undef _IMPL
-#define _IMPL(I, S, U) comp<U>(res, c) = comp<U>(a, c) | comp<U>(b, c);
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicXor)
-      {
-        // *ptr = *ptr ^ val
-#undef _IMPL
-#define _IMPL(I, S, U) comp<U>(res, c) = comp<U>(a, c) ^ comp<U>(b, c);
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicMax)
-      {
-        // *ptr = max(*ptr, val)
-#undef _IMPL
-#define _IMPL(I, S, U) comp<S>(res, c) = RDCMAX(comp<S>(a, c), comp<S>(b, c));
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicMin)
-      {
-        // *ptr = min(*ptr, val)
-#undef _IMPL
-#define _IMPL(I, S, U) comp<S>(res, c) = RDCMIN(comp<S>(a, c), comp<S>(b, c));
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicUMax)
-      {
-#undef _IMPL
-#define _IMPL(I, S, U) comp<S>(res, c) = RDCMAX(comp<S>(a, c), comp<S>(b, c));
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::AtomicUMin)
-      {
-#undef _IMPL
-#define _IMPL(I, S, U) comp<U>(res, c) = RDCMIN(comp<U>(a, c), comp<U>(b, c));
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else if(opCode == Operation::CompareExchange)
-      {
-        ShaderVariable cmp;
-        RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, cmp));
-
-#undef _IMPL
-#define _IMPL(I, S, U)                        \
-  matched = comp<I>(a, c) == comp<I>(cmp, c); \
-  comp<I>(res, c) = matched ? comp<I>(b, c) : comp<I>(a, c)
-
-        IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
-      }
-      else
-      {
-        RDCERR("Unhandled opCode %s", ToStr(opCode).c_str());
-      }
-
-      // Save the result back to the backing memory of the pointer
-      UpdateBackingMemoryFromVariable(memory, allocSize, res);
-
-      bool recordBaseMemoryChange = m_HasDebugState && baseMemoryId != resultId;
-      ShaderVariableChange change;
-      if(recordBaseMemoryChange)
-        change.before = m_Variables[baseMemoryId];
-
-      UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocMemoryBackingPtr);
-
-      // active lane : writes to a GSM variable, write to local and global backing memory
-      if(m_HasDebugState)
-        UpdateGlobalBackingMemory(ptrId, ptr, allocation, res);
-
-      // record the change to the base memory variable
-      if(recordBaseMemoryChange)
-      {
-        if(!IsVariableAssigned(baseMemoryId))
-        {
-          change.before = {};
-          m_Assigned[baseMemoryId] = true;
-        }
-        change.after = m_Variables[baseMemoryId];
-        m_PendingDebugState.changes.push_back(change);
-      }
-
-      // record the change to the ptr variable value
-      bool recordPtrMemoryChange = m_HasDebugState && ptrId != resultId;
-      RDCASSERT(IsVariableAssigned(ptrId));
-      if(recordPtrMemoryChange)
-        change.before = m_Variables[ptrId];
-      // Update the ptr variable value
-      m_Variables[ptrId].value = res.value;
-
-      if(recordPtrMemoryChange)
-      {
-        change.after = m_Variables[ptrId];
-        m_PendingDebugState.changes.push_back(change);
-      }
-
-      RDCASSERTNOTEQUAL(resultId, ptrId);
-      if(opCode == Operation::CompareExchange)
-      {
-        // Returns a struct
-        // { Original Value,  1 (equal) / 0 (not equal)
-        result.rows = 0;
-        result.columns = 0;
-        RDCASSERTEQUAL(result.type, VarType::Struct);
-        result.members.clear();
-        result.members.resize(2);
-        result.members[0] = res;
-        result.members[0].name = "original";
-        result.members[1].rows = 1;
-        result.members[1].columns = 1;
-        result.members[1].type = VarType::Bool;
-        result.members[1].name = "flag";
-        result.members[1].value.u32v[0] = matched ? 1 : 0;
-      }
-      else
-      {
-        result.value = res.value;
-      }
+      OperationAtomic(inst, opCode, dxOpCode, resultId, result);
       break;
     }
     case Operation::AddrSpaceCast:
@@ -7653,6 +7343,348 @@ void ThreadState::QueueSampleGather(DXIL::DXOp dxOp, const SampleGatherResourceD
   m_QueuedGpuSampleGatherOp.instructionIdx = instructionIdx;
   m_QueuedGpuSampleGatherOp.result = &m_PendingResultData;
   SetStepNeedsGpuSampleGatherOp();
+}
+
+void ThreadState::OperationLoad(const DXIL::Instruction &inst, DXIL::Operation opCode,
+                                DXIL::DXOp dxOpCode, Id &resultId, ShaderVariable &result)
+{
+  if(DXIL::IsDXCNop(inst))
+  {
+    resultId = DXILDebug::INVALID_ID;
+    result.name.clear();
+    return;
+  }
+
+  // Load(ptr)
+  Id ptrId = GetArgumentId(0);
+  if(ptrId == DXILDebug::INVALID_ID)
+    return;
+
+  auto itPtr = m_Memory.m_Pointers.find(ptrId);
+  if(itPtr == m_Memory.m_Pointers.end())
+  {
+    RDCERR("Unknown memory pointer Id %u", ptrId);
+    return;
+  }
+
+  const MemoryTracking::Pointer &ptr = itPtr->second;
+  Id baseMemoryId = ptr.baseMemoryId;
+
+  auto itAlloc = m_Memory.m_Allocations.find(baseMemoryId);
+  if(itAlloc == m_Memory.m_Allocations.end())
+  {
+    RDCERR("Unknown memory allocation Id %u", baseMemoryId);
+    return;
+  }
+  const MemoryTracking::Allocation &allocation = itAlloc->second;
+  ShaderVariable arg;
+  if(allocation.globalVarAlloc && !IsVariableAssigned(ptrId))
+  {
+    RDCASSERT(IsVariableAssigned(baseMemoryId));
+    arg = m_Variables[baseMemoryId];
+  }
+  else
+  {
+    RDCASSERT(GetShaderVariable(inst.args[0], opCode, dxOpCode, arg));
+  }
+  result.value = arg.value;
+}
+
+void ThreadState::OperationStore(const DXIL::Instruction &inst, DXIL::Operation opCode,
+                                 DXIL::DXOp dxOpCode)
+{
+  // Store(ptr, value)
+  Id ptrId = GetArgumentId(0);
+  if(ptrId == DXILDebug::INVALID_ID)
+    return;
+  auto itPtr = m_Memory.m_Pointers.find(ptrId);
+  if(itPtr == m_Memory.m_Pointers.end())
+  {
+    RDCERR("Unknown memory pointer Id %u", ptrId);
+    return;
+  }
+
+  ShaderVariable originalValue(m_Variables[ptrId]);
+
+  const MemoryTracking::Pointer &ptr = itPtr->second;
+  const Id baseMemoryId = ptr.baseMemoryId;
+  void *const memory = ptr.memory;
+  uint64_t allocSize = ptr.size;
+
+  RDCASSERT(memory);
+  RDCASSERTNOTEQUAL(baseMemoryId, DXILDebug::INVALID_ID);
+
+  ShaderVariable val;
+  RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, val));
+
+  UpdateBackingMemoryFromVariable(memory, allocSize, val);
+
+  bool recordBaseMemoryChange = m_HasDebugState && baseMemoryId != ptrId;
+  ShaderVariableChange change;
+  RDCASSERT(IsVariableAssigned(baseMemoryId));
+  if(recordBaseMemoryChange)
+    change.before = m_Variables[baseMemoryId];
+
+  auto itAlloc = m_Memory.m_Allocations.find(baseMemoryId);
+  if(itAlloc == m_Memory.m_Allocations.end())
+  {
+    RDCERR("Unknown memory allocation Id %u", baseMemoryId);
+    return;
+  }
+  const MemoryTracking::Allocation &allocation = itAlloc->second;
+  UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocation.backingMemory);
+
+  // active lane : writes to a GSM variable, write to local and global backing memory
+  if(m_HasDebugState)
+    UpdateGlobalBackingMemory(ptrId, ptr, allocation, val);
+
+  // record the change to the base memory variable if it is not the ptrId variable
+  if(recordBaseMemoryChange)
+  {
+    if(!IsVariableAssigned(baseMemoryId))
+    {
+      change.before = {};
+      m_Assigned[baseMemoryId] = true;
+    }
+    change.after = m_Variables[baseMemoryId];
+    m_PendingDebugState.changes.push_back(change);
+  }
+
+  // Update the ptr variable value and manually record the change to the ptr variable
+  RDCASSERT(IsVariableAssigned(ptrId));
+  ShaderVariable newValue(originalValue);
+  newValue.value = val.value;
+
+  m_Live[ptrId] = true;
+  m_Variables[ptrId] = newValue;
+  m_Assigned[ptrId] = true;
+
+  if(m_HasDebugState)
+  {
+    change.before = originalValue;
+    change.after = newValue;
+    m_PendingDebugState.changes.push_back(change);
+  }
+}
+
+void ThreadState::OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation opCode,
+                                  DXIL::DXOp dxOpCode, Id &resultId, ShaderVariable &result)
+{
+  Id ptrId = GetArgumentId(0);
+  if(ptrId == DXILDebug::INVALID_ID)
+    return;
+
+  auto itPtr = m_Memory.m_Pointers.find(ptrId);
+  if(itPtr == m_Memory.m_Pointers.end())
+  {
+    RDCERR("Unknown memory pointer Id %u", ptrId);
+    return;
+  }
+
+  const MemoryTracking::Pointer &ptr = itPtr->second;
+  const Id baseMemoryId = ptr.baseMemoryId;
+
+  RDCASSERTNOTEQUAL(baseMemoryId, DXILDebug::INVALID_ID);
+
+  void *const memory = ptr.memory;
+  RDCASSERT(memory);
+  uint64_t allocSize = ptr.size;
+
+  auto itAlloc = m_Memory.m_Allocations.find(baseMemoryId);
+  if(itAlloc == m_Memory.m_Allocations.end())
+  {
+    RDCERR("Unknown memory allocation Id %u", ptrId);
+    return;
+  }
+  const MemoryTracking::Allocation &allocation = itAlloc->second;
+  void *allocMemoryBackingPtr = allocation.backingMemory;
+
+  RDCASSERTNOTEQUAL(resultId, DXILDebug::INVALID_ID);
+  RDCASSERT(IsVariableAssigned(ptrId));
+  ShaderVariable a;
+  if(allocation.globalVarAlloc && !IsVariableAssigned(ptrId))
+  {
+    RDCASSERT(IsVariableAssigned(baseMemoryId));
+    a = m_Variables[baseMemoryId];
+  }
+  else
+  {
+    a = m_Variables[ptrId];
+  }
+
+  size_t newValueArgIdx = (opCode == Operation::CompareExchange) ? 2 : 1;
+  ShaderVariable b;
+  RDCASSERT(GetShaderVariable(inst.args[newValueArgIdx], opCode, dxOpCode, b));
+  const uint32_t c = 0;
+
+  ShaderVariable res = a;
+  bool matched = false;
+
+  if(opCode == Operation::AtomicExchange)
+  {
+    // *ptr = val
+#undef _IMPL
+#define _IMPL(I, S, U) comp<I>(res, c) = comp<I>(b, c)
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicAdd)
+  {
+    // *ptr = *ptr + val
+#undef _IMPL
+#define _IMPL(I, S, U) comp<I>(res, c) = comp<I>(a, c) + comp<I>(b, c)
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicSub)
+  {
+    // *ptr = *ptr - val
+#undef _IMPL
+#define _IMPL(I, S, U) comp<I>(res, c) = comp<I>(a, c) - comp<I>(b, c)
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicAnd)
+  {
+    // *ptr = *ptr & val
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(res, c) = comp<U>(a, c) & comp<U>(b, c);
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicNand)
+  {
+    // *ptr = ~(*ptr & val)
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(res, c) = ~(comp<U>(a, c) & comp<U>(b, c));
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicOr)
+  {
+    // *ptr = *ptr | val
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(res, c) = comp<U>(a, c) | comp<U>(b, c);
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicXor)
+  {
+    // *ptr = *ptr ^ val
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(res, c) = comp<U>(a, c) ^ comp<U>(b, c);
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicMax)
+  {
+    // *ptr = max(*ptr, val)
+#undef _IMPL
+#define _IMPL(I, S, U) comp<S>(res, c) = RDCMAX(comp<S>(a, c), comp<S>(b, c));
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicMin)
+  {
+    // *ptr = min(*ptr, val)
+#undef _IMPL
+#define _IMPL(I, S, U) comp<S>(res, c) = RDCMIN(comp<S>(a, c), comp<S>(b, c));
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicUMax)
+  {
+#undef _IMPL
+#define _IMPL(I, S, U) comp<S>(res, c) = RDCMAX(comp<S>(a, c), comp<S>(b, c));
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::AtomicUMin)
+  {
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(res, c) = RDCMIN(comp<U>(a, c), comp<U>(b, c));
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else if(opCode == Operation::CompareExchange)
+  {
+    ShaderVariable cmp;
+    RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, cmp));
+
+#undef _IMPL
+#define _IMPL(I, S, U)                        \
+  matched = comp<I>(a, c) == comp<I>(cmp, c); \
+  comp<I>(res, c) = matched ? comp<I>(b, c) : comp<I>(a, c)
+
+    IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
+  }
+  else
+  {
+    RDCERR("Unhandled opCode %s", ToStr(opCode).c_str());
+  }
+
+  // Save the result back to the backing memory of the pointer
+  UpdateBackingMemoryFromVariable(memory, allocSize, res);
+
+  bool recordBaseMemoryChange = m_HasDebugState && baseMemoryId != resultId;
+  ShaderVariableChange change;
+  if(recordBaseMemoryChange)
+    change.before = m_Variables[baseMemoryId];
+
+  UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocMemoryBackingPtr);
+
+  // active lane : writes to a GSM variable, write to local and global backing memory
+  if(m_HasDebugState)
+    UpdateGlobalBackingMemory(ptrId, ptr, allocation, res);
+
+  // record the change to the base memory variable
+  if(recordBaseMemoryChange)
+  {
+    if(!IsVariableAssigned(baseMemoryId))
+    {
+      change.before = {};
+      m_Assigned[baseMemoryId] = true;
+    }
+    change.after = m_Variables[baseMemoryId];
+    m_PendingDebugState.changes.push_back(change);
+  }
+
+  // record the change to the ptr variable value
+  bool recordPtrMemoryChange = m_HasDebugState && ptrId != resultId;
+  RDCASSERT(IsVariableAssigned(ptrId));
+  if(recordPtrMemoryChange)
+    change.before = m_Variables[ptrId];
+  // Update the ptr variable value
+  m_Variables[ptrId].value = res.value;
+
+  if(recordPtrMemoryChange)
+  {
+    change.after = m_Variables[ptrId];
+    m_PendingDebugState.changes.push_back(change);
+  }
+
+  RDCASSERTNOTEQUAL(resultId, ptrId);
+  if(opCode == Operation::CompareExchange)
+  {
+    // Returns a struct
+    // { Original Value,  1 (equal) / 0 (not equal)
+    result.rows = 0;
+    result.columns = 0;
+    RDCASSERTEQUAL(result.type, VarType::Struct);
+    result.members.clear();
+    result.members.resize(2);
+    result.members[0] = res;
+    result.members[0].name = "original";
+    result.members[1].rows = 1;
+    result.members[1].columns = 1;
+    result.members[1].type = VarType::Bool;
+    result.members[1].name = "flag";
+    result.members[1].value.u32v[0] = matched ? 1 : 0;
+  }
+  else
+  {
+    result.value = res.value;
+  }
 }
 
 Debugger::DebugInfo::~DebugInfo()

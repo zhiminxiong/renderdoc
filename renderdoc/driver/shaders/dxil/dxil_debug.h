@@ -660,6 +660,11 @@ private:
                          const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
                          float compareValue, GatherChannel gatherChannel, uint32_t instructionIdx,
                          ShaderVariable &result);
+  void OperationLoad(const DXIL::Instruction &inst, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
+                     Id &resultId, ShaderVariable &result);
+  void OperationStore(const DXIL::Instruction &inst, DXIL::Operation opCode, DXIL::DXOp dxOpCode);
+  void OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
+                       Id &resultId, ShaderVariable &result);
 
   struct AnnotationProperties
   {
@@ -919,6 +924,7 @@ public:
                                        ShaderDirectAccess &result) const;
 
   bool IsDeviceThread() const { return Threading::GetCurrentID() == m_DeviceThreadID; }
+  Threading::CriticalSection &GetAtomicMemoryLock() const { return m_AtomicMemoryLock; }
 private:
   void InitialiseWorkgroup();
   ThreadState &GetActiveLane() { return m_Workgroup[m_ActiveLaneIndex]; }
@@ -956,6 +962,7 @@ private:
   rdcarray<ShaderDebugState> *m_ShaderChangesReturn = NULL;
   ShaderDebugState m_ActiveDebugState;
 
+  mutable Threading::CriticalSection m_AtomicMemoryLock;
   rdcarray<int32_t> m_QueuedJobs;
   rdcarray<bool> m_QueuedDeviceThreadSteps;
   rdcarray<bool> m_QueuedGpuMathOps;
