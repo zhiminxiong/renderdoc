@@ -476,7 +476,7 @@ DeviceOpResult ThreadState::ReadPointerValue(Id pointer, ShaderVariable &ret)
 void ThreadState::DebugBreak()
 {
   if(m_State)
-    m_State->flags |= ShaderEvents::DebugBreak;
+    pendingDebugState.flags |= ShaderEvents::DebugBreak;
 }
 
 void ThreadState::SetDst(Id id, const ShaderVariable &val)
