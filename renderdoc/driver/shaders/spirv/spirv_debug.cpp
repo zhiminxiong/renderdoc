@@ -205,7 +205,7 @@ void ThreadState::FillCallstack(rdcarray<Id> &funcs)
 // Must run on the device thread for the active simulation thread
 void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
 {
-  if(m_State)
+  if(hasDebugState)
     CHECK_DEBUGGER_THREAD();
 
   ConstIter it = debugger.GetIterForInstruction(nextInstruction);
@@ -283,14 +283,14 @@ void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
 
   frame->locals.resize(numVars);
 
-  ShaderDebugState *state = m_State;
+  const bool oldHasDebugState = hasDebugState;
 
   // don't add variables if we don't have debug info, we'll add it on the first store to reduce
   // noise on unoptimised shaders with lots of variables and no scope information. However if we
   // have debug info we'll add the variable immediately because the source variable will only be
   // added at the correct scope and we want to display that before it's stored to.
   if(!debugger.HasDebugInfo())
-    m_State = NULL;
+    hasDebugState = false;
 
   size_t i = 0;
   // handle any variable declarations
@@ -321,7 +321,7 @@ void ThreadState::EnterFunction(const rdcarray<Id> &arguments)
     i++;
   }
 
-  m_State = state;
+  hasDebugState = oldHasDebugState;
 
   // next instruction is the first actual instruction we'll execute
   nextInstruction = debugger.GetInstructionForIter(it);
@@ -343,7 +343,7 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
   // i.e. changes an existing value. That way SetDst can always unconditionally assign values,
   // and only here do we write through pointers
 
-  if(!m_State)
+  if(!hasDebugState)
   {
     return debugger.WriteThroughPointer(ids[pointer], val);
   }
@@ -463,7 +463,7 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
       pointers.push_back(ptrid);
 
     for(size_t i = 0; i < pointers.size(); i++)
-      lastWrite[pointers[i]] = m_State ? m_State->stepIndex : nextInstruction;
+      lastWrite[pointers[i]] = hasDebugState ? stepIndex : nextInstruction;
   }
   return DeviceOpResult::Succeeded;
 }
@@ -475,7 +475,7 @@ DeviceOpResult ThreadState::ReadPointerValue(Id pointer, ShaderVariable &ret)
 
 void ThreadState::DebugBreak()
 {
-  if(m_State)
+  if(hasDebugState)
     pendingDebugState.flags |= ShaderEvents::DebugBreak;
 }
 
@@ -490,7 +490,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
 
   ShaderVariable afterVal;
   DeviceOpResult opResult;
-  if(m_State)
+  if(hasDebugState)
   {
     // Check if the variable is available (cached)
     opResult = debugger.GetPointerValue(cur, afterVal);
@@ -501,7 +501,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
     }
   }
 
-  if(m_State && ContainsNaNInf(val))
+  if(hasDebugState && ContainsNaNInf(val))
     pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf;
 
   ShaderVariable prev = ids[id];
@@ -513,10 +513,10 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
 
   ids[id] = cur;
 
-  lastWrite[id] = m_State ? m_State->stepIndex : nextInstruction;
+  lastWrite[id] = hasDebugState ? stepIndex : nextInstruction;
 
   bool wasLive = false;
-  if(m_State)
+  if(hasDebugState)
   {
     auto it = std::lower_bound(live.begin(), live.end(), id);
     wasLive = (it != live.end() && *it == id);
@@ -534,7 +534,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
     }
   }
 
-  if(m_State)
+  if(hasDebugState)
   {
     ShaderVariableChange change;
     if(wasLive)
@@ -552,7 +552,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
 void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray<Id> &newLive)
 {
   // nothing to do if we aren't tracking into a state
-  if(!m_State)
+  if(!hasDebugState)
     return;
 
   CHECK_DEBUGGER_THREAD();
@@ -751,7 +751,7 @@ bool ThreadState::ReferencePointer(Id id)
 {
   bool firstLocalWrite = false;
 
-  if(m_State)
+  if(hasDebugState)
   {
     StackFrame *frame = callstack.back();
 
@@ -828,16 +828,16 @@ void ThreadState::SkipIgnoredInstructions()
 }
 
 // Must run on the device thread for the active simulation thread
-void ThreadState::EnterEntryPoint(ShaderDebugState *state)
+void ThreadState::EnterEntryPoint(bool useDebugState)
 {
-  m_State = state;
+  hasDebugState = useDebugState;
 
-  if(m_State)
+  if(hasDebugState)
     CHECK_DEBUGGER_THREAD();
 
   EnterFunction({});
 
-  m_State = NULL;
+  hasDebugState = false;
   currentInstruction = nextInstruction;
 }
 
@@ -860,9 +860,11 @@ bool ThreadState::WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup)
   return false;
 }
 
-void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup)
+void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
+                           const rdcarray<ThreadState> &workgroup)
 {
-  m_State = state;
+  hasDebugState = useDebugState;
+  stepIndex = steps;
 
   ConstIter it = debugger.GetIterForInstruction(nextInstruction);
   nextInstruction++;
@@ -956,7 +958,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       SetDst(chain.result, debugger.MakeCompositePointer(ids[chain.base], baseId, indices));
 
       // create duplicate GSM pointers for the active thread which point to the global GSM not the local GSM cache
-      if(m_State)
+      if(hasDebugState)
       {
         auto gsmPtrIt = gsmPointers.find(chain.base);
         if(gsmPtrIt != gsmPointers.end())
@@ -990,7 +992,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       SetDst(chain.result, debugger.MakeCompositePointer(base, baseId, indices));
 
       // create duplicate GSM pointers for the active thread which point to the global GSM not the local GSM cache
-      if(m_State)
+      if(hasDebugState)
       {
         auto gsmPtrIt = gsmPointers.find(chain.base);
         if(gsmPtrIt != gsmPointers.end())
@@ -2404,7 +2406,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   else                                                            \
   {                                                               \
     comp<U>(var, c) = 0;                                          \
-    if(m_State)                                                   \
+    if(hasDebugState)                                             \
       pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
@@ -2424,7 +2426,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   else                                                            \
   {                                                               \
     comp<U>(var, c) = 0;                                          \
-    if(m_State)                                                   \
+    if(hasDebugState)                                             \
       pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
@@ -2444,7 +2446,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   else                                                            \
   {                                                               \
     comp<U>(var, c) = 0;                                          \
-    if(m_State)                                                   \
+    if(hasDebugState)                                             \
       pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
@@ -2481,7 +2483,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   else                                                            \
   {                                                               \
     comp<S>(var, c) = 0;                                          \
-    if(m_State)                                                   \
+    if(hasDebugState)                                             \
       pendingDebugState.flags |= ShaderEvents::GeneratedNanOrInf; \
   }
 
@@ -4138,7 +4140,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       if(returnValue.name.empty())
       {
         // for the active thread EnterFunction must be run on the device thread
-        if(m_State && !debugger.IsDeviceThread())
+        if(hasDebugState && !debugger.IsDeviceThread())
         {
           SetStepNeedsDeviceThread();
           break;
@@ -4207,7 +4209,7 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
       else
       {
         // for the active thread ProcessScopeChange must be run on the device thread
-        if(m_State && !debugger.IsDeviceThread())
+        if(hasDebugState && !debugger.IsDeviceThread())
         {
           callstack.push_back(exitingFrame);
           SetStepNeedsDeviceThread();
@@ -5247,9 +5249,9 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
   {
     nextInstruction--;
     // This instruction is being deferred clear the pending debug state
-    if(m_State)
+    if(hasDebugState)
       ClearPendingDebugState();
-    m_State = NULL;
+    hasDebugState = false;
     return;
   }
   SetPendingResultUnknown();
@@ -5281,16 +5283,16 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
   // set the state's next instruction (if we have one) to ours, bounded by how many
   // instructions there are
-  if(m_State)
+  if(hasDebugState)
     pendingDebugState.nextInstruction = RDCMIN(nextInstruction, debugger.GetNumInstructions() - 1);
 
-  m_State = NULL;
+  hasDebugState = false;
 }
 
 void ThreadState::ExecuteMemoryBarrier(Id semanticsId)
 {
   // ignore if not the active thread
-  if(!m_State)
+  if(!hasDebugState)
     return;
 
   ShaderVariable var = GetSrc(semanticsId);

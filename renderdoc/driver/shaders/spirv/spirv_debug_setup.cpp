@@ -2595,14 +2595,17 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
       if(lane == activeLaneIndex)
       {
-        thread.EnterEntryPoint(&initial);
+        thread.EnterEntryPoint(true);
         FillCallstack(thread, initial);
         initial.nextInstruction = thread.nextInstruction;
+        const ShaderDebugState &pendingDebugState = thread.GetPendingDebugState();
+        initial.flags = pendingDebugState.flags;
+        initial.changes.append(pendingDebugState.changes);
         startPoint = initial.nextInstruction;
       }
       else
       {
-        thread.EnterEntryPoint(NULL);
+        thread.EnterEntryPoint(false);
       }
     }
 
@@ -4824,7 +4827,7 @@ void Debugger::InternalStepThread(uint32_t lane)
     if(!thread.callstack.empty())
       funcRet = thread.callstack.back()->funcCallInstruction;
 
-    thread.StepNext(&activeDebugState, workgroup);
+    thread.StepNext(true, activeDebugState.stepIndex, workgroup);
     if(thread.StepNeedsGpuSampleGatherOp())
       return;
     if(thread.StepNeedsGpuMathOp())
@@ -4903,7 +4906,7 @@ void Debugger::InternalStepThread(uint32_t lane)
   }
   else
   {
-    thread.StepNext(NULL, workgroup);
+    thread.StepNext(false, ~0U, workgroup);
     if(thread.StepNeedsGpuSampleGatherOp())
       return;
     if(thread.StepNeedsGpuMathOp())

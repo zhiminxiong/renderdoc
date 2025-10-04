@@ -251,8 +251,8 @@ struct ThreadState
   ThreadState(Debugger &debug, const GlobalState &globalState);
   ~ThreadState();
 
-  void EnterEntryPoint(ShaderDebugState *state);
-  void StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup);
+  void EnterEntryPoint(bool useDebugState);
+  void StepNext(bool useDebugState, const uint32_t steps, const rdcarray<ThreadState> &workgroup);
 
   enum DerivDir
   {
@@ -454,7 +454,8 @@ private:
   }
 
   ShaderDebugState pendingDebugState;
-  ShaderDebugState *m_State = NULL;
+  bool hasDebugState = false;
+  uint32_t stepIndex = 0;
   ShaderVariable pendingResultData;
   GpuMathOperation queuedGpuMathOp;
   GpuSampleGatherOperation queuedGpuSampleGatherOp;
