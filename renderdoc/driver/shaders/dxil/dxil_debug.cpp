@@ -3914,7 +3914,18 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           {
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(workgroup, activeLanes);
+            const uint32_t firstLaneInSub = m_WorkgroupIndex - m_SubgroupIdx;
+            for(uint32_t lane = firstLaneInSub; lane < firstLaneInSub + m_GlobalState.subgroupSize;
+                lane++)
+            {
+              RDCASSERT(lane < m_ActiveMask.size(), lane, m_ActiveMask.size());
+              // helper lanes are considered active for this instruction
+              if(m_ActiveMask[lane])
+              {
+                RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
+                activeLanes.push_back(lane);
+              }
+            }
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             result.value.u32v[0] = (m_WorkgroupIndex == activeLanes[0]) ? 1 : 0;
             break;
