@@ -58,6 +58,7 @@ struct ExecPointReference
   {
   }
   bool IsAfter(const ExecPointReference &from, const DXIL::ControlFlow &controlFlow) const;
+  bool IsValid() const { return block != ~0U && instruction != ~0U; }
 
   uint32_t block;
   uint32_t instruction;
@@ -91,7 +92,7 @@ struct InputData
 struct FunctionInfo
 {
   typedef std::set<Id> ReferencedIds;
-  typedef std::map<Id, ExecPointReference> ExecutionPointPerId;
+  typedef rdcarray<ExecPointReference> ExecutionPointPerId;
   typedef std::map<uint32_t, ReferencedIds> PhiReferencedIdsPerBlock;
   typedef rdcarray<rdcstr> Callstack;
 
@@ -263,6 +264,7 @@ struct ThreadState
   Id GetArgumentId(uint32_t i) const;
   ResourceReferenceInfo GetResource(Id handleId, bool &annotatedHandle);
   void FillCallstack(ShaderDebugState &state);
+  void RetireLiveIDs();
 
   bool GetShaderVariable(const DXIL::Value *dxilValue, DXIL::Operation op, DXIL::DXOp dxOpCode,
                          ShaderVariable &var, bool flushDenormInput = true) const

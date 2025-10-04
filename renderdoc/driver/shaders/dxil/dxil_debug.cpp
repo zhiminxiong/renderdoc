@@ -6563,6 +6563,39 @@ void ThreadState::StepOverNopInstructions()
   } while(true);
 }
 
+void ThreadState::RetireLiveIDs()
+{
+  m_State->flags = ShaderEvents::NoEvent;
+  m_State->changes.clear();
+
+  // Remove variables which have gone out of scope
+  ExecPointReference current(m_Block, m_FunctionInstructionIdx);
+  for(uint32_t id = 0; id < m_Live.size(); ++id)
+  {
+    if(!m_Live[id])
+      continue;
+    // The fake output variable is always in scope
+    if(id == m_Output.id)
+      continue;
+    // Globals are always in scope
+    if(m_IsGlobal[id])
+      continue;
+
+    RDCASSERT(id < m_FunctionInfo->maxExecPointPerId.size());
+    const ExecPointReference maxPoint = m_FunctionInfo->maxExecPointPerId[id];
+    RDCASSERT(maxPoint.IsValid());
+    // Use control flow to determine if the current execution point is after the maximum point
+    if(current.IsAfter(maxPoint, m_FunctionInfo->controlFlow))
+    {
+      m_Live[id] = false;
+
+      ShaderVariableChange change;
+      change.before = m_Variables[id];
+      m_State->changes.push_back(change);
+    }
+  }
+}
+
 void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
                            const rdcarray<ThreadState> &workgroup, const rdcarray<bool> &activeMask)
 {
@@ -6578,33 +6611,7 @@ void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
   {
     m_State->flags = ShaderEvents::NoEvent;
     m_State->changes.clear();
-
-    // Remove variables which have gone out of scope
-    ExecPointReference current(m_Block, m_FunctionInstructionIdx);
-    for(uint32_t id = 0; id < m_Live.size(); ++id)
-    {
-      if(!m_Live[id])
-        continue;
-      // The fake output variable is always in scope
-      if(id == m_Output.id)
-        continue;
-      // Globals are always in scope
-      if(m_IsGlobal[id])
-        continue;
-
-      auto itRange = m_FunctionInfo->maxExecPointPerId.find(id);
-      RDCASSERT(itRange != m_FunctionInfo->maxExecPointPerId.end());
-      const ExecPointReference maxPoint = itRange->second;
-      // Use control flow to determine if the current execution point is after the maximum point
-      if(current.IsAfter(maxPoint, m_FunctionInfo->controlFlow))
-      {
-        m_Live[id] = false;
-
-        ShaderVariableChange change;
-        change.before = m_Variables[id];
-        m_State->changes.push_back(change);
-      }
-    }
+    RetireLiveIDs();
   }
   ExecuteInstruction(apiWrapper, workgroup, activeMask);
 
@@ -8777,13 +8784,13 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
   m_Stage = shaderStage;
 
   uint32_t outputSSAId = m_Program->m_NextSSAId;
-  uint32_t nextSSAId = outputSSAId + 1;
+  uint32_t maxSSAId = outputSSAId + 1;
 
   ShaderDebugTrace *ret = new ShaderDebugTrace;
   ret->stage = shaderStage;
 
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
-    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, nextSSAId));
+    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId));
 
   ThreadState &state = GetActiveLane();
 
@@ -8900,7 +8907,7 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
     sourceVar.variables.push_back(ref);
   }
 
-  m_LiveGlobals.resize(nextSSAId);
+  m_LiveGlobals.resize(maxSSAId);
   MemoryTracking &globalMemory = m_GlobalState.memory;
   for(const DXIL::GlobalVar *gv : m_Program->m_GlobalVars)
   {
@@ -9066,6 +9073,8 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
 
       FunctionInfo::ReferencedIds &ssaRefs = info.referencedIds;
       FunctionInfo::ExecutionPointPerId &ssaMaxExecPoints = info.maxExecPointPerId;
+      ssaMaxExecPoints.resize(maxSSAId);
+      std::set<Id> ssaMaxRefs;
 
       uint32_t curBlock = 0;
       info.instructionToBlock.resize(countInstructions);
@@ -9087,12 +9096,17 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
           RDCASSERTEQUAL(ssaRefs.count(resultId), 0);
           ssaRefs.insert(resultId);
 
-          auto it = ssaMaxExecPoints.find(resultId);
-          if(it == ssaMaxExecPoints.end())
+          auto it = ssaMaxRefs.find(resultId);
+          if(it == ssaMaxRefs.end())
+          {
             ssaMaxExecPoints[resultId] = current;
+            ssaMaxRefs.insert(resultId);
+          }
           else
-            // If the result SSA has tracking then this access should be at a later execution point
-            RDCASSERT(it->second.IsAfter(current, controlFlow));
+          {
+            // If the result SSA has tracking then that access should be after setting the result
+            RDCASSERT(current.IsAfter(ssaMaxExecPoints[resultId], controlFlow));
+          }
         }
         // Track maximum execution point when an SSA is referenced as an argument
         // Arguments to phi instructions are handled separately
@@ -9112,16 +9126,17 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
             if(ssaRefs.count(argId) == 0)
               ssaRefs.insert(argId);
           }
-          auto it = ssaMaxExecPoints.find(argId);
-          if(it == ssaMaxExecPoints.end())
+          auto it = ssaMaxRefs.find(argId);
+          if(it == ssaMaxRefs.end())
           {
             ssaMaxExecPoints[argId] = maxPoint;
+            ssaMaxRefs.insert(argId);
           }
           else
           {
             // Update the maximum execution point if access is later than the existing access
-            if(maxPoint.IsAfter(it->second, controlFlow))
-              it->second = maxPoint;
+            if(maxPoint.IsAfter(ssaMaxExecPoints[argId], controlFlow))
+              ssaMaxExecPoints[argId] = maxPoint;
           }
         }
         if(inst.op == Operation::Branch || inst.op == Operation::Unreachable ||
@@ -9129,13 +9144,13 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
           ++curBlock;
       }
       // If these do not match in size that means there is a result SSA that is never read
-      RDCASSERTEQUAL(ssaRefs.size(), ssaMaxExecPoints.size());
+      RDCASSERTEQUAL(ssaRefs.size(), ssaMaxRefs.size());
 
       // Update any SSA max points which are inside a loop to the next uniform block
       // This covers the case of SSA IDs that are assigned to but never accessed
-      for(auto &it : ssaMaxExecPoints)
+      for(Id id : ssaMaxRefs)
       {
-        ExecPointReference &maxPoint = it.second;
+        ExecPointReference &maxPoint = ssaMaxExecPoints[id];
         uint32_t block = maxPoint.block;
         // If the current block is in a loop, set the execution point to the next uniform block
         if(loopBlocks.contains(block))
@@ -9312,10 +9327,11 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
     {
       for(LocalMapping &localMapping : scope->localMappings)
       {
-        auto it = info.maxExecPointPerId.find(localMapping.debugVarSSAId);
-        if(it != info.maxExecPointPerId.end())
+        if(localMapping.debugVarSSAId < info.maxExecPointPerId.size())
         {
-          const ExecPointReference &current = it->second;
+          const ExecPointReference &current = info.maxExecPointPerId[localMapping.debugVarSSAId];
+          if(!current.IsValid())
+            continue;
           uint32_t scopeEndInst = scope->maxInstruction + 1;
           scopeEndInst = RDCMIN(scopeEndInst, (uint32_t)info.instructionToBlock.size() - 1);
           const uint32_t scopeEndBlock = info.instructionToBlock[scopeEndInst];
@@ -9327,7 +9343,7 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
             scopeEnd.instruction = info.function->blocks[nextUniformBlock]->startInstructionIdx + 1;
           }
           if(scopeEnd.IsAfter(current, controlFlow))
-            it->second = scopeEnd;
+            info.maxExecPointPerId[localMapping.debugVarSSAId] = scopeEnd;
         }
       }
     }
