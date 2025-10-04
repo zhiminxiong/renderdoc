@@ -24,6 +24,7 @@
 
 #include "dxil_bytecode.h"
 #include "dxil_common.h"
+#include "dxil_debug.h"
 #include "dxil_debuginfo.h"
 
 template <>
@@ -889,3 +890,16 @@ rdcstr DoStringise(const DXIL::WaveMultiPrefixOpCode &el)
   }
   END_ENUM_STRINGISE();
 }
+
+template <>
+rdcstr DoStringise(const DXILDebug::StepThreadMode &el)
+{
+  BEGIN_ENUM_STRINGISE(DXILDebug::StepThreadMode)
+  {
+    STRINGISE_ENUM_CLASS(RUN_SINGLE_STEP)
+    STRINGISE_ENUM_CLASS(RUN_MULTIPLE_STEPS)
+    STRINGISE_ENUM_CLASS(QUEUE_SINGLE_STEP)
+    STRINGISE_ENUM_CLASS(QUEUE_MULTIPLE_STEPS)
+  }
+  END_ENUM_STRINGISE();
+};

@@ -34,6 +34,22 @@
 #include "dxil_controlflow.h"
 #include "dxil_debuginfo.h"
 
+#if defined(RELEASE)
+#define DXIL_DEBUG_RDCASSERT(...) \
+  do                              \
+  {                               \
+    (void)(__VA_ARGS__);          \
+  } while((void)0, 0)
+#define DXIL_DEBUG_RDCASSERTEQUAL(...) \
+  do                                   \
+  {                                    \
+    (void)(__VA_ARGS__);               \
+  } while((void)0, 0)
+#else
+#define DXIL_DEBUG_RDCASSERT(...) RDCASSERTMSG("", __VA_ARGS__)
+#define DXIL_DEBUG_RDCASSERTEQUAL(a, b) RDCASSERTEQUAL(a, b)
+#endif
+
 namespace DXILDebug
 {
 using namespace DXDebug;
@@ -50,6 +66,25 @@ struct GlobalState;
 
 // D3D12 descriptors are equal sized and treated as effectively one byte in size
 const uint32_t D3D12_DESCRIPTOR_BYTESIZE = 1;
+
+inline void AtomicStore(int32_t *var, int32_t newVal)
+{
+  int32_t oldVal = *var;
+  while(Atomic::CmpExch32(var, oldVal, newVal) != oldVal)
+  {
+    oldVal = *var;
+  };
+}
+
+inline int32_t AtomicLoad(int32_t *var)
+{
+  return Atomic::CmpExch32(var, 0, 0);
+}
+
+inline int32_t AtomicLoad(const int32_t *var)
+{
+  return Atomic::CmpExch32((int32_t *)var, 0, 0);
+}
 
 struct ExecPointReference
 {
@@ -324,17 +359,17 @@ struct MemoryTracking
 struct ThreadState
 {
   ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
-              uint32_t laneIndex);
+              uint32_t laneIndex, uint32_t numThreads);
   ~ThreadState();
 
-  void EnterEntryPoint(const DXIL::Function *function, ShaderDebugState *state);
-  void StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup,
-                const rdcarray<bool> &activeMask);
+  void EnterEntryPoint(const DXIL::Function *function, bool hasDebugState);
+  void StepNext(bool hasDebugState, const rdcarray<ThreadState> &workgroup);
   void StepOverNopInstructions();
   void FillCallstack(ShaderDebugState &state);
   void RetireLiveIDs();
 
   bool Finished() const;
+  bool IsSimulationStepActive() const { return (AtomicLoad(&atomic_isSimulationStepActive) == 1); }
   const ShaderVariable &GetInput() const { return m_Input; }
   const GlobalVariable &GetOutput() const { return m_Output; }
   bool IsDead() const { return m_Dead; }
@@ -348,6 +383,7 @@ struct ThreadState
   {
     return &m_PartialConvergencePoints;
   }
+  const ShaderDebugState &GetPendingDebugState() const { return m_PendingDebugState; }
 
   void SetBuiltins(const BuiltinInputs &builtins) { m_Builtins = builtins; }
   void SetInput(const ShaderVariable &input) { m_Input = input; }
@@ -362,6 +398,14 @@ struct ThreadState
   void SetQuadId(uint32_t quadId) { m_QuadId = quadId; }
   void SetSubgroupIdx(uint32_t subgroupIdx) { m_SubgroupIdx = subgroupIdx; }
   void SetQuadNeighbours(uint32_t lane, uint32_t index) { m_QuadNeighbours[lane] = index; }
+  void SetActiveMask(const rdcarray<bool> &activeMask)
+  {
+    RDCASSERTEQUAL(m_ActiveMask.size(), activeMask.size());
+    memcpy(m_ActiveMask.data(), activeMask.data(), activeMask.size() * sizeof(bool));
+  }
+  void UpdateCurrentInstruction() { m_CurrentGlobalInstructionIdx = m_ActiveGlobalInstructionIdx; }
+  void SetSimulationStepCompleted() { AtomicStore(&atomic_isSimulationStepActive, 0); }
+  void SetStepQueued() { AtomicStore(&atomic_isSimulationStepActive, 1); }
 
   void InitialiseFromActive(const ThreadState &active)
   {
@@ -373,13 +417,19 @@ struct ThreadState
 
   void UpdateBackingMemoryFromVariable(void *ptr, uint64_t &allocSize, const ShaderVariable &var);
 
+  void ClearPendingDebugState()
+  {
+    m_PendingDebugState.changes.clear();
+    m_PendingDebugState.flags = ShaderEvents::NoEvent;
+    m_PendingDebugState.nextInstruction = 0;
+  }
 private:
   void EnterFunction(const DXIL::Function *function, const rdcarray<DXIL::Value *> &args);
 
   bool InUniformBlock() const;
 
   bool JumpToBlock(const DXIL::Block *target, bool divergencePoint);
-  bool ExecuteInstruction(const rdcarray<ThreadState> &workgroup, const rdcarray<bool> &activeMask);
+  bool ExecuteInstruction(const rdcarray<ThreadState> &workgroup);
 
   void MarkResourceAccess(const ShaderVariable &var);
   void SetResult(const Id &id, ShaderVariable &result, DXIL::Operation op, DXIL::DXOp dxOpCode,
@@ -434,8 +484,7 @@ private:
   bool IsVariableAssigned(const Id id) const;
 
   ShaderVariable GetBuiltin(ShaderBuiltin builtin) const;
-  uint32_t GetSubgroupActiveLanes(const rdcarray<bool> &activeMask,
-                                  const rdcarray<ThreadState> &workgroup,
+  uint32_t GetSubgroupActiveLanes(const rdcarray<ThreadState> &workgroup,
                                   rdcarray<uint32_t> &activeLanes) const;
 
   struct AnnotationProperties
@@ -452,7 +501,7 @@ private:
   const GlobalState &m_GlobalState;
 
   rdcarray<StackFrame *> m_Callstack;
-  ShaderDebugState *m_State = NULL;
+  bool m_HasDebugState = false;
 
   ShaderVariable m_Input;
   GlobalVariable m_Output;
@@ -477,6 +526,10 @@ private:
   const FunctionInfo *m_FunctionInfo = NULL;
   DXBC::ShaderType m_ShaderType;
 
+  rdcarray<bool> m_ActiveMask;
+
+  ShaderDebugState m_PendingDebugState;
+
   // Track memory allocations
   // For stack allocations do not bother freeing when leaving functions
   MemoryTracking m_Memory;
@@ -487,8 +540,10 @@ private:
   // The current and previous function basic block index
   uint32_t m_Block = ~0U;
   uint32_t m_PreviousBlock = ~0U;
-  // The global PC of the active instruction that was or will be executed on the current simulation step
+  // The global PC of the active instruction that will be executed on the next simulation step
   uint32_t m_ActiveGlobalInstructionIdx = 0;
+  // The global PC of the active instruction that was last executed
+  uint32_t m_CurrentGlobalInstructionIdx = 0;
 
   // true if executed an operation which could trigger divergence
   bool m_Diverged;
@@ -513,6 +568,9 @@ private:
   bool m_Dead = false;
   bool m_Ended = false;
   bool m_Helper = false;
+
+  // These need to be accessed using atomics
+  int32_t atomic_isSimulationStepActive = 0;
 };
 
 struct GlobalState
@@ -628,6 +686,14 @@ struct TypeData
   bool colMajorMat = false;
 };
 
+enum class StepThreadMode
+{
+  RUN_SINGLE_STEP,
+  RUN_MULTIPLE_STEPS,
+  QUEUE_SINGLE_STEP,
+  QUEUE_MULTIPLE_STEPS
+};
+
 class Debugger : public DXBCContainerDebugger
 {
 public:
@@ -686,11 +752,19 @@ private:
   void AddLocalVariable(const DXIL::SourceMappingInfo &srcMapping, uint32_t instructionIndex);
   void ParseDebugData();
 
+  void QueueJob(uint32_t lane);
+  void StepThread(uint32_t lane, StepThreadMode stepMode);
+  void InternalStepThread(uint32_t lane);
+  void SimulationJobHelper();
+
   DebugAPIWrapper *m_ApiWrapper = NULL;
 
   rdcarray<ThreadState> m_Workgroup;
   std::map<const DXIL::Function *, FunctionInfo> m_FunctionInfos;
   rdcshaders::ControlFlow m_ControlFlow;
+
+  rdcarray<ShaderDebugState> *m_ShaderChangesReturn = NULL;
+  ShaderDebugState m_ActiveDebugState;
 
   // the live mutable global variables, to initialise a stack frame's live list
   rdcarray<bool> m_LiveGlobals;
@@ -713,6 +787,9 @@ private:
   const uint64_t m_DeviceThreadID;
   uint32_t m_ActiveLaneIndex = 0;
   int m_Steps = 0;
+  bool m_RetireIDs = true;
 };
 
 };    // namespace DXILDebug
+
+DECLARE_REFLECTION_ENUM(DXILDebug::StepThreadMode);

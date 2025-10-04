@@ -1802,7 +1802,7 @@ void MemoryTracking::ConvertGlobalAllocToLocal(Id allocId)
 
 // Must be called from the replay manager thread (the debugger thread)
 ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
-                         uint32_t laneIndex)
+                         uint32_t laneIndex, uint32_t numThreads)
     : m_Debugger(debugger),
       m_GlobalState(globalState),
       m_Program(debugger.GetProgram()),
@@ -1814,6 +1814,7 @@ ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uin
   m_Assigned.resize(maxSSAId);
   m_Live.resize(maxSSAId);
   m_Variables.resize(maxSSAId);
+  m_ActiveMask.resize(numThreads);
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -1842,7 +1843,7 @@ void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarr
 {
   THREADSTATE_CHECK_DEBUGGER_THREAD();
   // nothing to do if we aren't tracking into a state
-  if(!m_State)
+  if(!m_HasDebugState)
     return;
 
   // all oldLive (except globals) are going out of scope. all newLive (except globals) are coming
@@ -1855,7 +1856,7 @@ void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarr
     if(liveGlobals[id])
       continue;
 
-    m_State->changes.push_back({m_Variables[id]});
+    m_PendingDebugState.changes.push_back({m_Variables[id]});
   }
 
   for(uint32_t id = 0; id < newLive.size(); id++)
@@ -1863,7 +1864,7 @@ void ThreadState::ProcessScopeChange(const rdcarray<bool> &oldLive, const rdcarr
     if(liveGlobals[id])
       continue;
 
-    m_State->changes.push_back({ShaderVariable(), m_Variables[id]});
+    m_PendingDebugState.changes.push_back({ShaderVariable(), m_Variables[id]});
   }
 }
 
@@ -1894,16 +1895,14 @@ void ThreadState::EnterFunction(const Function *function, const rdcarray<Value *
   m_ActiveGlobalInstructionIdx = m_FunctionInfo->globalInstructionOffset + m_FunctionInstructionIdx;
   m_Callstack.push_back(frame);
 
-  ShaderDebugState *state = m_State;
-  m_State = state;
   StepOverNopInstructions();
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-void ThreadState::EnterEntryPoint(const Function *function, ShaderDebugState *state)
+void ThreadState::EnterEntryPoint(const Function *function, bool hasDebugState)
 {
   THREADSTATE_CHECK_DEBUGGER_THREAD();
-  m_State = state;
+  m_HasDebugState = hasDebugState;
 
   EnterFunction(function, {});
 
@@ -1933,13 +1932,13 @@ void ThreadState::EnterEntryPoint(const Function *function, ShaderDebugState *st
   }
 
   // active lane : needs it own local backing memory for GSM
-  if(m_State)
+  if(m_HasDebugState)
   {
     for(Id id : m_GlobalState.groupSharedMemoryIds)
       m_Memory.ConvertGlobalAllocToLocal(id);
   }
 
-  m_State = NULL;
+  m_HasDebugState = false;
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -2017,8 +2016,8 @@ bool ThreadState::JumpToBlock(const Block *target, bool divergencePoint)
   }
 
   uint32_t nextInstruction = m_FunctionInfo->globalInstructionOffset + m_FunctionInstructionIdx;
-  if(m_State && !m_Ended)
-    m_State->nextInstruction = nextInstruction;
+  if(m_HasDebugState && !m_Ended)
+    m_PendingDebugState.nextInstruction = nextInstruction;
 
   m_EnteredPoints.push_back(m_Block);
   RDCASSERTEQUAL(m_FunctionInfo->divergentBlocks.contains(m_PreviousBlock), divergencePoint);
@@ -2051,16 +2050,15 @@ bool ThreadState::JumpToBlock(const Block *target, bool divergencePoint)
   return true;
 }
 
-uint32_t ThreadState::GetSubgroupActiveLanes(const rdcarray<bool> &activeMask,
-                                             const rdcarray<ThreadState> &workgroup,
+uint32_t ThreadState::GetSubgroupActiveLanes(const rdcarray<ThreadState> &workgroup,
                                              rdcarray<uint32_t> &activeLanes) const
 {
   const uint32_t firstLaneInSub = m_WorkgroupIndex - m_SubgroupIdx;
   for(uint32_t lane = firstLaneInSub; lane < firstLaneInSub + m_GlobalState.subgroupSize; lane++)
   {
-    RDCASSERT(lane < activeMask.size(), lane, activeMask.size());
+    RDCASSERT(lane < m_ActiveMask.size(), lane, m_ActiveMask.size());
     // wave operations exclude helpers
-    if(activeMask[lane])
+    if(m_ActiveMask[lane])
     {
       RDCASSERT(lane < workgroup.size(), lane, workgroup.size());
       if(!m_GlobalState.waveOpsIncludeHelpers && workgroup[lane].m_Helper)
@@ -2071,8 +2069,7 @@ uint32_t ThreadState::GetSubgroupActiveLanes(const rdcarray<bool> &activeMask,
   return firstLaneInSub;
 }
 
-bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
-                                     const rdcarray<bool> &activeMask)
+bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 {
   m_CurrentInstruction = m_FunctionInfo->function->instructions[m_FunctionInstructionIdx];
   const Instruction &inst = *m_CurrentInstruction;
@@ -2148,7 +2145,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             RDCASSERT(GetShaderVariable(inst.args[4], opCode, dxOpCode, arg));
 
             // Only the active lane stores outputs
-            if(m_State)
+            if(m_HasDebugState)
             {
               ShaderVariable &var = m_Output.var.members[outputIdx];
               if(var.rows == 0)
@@ -3461,7 +3458,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             if(cond.value.u32v[0] != 0)
             {
               // Active lane is demoted to helper invocation which for pixel debug terminates the debug
-              if(m_State)
+              if(m_HasDebugState)
               {
                 m_Dead = true;
                 return true;
@@ -4113,7 +4110,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
           {
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             result.value.u32v[0] = (m_WorkgroupIndex == activeLanes[0]) ? 1 : 0;
             break;
@@ -4143,7 +4140,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
             // WaveReadLaneFirst(value)
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             uint32_t lane = activeLanes[0];
             if(lane < workgroup.size())
@@ -4183,7 +4180,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
             for(uint32_t lane : activeLanes)
             {
@@ -4256,7 +4253,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             uint32_t maxLane = (dxOpCode == DXOp::WavePrefixBitCount) ? m_WorkgroupIndex : UINT32_MAX;
@@ -4329,8 +4326,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            const uint32_t firstLaneInSub =
-                GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            const uint32_t firstLaneInSub = GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
@@ -4412,7 +4408,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
@@ -4543,7 +4539,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
@@ -4608,8 +4604,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            const uint32_t firstLaneInSub =
-                GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            const uint32_t firstLaneInSub = GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             for(uint32_t lane : activeLanes)
@@ -4677,8 +4672,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            const uint32_t firstLaneInSub =
-                GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            const uint32_t firstLaneInSub = GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             uint32_t maxLane = m_WorkgroupIndex;
@@ -4790,8 +4784,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
             // determine active lane indices in our subgroup
             rdcarray<uint32_t> activeLanes;
-            const uint32_t firstLaneInSub =
-                GetSubgroupActiveLanes(activeMask, workgroup, activeLanes);
+            const uint32_t firstLaneInSub = GetSubgroupActiveLanes(workgroup, activeLanes);
             RDCASSERT(!SubgroupIsDiverged(workgroup, activeLanes));
 
             uint32_t maxLane = m_WorkgroupIndex;
@@ -5464,7 +5457,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
       UpdateBackingMemoryFromVariable(memory, allocSize, val);
 
-      bool recordBaseMemoryChange = m_State && baseMemoryId != ptrId;
+      bool recordBaseMemoryChange = m_HasDebugState && baseMemoryId != ptrId;
       ShaderVariableChange change;
       RDCASSERT(IsVariableAssigned(baseMemoryId));
       if(recordBaseMemoryChange)
@@ -5480,7 +5473,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
       UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocation.backingMemory);
 
       // active lane : writes to a GSM variable, write to local and global backing memory
-      if(m_State)
+      if(m_HasDebugState)
         UpdateGlobalBackingMemory(ptrId, ptr, allocation, val);
 
       // record the change to the base memory variable if it is not the ptrId variable
@@ -5492,7 +5485,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
           m_Assigned[baseMemoryId] = true;
         }
         change.after = m_Variables[baseMemoryId];
-        m_State->changes.push_back(change);
+        m_PendingDebugState.changes.push_back(change);
       }
 
       // Update the ptr variable value and manually record the change to the ptr variable
@@ -5504,11 +5497,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
       m_Variables[ptrId] = newValue;
       m_Assigned[ptrId] = true;
 
-      if(m_State)
+      if(m_HasDebugState)
       {
         change.before = originalValue;
         change.after = newValue;
-        m_State->changes.push_back(change);
+        m_PendingDebugState.changes.push_back(change);
       }
 
       result.name.clear();
@@ -6600,7 +6593,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
       // Save the result back to the backing memory of the pointer
       UpdateBackingMemoryFromVariable(memory, allocSize, res);
 
-      bool recordBaseMemoryChange = m_State && baseMemoryId != resultId;
+      bool recordBaseMemoryChange = m_HasDebugState && baseMemoryId != resultId;
       ShaderVariableChange change;
       if(recordBaseMemoryChange)
         change.before = m_Variables[baseMemoryId];
@@ -6608,7 +6601,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
       UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocMemoryBackingPtr);
 
       // active lane : writes to a GSM variable, write to local and global backing memory
-      if(m_State)
+      if(m_HasDebugState)
         UpdateGlobalBackingMemory(ptrId, ptr, allocation, res);
 
       // record the change to the base memory variable
@@ -6620,11 +6613,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
           m_Assigned[baseMemoryId] = true;
         }
         change.after = m_Variables[baseMemoryId];
-        m_State->changes.push_back(change);
+        m_PendingDebugState.changes.push_back(change);
       }
 
       // record the change to the ptr variable value
-      bool recordPtrMemoryChange = m_State && ptrId != resultId;
+      bool recordPtrMemoryChange = m_HasDebugState && ptrId != resultId;
       RDCASSERT(IsVariableAssigned(ptrId));
       if(recordPtrMemoryChange)
         change.before = m_Variables[ptrId];
@@ -6634,7 +6627,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
       if(recordPtrMemoryChange)
       {
         change.after = m_Variables[ptrId];
-        m_State->changes.push_back(change);
+        m_PendingDebugState.changes.push_back(change);
       }
 
       RDCASSERTNOTEQUAL(resultId, ptrId);
@@ -6673,7 +6666,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
 
   if(!result.name.empty() && resultId != DXILDebug::INVALID_ID)
   {
-    if(m_State)
+    if(m_HasDebugState)
       SetResult(resultId, result, opCode, dxOpCode, eventFlags);
 
     // Fake Output results won't be in the referencedIds
@@ -6711,8 +6704,8 @@ void ThreadState::StepOverNopInstructions()
 
 void ThreadState::RetireLiveIDs()
 {
-  m_State->flags = ShaderEvents::NoEvent;
-  m_State->changes.clear();
+  m_PendingDebugState.flags = ShaderEvents::NoEvent;
+  m_PendingDebugState.changes.clear();
 
   // Remove variables which have gone out of scope
   ExecPointReference current(m_Block, m_FunctionInstructionIdx);
@@ -6737,15 +6730,14 @@ void ThreadState::RetireLiveIDs()
 
       ShaderVariableChange change;
       change.before = m_Variables[id];
-      m_State->changes.push_back(change);
+      m_PendingDebugState.changes.push_back(change);
     }
   }
 }
 
-void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup,
-                           const rdcarray<bool> &activeMask)
+void ThreadState::StepNext(bool hasDebugState, const rdcarray<ThreadState> &workgroup)
 {
-  m_State = state;
+  m_HasDebugState = hasDebugState;
   m_Diverged = false;
   m_EnteredPoints.clear();
   m_ConvergencePoint = INVALID_EXECUTION_POINT;
@@ -6753,15 +6745,15 @@ void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> 
 
   RDCASSERTEQUAL(m_ActiveGlobalInstructionIdx,
                  m_FunctionInfo->globalInstructionOffset + m_FunctionInstructionIdx);
-  if(m_State)
+  if(m_HasDebugState)
   {
-    m_State->flags = ShaderEvents::NoEvent;
-    m_State->changes.clear();
-    RetireLiveIDs();
+    m_PendingDebugState.flags = ShaderEvents::NoEvent;
+    m_PendingDebugState.changes.clear();
   }
-  ExecuteInstruction(workgroup, activeMask);
+  ExecuteInstruction(workgroup);
+  StepOverNopInstructions();
 
-  m_State = NULL;
+  m_HasDebugState = false;
 }
 
 bool ThreadState::GetShaderVariableHelper(const DXIL::Value *dxilValue, DXIL::Operation op,
@@ -6963,19 +6955,19 @@ void ThreadState::SetResult(const Id &id, ShaderVariable &result, Operation op, 
 
   flags |= AssignValue(result, result, flushDenorm);
 
-  if(m_State)
+  if(m_HasDebugState)
   {
     ShaderVariableChange change;
-    m_State->flags |= flags;
+    m_PendingDebugState.flags |= flags;
     change.before = m_Variables[id];
     change.after = result;
-    m_State->changes.push_back(change);
+    m_PendingDebugState.changes.push_back(change);
   }
 }
 
 void ThreadState::MarkResourceAccess(const ShaderVariable &var)
 {
-  if(m_State == NULL)
+  if(!m_HasDebugState)
     return;
 
   if(var.type != VarType::ReadOnlyResource && var.type != VarType::ReadWriteResource)
@@ -6985,7 +6977,7 @@ void ThreadState::MarkResourceAccess(const ShaderVariable &var)
   change.before = var;
   change.after = var;
 
-  m_State->changes.push_back(change);
+  m_PendingDebugState.changes.push_back(change);
 }
 
 void ThreadState::UpdateBackingMemoryFromVariable(void *ptr, uint64_t &allocSize,
@@ -7537,7 +7529,7 @@ ShaderValue ThreadState::DDY(bool fine, Operation opCode, DXOp dxOpCode,
 void ThreadState::ExecuteMemoryBarrier()
 {
   // ignore if not the active thread
-  if(!m_State)
+  if(!m_HasDebugState)
     return;
 
   // copy the global GSM memory into the local GSM cache
@@ -7573,7 +7565,7 @@ void ThreadState::ExecuteMemoryBarrier()
     UpdateMemoryVariableFromBackingMemory(id, globalBackingMemory);
     change.after = local;
     if(!(change.after == change.before))
-      m_State->changes.push_back(change);
+      m_PendingDebugState.changes.push_back(change);
 
     // Update local backing memory from the local variable
     RDCASSERTEQUAL(globalMem->second.size, localMem->second.size);
@@ -7603,14 +7595,14 @@ bool ThreadState::WorkgroupIsDiverged(const rdcarray<ThreadState> &workgroup)
     if(block0 == ~0U)
     {
       block0 = workgroup[i].m_Block;
-      instr0 = workgroup[i].m_ActiveGlobalInstructionIdx;
+      instr0 = workgroup[i].m_CurrentGlobalInstructionIdx;
       continue;
     }
     // not in the same basic block
     if(workgroup[i].m_Block != block0)
       return true;
     // not executing the same instruction
-    if(workgroup[i].m_ActiveGlobalInstructionIdx != instr0)
+    if(workgroup[i].m_CurrentGlobalInstructionIdx != instr0)
       return true;
   }
   return false;
@@ -7628,14 +7620,14 @@ bool ThreadState::SubgroupIsDiverged(const rdcarray<ThreadState> &workgroup,
     if(block0 == ~0U)
     {
       block0 = workgroup[lane].m_Block;
-      instr0 = workgroup[lane].m_ActiveGlobalInstructionIdx;
+      instr0 = workgroup[lane].m_CurrentGlobalInstructionIdx;
       continue;
     }
     // not in the same basic block
     if(workgroup[lane].m_Block != block0)
       return true;
     // not executing the same instruction
-    if(workgroup[lane].m_ActiveGlobalInstructionIdx != instr0)
+    if(workgroup[lane].m_CurrentGlobalInstructionIdx != instr0)
       return true;
   }
   return false;
@@ -7660,14 +7652,14 @@ bool ThreadState::QuadIsDiverged(const rdcarray<ThreadState> &workgroup,
     if(block0 == ~0U)
     {
       block0 = workgroup[i].m_Block;
-      instr0 = workgroup[i].m_ActiveGlobalInstructionIdx;
+      instr0 = workgroup[i].m_CurrentGlobalInstructionIdx;
       continue;
     }
     // not in the same basic block
     if(workgroup[i].m_Block != block0)
       return true;
     // not executing the same instruction
-    if(workgroup[i].m_ActiveGlobalInstructionIdx != instr0)
+    if(workgroup[i].m_CurrentGlobalInstructionIdx != instr0)
       return true;
   }
   return false;
@@ -8978,7 +8970,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   m_GlobalState.constantBlocksDatas = apiWrapper->GetConstantBlocksDatas();
 
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
-    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId, i));
+    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId, i, threadsInWorkgroup));
 
   // Get the thread state from the API wrapper
   const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &threadsBuiltins =
@@ -9824,6 +9816,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
   ThreadState &active = GetActiveLane();
 
   rdcarray<ShaderDebugState> ret;
+  m_ShaderChangesReturn = NULL;
 
   // initialise the first ShaderDebugState if we haven't stepped yet
   if(m_Steps == 0)
@@ -9837,14 +9830,17 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
 
       if(lane == m_ActiveLaneIndex)
       {
-        thread.EnterEntryPoint(m_EntryPointFunction, &initial);
+        thread.EnterEntryPoint(m_EntryPointFunction, true);
         thread.FillCallstack(initial);
         initial.nextInstruction = thread.GetActiveGlobalInstructionIdx();
+        const ShaderDebugState &pendingDebugState = thread.GetPendingDebugState();
+        initial.flags = pendingDebugState.flags;
+        initial.changes.append(pendingDebugState.changes);
         startPoint = initial.nextInstruction;
       }
       else
       {
-        thread.EnterEntryPoint(m_EntryPointFunction, NULL);
+        thread.EnterEntryPoint(m_EntryPointFunction, false);
       }
     }
 
@@ -9880,12 +9876,14 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
   if(active.Finished())
     return ret;
 
-  rdcarray<bool> activeMask;
+  bool allStepsCompleted = true;
+  m_ShaderChangesReturn = &ret;
 
   // continue stepping until we have 1000000 target steps completed in a chunk.
   for(int stepEnd = m_Steps + 1000000; m_Steps < stepEnd;)
   {
-    if(active.Finished())
+    allStepsCompleted = true;
+    if(active.Finished() && !active.IsSimulationStepActive())
       break;
 
     // Execute the threads in each active tangle
@@ -9893,31 +9891,97 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
     TangleGroup &tangles = m_ControlFlow.GetTangles();
 
     bool anyActiveThreads = false;
+    bool hasDebugState = false;
+
+    for(const Tangle &tangle : tangles)
+    {
+      if(!tangle.IsAliveActive())
+        continue;
+
+      rdcarray<bool> activeMask;
+      // one bool per workgroup thread
+      activeMask.resize(m_Workgroup.size());
+
+      // calculate the current active thread mask from the threads in the tangle
+      for(size_t i = 0; i < m_Workgroup.size(); i++)
+        activeMask[i] = false;
+
+      const rdcarray<ThreadReference> &threadRefs = tangle.GetThreadRefs();
+      for(const ThreadReference &ref : threadRefs)
+      {
+        uint32_t lane = ref.id;
+        RDCASSERT(lane < m_Workgroup.size(), lane, m_Workgroup.size());
+        ThreadState &thread = m_Workgroup[lane];
+        RDCASSERT(!thread.Finished());
+        activeMask[lane] = true;
+        anyActiveThreads = true;
+      }
+
+      // step all threads in the tangle
+      for(const ThreadReference &ref : threadRefs)
+      {
+        const uint32_t threadId = ref.id;
+        const uint32_t lane = threadId;
+
+        ThreadState &thread = m_Workgroup[lane];
+        if(thread.Finished())
+        {
+          if(lane == m_ActiveLaneIndex)
+            ret.emplace_back();
+          continue;
+        }
+        if(lane == m_ActiveLaneIndex)
+          hasDebugState = true;
+
+        thread.SetActiveMask(activeMask);
+        QueueJob(lane);
+      }
+    }
+
+    do
+    {
+      allStepsCompleted = true;
+      for(const Tangle &tangle : tangles)
+      {
+        if(!tangle.IsAliveActive())
+          continue;
+
+        bool tangleStepsCompleted = true;
+        const rdcarray<ThreadReference> &threadRefs = tangle.GetThreadRefs();
+        for(const ThreadReference &ref : threadRefs)
+        {
+          const uint32_t threadId = ref.id;
+          const uint32_t lane = threadId;
+          ThreadState &thread = m_Workgroup[lane];
+          if(thread.IsSimulationStepActive())
+          {
+            tangleStepsCompleted = false;
+            break;
+          }
+        }
+        if(!tangleStepsCompleted)
+        {
+          allStepsCompleted = false;
+          break;
+        }
+      }
+    } while(!allStepsCompleted);
+
     for(Tangle &tangle : tangles)
     {
       if(!tangle.IsAliveActive())
         continue;
 
       const rdcarray<ThreadReference> &threadRefs = tangle.GetThreadRefs();
-      // calculate the current active thread mask from the threads in the tangle
+#if !defined(RELEASE)
+      for(const ThreadReference &ref : threadRefs)
       {
-        // one bool per workgroup thread
-        activeMask.resize(m_Workgroup.size());
-
-        // start with all threads as inactive
-        for(size_t i = 0; i < m_Workgroup.size(); i++)
-          activeMask[i] = false;
-
-        // activate the threads in the tangle
-        for(const ThreadReference &ref : threadRefs)
-        {
-          uint32_t idx = ref.id;
-          RDCASSERT(idx < m_Workgroup.size(), idx, m_Workgroup.size());
-          RDCASSERT(!m_Workgroup[idx].Finished());
-          activeMask[idx] = true;
-          anyActiveThreads = true;
-        }
+        const uint32_t threadId = ref.id;
+        const uint32_t lane = threadId;
+        ThreadState &thread = m_Workgroup[lane];
+        RDCASSERT(!thread.IsSimulationStepActive());
       }
+#endif    // #if !defined(RELEASE)
 
       const DXIL::BlockArray *newPartialConvergentPoints = NULL;
       ExecutionPoint newConvergencePoint = INVALID_EXECUTION_POINT;
@@ -9926,36 +9990,18 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
       uint32_t countConvergePointThreads = 0;
       uint32_t countPartialConvergePointThreads = 0;
 
-      // step all active members of the workgroup
-      ShaderDebugState state;
-      bool hasDebugState = false;
-      for(size_t lane = 0; lane < m_Workgroup.size(); lane++)
+      // Update the control flow state
+      for(const ThreadReference &ref : threadRefs)
       {
-        if(!activeMask[lane])
-          continue;
+        const uint32_t threadId = ref.id;
+        const uint32_t lane = threadId;
+        ThreadState &thread = m_Workgroup[lane];
         ++countActiveThreads;
 
-        ThreadState &thread = m_Workgroup[lane];
-        const uint32_t threadId = (uint32_t)lane;
         if(thread.Finished())
         {
-          if(lane == m_ActiveLaneIndex)
-            ret.emplace_back();
-
           tangle.SetThreadDead(threadId);
           continue;
-        }
-
-        if(lane == m_ActiveLaneIndex)
-        {
-          hasDebugState = true;
-          state.stepIndex = m_Steps;
-          thread.StepNext(&state, m_Workgroup, activeMask);
-          m_Steps++;
-        }
-        else
-        {
-          thread.StepNext(NULL, m_Workgroup, activeMask);
         }
 
         threadExecutionStates[threadId] = thread.GetEnteredPoints();
@@ -9994,25 +10040,17 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
           ++countPartialConvergePointThreads;
         }
 
-        if(thread.Finished())
-          tangle.SetThreadDead(threadId);
-
         if(thread.GetDiverged())
           ++countDivergedThreads;
       }
-      for(size_t lane = 0; lane < m_Workgroup.size(); lane++)
+
+      for(const ThreadReference &ref : threadRefs)
       {
-        if(activeMask[lane])
-          m_Workgroup[lane].StepOverNopInstructions();
+        const uint32_t threadId = ref.id;
+        const uint32_t lane = threadId;
+        m_Workgroup[lane].UpdateCurrentInstruction();
       }
-      // Update UI state after the execute and step over nops to make sure state.nextInstruction is in sync
-      if(hasDebugState)
-      {
-        ThreadState &thread = m_Workgroup[m_ActiveLaneIndex];
-        state.nextInstruction = thread.GetActiveGlobalInstructionIdx();
-        thread.FillCallstack(state);
-        ret.push_back(std::move(state));
-      }
+
       if(countConvergePointThreads)
       {
         // all the active threads should have a convergence point if any have one
@@ -10050,6 +10088,9 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
     }
     m_ControlFlow.UpdateState(threadExecutionStates);
   }
+
+  RDCASSERT(allStepsCompleted);
+  m_ShaderChangesReturn = NULL;
   return ret;
 }
 
@@ -10131,5 +10172,91 @@ ShaderDirectAccess Debugger::GetShaderDirectAccess(DescriptorType type,
 {
   CHECK_DEBUGGER_THREAD();
   return m_ApiWrapper->GetShaderDirectAccess(type, slot);
+}
+
+// Called from any thread
+void Debugger::StepThread(uint32_t lane, StepThreadMode stepMode)
+{
+  ThreadState &thread = m_Workgroup[lane];
+  bool isActiveThread = lane == m_ActiveLaneIndex;
+  bool simulateStep = true;
+  DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+  int curActiveSteps = isActiveThread ? m_Steps : 0;
+
+  while(simulateStep)
+  {
+    simulateStep = false;
+    {
+      thread.ClearPendingDebugState();
+      if(isActiveThread)
+        m_ActiveDebugState.stepIndex = curActiveSteps;
+      InternalStepThread(lane);
+      thread.ClearPendingDebugState();
+    }
+
+    if(isActiveThread)
+      curActiveSteps++;
+  };
+  // Update the number of simulation steps
+  if(isActiveThread)
+    m_Steps = curActiveSteps;
+
+  DXIL_DEBUG_RDCASSERT(thread.IsSimulationStepActive());
+
+  if(simulateStep)
+  {
+    DXIL_DEBUG_RDCASSERTEQUAL(stepMode, StepThreadMode::QUEUE_MULTIPLE_STEPS);
+    QueueJob(lane);
+    return;
+  }
+  thread.SetSimulationStepCompleted();
+}
+
+// Called from any thread
+void Debugger::InternalStepThread(uint32_t lane)
+{
+  ThreadState &thread = m_Workgroup[lane];
+  if(lane == m_ActiveLaneIndex)
+  {
+    if(m_RetireIDs)
+    {
+      thread.RetireLiveIDs();
+      m_RetireIDs = false;
+      const ShaderDebugState &pendingDebugState = thread.GetPendingDebugState();
+      m_ActiveDebugState.changes.append(pendingDebugState.changes);
+      thread.ClearPendingDebugState();
+    }
+    thread.StepNext(true, m_Workgroup);
+    thread.FillCallstack(m_ActiveDebugState);
+
+    const ShaderDebugState &pendingDebugState = thread.GetPendingDebugState();
+    m_ActiveDebugState.nextInstruction = pendingDebugState.nextInstruction;
+    m_ActiveDebugState.flags = pendingDebugState.flags;
+    m_ActiveDebugState.changes.append(pendingDebugState.changes);
+    thread.ClearPendingDebugState();
+
+    m_ShaderChangesReturn->push_back(m_ActiveDebugState);
+    {
+      m_ActiveDebugState.callstack.clear();
+      m_ActiveDebugState.changes.clear();
+      m_ActiveDebugState.flags = ShaderEvents::NoEvent;
+      m_ActiveDebugState.stepIndex = 0;
+      m_ActiveDebugState.nextInstruction = 0;
+      m_RetireIDs = true;
+    }
+  }
+  else
+  {
+    thread.StepNext(false, m_Workgroup);
+  }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::QueueJob(uint32_t lane)
+{
+  CHECK_DEBUGGER_THREAD();
+  ThreadState &thread = m_Workgroup[lane];
+  thread.SetStepQueued();
+  StepThread(lane, StepThreadMode::RUN_SINGLE_STEP);
 }
 };    // namespace DXILDebug
