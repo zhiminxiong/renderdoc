@@ -152,6 +152,11 @@ public:
   D3D12DebugManager(WrappedID3D12Device *wrapper);
   ~D3D12DebugManager();
 
+  enum
+  {
+    MAX_SHADER_DEBUG_QUEUED_OPS = 128
+  };
+
   void GetBufferData(ID3D12Resource *buff, uint64_t offset, uint64_t length, bytebuf &retData);
 
   ID3D12Resource *MakeCBuffer(UINT64 size);

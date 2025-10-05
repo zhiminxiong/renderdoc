@@ -570,7 +570,14 @@ D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Progra
       m_EventId(eventId),
       m_Program(dxilProgram),
       m_Reflection(refl),
-      m_DeviceThreadID(Threading::GetCurrentID())
+      m_DeviceThreadID(Threading::GetCurrentID()),
+      m_QueuedOpCmdList(NULL),
+      m_QueuedMathOpIndex(0),
+      m_QueuedSampleGatherOpIndex(0),
+      m_MathOpResultOffset(0),
+      m_MaxQueuedOps(D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS),
+      m_SampleGatherOpResultsStart(D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS *
+                                   m_MathOpResultByteSize)
 {
   // Create the storage layout for the constant buffers
   // The constant buffer data and details are filled in outside of this method
@@ -1574,11 +1581,26 @@ UAVInfo D3D12APIWrapper::GetUAV(const BindingSlot &slot)
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-bool D3D12APIWrapper::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
-                                             ShaderVariable &output)
+bool D3D12APIWrapper::QueueMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input)
 {
   CHECK_DEVICE_THREAD();
-  D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "CalculateMathIntrinsic");
+  ID3D12GraphicsCommandListX *cmdList = m_QueuedOpCmdList;
+  if(!cmdList)
+  {
+    if(StartQueuedOps())
+      cmdList = m_QueuedOpCmdList;
+  }
+  if(!cmdList)
+    return false;
+
+  if(!QueuedOpsHasSpace())
+  {
+    m_Device->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
+                              MessageSource::RuntimeWarning, "Too many GPU queued operations");
+    return false;
+  }
+
+  D3D12MarkerRegion region(m_Device->GetQueue()->GetReal(), "QueueMathIntrinsic");
 
   int mathOp;
   switch(dxOp)
@@ -1604,18 +1626,36 @@ bool D3D12APIWrapper::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariab
       return false;
   }
 
-  ShaderVariable ignored;
-  return D3D12ShaderDebug::CalculateMathIntrinsic(true, m_Device, mathOp, input, output, ignored);
+  return D3D12ShaderDebug::QueueMathIntrinsic(false, m_Device, cmdList, mathOp, input,
+                                              m_QueuedMathOpIndex++);
 }
 
 // Must be called from the replay manager thread (the debugger thread)
-bool D3D12APIWrapper::CalculateSampleGather(
-    DXIL::DXOp dxOp, SampleGatherResourceData resourceData, SampleGatherSamplerData samplerData,
-    const ShaderVariable &uv, const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
-    const int8_t texelOffsets[3], int multisampleIndex, float lodValue, float compareValue,
-    GatherChannel gatherChannel, uint32_t instructionIdx, ShaderVariable &output)
+bool D3D12APIWrapper::QueueSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
+                                        SampleGatherSamplerData samplerData,
+                                        const ShaderVariable &uv, const ShaderVariable &ddxCalc,
+                                        const ShaderVariable &ddyCalc, const int8_t texelOffsets[3],
+                                        int multisampleIndex, float lodValue, float compareValue,
+                                        GatherChannel gatherChannel, uint32_t instructionIdx,
+                                        int &sampleRetType)
 {
   CHECK_DEVICE_THREAD();
+  ID3D12GraphicsCommandListX *cmdList = m_QueuedOpCmdList;
+  if(!cmdList)
+  {
+    if(StartQueuedOps())
+      cmdList = m_QueuedOpCmdList;
+  }
+  if(!cmdList)
+    return false;
+
+  if(!QueuedOpsHasSpace())
+  {
+    m_Device->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
+                              MessageSource::RuntimeWarning, "Too many GPU queued operations");
+    return false;
+  }
+
   int sampleOp;
   switch(dxOp)
   {
@@ -1642,10 +1682,59 @@ bool D3D12APIWrapper::CalculateSampleGather(
 
   const char *opString = ToStr(dxOp).c_str();
   uint8_t swizzle[4] = {0, 1, 2, 3};
-  return D3D12ShaderDebug::CalculateSampleGather(
-      true, m_Device, sampleOp, resourceData, samplerData, uv, ddxCalc, ddyCalc, texelOffsets,
-      multisampleIndex, lodValue, compareValue, swizzle, gatherChannel, m_ShaderType,
-      instructionIdx, opString, output);
+  return D3D12ShaderDebug::QueueSampleGather(
+      true, m_Device, m_QueuedOpCmdList, sampleOp, resourceData, samplerData, uv, ddxCalc, ddyCalc,
+      texelOffsets, multisampleIndex, lodValue, compareValue, swizzle, gatherChannel, m_ShaderType,
+      instructionIdx, opString, m_QueuedSampleGatherOpIndex++, sampleRetType);
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+bool D3D12APIWrapper::StartQueuedOps()
+{
+  CHECK_DEVICE_THREAD();
+
+  RDCASSERTEQUAL(m_QueuedMathOpIndex, 0);
+  RDCASSERTEQUAL(m_QueuedSampleGatherOpIndex, 0);
+  RDCASSERTEQUAL(m_QueuedOpCmdList, NULL);
+  RDCASSERTEQUAL(m_MathOpResultOffset, 0);
+
+  if(m_QueuedOpCmdList)
+    return false;
+
+  m_QueuedOpCmdList = m_Device->GetDebugManager()->ResetDebugList();
+  if(!m_QueuedOpCmdList)
+    return false;
+
+  return true;
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+bool D3D12APIWrapper::GetQueuedResults(rdcarray<ShaderVariable *> &mathOpResults,
+                                       rdcarray<ShaderVariable *> &sampleGatherResults,
+                                       const rdcarray<int> &sampleRetTypes)
+{
+  const uint32_t countMathResultsPerGpuOp = 1;
+  rdcarray<const uint8_t *> swizzles;
+  uint8_t swizzle[4] = {0, 1, 2, 3};
+  for(size_t i = 0; i < sampleGatherResults.size(); ++i)
+    swizzles.push_back(swizzle);
+
+  bool ret = D3D12ShaderDebug::GetQueuedResults(m_Device, m_QueuedOpCmdList, mathOpResults,
+                                                countMathResultsPerGpuOp, sampleGatherResults,
+                                                sampleRetTypes, swizzles);
+
+  m_QueuedOpCmdList = NULL;
+  m_QueuedMathOpIndex = 0;
+  m_QueuedSampleGatherOpIndex = 0;
+  m_MathOpResultOffset = 0;
+
+  return ret;
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+bool D3D12APIWrapper::QueuedOpsHasSpace() const
+{
+  return (m_QueuedMathOpIndex + m_QueuedSampleGatherOpIndex) < m_MaxQueuedOps;
 }
 
 // Called from any thread

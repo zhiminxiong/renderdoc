@@ -54,14 +54,17 @@ public:
   UAVInfo GetUAV(const BindingSlot &slot) override;
   SRVInfo GetSRV(const BindingSlot &slot) override;
 
-  bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
-                              ShaderVariable &output) override;
-  bool CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
-                             SampleGatherSamplerData samplerData, const ShaderVariable &uv,
-                             const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
-                             const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
-                             float compareValue, GatherChannel gatherChannel,
-                             uint32_t instructionIdx, ShaderVariable &output) override;
+  bool QueueMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input) override;
+  bool QueueSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
+                         SampleGatherSamplerData samplerData, const ShaderVariable &uv,
+                         const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                         const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
+                         float compareValue, GatherChannel gatherChannel, uint32_t instructionIdx,
+                         int &sampleRetType) override;
+  bool GetQueuedResults(rdcarray<ShaderVariable *> &mathOpResults,
+                        rdcarray<ShaderVariable *> &sampleGatherResults,
+                        const rdcarray<int> &sampleRetTypes) override;
+  bool QueuedOpsHasSpace() const override;
 
   ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
                                  uint32_t mipLevel) override;
@@ -144,6 +147,7 @@ private:
                                  const char *opString);
   ResourceReferenceInfo FetchResourceReferenceInfo(const DXDebug::BindingSlot &slot);
   ShaderDirectAccess FetchShaderDirectAccess(DescriptorType type, const DXDebug::BindingSlot &slot);
+  bool StartQueuedOps();
 
   BuiltinInputs m_Builtins;
   rdcarray<DXILDebug::ThreadProperties> m_WorkgroupProperties;
@@ -195,6 +199,16 @@ private:
 
   const ShaderReflection &m_Reflection;
   WrappedID3D12Device *m_Device = NULL;
+
+  ID3D12GraphicsCommandListX *m_QueuedOpCmdList = NULL;
+  uint32_t m_QueuedMathOpIndex = 0;
+  uint32_t m_QueuedSampleGatherOpIndex = 0;
+  uint64_t m_MathOpResultOffset = 0;
+  const uint32_t m_MaxQueuedOps = 0;
+  const uint64_t m_MathOpResultByteSize = sizeof(Vec4f) * 2;
+  const uint64_t m_SampleGatherOpResultByteSize = sizeof(Vec4f);
+  const uint64_t m_SampleGatherOpResultsStart;
+
   const DXIL::Program *m_Program = NULL;
   const DXIL::EntryPointInterface *m_EntryPointInterface = NULL;
   const DXBC::ShaderType m_ShaderType;

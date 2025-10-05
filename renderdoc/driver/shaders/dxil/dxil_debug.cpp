@@ -10482,6 +10482,7 @@ void Debugger::ProcessQueuedOps()
   CHECK_DEBUGGER_THREAD();
   ProcessQueuedGpuMathOps();
   ProcessQueuedGpuSampleGatherOps();
+  SyncPendingGpuOps();
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -10508,11 +10509,14 @@ void Debugger::ProcessQueuedGpuMathOps()
   {
     if(m_QueuedGpuMathOps[lane])
     {
+      if(!m_ApiWrapper->QueuedOpsHasSpace())
+        SyncPendingGpuOps();
+
       m_QueuedGpuMathOps[lane] = false;
       const GpuMathOperation &mathOp = m_Workgroup[lane].GetQueuedGpuMathOp();
 
       uint32_t workgroupIndex = mathOp.workgroupIndex;
-      if(m_ApiWrapper->CalculateMathIntrinsic(mathOp.dxOp, mathOp.input, *mathOp.result))
+      if(m_ApiWrapper->QueueMathIntrinsic(mathOp.dxOp, mathOp.input))
       {
         m_PendingGpuMathsOpsResults.push_back(mathOp.result);
       }
@@ -10536,30 +10540,55 @@ void Debugger::ProcessQueuedGpuSampleGatherOps()
   {
     if(m_QueuedGpuSampleGatherOps[lane])
     {
+      if(!m_ApiWrapper->QueuedOpsHasSpace())
+        SyncPendingGpuOps();
+
       m_QueuedGpuSampleGatherOps[lane] = false;
       const GpuSampleGatherOperation &sampleGatherOp = m_Workgroup[lane].GetQueuedGpuSampleGatherOp();
 
       uint32_t workgroupIndex = sampleGatherOp.workgroupIndex;
       ShaderVariable &result = *sampleGatherOp.result;
       bool hasResult = false;
-      if(!m_ApiWrapper->CalculateSampleGather(
+      int sampleRetType = 0;
+      if(!m_ApiWrapper->QueueSampleGather(
              sampleGatherOp.dxOp, sampleGatherOp.resourceData, sampleGatherOp.samplerData,
              sampleGatherOp.uv, sampleGatherOp.ddxCalc, sampleGatherOp.ddyCalc,
              sampleGatherOp.texelOffsets, sampleGatherOp.multisampleIndex, sampleGatherOp.lodValue,
              sampleGatherOp.compareValue, sampleGatherOp.gatherChannel,
-             sampleGatherOp.instructionIdx, *sampleGatherOp.result))
+             sampleGatherOp.instructionIdx, sampleRetType))
       {
         // sample failed. Pretend we got 0 columns back
         set0001(result);
         hasResult = true;
       }
       if(!hasResult)
+      {
         m_PendingGpuSampleGatherOpsResults.push_back(sampleGatherOp.result);
+        m_PendingGpuSampleGatherOpsSampleRetTypes.push_back(sampleRetType);
+      }
 
       DXIL_DEBUG_RDCASSERT(!m_PendingLanes[workgroupIndex]);
       m_PendingLanes[workgroupIndex] = true;
     }
   }
+}
+
+// Must be called from the replay manager thread (the debugger thread)
+void Debugger::SyncPendingGpuOps()
+{
+  CHECK_DEBUGGER_THREAD();
+  if(m_PendingGpuMathsOpsResults.empty() && m_PendingGpuSampleGatherOpsResults.empty())
+    return;
+
+  if(!(m_ApiWrapper->GetQueuedResults(m_PendingGpuMathsOpsResults, m_PendingGpuSampleGatherOpsResults,
+                                      m_PendingGpuSampleGatherOpsSampleRetTypes)))
+  {
+    RDCERR("GetQueuedResults failed");
+    return;
+  }
+  m_PendingGpuMathsOpsResults.clear();
+  m_PendingGpuSampleGatherOpsResults.clear();
+  m_PendingGpuSampleGatherOpsSampleRetTypes.clear();
 }
 
 void Debugger::SimulationJobHelper()

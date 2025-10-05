@@ -307,14 +307,17 @@ public:
   virtual UAVInfo GetUAV(const BindingSlot &slot) = 0;
   virtual SRVInfo GetSRV(const BindingSlot &slot) = 0;
 
-  virtual bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
-                                      ShaderVariable &output) = 0;
-  virtual bool CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
-                                     SampleGatherSamplerData samplerData, const ShaderVariable &uv,
-                                     const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
-                                     const int8_t texelOffsets[3], int multisampleIndex,
-                                     float lodValue, float compareValue, GatherChannel gatherChannel,
-                                     uint32_t instructionIdx, ShaderVariable &output) = 0;
+  virtual bool QueueMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input) = 0;
+  virtual bool QueueSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
+                                 SampleGatherSamplerData samplerData, const ShaderVariable &uv,
+                                 const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                                 const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
+                                 float compareValue, GatherChannel gatherChannel,
+                                 uint32_t instructionIdx, int &sampleRetType) = 0;
+  virtual bool GetQueuedResults(rdcarray<ShaderVariable *> &mathOpResults,
+                                rdcarray<ShaderVariable *> &sampleGatherResults,
+                                const rdcarray<int> &sampleRetTypes) = 0;
+  virtual bool QueuedOpsHasSpace() const = 0;
   virtual ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass,
                                          const DXDebug::BindingSlot &slot, uint32_t mipLevel) = 0;
   virtual ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass,
@@ -948,6 +951,7 @@ private:
   void ProcessQueuedOps();
   void ProcessQueuedGpuMathOps();
   void ProcessQueuedGpuSampleGatherOps();
+  void SyncPendingGpuOps();
   void SyncPendingLanes();
 
   void QueueGpuMathOp(uint32_t lane);
@@ -970,6 +974,7 @@ private:
   rdcarray<bool> m_PendingLanes;
   rdcarray<ShaderVariable *> m_PendingGpuMathsOpsResults;
   rdcarray<ShaderVariable *> m_PendingGpuSampleGatherOpsResults;
+  rdcarray<int> m_PendingGpuSampleGatherOpsSampleRetTypes;
 
   // the live mutable global variables, to initialise a stack frame's live list
   rdcarray<bool> m_LiveGlobals;
