@@ -6378,6 +6378,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
       const uint32_t c = 0;
 
       ShaderVariable res = a;
+      bool matched = false;
 
       if(opCode == Operation::AtomicExchange)
       {
@@ -6471,8 +6472,9 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
         RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, cmp));
 
 #undef _IMPL
-#define _IMPL(I, S, U) \
-  comp<I>(res, c) = comp<I>(a, c) == comp<I>(cmp, c) ? comp<I>(b, c) : comp<I>(a, c)
+#define _IMPL(I, S, U)                        \
+  matched = comp<I>(a, c) == comp<I>(cmp, c); \
+  comp<I>(res, c) = matched ? comp<I>(b, c) : comp<I>(a, c)
 
         IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, b.type);
       }
@@ -6522,7 +6524,27 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
       }
 
       RDCASSERTNOTEQUAL(resultId, ptrId);
-      result.value = res.value;
+      if(opCode == Operation::CompareExchange)
+      {
+        // Returns a struct
+        // { Original Value,  1 (equal) / 0 (not equal)
+        result.rows = 0;
+        result.columns = 0;
+        RDCASSERTEQUAL(result.type, VarType::Struct);
+        result.members.clear();
+        result.members.resize(2);
+        result.members[0] = res;
+        result.members[0].name = "original";
+        result.members[1].rows = 1;
+        result.members[1].columns = 1;
+        result.members[1].type = VarType::Bool;
+        result.members[1].name = "flag";
+        result.members[1].value.u32v[0] = matched ? 1 : 0;
+      }
+      else
+      {
+        result.value = res.value;
+      }
       break;
     }
     case Operation::AddrSpaceCast:
