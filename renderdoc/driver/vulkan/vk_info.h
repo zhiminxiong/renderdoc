@@ -364,6 +364,7 @@ struct VulkanCreationInfo
 
     // VkPipelineViewportStateCreateInfo
     uint32_t viewportCount;
+    uint32_t scissorCount;
     rdcarray<VkViewport> viewports;
     rdcarray<VkRect2D> scissors;
 

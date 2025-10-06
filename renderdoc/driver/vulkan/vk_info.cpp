@@ -1424,13 +1424,22 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
     viewportCount = 0;
 
   viewports.resize(viewportCount);
-  scissors.resize(viewportCount);
 
   for(uint32_t i = 0; i < viewportCount; i++)
   {
     if(pCreateInfo->pViewportState->pViewports)
       viewports[i] = pCreateInfo->pViewportState->pViewports[i];
+  }
 
+  if(pCreateInfo->pViewportState)
+    scissorCount = pCreateInfo->pViewportState->scissorCount;
+  else
+    scissorCount = 0;
+
+  scissors.resize(scissorCount);
+
+  for(uint32_t i = 0; i < scissorCount; i++)
+  {
     if(pCreateInfo->pViewportState->pScissors)
       scissors[i] = pCreateInfo->pViewportState->pScissors[i];
   }
@@ -1751,6 +1760,7 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
         vertLayout = pipeInfo.vertLayout;
 
         viewportCount = pipeInfo.viewportCount;
+        scissorCount = pipeInfo.scissorCount;
         viewports = pipeInfo.viewports;
         scissors = pipeInfo.scissors;
 
@@ -2013,6 +2023,7 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan, Vulk
   tessellationDomainOrigin = VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT;
 
   viewportCount = 0;
+  scissorCount = 0;
 
   // VkPipelineRasterStateCreateInfo
   depthClampEnable = false;
@@ -2079,6 +2090,7 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
   tessellationDomainOrigin = VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT;
 
   viewportCount = 0;
+  scissorCount = 0;
 
   // VkPipelineRasterStateCreateInfo
   depthClampEnable = false;
