@@ -5730,7 +5730,7 @@ void ShaderDebugData::Init(WrappedVulkan *driver, VkDescriptorPool descriptorPoo
                     GPUBuffer::eGPUBufferGPULocal | GPUBuffer::eGPUBufferSSBO);
 
   // don't need to ring this, as we hard-sync for readback anyway
-  uint32_t maxQueuedResults = 128;
+  uint32_t maxQueuedResults = ShaderDebugData::MAX_QUEUED_OPS;
   ReadbackBuffer.Create(driver, driver->GetDev(), resultMaxElementSize * maxQueuedResults, 1,
                         GPUBuffer::eGPUBufferReadback);
   ConstantsBuffer.Create(driver, driver->GetDev(), 1024, maxQueuedResults, 0);
