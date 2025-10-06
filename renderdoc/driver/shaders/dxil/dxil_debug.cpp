@@ -2039,8 +2039,7 @@ uint32_t ThreadState::GetSubgroupActiveLanes(const rdcarray<bool> &activeMask,
   return firstLaneInSub;
 }
 
-bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
-                                     const rdcarray<ThreadState> &workgroup,
+bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup,
                                      const rdcarray<bool> &activeMask)
 {
   m_CurrentInstruction = m_FunctionInfo->function->instructions[m_FunctionInstructionIdx];
@@ -2163,9 +2162,8 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, arg));
               mipLevel = arg.value.u32v[0];
             }
-            int dim;
-            data = apiWrapper->GetResourceInfo(resRefInfo.resClass, binding, mipLevel, m_ShaderType,
-                                               dim);
+            data = m_Debugger.GetResourceInfo(resRefInfo.resClass, binding, mipLevel);
+
             // Returns a vector with: w, h, d, numLevels
             result.value = data.value;
             // DXIL reports the vector result as a struct of 4 x int.
@@ -2191,8 +2189,8 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, arg));
             const char *opString = ToStr(dxOpCode).c_str();
-            ShaderVariable data = apiWrapper->GetSampleInfo(resRefInfo.resClass, resRefInfo.binding,
-                                                            m_ShaderType, opString);
+            ShaderVariable data =
+                m_Debugger.GetSampleInfo(resRefInfo.resClass, resRefInfo.binding, opString);
 
             uint32_t sampleCount = data.value.u32v[0];
             uint32_t sampleIndex = arg.value.u32v[0];
@@ -2212,14 +2210,14 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
           case DXOp::RenderTargetGetSampleCount:
           {
             const char *opString = ToStr(dxOpCode).c_str();
-            ShaderVariable data = apiWrapper->GetRenderTargetSampleInfo(m_ShaderType, opString);
+            ShaderVariable data = m_Debugger.GetRenderTargetSampleInfo(opString);
             result.value.u32v[0] = data.value.u32v[0];
             break;
           }
           case DXOp::RenderTargetGetSamplePosition:
           {
             const char *opString = ToStr(dxOpCode).c_str();
-            ShaderVariable data = apiWrapper->GetRenderTargetSampleInfo(m_ShaderType, opString);
+            ShaderVariable data = m_Debugger.GetRenderTargetSampleInfo(opString);
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
 
@@ -2257,7 +2255,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             if(!resRefInfo.Valid())
               break;
 
-            PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, apiWrapper, inst, result);
+            PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result);
             eventFlags |= ShaderEvents::SampleLoadGather;
             break;
           }
@@ -2284,7 +2282,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             // SRV TextureLoad is done on the GPU
             if((dxOpCode == DXOp::TextureLoad) && (resClass == ResourceClass::SRV))
             {
-              PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, apiWrapper, inst, result);
+              PerformGPUResourceOp(workgroup, opCode, dxOpCode, resRefInfo, inst, result);
               eventFlags |= ShaderEvents::SampleLoadGather;
               break;
             }
@@ -2364,7 +2362,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             {
               case ResourceClass::UAV:
               {
-                const UAVData &uav = apiWrapper->GetUAVData(resRefInfo.binding);
+                const UAVData &uav = m_Debugger.GetUAVData(resRefInfo.binding);
                 resInfo = uav.resInfo;
                 data = uav.data.data();
                 dataSize = uav.data.size();
@@ -2375,7 +2373,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               }
               case ResourceClass::SRV:
               {
-                const SRVData &srv = apiWrapper->GetSRVData(resRefInfo.binding);
+                const SRVData &srv = m_Debugger.GetSRVData(resRefInfo.binding);
                 resInfo = srv.resInfo;
                 data = srv.data.data();
                 dataSize = srv.data.size();
@@ -2562,11 +2560,11 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
 
             // convert the direct heap access binding into ResourceReferenceIndo
             BindingSlot slot(heapType, descriptorIndex);
-            ResourceReferenceInfo resRefInfo = apiWrapper->GetResourceReferenceInfo(slot);
+            ResourceReferenceInfo resRefInfo = m_Debugger.GetResourceReferenceInfo(slot);
             RDCASSERT(m_DirectHeapAccessBindings.count(resultId) == 0);
             m_DirectHeapAccessBindings[resultId] = resRefInfo;
 
-            ShaderDirectAccess access = apiWrapper->GetShaderDirectAccess(resRefInfo.descType, slot);
+            ShaderDirectAccess access = m_Debugger.GetShaderDirectAccess(resRefInfo.descType, slot);
             // Default to unannotated handle
             ClearAnnotatedHandle(result);
             rdcstr resName = m_Program.GetHandleAlias(result.name);
@@ -2951,7 +2949,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
           {
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
-            apiWrapper->CalculateMathIntrinsic(dxOpCode, arg, result);
+            m_Debugger.CalculateMathIntrinsic(dxOpCode, arg, result);
             break;
           }
           case DXOp::Round_ne:
@@ -3510,7 +3508,7 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             uint32_t numElems = 0;
             ViewFmt fmt;
 
-            const UAVData &uav = apiWrapper->GetUAVData(resRefInfo.binding);
+            const UAVData &uav = m_Debugger.GetUAVData(resRefInfo.binding);
             const ResourceInfo resInfo = uav.resInfo;
             data = uav.data.data();
             dataSize = uav.data.size();
@@ -6702,8 +6700,8 @@ void ThreadState::RetireLiveIDs()
   }
 }
 
-void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
-                           const rdcarray<ThreadState> &workgroup, const rdcarray<bool> &activeMask)
+void ThreadState::StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup,
+                           const rdcarray<bool> &activeMask)
 {
   m_State = state;
   m_Diverged = false;
@@ -6719,7 +6717,7 @@ void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
     m_State->changes.clear();
     RetireLiveIDs();
   }
-  ExecuteInstruction(apiWrapper, workgroup, activeMask);
+  ExecuteInstruction(workgroup, activeMask);
 
   m_State = NULL;
 }
@@ -7012,8 +7010,7 @@ void ThreadState::UpdateGlobalBackingMemory(Id ptrId, const MemoryTracking::Poin
 
 void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, Operation opCode,
                                        DXOp dxOpCode, const ResourceReferenceInfo &resRefInfo,
-                                       DebugAPIWrapper *apiWrapper, const DXIL::Instruction &inst,
-                                       ShaderVariable &result)
+                                       const DXIL::Instruction &inst, ShaderVariable &result)
 {
   // TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
   // Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
@@ -7281,10 +7278,7 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
     }
   }
 
-  uint8_t swizzle[4] = {0, 1, 2, 3};
-
   uint32_t instructionIdx = m_FunctionInstructionIdx - 1;
-  const char *opString = ToStr(dxOpCode).c_str();
 
   // TODO: TextureGatherRaw // SM 6.7
   // Return types for TextureGatherRaw
@@ -7293,9 +7287,9 @@ void ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
   // DXGI_FORMAT_R32G32_UINT : u32x2
 
   ShaderVariable data;
-  apiWrapper->CalculateSampleGather(dxOpCode, resourceData, samplerData, uv, ddx, ddy, texelOffsets,
-                                    msIndex, lodValue, compareValue, swizzle, gatherChannel,
-                                    m_ShaderType, instructionIdx, opString, data);
+  m_Debugger.CalculateSampleGather(dxOpCode, resourceData, samplerData, uv, ddx, ddy, texelOffsets,
+                                   msIndex, lodValue, compareValue, gatherChannel, instructionIdx,
+                                   data);
 
   // Do conversion to the return type
   if((result.type == VarType::Float) || (result.type == VarType::SInt) ||
@@ -9877,12 +9871,12 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         {
           hasDebugState = true;
           state.stepIndex = m_Steps;
-          thread.StepNext(&state, m_ApiWrapper, m_Workgroup, activeMask);
+          thread.StepNext(&state, m_Workgroup, activeMask);
           m_Steps++;
         }
         else
         {
-          thread.StepNext(NULL, m_ApiWrapper, m_Workgroup, activeMask);
+          thread.StepNext(NULL, m_Workgroup, activeMask);
         }
 
         threadExecutionStates[threadId] = thread.GetEnteredPoints();
@@ -9984,5 +9978,61 @@ const FunctionInfo *Debugger::GetFunctionInfo(const DXIL::Function *function) co
 {
   RDCASSERT(m_FunctionInfos.count(function) != 0);
   return &m_FunctionInfos.at(function);
+}
+
+const UAVData &Debugger::GetUAVData(const BindingSlot &slot) const
+{
+  return m_ApiWrapper->GetUAVData(slot);
+}
+
+const SRVData &Debugger::GetSRVData(const BindingSlot &slot) const
+{
+  return m_ApiWrapper->GetSRVData(slot);
+}
+
+bool Debugger::CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
+                                      ShaderVariable &output) const
+{
+  return m_ApiWrapper->CalculateMathIntrinsic(dxOp, input, output);
+}
+
+bool Debugger::CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
+                                     SampleGatherSamplerData samplerData, const ShaderVariable &uv,
+                                     const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                                     const int8_t texelOffsets[3], int multisampleIndex,
+                                     float lodValue, float compareValue, GatherChannel gatherChannel,
+                                     uint32_t instructionIdx, ShaderVariable &output) const
+{
+  return m_ApiWrapper->CalculateSampleGather(dxOp, resourceData, samplerData, uv, ddxCalc, ddyCalc,
+                                             texelOffsets, multisampleIndex, lodValue, compareValue,
+                                             gatherChannel, instructionIdx, output);
+}
+
+ShaderVariable Debugger::GetResourceInfo(DXIL::ResourceClass resClass,
+                                         const DXDebug::BindingSlot &slot, uint32_t mipLevel) const
+{
+  return m_ApiWrapper->GetResourceInfo(resClass, slot, mipLevel);
+}
+
+ShaderVariable Debugger::GetSampleInfo(DXIL::ResourceClass resClass,
+                                       const DXDebug::BindingSlot &slot, const char *opString) const
+{
+  return m_ApiWrapper->GetSampleInfo(resClass, slot, opString);
+}
+
+ShaderVariable Debugger::GetRenderTargetSampleInfo(const char *opString) const
+{
+  return m_ApiWrapper->GetRenderTargetSampleInfo(opString);
+}
+
+ResourceReferenceInfo Debugger::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
+{
+  return m_ApiWrapper->GetResourceReferenceInfo(slot);
+}
+
+ShaderDirectAccess Debugger::GetShaderDirectAccess(DescriptorType type,
+                                                   const DXDebug::BindingSlot &slot) const
+{
+  return m_ApiWrapper->GetShaderDirectAccess(type, slot);
 }
 };    // namespace DXILDebug

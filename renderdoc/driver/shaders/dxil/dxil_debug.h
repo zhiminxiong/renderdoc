@@ -261,18 +261,14 @@ public:
                                      SampleGatherSamplerData samplerData, const ShaderVariable &uv,
                                      const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
                                      const int8_t texelOffsets[3], int multisampleIndex,
-                                     float lodValue, float compareValue, const uint8_t swizzle[4],
-                                     GatherChannel gatherChannel, DXBC::ShaderType shaderType,
-                                     uint32_t instructionIdx, const char *opString,
-                                     ShaderVariable &output) = 0;
+                                     float lodValue, float compareValue, GatherChannel gatherChannel,
+                                     uint32_t instructionIdx, ShaderVariable &output) = 0;
   virtual ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass,
-                                         const DXDebug::BindingSlot &slot, uint32_t mipLevel,
-                                         const DXBC::ShaderType shaderType, int &dim) const = 0;
+                                         const DXDebug::BindingSlot &slot,
+                                         uint32_t mipLevel) const = 0;
   virtual ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                       const DXBC::ShaderType shaderType,
                                        const char *opString) const = 0;
-  virtual ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
-                                                   const char *opString) const = 0;
+  virtual ShaderVariable GetRenderTargetSampleInfo(const char *opString) const = 0;
   virtual ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const = 0;
   virtual ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
                                                    const DXDebug::BindingSlot &slot) const = 0;
@@ -332,8 +328,8 @@ struct ThreadState
   ~ThreadState();
 
   void EnterEntryPoint(const DXIL::Function *function, ShaderDebugState *state);
-  void StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
-                const rdcarray<ThreadState> &workgroup, const rdcarray<bool> &activeMask);
+  void StepNext(ShaderDebugState *state, const rdcarray<ThreadState> &workgroup,
+                const rdcarray<bool> &activeMask);
   void StepOverNopInstructions();
   void FillCallstack(ShaderDebugState &state);
   void RetireLiveIDs();
@@ -383,8 +379,7 @@ private:
   bool InUniformBlock() const;
 
   bool JumpToBlock(const DXIL::Block *target, bool divergencePoint);
-  bool ExecuteInstruction(DebugAPIWrapper *apiWrapper, const rdcarray<ThreadState> &workgroup,
-                          const rdcarray<bool> &activeMask);
+  bool ExecuteInstruction(const rdcarray<ThreadState> &workgroup, const rdcarray<bool> &activeMask);
 
   void MarkResourceAccess(const ShaderVariable &var);
   void SetResult(const Id &id, ShaderVariable &result, DXIL::Operation op, DXIL::DXOp dxOpCode,
@@ -417,8 +412,7 @@ private:
 
   void PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, DXIL::Operation opCode,
                             DXIL::DXOp dxOpCode, const ResourceReferenceInfo &resRef,
-                            DebugAPIWrapper *apiWrapper, const DXIL::Instruction &inst,
-                            ShaderVariable &result);
+                            const DXIL::Instruction &inst, ShaderVariable &result);
   void Sub(const ShaderVariable &a, const ShaderVariable &b, ShaderValue &ret) const;
 
   ShaderValue DDX(bool fine, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
@@ -655,6 +649,26 @@ public:
 
   static rdcstr GetResourceReferenceName(const DXIL::Program *program, DXIL::ResourceClass resClass,
                                          const BindingSlot &slot);
+
+  const UAVData &GetUAVData(const BindingSlot &slot) const;
+  const SRVData &GetSRVData(const BindingSlot &slot) const;
+
+  bool CalculateMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &input,
+                              ShaderVariable &output) const;
+  bool CalculateSampleGather(DXIL::DXOp dxOp, SampleGatherResourceData resourceData,
+                             SampleGatherSamplerData samplerData, const ShaderVariable &uv,
+                             const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
+                             const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
+                             float compareValue, GatherChannel gatherChannel,
+                             uint32_t instructionIdx, ShaderVariable &output) const;
+  ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                                 uint32_t mipLeveldim) const;
+  ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                               const char *opString) const;
+  ShaderVariable GetRenderTargetSampleInfo(const char *opString) const;
+  ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const;
+  ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
+                                           const DXDebug::BindingSlot &slot) const;
 
 private:
   void InitialiseWorkgroup();

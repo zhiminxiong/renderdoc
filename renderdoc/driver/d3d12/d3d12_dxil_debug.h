@@ -52,19 +52,14 @@ public:
                              SampleGatherSamplerData samplerData, const ShaderVariable &uv,
                              const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
                              const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
-                             float compareValue, const uint8_t swizzle[4],
-                             GatherChannel gatherChannel, DXBC::ShaderType shaderType,
-                             uint32_t instructionIdx, const char *opString,
-                             ShaderVariable &output) override;
+                             float compareValue, GatherChannel gatherChannel,
+                             uint32_t instructionIdx, ShaderVariable &output) override;
 
   ShaderVariable GetResourceInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                                 uint32_t mipLevel, const DXBC::ShaderType shaderType,
-                                 int &dim) const override;
+                                 uint32_t mipLevel) const override;
   ShaderVariable GetSampleInfo(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
-                               const DXBC::ShaderType shaderType,
                                const char *opString) const override;
-  ShaderVariable GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
-                                           const char *opString) const override;
+  ShaderVariable GetRenderTargetSampleInfo(const char *opString) const override;
   ResourceReferenceInfo GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const override;
   ShaderDirectAccess GetShaderDirectAccess(DescriptorType type,
                                            const DXDebug::BindingSlot &slot) const override;

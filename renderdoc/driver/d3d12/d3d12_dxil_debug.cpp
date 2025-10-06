@@ -1174,8 +1174,7 @@ bool D3D12APIWrapper::CalculateSampleGather(
     DXIL::DXOp dxOp, SampleGatherResourceData resourceData, SampleGatherSamplerData samplerData,
     const ShaderVariable &uv, const ShaderVariable &ddxCalc, const ShaderVariable &ddyCalc,
     const int8_t texelOffsets[3], int multisampleIndex, float lodValue, float compareValue,
-    const uint8_t swizzle[4], GatherChannel gatherChannel, DXBC::ShaderType shaderType,
-    uint32_t instructionIdx, const char *opString, ShaderVariable &output)
+    GatherChannel gatherChannel, uint32_t instructionIdx, ShaderVariable &output)
 {
   int sampleOp;
   switch(dxOp)
@@ -1201,15 +1200,17 @@ bool D3D12APIWrapper::CalculateSampleGather(
       return false;
   }
 
+  const char *opString = ToStr(dxOp).c_str();
+  uint8_t swizzle[4] = {0, 1, 2, 3};
   return D3D12ShaderDebug::CalculateSampleGather(
       true, m_Device, sampleOp, resourceData, samplerData, uv, ddxCalc, ddyCalc, texelOffsets,
-      multisampleIndex, lodValue, compareValue, swizzle, gatherChannel, shaderType, instructionIdx,
-      opString, output);
+      multisampleIndex, lodValue, compareValue, swizzle, gatherChannel, m_ShaderType,
+      instructionIdx, opString, output);
 }
 
 ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
-                                                const DXDebug::BindingSlot &slot, uint32_t mipLevel,
-                                                const DXBC::ShaderType shaderType, int &dim) const
+                                                const DXDebug::BindingSlot &slot,
+                                                uint32_t mipLevel) const
 {
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
   switch(resClass)
@@ -1222,12 +1223,13 @@ ShaderVariable D3D12APIWrapper::GetResourceInfo(DXIL::ResourceClass resClass,
       RDCERR("Unsupported resource class %s", ToStr(resClass).c_str());
       return ShaderVariable();
   }
-  return D3D12ShaderDebug::GetResourceInfo(m_Device, descType, slot, mipLevel, shaderType, dim, true);
+  int dim;
+  return D3D12ShaderDebug::GetResourceInfo(m_Device, descType, slot, mipLevel, m_ShaderType, dim,
+                                           true);
 }
 
 ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
                                               const DXDebug::BindingSlot &slot,
-                                              const DXBC::ShaderType shaderType,
                                               const char *opString) const
 {
   D3D12_DESCRIPTOR_RANGE_TYPE descType;
@@ -1241,13 +1243,12 @@ ShaderVariable D3D12APIWrapper::GetSampleInfo(DXIL::ResourceClass resClass,
       RDCERR("Unsupported resource class %s", ToStr(resClass).c_str());
       return ShaderVariable();
   }
-  return D3D12ShaderDebug::GetSampleInfo(m_Device, descType, slot, shaderType, opString);
+  return D3D12ShaderDebug::GetSampleInfo(m_Device, descType, slot, m_ShaderType, opString);
 }
 
-ShaderVariable D3D12APIWrapper::GetRenderTargetSampleInfo(const DXBC::ShaderType shaderType,
-                                                          const char *opString) const
+ShaderVariable D3D12APIWrapper::GetRenderTargetSampleInfo(const char *opString) const
 {
-  return D3D12ShaderDebug::GetRenderTargetSampleInfo(m_Device, shaderType, opString);
+  return D3D12ShaderDebug::GetRenderTargetSampleInfo(m_Device, m_ShaderType, opString);
 }
 
 ResourceReferenceInfo D3D12APIWrapper::GetResourceReferenceInfo(const DXDebug::BindingSlot &slot) const
