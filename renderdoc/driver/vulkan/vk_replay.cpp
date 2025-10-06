@@ -2974,6 +2974,10 @@ rdcarray<DescriptorAccess> VulkanReplay::GetDescriptorAccess(uint32_t eventId)
                 m_pDriver->m_CreationInfo.m_PipelineLayout[bufSet.pipeLayout].descSetLayouts[i]);
             access.byteOffset = 0;
           }
+          else if(bufSet.descBufferIdx >= state.descBufs.size())
+          {
+            access.descriptorStore = ResourceId();
+          }
           else
           {
             ResourceId id;
