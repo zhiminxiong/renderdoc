@@ -95,8 +95,8 @@ v2f main(vertin IN, uint vid : SV_VertexID)
   OUT.pos = float4(IN.pos, 1.0f);
 )EOSHADER";
 
-    float counterFloat = 0.0f;
-    uint32_t counterUInt = 0;
+    float counterFloat = 1.5f;
+    uint32_t counterUInt = 1;
     for(size_t i = 0; i < outputs.size(); ++i)
     {
       uint32_t count = std::max(1U, outputs[i].arraySize);
@@ -113,7 +113,8 @@ v2f main(vertin IN, uint vid : SV_VertexID)
         {
           if(k != 0)
             vs += ", ";
-          vs += std::to_string(outputs[i].type == VarType::Float ? counterFloat++ : counterUInt++);
+          vs += outputs[i].type == VarType::Float ? std::to_string(counterFloat++)
+                                                  : std::to_string(counterUInt++);
         }
         vs += ");\n";
       }
@@ -240,6 +241,39 @@ float4 main(v2f IN) : SV_Target0
     tests.push_back(BuildTestCase({{false, VarType::UInt, 1, 1, "TEXCOORD0", true}}));
     tests.push_back(BuildTestCase({{false, VarType::UInt, 1, 2, "TEXCOORD0", true}}));
     tests.push_back(BuildTestCase({{false, VarType::UInt, 1, 5, "TEXCOORD0", true}}));
+
+    // One array with 2 or 3 components
+    tests.push_back(BuildTestCase({{false, VarType::Float, 2, 5, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::Float, 3, 5, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::Float, 4, 5, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 2, 5, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 3, 5, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 4, 5, "TEXCOORD0", true}}));
+
+    // degenerate array with 2 or 3 components
+    tests.push_back(BuildTestCase({{false, VarType::Float, 2, 1, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::Float, 3, 1, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::Float, 4, 1, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 2, 1, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 3, 1, "TEXCOORD0", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 4, 1, "TEXCOORD0", true}}));
+
+    // float2 array with an extra float2
+    tests.push_back(BuildTestCase({{false, VarType::Float, 2, 5, "TEXCOORD0", true},
+                                   {false, VarType::Float, 2, 0, "OTHER", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 2, 5, "TEXCOORD0", true},
+                                   {false, VarType::UInt, 2, 0, "OTHER", true}}));
+
+    // float2 degenerate array with an extra float2
+    tests.push_back(BuildTestCase({{false, VarType::Float, 2, 1, "TEXCOORD0", true},
+                                   {false, VarType::Float, 2, 0, "OTHER", true}}));
+    tests.push_back(BuildTestCase({{false, VarType::UInt, 2, 1, "TEXCOORD0", true},
+                                   {false, VarType::UInt, 2, 0, "OTHER", true}}));
+
+    tests.push_back(BuildTestCase({{false, VarType::Float, 2, 1, "A", true},
+                                   {false, VarType::Float, 2, 0, "B", true},
+                                   {false, VarType::Float, 3, 1, "C", true},
+                                   {false, VarType::Float, 1, 0, "D", true}}));
 
     // Multiple semantics that pack together
     tests.push_back(BuildTestCase({{false, VarType::Float, 2, 0, "TEXCOORD0", true},
