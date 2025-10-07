@@ -9136,8 +9136,8 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
           }
           else
           {
-            // If the result SSA has tracking then that access should be after setting the result
-            RDCASSERT(current.IsAfter(ssaMaxExecPoints[resultId], controlFlow));
+            // If the result SSA has tracking then that access should be after this assignment
+            RDCASSERT(ssaMaxExecPoints[resultId].IsAfter(current, controlFlow));
           }
         }
         // Track maximum execution point when an SSA is referenced as an argument
