@@ -3582,8 +3582,8 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
               // NULL resource or out of bounds
               if((!texData && elemIdx >= numElems) || (texData && dataOffset >= dataSize))
               {
-                RDCERR("Ignoring store to unbound resource or out of bounds store %s",
-                       GetArgumentName(1).c_str());
+                RDCWARN("Ignoring store to unbound resource or out of bounds store %s",
+                        GetArgumentName(1).c_str());
               }
               else
               {
