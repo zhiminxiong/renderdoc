@@ -224,7 +224,6 @@ float4 main(v2f IN) : SV_Target0
   float tiny = IN.tinyVal;
 
   int intval = IN.intval;
-  int pixId = IN.s.x + 3 * IN.s.y;
 
   if(IN.tri == 0)
     return float4(log(negone), log(zero), log(posone), 1.0f);
@@ -799,7 +798,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 10 + pixId;
+    intbufrwtest[u] = 10;
     InterlockedAdd(intbufrwtest[u], value, original);
     InterlockedAdd(intbufrwtest[u], -value, original);
     return intbufrwtest[u];
@@ -809,7 +808,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 20 + pixId;
+    intbufrwtest[u] = 20;
     InterlockedAnd(intbufrwtest[u], value, original);
     return intbufrwtest[u];
   }
@@ -818,7 +817,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 30 + pixId;
+    intbufrwtest[u] = 30;
     InterlockedOr(intbufrwtest[u], value, original);
     return intbufrwtest[u];
   }
@@ -827,7 +826,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 40 + pixId;
+    intbufrwtest[u] = 40;
     InterlockedXor(intbufrwtest[u], value, original);
     InterlockedXor(intbufrwtest[u], value, original);
     return intbufrwtest[u];
@@ -837,7 +836,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 50 + pixId;
+    intbufrwtest[u] = 50;
     InterlockedMin(intbufrwtest[u], value, original);
     return intbufrwtest[u];
   }
@@ -846,7 +845,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 60 + pixId;
+    intbufrwtest[u] = 60;
     InterlockedMax(intbufrwtest[u], value, original);
     return intbufrwtest[u];
   }
@@ -855,7 +854,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 70 + pixId;
+    intbufrwtest[u] = 70;
     InterlockedExchange(intbufrwtest[u], value, original);
     return intbufrwtest[u];
   }
@@ -864,7 +863,7 @@ float4 main(v2f IN) : SV_Target0
     int value = IN.tri;
     int original;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 80 + pixId;
+    intbufrwtest[u] = 80;
     InterlockedCompareExchange(intbufrwtest[u], value, value+1, original);
     return intbufrwtest[u];
   }
@@ -872,7 +871,7 @@ float4 main(v2f IN) : SV_Target0
   {
     int value = IN.tri;
     int u = mad(3, (IN.tri - 85), 17);
-    intbufrwtest[u] = 90 + pixId;
+    intbufrwtest[u] = 90;
     InterlockedCompareStore(intbufrwtest[u], value, value+1);
     return intbufrwtest[u];
   }
