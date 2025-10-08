@@ -42,6 +42,7 @@ cbuffer rootconsts : register(b0)
 
 groupshared float gsmData[MAX_THREADS];
 groupshared int gsmIntData[MAX_THREADS];
+groupshared int gInt;
 
 #define IsTest(x) (root_test == x)
 
@@ -80,11 +81,14 @@ void main(uint3 gid : SV_GroupThreadID)
     gsmIntData[7] = 125;
     gsmIntData[8] = 125;
     for(int j=8; j < MAX_THREADS; j++) gsmIntData[j] = 125;
+
+    gInt = 25;
   }
 
   GroupMemoryBarrierWithGroupSync();
 
   float4 outval = 0.0f.xxxx;
+  int u = int(gid.x);
 
   if (IsTest(0))
   {
@@ -145,8 +149,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(3))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedAdd(gsmIntData[u], value);
     InterlockedAdd(gsmIntData[u], -value);
@@ -159,8 +162,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(4))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedAnd(gsmIntData[u], value);
     GroupMemoryBarrierWithGroupSync();
@@ -172,8 +174,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(5))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedOr(gsmIntData[u], value);
     GroupMemoryBarrierWithGroupSync();
@@ -185,8 +186,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(6))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedXor(gsmIntData[u], value);
     InterlockedXor(gsmIntData[u], value);
@@ -199,8 +199,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(7))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedMin(gsmIntData[u], value);
     GroupMemoryBarrierWithGroupSync();
@@ -212,8 +211,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(8))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedMax(gsmIntData[u], value);
     GroupMemoryBarrierWithGroupSync();
@@ -225,8 +223,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(9))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     int original;
     InterlockedExchange(gsmIntData[u], value, original);
@@ -239,8 +236,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(10))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     int original;
     InterlockedCompareExchange(gsmIntData[u], value, value+1, original);
@@ -253,8 +249,7 @@ void main(uint3 gid : SV_GroupThreadID)
   else if (IsTest(11))
   {
     int value = (int)(indata[gid.x] * 100.0);
-    int u = gid.x;
-    gsmIntData[gid.x] = (float)gid.x;
+    gsmIntData[gid.x] = u;
     GroupMemoryBarrierWithGroupSync();
     InterlockedCompareStore(gsmIntData[u], value, value+1);
     GroupMemoryBarrierWithGroupSync();
@@ -262,6 +257,23 @@ void main(uint3 gid : SV_GroupThreadID)
     outval.y = (float)GetGSMIntValue(u+1);
     outval.z = (float)GetGSMIntValue(u+2);
     outval.w = (float)GetGSMIntValue(u+3);
+  }
+  else if (IsTest(12))
+  {
+    GroupMemoryBarrierWithGroupSync();
+    outval.x = gInt;
+    GroupMemoryBarrierWithGroupSync();
+    InterlockedAdd(gInt,1);
+    GroupMemoryBarrierWithGroupSync();
+    outval.y = gInt;
+    GroupMemoryBarrierWithGroupSync();
+    InterlockedAdd(gInt,1);
+    GroupMemoryBarrierWithGroupSync();
+    outval.z = gInt;
+    GroupMemoryBarrierWithGroupSync();
+    InterlockedAdd(gInt,1);
+    GroupMemoryBarrierWithGroupSync();
+    outval.w = gInt;
   }
 
   outdata[gid.x] = outval;
