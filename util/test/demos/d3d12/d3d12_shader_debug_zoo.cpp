@@ -45,15 +45,15 @@ struct v2f { float4 pos : SV_Position; float4 col : COL; };
 
 v2f main(uint vid : SV_VertexID)
 {
-	float2 positions[] = {
-		float2(-1.0f,  1.0f),
-		float2( 1.0f,  1.0f),
-		float2(-1.0f, -1.0f),
-		float2( 1.0f, -1.0f),
-	};
+  float2 positions[] = {
+    float2(-1.0f,  1.0f),
+    float2( 1.0f,  1.0f),
+    float2(-1.0f, -1.0f),
+    float2( 1.0f, -1.0f),
+  };
 
   v2f ret = (v2f)0;
-	ret.pos = float4(positions[vid], 0, 1);
+  ret.pos = float4(positions[vid], 0, 1);
   ret.col = intex.Load(float3(0,0,0));
   return ret;
 }
@@ -66,7 +66,7 @@ struct v2f { float4 pos : SV_Position; float4 col : COL; };
 
 float4 main(v2f IN) : SV_Target0
 {
-	return IN.col;
+  return IN.col;
 }
 
 )EOSHADER";
@@ -82,7 +82,7 @@ Texture2D<float4> intex : register(t0);
 
 float4 main(float4 pos : SV_Position) : SV_Target0
 {
-	return intex.Load(float3(pos.x, pos.y - offset, 0));
+  return intex.Load(float3(pos.x, pos.y - offset, 0));
 }
 
 )EOSHADER";
@@ -1012,6 +1012,32 @@ float4 main(v2f IN) : SV_Target0
     floattex2rwtest[uv] = value;
     return floattex2rwtest[uv];
   }
+  if(IN.tri == 108)
+  {
+    float4 Color = float4(0,0,0,0);
+    // this is intended to test triggering a mixture of GPU math and GPU sample ops
+    float2 coord = float2(zero + 0.5, zero + 0.15);
+    if (IN.s.x % 2 == 0)
+    {
+      Color = smiley.SampleLevel(linearclamp, coord, float(0));
+      for (int i = 0; i < 100; i++)
+      {
+        Color += smiley.SampleLevel(linearclamp, coord, float(i));
+      }
+    }
+    else
+    {
+      Color = float4(pow(abs(posone*2.5f), posone*1.3f), pow(abs(posone*2.5f), posone*0.45f),
+                     pow(abs(posone*2.5f), posone*0.9f), pow(abs(posone*0.9f), posone*8.5f));
+      for (int i = 0; i < 100; i++)
+      {
+        float4 value = float4(pow(abs(posone*2.5f+float(i)), posone*1.3f), pow(abs(posone*2.5f), posone*0.45f),
+                              pow(abs(posone*2.5f), posone*0.9f), pow(abs(posone*1.3), posone*8.5f));
+        Color += value / 100.0;
+      }
+    }
+    return Color;
+  }
 
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }
@@ -1065,9 +1091,9 @@ float4 main(v2f IN) : SV_Target0
 
 struct v2f
 {
-	float4 pos : SV_POSITION;
-	float4 col : COLOR0;
-	float2 uv : TEXCOORD0;
+  float4 pos : SV_POSITION;
+  float4 col : COLOR0;
+  float2 uv : TEXCOORD0;
 };
 
 float4 main(v2f IN, uint samp : SV_SampleIndex) : SV_Target0 
