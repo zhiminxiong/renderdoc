@@ -7655,7 +7655,7 @@ void ThreadState::OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation
   }
 
   // record the change to the ptr variable value
-  bool recordPtrMemoryChange = m_HasDebugState && ptrId != resultId;
+  bool recordPtrMemoryChange = m_HasDebugState && (ptrId != resultId) && (baseMemoryId != ptrId);
   RDCASSERT(IsVariableAssigned(ptrId));
   if(recordPtrMemoryChange)
     change.before = m_Variables[ptrId];
