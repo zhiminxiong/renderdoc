@@ -1390,6 +1390,11 @@ QWidget.
 )");
   virtual void SetHistory(const rdcarray<PixelModification> &history) = 0;
 
+  DOCUMENT(R"(Indicates that the pixel history was launched as a result of failing to debug a shader,
+so a message will be displayed to explain.
+)");
+  virtual void SetFailedDebug() = 0;
+
 protected:
   IPixelHistoryView() = default;
   ~IPixelHistoryView() = default;

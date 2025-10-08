@@ -256,6 +256,8 @@ private:
 
   void SelectPreview(ResourcePreview *prev);
 
+  void ShowPixelHistory(bool failedDebug);
+
   void SetupTextureTabs();
   void RemoveTextureTabs(int firstIndex);
 

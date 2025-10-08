@@ -47,6 +47,7 @@ public:
   // IPixelHistoryView
   QWidget *Widget() override { return this; }
   void SetHistory(const rdcarray<PixelModification> &history) override;
+  void SetFailedDebug() override;
 
   // ICaptureViewer
   void OnCaptureLoaded() override;
