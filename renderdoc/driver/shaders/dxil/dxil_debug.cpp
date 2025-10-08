@@ -5201,11 +5201,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
       result.value = arg.value;
       break;
     }
-    case Operation::Load: OperationLoad(inst, opCode, dxOpCode, resultId, result); break;
+    case Operation::Load: OperationLoad(false, inst, opCode, dxOpCode, resultId, result); break;
     case Operation::LoadAtomic:
     {
       SCOPED_LOCK(m_Debugger.GetAtomicMemoryLock());
-      OperationLoad(inst, opCode, dxOpCode, resultId, result);
+      OperationLoad(true, inst, opCode, dxOpCode, resultId, result);
       break;
     }
     case Operation::Store:
@@ -6571,6 +6571,38 @@ void ThreadState::UpdateGlobalBackingMemory(Id ptrId, const MemoryTracking::Poin
   }
 }
 
+bool ThreadState::LoadGSMFromGlobalBackingMemory(const MemoryTracking::Pointer &ptr,
+                                                 const MemoryTracking::Allocation &allocation,
+                                                 ShaderVariable &var)
+{
+  const Id baseMemoryId = ptr.baseMemoryId;
+  auto globalMem = m_GlobalState.memory.m_Allocations.find(baseMemoryId);
+  if(globalMem != m_GlobalState.memory.m_Allocations.end())
+  {
+    // Compute the local pointer offset and apply it to the global base memory
+    ptrdiff_t offset = (uintptr_t)ptr.memory - (uintptr_t)allocation.backingMemory;
+    if(offset >= 0)
+    {
+      const void *globalBackingMemory = globalMem->second.backingMemory;
+      void *globalMemory = (void *)((uintptr_t)globalBackingMemory + offset);
+      RDCASSERT(ptr.size <= sizeof(ShaderValue));
+      if(ptr.size <= sizeof(ShaderValue))
+        memcpy(&var.value, globalMemory, (size_t)ptr.size);
+    }
+    else
+    {
+      RDCERR("Invalid memory allocation offset baseMemoryId %u", baseMemoryId);
+      return false;
+    }
+  }
+  else
+  {
+    RDCERR("Invalid GSM baseMemoryId %u", baseMemoryId);
+    return false;
+  }
+  return true;
+}
+
 bool ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, Operation opCode,
                                        DXOp dxOpCode, const ResourceReferenceInfo &resRefInfo,
                                        const DXIL::Instruction &inst, ShaderVariable &result)
@@ -7350,7 +7382,7 @@ void ThreadState::QueueSampleGather(DXIL::DXOp dxOp, const SampleGatherResourceD
   SetStepNeedsGpuSampleGatherOp();
 }
 
-void ThreadState::OperationLoad(const DXIL::Instruction &inst, DXIL::Operation opCode,
+void ThreadState::OperationLoad(bool isAtomic, const DXIL::Instruction &inst, DXIL::Operation opCode,
                                 DXIL::DXOp dxOpCode, Id &resultId, ShaderVariable &result)
 {
   if(DXIL::IsDXCNop(inst))
@@ -7381,18 +7413,22 @@ void ThreadState::OperationLoad(const DXIL::Instruction &inst, DXIL::Operation o
     RDCERR("Unknown memory allocation Id %u", baseMemoryId);
     return;
   }
+
   const MemoryTracking::Allocation &allocation = itAlloc->second;
-  ShaderVariable arg;
-  if(allocation.globalVarAlloc && !IsVariableAssigned(ptrId))
+  // active lane: Atomic Load for GSM then read from the global backing memory
+  if(m_HasDebugState && isAtomic && allocation.gsm)
   {
-    RDCASSERT(IsVariableAssigned(baseMemoryId));
-    arg = m_Variables[baseMemoryId];
+    if(!LoadGSMFromGlobalBackingMemory(ptr, allocation, result))
+      RDCERR("OperationLoad: LoadGSMFromGlobalBackingMemory failed ptrId %u", ptrId);
+    return;
   }
+
+  // Load from local backing memory
+  RDCASSERT(ptr.size <= sizeof(ShaderValue));
+  if(ptr.size <= sizeof(ShaderValue))
+    memcpy(&result.value, ptr.memory, (size_t)ptr.size);
   else
-  {
-    RDCASSERT(GetShaderVariable(inst.args[0], opCode, dxOpCode, arg));
-  }
-  result.value = arg.value;
+    RDCERR("Size %u too large MAX %u for OperationLoad", ptr.size, sizeof(ShaderValue));
 }
 
 void ThreadState::OperationStore(const DXIL::Instruction &inst, DXIL::Operation opCode,
@@ -7440,7 +7476,7 @@ void ThreadState::OperationStore(const DXIL::Instruction &inst, DXIL::Operation 
   UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocation.backingMemory);
 
   // active lane : writes to a GSM variable, write to local and global backing memory
-  if(m_HasDebugState)
+  if(m_HasDebugState && allocation.gsm)
     UpdateGlobalBackingMemory(ptrId, ptr, allocation, val);
 
   // record the change to the base memory variable if it is not the ptrId variable
@@ -7515,6 +7551,16 @@ void ThreadState::OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation
   else
   {
     a = m_Variables[ptrId];
+  }
+
+  // GSM variable, read from the global backing memory
+  if(allocation.gsm)
+  {
+    if(!LoadGSMFromGlobalBackingMemory(ptr, allocation, a))
+    {
+      RDCERR("OperationAtomic: LoadGSMFromGlobalBackingMemory failed ptrId %u", ptrId);
+      return;
+    }
   }
 
   size_t newValueArgIdx = (opCode == Operation::CompareExchange) ? 2 : 1;
@@ -7639,7 +7685,7 @@ void ThreadState::OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation
   UpdateMemoryVariableFromBackingMemory(baseMemoryId, allocMemoryBackingPtr);
 
   // active lane : writes to a GSM variable, write to local and global backing memory
-  if(m_HasDebugState)
+  if(m_HasDebugState && allocation.gsm)
     UpdateGlobalBackingMemory(ptrId, ptr, allocation, res);
 
   // record the change to the base memory variable

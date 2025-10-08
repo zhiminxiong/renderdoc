@@ -624,6 +624,9 @@ private:
   void UpdateGlobalBackingMemory(Id ptrId, const MemoryTracking::Pointer &ptr,
                                  const MemoryTracking::Allocation &allocation,
                                  const ShaderVariable &val);
+  bool LoadGSMFromGlobalBackingMemory(const MemoryTracking::Pointer &ptr,
+                                      const MemoryTracking::Allocation &allocation,
+                                      ShaderVariable &var);
 
   bool PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, DXIL::Operation opCode,
                             DXIL::DXOp dxOpCode, const ResourceReferenceInfo &resRef,
@@ -663,8 +666,8 @@ private:
                          const int8_t texelOffsets[3], int multisampleIndex, float lodValue,
                          float compareValue, GatherChannel gatherChannel, uint32_t instructionIdx,
                          ShaderVariable &result);
-  void OperationLoad(const DXIL::Instruction &inst, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
-                     Id &resultId, ShaderVariable &result);
+  void OperationLoad(bool isAtomic, const DXIL::Instruction &inst, DXIL::Operation opCode,
+                     DXIL::DXOp dxOpCode, Id &resultId, ShaderVariable &result);
   void OperationStore(const DXIL::Instruction &inst, DXIL::Operation opCode, DXIL::DXOp dxOpCode);
   void OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation opCode, DXIL::DXOp dxOpCode,
                        Id &resultId, ShaderVariable &result);
