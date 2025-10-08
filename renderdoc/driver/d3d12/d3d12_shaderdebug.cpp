@@ -40,8 +40,6 @@
 
 #include "data/hlsl/hlsl_cbuffers.h"
 
-RDOC_EXTERN_CONFIG(bool, D3D_Hack_EnableGroups);
-
 using namespace DXBCBytecode;
 
 static bool IsShaderParameterVisible(DXBC::ShaderType shaderType,
@@ -1922,7 +1920,7 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
   bytebuf staticData[D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT];
 
   // if we're fetching from the GPU anyway, don't grab any buffer data
-  if(D3D_Hack_EnableGroups() && (dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup))
+  if(dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup)
     vertexbuffers.clear();
 
   for(auto it = vertexbuffers.begin(); it != vertexbuffers.end(); ++it)
@@ -2211,7 +2209,7 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
     ret->constantBlocks = global.constantBlocks;
     ret->inputs = state.inputs;
   }
-  else if(D3D_Hack_EnableGroups() && (dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup))
+  else if(dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup)
   {
     DXDebug::InputFetcherConfig cfg;
     DXDebug::InputFetcher fetcher;
@@ -2830,7 +2828,7 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
   cfg.maxWaveSize = 4;
   cfg.outputSampleCount = RDCMAX(1U, pipeDesc.SampleDesc.Count);
 
-  if(D3D_Hack_EnableGroups() && (dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup))
+  if(dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup)
     cfg.maxWaveSize = m_pDevice->GetOpts1().WaveLaneCountMax;
 
   DXDebug::CreateInputFetcher(dxbc, prevDxbc, cfg, fetcher);
@@ -3358,10 +3356,8 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     uint32_t activeIndex = 0;
     if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
     {
-      if(D3D_Hack_EnableGroups())
-        activeIndex =
-            threadid[0] + threadid[1] * refl.dispatchThreadsDimension[0] +
-            threadid[2] * refl.dispatchThreadsDimension[0] * refl.dispatchThreadsDimension[1];
+      activeIndex = threadid[0] + threadid[1] * refl.dispatchThreadsDimension[0] +
+                    threadid[2] * refl.dispatchThreadsDimension[0] * refl.dispatchThreadsDimension[1];
     }
 
     DXBCDebug::InterpretDebugger *interpreter = new DXBCDebug::InterpretDebugger;
@@ -3455,7 +3451,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     rdcarray<DXILDebug::ThreadProperties> workgroupProperties;
 
     // hard case - with subgroups we want the actual layout so read that from the GPU
-    if(D3D_Hack_EnableGroups() && (dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup))
+    if(dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup)
     {
       DXDebug::InputFetcherConfig cfg;
       DXDebug::InputFetcher fetcher;
@@ -3705,7 +3701,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
         }
       }
     }
-    else if(D3D_Hack_EnableGroups() && (dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup))
+    else if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
     {
       numThreads = threadDim[0] * threadDim[1] * threadDim[2];
 

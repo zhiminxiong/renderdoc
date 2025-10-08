@@ -33,9 +33,6 @@
 #include "dxbc_bytecode.h"
 #include "dxbc_container.h"
 
-RDOC_DEBUG_CONFIG(bool, D3D_Hack_EnableGroups, false,
-                  "Work in progress allow shaders to be debugged with workgroup requirements.");
-
 using namespace DXBCBytecode;
 using namespace DXDebug;
 
@@ -4884,8 +4881,7 @@ ShaderDebugTrace *InterpretDebugger::BeginDebug(const DXBC::DXBCContainer *dxbcC
   if(dxbc->m_Type == DXBC::ShaderType::Compute &&
      dxbcContainer->GetThreadScope() == DXBC::ThreadScope::Workgroup)
   {
-    if(D3D_Hack_EnableGroups())
-      workgroupSize = numthreads[0] * numthreads[1] * numthreads[2];
+    workgroupSize = numthreads[0] * numthreads[1] * numthreads[2];
   }
 
   for(int i = 0; i < workgroupSize; i++)

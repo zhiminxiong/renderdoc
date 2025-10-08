@@ -28,8 +28,6 @@
 #include "dxil_bytecode.h"
 #include "dxil_common.h"
 
-RDOC_EXTERN_CONFIG(bool, D3D_Hack_EnableGroups);
-
 namespace DXIL
 {
 enum class ResourcesTag
@@ -1869,27 +1867,6 @@ rdcstr Program::GetDebugStatus()
                   return StringFormat::Fmt(
                       "Only supported when debugging pixel shaders dx.op call `%s` %s",
                       callFunc->name.c_str(), ToStr(dxOpCode).c_str());
-                continue;
-              case DXOp::WaveIsFirstLane:
-              case DXOp::WaveGetLaneIndex:
-              case DXOp::WaveGetLaneCount:
-              case DXOp::WaveAnyTrue:
-              case DXOp::WaveAllTrue:
-              case DXOp::WaveActiveAllEqual:
-              case DXOp::WaveActiveBallot:
-              case DXOp::WaveReadLaneAt:
-              case DXOp::WaveReadLaneFirst:
-              case DXOp::WaveActiveOp:
-              case DXOp::WaveActiveBit:
-              case DXOp::WavePrefixOp:
-              case DXOp::WavePrefixBitCount:
-              case DXOp::WaveAllBitCount:
-              case DXOp::WaveMatch:
-              case DXOp::WaveMultiPrefixOp:
-              case DXOp::WaveMultiPrefixBitCount:
-                if(!D3D_Hack_EnableGroups())
-                  return StringFormat::Fmt("Unsupported dx.op call `%s` %s", callFunc->name.c_str(),
-                                           ToStr(dxOpCode).c_str());
                 continue;
               case DXOp::TempRegLoad:
               case DXOp::TempRegStore:
