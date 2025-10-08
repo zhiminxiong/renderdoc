@@ -5312,6 +5312,11 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
     case Operation::Bitcast:
     {
       RDCASSERTEQUAL(retType->bitWidth, inst.args[0]->type->bitWidth);
+      Id argId = GetArgumentId(0);
+      auto itPtr = m_Memory.m_Pointers.find(argId);
+      if(itPtr != m_Memory.m_Pointers.end())
+        m_Memory.m_Pointers[resultId] = itPtr->second;
+
       ShaderVariable a;
       RDCASSERT(GetShaderVariable(inst.args[0], opCode, dxOpCode, a));
       result.value = a.value;
