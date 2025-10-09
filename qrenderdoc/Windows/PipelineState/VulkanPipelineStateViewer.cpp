@@ -2019,7 +2019,7 @@ void VulkanPipelineStateViewer::setState()
         {
           for(const SigParameter &sigParam : state.vertexShader.reflection->inputSignature)
           {
-            if(sigParam.regIndex == a.location)
+            if(sigParam.regIndex == a.location && sigParam.systemValue == ShaderBuiltin::Undefined)
             {
               name = sigParam.varName;
               usedSlot = true;
