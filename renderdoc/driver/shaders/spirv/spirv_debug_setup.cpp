@@ -99,6 +99,11 @@ rdcspv::Id getBaseId(const ShaderVariable &var)
   return rdcspv::Id::fromWord((uint32_t)var.value.u64v[3]);
 }
 
+bool isUndefPointer(const ShaderVariable &var)
+{
+  return var.value.u64v[4] == 0xccccccccccccccccULL;
+}
+
 // slot 4 has the different flags we keep track of
 void setPointerFlags(ShaderVariable &var, PointerFlags flags)
 {
@@ -3203,6 +3208,13 @@ DeviceOpResult Debugger::ReadFromPointer(const ShaderVariable &ptr, ShaderVariab
     return DeviceOpResult::Succeeded;
   }
 
+  if(isUndefPointer(ptr))
+  {
+    ret = ShaderVariable(ptr.name, 0, 0, 0, 0);
+    memset(&ret.value, 0xcc, sizeof(ret.value));
+    return DeviceOpResult::Succeeded;
+  }
+
   // values for setting up pointer reads, either from a physical pointer or from an opaque pointer
   rdcspv::Id typeId;
   Decorations parentDecorations;
@@ -3243,6 +3255,11 @@ DeviceOpResult Debugger::ReadFromPointer(const ShaderVariable &ptr, ShaderVariab
   else
   {
     const ShaderVariable *inner = getPointer(ptr);
+    if(inner == NULL)
+    {
+      ret = ShaderVariable(ptr.name, 0, 0, 0, 0);
+      return DeviceOpResult::Succeeded;
+    }
     if(inner->type == VarType::ReadWriteResource && checkPointerFlags(*inner, PointerFlags::SSBO))
     {
       typeId = getBufferTypeId(ptr);
