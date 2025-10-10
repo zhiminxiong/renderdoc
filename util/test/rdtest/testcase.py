@@ -739,13 +739,15 @@ class TestCase:
 
     def generate_full_trace(self, trace: rd.ShaderDebugTrace) -> List[rd.ShaderDebugState]:
         allStates = []
+        allChanges = []
         while True:
             states = self.controller.ContinueDebug(trace.debugger)
             if len(states) == 0:
                 break
             for state in states:
                 allStates.append(state)
-        self.validate_trace(allStates)
+                allChanges.append(state.changes)
+        self.validate_trace(allChanges)
         return allStates
 
     def process_trace(self, trace: rd.ShaderDebugTrace, validate: bool = True):
