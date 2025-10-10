@@ -745,6 +745,7 @@ class TestCase:
                 break
             for state in states:
                 allStates.append(state)
+        self.validate_trace(allStates)
         return allStates
 
     def process_trace(self, trace: rd.ShaderDebugTrace, validate: bool = True):
