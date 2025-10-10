@@ -2310,6 +2310,7 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
     cfg.uavslot = 1;
     cfg.waveOps = m_pDevice->GetOpts1().WaveOps != FALSE;
     cfg.maxWaveSize = m_pDevice->GetOpts1().WaveLaneCountMax;
+    cfg.fetchWorkgroup = 0;
 
     DXDebug::CreateInputFetcher(dxbc, NULL, cfg, fetcher);
 
@@ -2921,6 +2922,7 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
   cfg.waveOps = m_pDevice->GetOpts1().WaveOps != FALSE;
   cfg.maxWaveSize = 4;
   cfg.outputSampleCount = RDCMAX(1U, pipeDesc.SampleDesc.Count);
+  cfg.fetchWorkgroup = 0;
 
   if(dxbc->GetThreadScope() & DXBC::ThreadScope::Subgroup)
     cfg.maxWaveSize = m_pDevice->GetOpts1().WaveLaneCountMax;
@@ -3453,10 +3455,11 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
   cs->GetWriteableDXBC()->GetDisassembly(false);
 
   ShaderDebugTrace *ret = NULL;
+  bool wholeWorkgroup = (dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup) ? true : false;
   if(dxbc->GetDXBCByteCode())
   {
     uint32_t activeIndex = 0;
-    if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
+    if(wholeWorkgroup)
     {
       activeIndex = threadid[0] + threadid[1] * refl.dispatchThreadsDimension[0] +
                     threadid[2] * refl.dispatchThreadsDimension[0] * refl.dispatchThreadsDimension[1];
@@ -3545,7 +3548,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     };
 
     uint32_t subgroupSize = 1;
-    uint32_t activeLaneIndex = 0;
+    uint32_t activeLaneIndex = ~0U;
     uint32_t numThreads = 1;
 
     DXILDebug::D3D12APIWrapper *apiWrapper = new DXILDebug::D3D12APIWrapper(
@@ -3584,6 +3587,9 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
       cfg.uavslot = 1;
       cfg.waveOps = m_pDevice->GetOpts1().WaveOps != FALSE;
       cfg.maxWaveSize = m_pDevice->GetOpts1().WaveLaneCountMax;
+      cfg.fetchWorkgroup = wholeWorkgroup ? 1 : 0;
+      cfg.groupSize = wholeWorkgroup ? threadDim[0] * threadDim[1] * threadDim[2] : 0;
+      cfg.groupid = groupid;
 
       DXDebug::CreateInputFetcher(dxbc, NULL, cfg, fetcher);
 
@@ -3693,11 +3699,8 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
       if(buf[0].numHits > 1)
         RDCLOG("Unexpected number of compute hits: %u!", buf[0].numHits);
 
-      numThreads = buf->subgroupSize;
-
-      // if we need the whole workgroup prepare for that, though we only read one subgroup's worth of data back
-      if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
-        numThreads = threadDim[0] * threadDim[1] * threadDim[2];
+      subgroupSize = buf->subgroupSize;
+      numThreads = wholeWorkgroup ? threadDim[0] * threadDim[1] * threadDim[2] : subgroupSize;
 
       workgroupProperties.resize(numThreads);
       threadsBuiltins.resize(numThreads);
@@ -3706,51 +3709,130 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
       globalBuiltins[ShaderBuiltin::GroupIndex] =
           ShaderVariable(rdcstr(), groupid[0], groupid[1], groupid[2], 0U);
 
-      // can't know our lane index from the hit if we are simulating the whole workgroup
-      if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
-        activeLaneIndex = ~0U;
-      else
-        activeLaneIndex = buf->laneIndex;
+      const uint32_t countData = wholeWorkgroup ? numThreads : subgroupSize;
 
-      subgroupSize = buf->subgroupSize;
-      for(uint32_t t = 0; t < buf->subgroupSize; t++)
+      // Create a mappinig from LaneData index to simulation lane index
+      // The simulation expects the lanes to be grouped by subgroup
+      // The active subgroup is first
+      // Within a subgroup the lanes are in increasing Subgroup Lane Index order
+
+      struct SortedLaneData
+      {
+        rdcfixedarray<uint32_t, 3> threadid;
+        uint32_t subgroupIndex;
+        uint32_t laneIndex;
+        uint32_t active;
+        bool operator<(const SortedLaneData &o) const
+        {
+          // 1. subgroupIndex
+          if(subgroupIndex != o.subgroupIndex)
+            return subgroupIndex < o.subgroupIndex;
+          // 2. laneIndex
+          if(laneIndex != o.laneIndex)
+            return laneIndex < o.laneIndex;
+          // 3. active
+          return active < o.active;
+        }
+      };
+      rdcarray<SortedLaneData> laneDatas;
+      laneDatas.resize(countData);
+      rdcarray<uint32_t> subgroupCounts;
+      subgroupCounts.resize(subgroupSize);
+      uint32_t countActiveSubgroup = 0;
+      for(uint32_t t = 0; t < countData; t++)
       {
         DXDebug::CSLaneData *value = (DXDebug::CSLaneData *)(initialData.data() + laneDataOffset +
                                                              t * fetcher.laneDataBufferStride);
 
-        // should we try to verify that the GPU assigned subgroups as we expect? this assumes
-        // tightly wrapped subgroups
-        uint32_t lane = t;
-
-        if(value->active)
-          RDCASSERTEQUAL(value->laneIndex, lane);
-
-        if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
+        uint32_t subgroupIndex = ~0U;
+        uint32_t laneIndex = value->laneIndex;
+        if(value->activeSubgroup)
         {
-          lane = value->threadid[2] * threadDim[0] * threadDim[1] +
-                 value->threadid[1] * threadDim[0] + value->threadid[0];
+          subgroupIndex = 0;
+          countActiveSubgroup++;
+        }
+        else
+        {
+          subgroupIndex = ++subgroupCounts[laneIndex];
         }
 
-        if(rdcfixedarray<uint32_t, 3>(value->threadid) == threadid)
-          activeLaneIndex = lane;
+        laneDatas[t].threadid =
+            rdcfixedarray<uint32_t, 3>({value->threadid[0], value->threadid[1], value->threadid[2]});
+        laneDatas[t].laneIndex = laneIndex;
+        laneDatas[t].active = value->active;
+        laneDatas[t].subgroupIndex = subgroupIndex;
 
-        workgroupProperties[lane][DXILDebug::ThreadProperty::Active] = value->active;
-        workgroupProperties[lane][DXILDebug::ThreadProperty::SubgroupIdx] = t;
+        const uint32_t groupFlatIndex = value->threadid[2] * threadDim[0] * threadDim[1] +
+                                        value->threadid[1] * threadDim[0] + value->threadid[0];
+        if(value->active && wholeWorkgroup)
+          RDCASSERTEQUAL(t, groupFlatIndex);
+      }
+      // Not a full subgroup : add padding lanes
+      if(countActiveSubgroup < subgroupSize)
+      {
+        for(uint32_t i = 0; i < subgroupSize - countActiveSubgroup; i++)
+        {
+          SortedLaneData padLane = {};
+          padLane.threadid = rdcfixedarray<uint32_t, 3>({0, 0, 0});
+          padLane.laneIndex = i + countActiveSubgroup;
+          padLane.active = 0;
+          padLane.subgroupIndex = 0;
+          laneDatas.push_back(padLane);
+        }
+      }
+      // Sort by the following keys:
+      // 1. subgroupIndex
+      // 2. laneIndex
+      // 3. active
+      std::sort(laneDatas.begin(), laneDatas.end());
+
+      uint32_t prevSubgroupIndex = 0;
+      int32_t prevLaneIndex = -1;
+      for(uint32_t lane = 0; lane < countData; lane++)
+      {
+        SortedLaneData &laneData = laneDatas[lane];
+
+        // Validate the data is sorted correctly for the simulation
+        // The active subgroup is first
+        // Within a subgroup the lanes are in increasing Subgroup Lane Index order
+        RDCASSERT(laneData.subgroupIndex >= prevSubgroupIndex);
+        if(laneData.subgroupIndex == prevSubgroupIndex)
+          RDCASSERT((int32_t)laneData.laneIndex > prevLaneIndex);
+
+        prevSubgroupIndex = laneData.subgroupIndex;
+        prevLaneIndex = laneData.laneIndex;
+
+        if(laneData.active && !wholeWorkgroup)
+        {
+          RDCASSERTEQUAL(laneData.subgroupIndex, 0);
+          RDCASSERTEQUAL(laneData.laneIndex, lane);
+        }
+
+        if(laneData.threadid == threadid)
+        {
+          RDCASSERTEQUAL(laneData.subgroupIndex, 0);
+          activeLaneIndex = lane;
+        }
+
+        const uint32_t groupFlatIndex = laneData.threadid[2] * threadDim[0] * threadDim[1] +
+                                        laneData.threadid[1] * threadDim[0] + laneData.threadid[0];
+
+        workgroupProperties[lane][DXILDebug::ThreadProperty::Active] = laneData.active;
+        workgroupProperties[lane][DXILDebug::ThreadProperty::SubgroupIdx] = laneData.laneIndex;
+        // The simulation requires
+        RDCASSERT(lane >= laneData.laneIndex);
 
         rdcflatmap<ShaderBuiltin, ShaderVariable> &threadBuiltins = threadsBuiltins[lane];
         threadBuiltins[ShaderBuiltin::DispatchThreadIndex] =
-            ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + value->threadid[0],
-                           groupid[1] * threadDim[1] + value->threadid[1],
-                           groupid[2] * threadDim[2] + value->threadid[2], 0U);
-        threadBuiltins[ShaderBuiltin::GroupThreadIndex] =
-            ShaderVariable(rdcstr(), value->threadid[0], value->threadid[1], value->threadid[2], 0U);
+            ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + laneData.threadid[0],
+                           groupid[1] * threadDim[1] + laneData.threadid[1],
+                           groupid[2] * threadDim[2] + laneData.threadid[2], 0U);
+        threadBuiltins[ShaderBuiltin::GroupThreadIndex] = ShaderVariable(
+            rdcstr(), laneData.threadid[0], laneData.threadid[1], laneData.threadid[2], 0U);
         threadBuiltins[ShaderBuiltin::GroupFlatIndex] =
-            ShaderVariable(rdcstr(),
-                           value->threadid[2] * threadDim[0] * threadDim[1] +
-                               value->threadid[1] * threadDim[0] + value->threadid[0],
-                           0U, 0U, 0U);
+            ShaderVariable(rdcstr(), groupFlatIndex, 0U, 0U, 0U);
         threadBuiltins[ShaderBuiltin::IndexInSubgroup] =
-            ShaderVariable(rdcstr(), value->laneIndex, 0U, 0U, 0U);
+            ShaderVariable(rdcstr(), laneData.laneIndex, 0U, 0U, 0U);
       }
 
       if(activeLaneIndex == ~0U)
@@ -3758,56 +3840,8 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
         RDCERR("Didn't find desired lane in subgroup data");
         activeLaneIndex = 0;
       }
-
-      // if we're simulating the whole workgroup we need to fill in the thread IDs of other threads
-      if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
-      {
-        uint32_t i = 0;
-        for(uint32_t tz = 0; tz < threadDim[2]; tz++)
-        {
-          for(uint32_t ty = 0; ty < threadDim[1]; ty++)
-          {
-            for(uint32_t tx = 0; tx < threadDim[0]; tx++)
-            {
-              rdcflatmap<ShaderBuiltin, ShaderVariable> &thread_builtins = threadsBuiltins[i];
-
-              if(workgroupProperties[i][DXILDebug::ThreadProperty::Active])
-              {
-                // assert that this is the thread we expect it to be
-                RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::DispatchThreadIndex].value.u32v[0],
-                               groupid[0] * threadDim[0] + tx);
-                RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::DispatchThreadIndex].value.u32v[1],
-                               groupid[1] * threadDim[1] + ty);
-                RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::DispatchThreadIndex].value.u32v[2],
-                               groupid[2] * threadDim[2] + tz);
-
-                RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::IndexInSubgroup].value.u32v[0],
-                               i % buf->subgroupSize);
-              }
-              else
-              {
-                thread_builtins[ShaderBuiltin::DispatchThreadIndex] = ShaderVariable(
-                    rdcstr(), groupid[0] * threadDim[0] + tx, groupid[1] * threadDim[1] + ty,
-                    groupid[2] * threadDim[2] + tz, 0U);
-                thread_builtins[ShaderBuiltin::GroupThreadIndex] =
-                    ShaderVariable(rdcstr(), tx, ty, tz, 0U);
-                thread_builtins[ShaderBuiltin::GroupFlatIndex] = ShaderVariable(
-                    rdcstr(), tz * threadDim[0] * threadDim[1] + ty * threadDim[0] + tx, 0U, 0U, 0U);
-                // tightly wrap subgroups, this is likely not how the GPU actually assigns them
-                thread_builtins[ShaderBuiltin::IndexInSubgroup] =
-                    ShaderVariable(rdcstr(), i % buf->subgroupSize, 0U, 0U, 0U);
-                workgroupProperties[i][DXILDebug::ThreadProperty::Active] = 1;
-                workgroupProperties[i][DXILDebug::ThreadProperty::SubgroupIdx] =
-                    i % buf->subgroupSize;
-              }
-
-              i++;
-            }
-          }
-        }
-      }
     }
-    else if(dxbc->GetThreadScope() & DXBC::ThreadScope::Workgroup)
+    else if(wholeWorkgroup)
     {
       numThreads = threadDim[0] * threadDim[1] * threadDim[2];
 
@@ -3853,6 +3887,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
       workgroupProperties.resize(numThreads);
       threadsBuiltins.resize(numThreads);
 
+      activeLaneIndex = 0;
       workgroupProperties[0][DXILDebug::ThreadProperty::Active] = 1;
 
       // put everything in globals, no per-thread values

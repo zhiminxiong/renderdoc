@@ -9023,6 +9023,12 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
                                        uint32_t threadsInWorkgroup)
 {
   CHECK_DEBUGGER_THREAD();
+  if(activeLaneIndex >= threadsInWorkgroup)
+  {
+    RDCERR("Invalid active lane index");
+    return NULL;
+  }
+
   ShaderStage shaderStage = reflection.stage;
 
   m_ApiWrapper = apiWrapper;
