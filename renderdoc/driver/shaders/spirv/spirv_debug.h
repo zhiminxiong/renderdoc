@@ -336,7 +336,7 @@ struct ThreadState
 
   const ShaderVariable &GetSrc(Id id) const;
   DeviceOpResult WritePointerValue(Id pointer, const ShaderVariable &val);
-  DeviceOpResult ReadPointerValue(Id pointer, ShaderVariable &ret);
+  DeviceOpResult ReadPointerValue(bool atomic, Id pointer, ShaderVariable &ret);
 
   void DebugBreak();
 

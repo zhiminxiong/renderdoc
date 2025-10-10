@@ -468,8 +468,18 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
   return DeviceOpResult::Succeeded;
 }
 
-DeviceOpResult ThreadState::ReadPointerValue(Id pointer, ShaderVariable &ret)
+DeviceOpResult ThreadState::ReadPointerValue(bool atomic, Id pointer, ShaderVariable &ret)
 {
+  // active lane: atomic operations read GSM from the global backing memory
+  if(hasDebugState && atomic)
+  {
+    auto gsmPtrIt = gsmPointers.find(pointer);
+    if(gsmPtrIt != gsmPointers.end())
+    {
+      const ShaderVariable &globalPtr = gsmPointers[pointer];
+      return debugger.ReadFromPointer(globalPtr, ret);
+    }
+  }
   return debugger.ReadFromPointer(GetSrc(pointer), ret);
 }
 
@@ -894,7 +904,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       // get the pointer value, evaluate it (i.e. dereference) and store the result
       ShaderVariable val;
-      if(ReadPointerValue(load.pointer, val) == DeviceOpResult::NeedsDevice)
+      if(ReadPointerValue(false, load.pointer, val) == DeviceOpResult::NeedsDevice)
       {
         SetStepNeedsDeviceThread();
         break;
@@ -928,7 +938,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       ShaderVariable val;
       {
-        if(ReadPointerValue(copy.source, val) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(false, copy.source, val) == DeviceOpResult::NeedsDevice)
         {
           SetStepNeedsDeviceThread();
           break;
@@ -4243,12 +4253,6 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
       break;
     }
 
-      //////////////////////////////////////////////////////////////////////////////
-      //
-      // Atomic opcodes
-      //
-      //////////////////////////////////////////////////////////////////////////////
-
     case Op::ImageTexelPointer:
     {
       // we don't actually process this right now, we just store the parameters for future
@@ -4256,7 +4260,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
       OpImageTexelPointer ptr(it);
 
       ShaderVariable val;
-      if(ReadPointerValue(ptr.image, val) == DeviceOpResult::NeedsDevice)
+      if(ReadPointerValue(false, ptr.image, val) == DeviceOpResult::NeedsDevice)
       {
         SetStepNeedsDeviceThread();
         break;
@@ -4274,6 +4278,13 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
       SetDst(opdata.result, result);
       break;
     }
+
+      //////////////////////////////////////////////////////////////////////////////
+      //
+      // Atomic opcodes
+      //
+      //////////////////////////////////////////////////////////////////////////////
+
     case Op::AtomicLoad:
     {
       SCOPED_LOCK(debugger.GetAtomicMemoryLock());
@@ -4289,7 +4300,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       if(ptr.members.empty())
       {
-        if(ReadPointerValue(load.pointer, result) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(true, load.pointer, result) == DeviceOpResult::NeedsDevice)
         {
           SetStepNeedsDeviceThread();
           break;
@@ -4368,7 +4379,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       if(ptr.members.empty())
       {
-        if(ReadPointerValue(excg.pointer, result) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(true, excg.pointer, result) == DeviceOpResult::NeedsDevice)
         {
           SetStepNeedsDeviceThread();
           break;
@@ -4431,7 +4442,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       if(ptr.members.empty())
       {
-        if(ReadPointerValue(cmpexcg.pointer, result) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(true, cmpexcg.pointer, result) == DeviceOpResult::NeedsDevice)
         {
           SetStepNeedsDeviceThread();
           break;
@@ -4513,7 +4524,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       if(ptr.members.empty())
       {
-        if(ReadPointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(true, atomic.pointer, result) == DeviceOpResult::NeedsDevice)
         {
           SetStepNeedsDeviceThread();
           break;
@@ -4601,7 +4612,7 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       if(ptr.members.empty())
       {
-        if(ReadPointerValue(atomic.pointer, result) == DeviceOpResult::NeedsDevice)
+        if(ReadPointerValue(true, atomic.pointer, result) == DeviceOpResult::NeedsDevice)
         {
           SetStepNeedsDeviceThread();
           break;
