@@ -1850,6 +1850,7 @@ bool ShouldIgnoreSourceMapping(const Instruction &inst);
 bool isUndef(const Value *v);
 
 void SanitiseName(rdcstr &name);
+rdcstr GetGlobalVarName(const GlobalVar *gv);
 
 };    // namespace DXIL
 

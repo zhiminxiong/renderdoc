@@ -1724,12 +1724,7 @@ rdcstr Program::DisassembleGlobalVars(int &instructionLine) const
   {
     const GlobalVar &g = *m_GlobalVars[i];
 
-    rdcstr n = g.name;
-    if(!m_DXCStyle)
-    {
-      n = DXBC::BasicDemangle(g.name);
-      DXIL::SanitiseName(n);
-    }
+    rdcstr n = !m_DXCStyle ? DXIL::GetGlobalVarName(&g) : g.name;
     ret += StringFormat::Fmt("@%s = ", escapeStringIfNeeded(n).c_str());
     switch(g.flags & GlobalFlags::LinkageMask)
     {
@@ -1772,6 +1767,7 @@ rdcstr Program::DisassembleGlobalVars(int &instructionLine) const
     if(g.section >= 0)
       ret += StringFormat::Fmt(", section %s", escapeString(m_Sections[g.section]).c_str());
 
+    ret += " // " + escapeString(g.name);
     ret += "\n";
     instructionLine++;
   }
@@ -4718,21 +4714,11 @@ void Program::MakeRDDisassemblyString(const DXBC::Reflection *reflection)
               // arg[0] : ptr
               if(cast<GlobalVar>(inst.args[0]))
               {
-                lineStr += DXBC::BasicDemangle(cast<GlobalVar>(inst.args[0])->name);
+                lineStr += DXIL::GetGlobalVarName(cast<GlobalVar>(inst.args[0]));
               }
               else
               {
-                rdcstr ptrStr = GetArgId(0);
-                // Simple demangle take string between first "?" and next "@"
-                int nameStart = ptrStr.indexOf('?');
-                if(nameStart > 0)
-                {
-                  nameStart++;
-                  int nameEnd = ptrStr.indexOf('@', nameStart);
-                  if(nameEnd > nameStart)
-                    ptrStr = ptrStr.substr(nameStart, nameEnd - nameStart);
-                  lineStr += ptrStr;
-                }
+                lineStr += GetArgId(0);
               }
               // arg[1] : index 0
               bool first = true;
@@ -6347,9 +6333,7 @@ SourceMappingInfo Program::ParseDbgOpDeclare(const DXIL::Instruction &inst) cons
   else if(const GlobalVar *gv = cast<GlobalVar>(value))
   {
     ret.dbgVarId = gv->ssaId;
-    rdcstr n = DXBC::BasicDemangle(gv->name);
-    DXIL::SanitiseName(n);
-    ret.dbgVarName = n;
+    ret.dbgVarName = DXIL::GetGlobalVarName(gv);
   }
   else if(const Constant *c = cast<Constant>(value))
   {
@@ -6374,6 +6358,15 @@ SourceMappingInfo Program::ParseDbgOpDeclare(const DXIL::Instruction &inst) cons
   ret.srcCountBytes = srcMapping.second;
 
   return ret;
+}
+
+rdcstr GetGlobalVarName(const GlobalVar *gv)
+{
+  rdcstr n = DXBC::BasicDemangle(gv->name);
+  DXIL::SanitiseName(n);
+  n += "_";
+  n += ToStr(gv->ssaId);
+  return n;
 }
 
 };    // namespace DXIL

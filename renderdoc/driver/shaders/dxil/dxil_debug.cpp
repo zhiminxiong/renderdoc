@@ -5406,6 +5406,8 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
     case Operation::Alloca:
     {
       result.name = DXBC::BasicDemangle(result.name);
+      result.name += "_";
+      result.name += ToStr(resultId);
       m_Memory.AllocateMemoryForType(inst.type, resultId, false, false, result);
       break;
     }
@@ -8944,8 +8946,7 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
   for(const DXIL::GlobalVar *gv : m_Program->m_GlobalVars)
   {
     GlobalVariable globalVar;
-    rdcstr n = DXBC::BasicDemangle(gv->name);
-    DXIL::SanitiseName(n);
+    rdcstr n = DXIL::GetGlobalVarName(gv);
     globalVar.var.name = n;
     globalVar.id = gv->ssaId;
     globalVar.gsm = (gv->type->addrSpace == DXIL::Type::PointerAddrSpace::GroupShared);
