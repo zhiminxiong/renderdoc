@@ -3066,9 +3066,6 @@ void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
                DDY(op.operation == OPCODE_DERIV_RTY_FINE, prevWorkgroup, op.operands[1], op));
       break;
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Buffer/Texture load and store
-
     // handle atomic operations all together
     case OPCODE_ATOMIC_IADD:
     case OPCODE_ATOMIC_IMAX:
@@ -3257,6 +3254,9 @@ void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
 
       break;
     }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Buffer/Texture load and store
 
     // store and load paths are mostly identical
     case OPCODE_STORE_UAV_TYPED:
