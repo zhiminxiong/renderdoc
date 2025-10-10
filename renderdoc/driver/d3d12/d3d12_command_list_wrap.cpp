@@ -3062,7 +3062,8 @@ void WrappedID3D12GraphicsCommandList::SetMarker(UINT Metadata, const void *pDat
   SERIALISE_TIME_CALL(m_pList->SetMarker(Metadata, pData, Size));
 
   if(m_AMDMarkers && Metadata == PIX_EVENT_UNICODE_VERSION)
-    m_AMDMarkers->SetMarker(StringFormat::Wide2UTF8((const wchar_t *)pData).c_str());
+    m_AMDMarkers->SetMarker(
+        StringFormat::Wide2UTF8(rdcwstr((const wchar_t *)pData, Size / sizeof(wchar_t))).c_str());
 
   if(IsCaptureMode(m_State))
   {
@@ -3135,7 +3136,8 @@ void WrappedID3D12GraphicsCommandList::BeginEvent(UINT Metadata, const void *pDa
   SERIALISE_TIME_CALL(m_pList->BeginEvent(Metadata, pData, Size));
 
   if(m_AMDMarkers && Metadata == PIX_EVENT_UNICODE_VERSION)
-    m_AMDMarkers->PushMarker(StringFormat::Wide2UTF8((const wchar_t *)pData).c_str());
+    m_AMDMarkers->PushMarker(
+        StringFormat::Wide2UTF8(rdcwstr((const wchar_t *)pData, Size / sizeof(wchar_t))).c_str());
 
   if(IsCaptureMode(m_State))
   {
