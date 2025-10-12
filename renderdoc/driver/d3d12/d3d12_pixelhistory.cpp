@@ -2102,7 +2102,8 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
     colorCopyParams.arraySlice = m_CallbackInfo.targetSubresource.slice;
     colorCopyParams.scratchBuffer = true;
 
-    bool depthEnabled = origPipeDesc.DepthStencilState.DepthEnable != FALSE;
+    bool depthEnabled =
+        state.GetDSVID() != ResourceId() && origPipeDesc.DepthStencilState.DepthEnable != FALSE;
 
     D3D12MarkerRegion::Set(
         cmd, StringFormat::Fmt("Event %u has %u fragments", eid, numFragmentsInEvent));
@@ -2340,6 +2341,14 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
       pipeDesc.DepthStencilState.FrontFace.StencilReadMask = 0xff;
       pipeDesc.DepthStencilState.FrontFace.StencilWriteMask = 0xff;
       pipeDesc.DepthStencilState.BackFace = pipeDesc.DepthStencilState.FrontFace;
+    }
+
+    // if there was no depth attachment before these were implicitly disabled, so ensure we don't
+    // run them now that we've inserted a depth attachment for stencil counting
+    if(state.GetDSVID() == ResourceId())
+    {
+      pipeDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+      pipeDesc.DepthStencilState.DepthBoundsTestEnable = FALSE;
     }
 
     // TODO: The original pixel shader may have side effects such as UAV writes. The Vulkan impl

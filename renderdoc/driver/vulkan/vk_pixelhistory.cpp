@@ -1079,6 +1079,28 @@ protected:
     dynState->dynamicStateCount = (uint32_t)m_DynamicStates.size();
   }
 
+  bool HasDepthAttachment(const VulkanRenderState &pipestate)
+  {
+    if(pipestate.dynamicRendering.active)
+    {
+      const VulkanRenderState::DynamicRendering &dyn = pipestate.dynamicRendering;
+
+      return dyn.depth.imageView != VK_NULL_HANDLE;
+    }
+
+    ResourceId rp = pipestate.GetRenderPass();
+
+    const VulkanCreationInfo::RenderPass &rpInfo =
+        m_pDriver->GetDebugManager()->GetRenderPassInfo(rp);
+
+    // TODO: this should retrieve the correct subpass, once multiple subpasses
+    // are supported.
+    // Currently only single subpass render passes are supported.
+    const VulkanCreationInfo::RenderPass::Subpass &sub = rpInfo.subpasses.front();
+
+    return (sub.depthstencilAttachment != -1);
+  }
+
   // PatchRenderPass creates a new VkRenderPass based on the original that has a separate
   // depth-stencil attachment, and covers a single subpass. This will be used to replay a single
   // draw. The new renderpass also replaces the depth stencil attachment, so it can be used to count
@@ -3120,6 +3142,8 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
       }
     }
 
+    const bool hadDepthAttachment = HasDepthAttachment(state);
+
     bool multiview = false;
     VkRenderPass origRpWithDepth = PatchRenderPass(state, multiview);
     state.SetRenderPass(prevState.GetRenderPass());
@@ -3134,8 +3158,8 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
 
     if(!prevState.graphics.shaderObject)
     {
-      pipes = CreatePerFragmentPipelines(curPipeline, newRp, origRpWithDepth, eid, 0,
-                                         VK_FORMAT_R32G32B32A32_SFLOAT, colorOutputIndex);
+      pipes = CreatePerFragmentPipelines(curPipeline, newRp, origRpWithDepth, hadDepthAttachment,
+                                         eid, 0, VK_FORMAT_R32G32B32A32_SFLOAT, colorOutputIndex);
     }
     else
     {
@@ -3171,7 +3195,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
       colourCopyParams.srcImageLayout = srcImageLayout;
     }
 
-    bool depthEnabled = prevState.depthTestEnable != VK_FALSE;
+    bool depthEnabled = hadDepthAttachment && prevState.depthTestEnable != VK_FALSE;
 
     VkMarkerRegion::Set(StringFormat::Fmt("Event %u has %u fragments", eid, numFragmentsInEvent),
                         cmd);
@@ -3296,7 +3320,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
           else
           {
             // second pass - blending OFF, to get shader output value
-            state.depthTestEnable = prevState.depthTestEnable;
+            state.depthTestEnable = depthEnabled ? VK_TRUE : VK_FALSE;
             state.depthWriteEnable = true;
           }
         }
@@ -3416,7 +3440,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
         state.colorBlendEnable = prevState.colorBlendEnable;
         state.colorWriteMask = prevState.colorWriteMask;
 
-        state.depthTestEnable = prevState.depthTestEnable;
+        state.depthTestEnable = depthEnabled ? VK_TRUE : VK_FALSE;
         state.depthWriteEnable = prevState.depthWriteEnable;
         state.depthCompareOp = prevState.depthCompareOp;
 
@@ -3495,7 +3519,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
   void PostRedraw(uint32_t eid, ActionFlags flags, VkCommandBuffer cmd) {}
   // CreatePerFragmentPipelines for getting per fragment information.
   Pipelines CreatePerFragmentPipelines(ResourceId pipe, VkRenderPass rp, VkRenderPass origRpWithDepth,
-                                       uint32_t eid, uint32_t fragmentIndex,
+                                       bool hadDepthAttachment, uint32_t eid, uint32_t fragmentIndex,
                                        VkFormat colorOutputFormat, uint32_t colorOutputIndex)
   {
     const VulkanCreationInfo::Pipeline &p = m_pDriver->GetDebugManager()->GetPipelineInfo(pipe);
@@ -3578,6 +3602,14 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
         stages[i].module = replacement;
     }
     pipeCreateInfo.pStages = stages.data();
+
+    // if there was no depth attachment before these were implicitly disabled, so ensure we don't
+    // run them now that we've inserted a depth attachment for stencil counting
+    if(!hadDepthAttachment)
+    {
+      ds->depthTestEnable = VK_FALSE;
+      ds->depthBoundsTestEnable = VK_FALSE;
+    }
 
     // the postmod pipe is used with the renderpass with added depth/stencil
     pipeCreateInfo.renderPass = origRpWithDepth;

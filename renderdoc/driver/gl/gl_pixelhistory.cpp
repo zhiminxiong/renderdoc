@@ -1708,6 +1708,15 @@ void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
                                                     &curStencilLevel);
     }
 
+    // if we didn't have a depth buffer, turn off depth testing so we don't have to worry about
+    // incorrect depth failures with our forced depth
+    if(!curDepth)
+    {
+      if(HasExt[EXT_depth_bounds_test])
+        driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
+      driver->glDepthFunc(eGL_ALWAYS);
+    }
+
     GLuint forcedDepth = 0;
     // replace depth and clear it to premod value
     {
