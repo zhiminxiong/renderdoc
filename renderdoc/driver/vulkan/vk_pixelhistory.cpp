@@ -4868,8 +4868,10 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
 
         if((history[h].preMod.depth < depthBounds.first ||
             history[h].preMod.depth > depthBounds.second) &&
-           depthBounds.second > depthBounds.first)
+           depthBounds.second > depthBounds.first && dfmt != VK_FORMAT_UNDEFINED)
+        {
           history[h].depthBoundsFailed = true;
+        }
       }
     }
 

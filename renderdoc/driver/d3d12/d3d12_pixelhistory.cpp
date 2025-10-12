@@ -1420,7 +1420,8 @@ struct D3D12TestsFailedCallback : public D3D12PixelHistoryCallback
     D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC pipeDesc;
     origPSO->Fill(pipeDesc);
 
-    if(pipeDesc.DepthStencilState.DepthBoundsTestEnable)
+    // When a depth buffer is not bound (e.g. when TIR is enabled), the Depth Bounds Test must always pass.
+    if(pipeDesc.DepthStencilState.DepthBoundsTestEnable && pipeState.GetDSVID() != ResourceId())
       m_EventDepthBounds[eid] = {pipeState.depthBoundsMin, pipeState.depthBoundsMax};
     else
       m_EventDepthBounds[eid] = {};
