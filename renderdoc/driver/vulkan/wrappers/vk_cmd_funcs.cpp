@@ -1015,6 +1015,18 @@ void WrappedVulkan::ApplyRPLoadDiscards(VkCommandBuffer commandBuffer, VkRect2D 
     VkImage image = GetResourceManager()->GetCurrentHandle<VkImage>(viewInfo.image);
     const VulkanCreationInfo::Image &imInfo = GetDebugManager()->GetImageInfo(GetResID(image));
 
+    VkImageSubresourceRange viewRange = viewInfo.range;
+    if(!Maintenance9() && imInfo.type == VK_IMAGE_TYPE_3D &&
+       viewInfo.viewType != VK_IMAGE_VIEW_TYPE_3D)
+    {
+      // If the maintenance9 feature is not enabled, and the attachment view is a 2D or 2D array
+      // view of a 3D image, even if the attachment view only refers to a subset of the slices of
+      // the selected mip level of the 3D image, automatic layout transitions apply to the entire
+      // subresource referenced which is the entire mip level in this case.
+      viewRange.baseArrayLayer = 0;
+      viewRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    }
+
     VkImageLayout initialLayout = rpinfo.attachments[i].initialLayout;
 
     bool depthDontCareLoad = (rpinfo.attachments[i].loadOp == VK_ATTACHMENT_LOAD_OP_DONT_CARE);
@@ -1048,7 +1060,7 @@ void WrappedVulkan::ApplyRPLoadDiscards(VkCommandBuffer commandBuffer, VkRect2D 
             VK_QUEUE_FAMILY_IGNORED,
             VK_QUEUE_FAMILY_IGNORED,
             Unwrap(image),
-            viewInfo.range,
+            viewRange,
         };
 
         DoPipelineBarrier(commandBuffer, 1, &dstimBarrier);
@@ -1066,11 +1078,11 @@ void WrappedVulkan::ApplyRPLoadDiscards(VkCommandBuffer commandBuffer, VkRect2D 
         // is only false if nothing at all is getting don't care'd.
         if(!dontCareLoad || stencilDifferentDontCare || renderArea.offset.x > 0 ||
            renderArea.offset.y > 0 ||
-           renderArea.extent.width < RDCMAX(1U, imInfo.extent.width >> viewInfo.range.baseMipLevel) ||
-           renderArea.extent.height < RDCMAX(1U, imInfo.extent.height >> viewInfo.range.baseMipLevel))
+           renderArea.extent.width < RDCMAX(1U, imInfo.extent.width >> viewRange.baseMipLevel) ||
+           renderArea.extent.height < RDCMAX(1U, imInfo.extent.height >> viewRange.baseMipLevel))
         {
           GetDebugManager()->FillWithDiscardPattern(
-              commandBuffer, DiscardType::UndefinedTransition, image, initialLayout, viewInfo.range,
+              commandBuffer, DiscardType::UndefinedTransition, image, initialLayout, viewRange,
               {{0, 0}, {imInfo.extent.width, imInfo.extent.height}});
         }
       }
@@ -1078,19 +1090,19 @@ void WrappedVulkan::ApplyRPLoadDiscards(VkCommandBuffer commandBuffer, VkRect2D 
       if(!stencilDifferentDontCare && dontCareLoad)
       {
         GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassLoad, image,
-                                                  initialLayout, viewInfo.range, renderArea);
+                                                  initialLayout, viewRange, renderArea);
       }
       else if(stencilDifferentDontCare)
       {
-        VkImageSubresourceRange range = viewInfo.range;
+        VkImageSubresourceRange range = viewRange;
 
         range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if(depthDontCareLoad && (viewInfo.range.aspectMask & range.aspectMask) != 0)
+        if(depthDontCareLoad && (viewRange.aspectMask & range.aspectMask) != 0)
           GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassLoad,
                                                     image, initialLayout, range, renderArea);
 
         range.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
-        if(stencilDontCareLoad && (viewInfo.range.aspectMask & range.aspectMask) != 0)
+        if(stencilDontCareLoad && (viewRange.aspectMask & range.aspectMask) != 0)
           GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassLoad,
                                                     image, initialLayout, range, renderArea);
       }
@@ -1111,6 +1123,19 @@ void WrappedVulkan::ApplyRPStoreDiscards(VkCommandBuffer commandBuffer, VkRect2D
 
     const VulkanCreationInfo::ImageView &viewInfo = m_CreationInfo.m_ImageView[attachments[i]];
     VkImage image = GetResourceManager()->GetCurrentHandle<VkImage>(viewInfo.image);
+    const VulkanCreationInfo::Image &imInfo = GetDebugManager()->GetImageInfo(GetResID(image));
+
+    VkImageSubresourceRange viewRange = viewInfo.range;
+    if(!Maintenance9() && imInfo.type == VK_IMAGE_TYPE_3D &&
+       viewInfo.viewType != VK_IMAGE_VIEW_TYPE_3D)
+    {
+      // If the maintenance9 feature is not enabled, and the attachment view is a 2D or 2D array
+      // view of a 3D image, even if the attachment view only refers to a subset of the slices of
+      // the selected mip level of the 3D image, automatic layout transitions apply to the entire
+      // subresource referenced which is the entire mip level in this case.
+      viewRange.baseArrayLayer = 0;
+      viewRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    }
 
     VkImageLayout layout = rpinfo.attachments[i].finalLayout;
 
@@ -1130,20 +1155,20 @@ void WrappedVulkan::ApplyRPStoreDiscards(VkCommandBuffer commandBuffer, VkRect2D
       if(depthDontCareStore && stencilDontCareStore)
       {
         GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassStore,
-                                                  image, layout, viewInfo.range, renderArea);
+                                                  image, layout, viewRange, renderArea);
       }
       else
       {
         // otherwise only don't care the appropriate aspects
-        VkImageSubresourceRange range = viewInfo.range;
+        VkImageSubresourceRange range = viewRange;
 
         range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if(depthDontCareStore && (viewInfo.range.aspectMask & range.aspectMask) != 0)
+        if(depthDontCareStore && (viewRange.aspectMask & range.aspectMask) != 0)
           GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassStore,
                                                     image, layout, range, renderArea);
 
         range.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
-        if(stencilDontCareStore && (viewInfo.range.aspectMask & range.aspectMask) != 0)
+        if(stencilDontCareStore && (viewRange.aspectMask & range.aspectMask) != 0)
           GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassStore,
                                                     image, layout, range, renderArea);
       }
@@ -1151,7 +1176,7 @@ void WrappedVulkan::ApplyRPStoreDiscards(VkCommandBuffer commandBuffer, VkRect2D
     else if(rpinfo.attachments[i].storeOp == VK_ATTACHMENT_STORE_OP_DONT_CARE)
     {
       GetDebugManager()->FillWithDiscardPattern(commandBuffer, DiscardType::RenderPassStore, image,
-                                                layout, viewInfo.range, renderArea);
+                                                layout, viewRange, renderArea);
     }
   }
 }
