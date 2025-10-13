@@ -186,6 +186,7 @@ struct PixelHistoryCallbackInfo
   Subresource targetSubresource;
   uint32_t x;
   uint32_t y;
+  uint32_t z;
   uint32_t sampleMask;
 
   // Image used to get per fragment data.
@@ -1535,6 +1536,12 @@ protected:
     // For pipeline barriers.
     VkImageSubresourceRange subresource = {aspectFlags, baseMip, 1, baseSlice, 1};
 
+    if(p.srcImage == m_CallbackInfo.targetImage && (m_CallbackInfo.extent.depth > 1))
+    {
+      subresource.baseArrayLayer = baseSlice = 0;
+      subresource.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    }
+
     // For multi-sampled images can't call vkCmdCopyImageToBuffer directly,
     // copy using a compute shader into a staging image first.
     if(p.multisampled)
@@ -1588,6 +1595,11 @@ protected:
       region.imageSubresource.baseArrayLayer = baseSlice;
       region.imageSubresource.mipLevel = baseMip;
       region.imageSubresource.layerCount = 1;
+
+      if(p.srcImage == m_CallbackInfo.targetImage)
+      {
+        region.imageOffset.z = m_CallbackInfo.z;
+      }
 
       if(!depthCopy)
       {
@@ -4051,6 +4063,8 @@ bool VulkanDebugManager::PixelHistorySetupResources(PixelHistoryResources &resou
   imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
   imgInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                   VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  if(extent.depth > 1)
+    imgInfo.arrayLayers = extent.depth;
   if(samples != VK_SAMPLE_COUNT_1_BIT)
     imgInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
@@ -4543,6 +4557,7 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
   callbackInfo.targetSubresource = sub;
   callbackInfo.x = x;
   callbackInfo.y = y;
+  callbackInfo.z = 0;
   callbackInfo.sampleMask = sampleMask;
   callbackInfo.subImage = resources.colorImage;
   callbackInfo.subImageView = resources.colorImageView;
@@ -4551,6 +4566,12 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
   callbackInfo.dsImageView = resources.dsImageView;
   callbackInfo.dstBuffer = resources.dstBuffer;
   callbackInfo.multisampled = imginfo.samples != VK_SAMPLE_COUNT_1_BIT;
+
+  if(imginfo.type == VK_IMAGE_TYPE_3D)
+  {
+    callbackInfo.z = sub.slice;
+    callbackInfo.targetSubresource.slice = 0;
+  }
 
   VulkanOcclusionCallback occlCb(m_pDriver, shaderCache, callbackInfo, occlusionPool, events);
   {

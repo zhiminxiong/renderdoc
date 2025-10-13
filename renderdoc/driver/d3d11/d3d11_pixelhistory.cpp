@@ -137,6 +137,7 @@ struct D3D11CopyPixelParams
   bool floatTex;
   bool uintTex;
   bool intTex;
+  bool tex3d;
 
   UINT subres;
 
@@ -246,12 +247,14 @@ void D3D11DebugManager::PixelHistoryCopyPixel(D3D11CopyPixelParams &p, size_t ev
     if(p.floatTex)
       offs = 4;
     else if(p.uintTex)
-      offs = 6;
-    else if(p.intTex)
       offs = 8;
+    else if(p.intTex)
+      offs = 12;
 
     if(p.multisampled)
       offs++;
+    else if(p.tex3d)
+      offs += 2;
   }
 
   m_pImmediateContext->CSSetShaderResources(offs, 2, p.srv);
@@ -555,7 +558,7 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   ID3D11Texture2D *depthCopyD16 = NULL;
   ID3D11ShaderResourceView *depthCopyD16_DepthSRV = NULL;
 
-  uint32_t srcxyData[8] = {
+  uint32_t srcxyData[12] = {
       x,
       y,
       multisampled ? sampleIdx : mip,
@@ -565,14 +568,18 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
       uint32_t(floatTex),
       uint32_t(uintTex),
       uint32_t(intTex),
+
+      uint32_t(details.texType == eTexType_3D),
   };
 
-  uint32_t shadoutsrcxyData[8];
+  uint32_t shadoutsrcxyData[12];
   memcpy(shadoutsrcxyData, srcxyData, sizeof(srcxyData));
 
   // shadout texture doesn't have slices/mips, just one of the right dimension
   shadoutsrcxyData[2] = multisampled ? sampleIdx : 0;
   shadoutsrcxyData[3] = 0;
+  // and is not 3D
+  shadoutsrcxyData[8] = 0;
 
   ID3D11Buffer *srcxyCBuf = GetDebugManager()->MakeCBuffer(sizeof(srcxyData));
   ID3D11Buffer *shadoutsrcxyCBuf = GetDebugManager()->MakeCBuffer(sizeof(shadoutsrcxyData));
@@ -622,10 +629,16 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   colourCopyParams.intTex = intTex;
   colourCopyParams.srcxyCBuf = srcxyCBuf;
   colourCopyParams.storeCBuf = storeCBuf;
+  colourCopyParams.tex3d = false;
   if(details.texType == eTexType_3D)
+  {
     colourCopyParams.subres = mip;
+    colourCopyParams.tex3d = true;
+  }
   else
+  {
     colourCopyParams.subres = details.texMips * slice + mip;
+  }
 
   D3D11CopyPixelParams depthCopyParams = colourCopyParams;
 
@@ -638,6 +651,7 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
 
   depthCopyParams.depthcopy = true;
   depthCopyParams.uav = pixstoreDepthUAV;
+  depthCopyParams.tex3d = false;
 
   // while issuing the above queries we can check to see which tests are enabled so we don't
   // bother checking if depth testing failed if the depth test was disabled
@@ -2015,11 +2029,13 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   shadoutCopyParams.subres = 0;
   shadoutCopyParams.uav = shadoutStoreUAV;
   shadoutCopyParams.srcxyCBuf = shadoutsrcxyCBuf;
+  shadoutCopyParams.tex3d = false;
 
   depthCopyParams.sourceTex = depthCopyParams.srvTex = shaddepthOutput;
   depthCopyParams.srv[0] = shaddepthOutputDepthSRV;
   depthCopyParams.srv[1] = shaddepthOutputStencilSRV;
   depthCopyParams.srcxyCBuf = shadoutsrcxyCBuf;
+  depthCopyParams.tex3d = false;
 
   for(size_t h = 0; h < history.size(); h++)
   {
@@ -2170,12 +2186,25 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
     {
       D3D11MarkerRegion middraw("fetching mid-action");
 
-      m_pImmediateContext->OMSetRenderTargets(rtIndex + 1, RTVs, shaddepthOutputDSV);
+      // 3D depth is not supported but we need depth for fragment counting - so as a bit of a compromise
+      // we fetch postmod via an extra shader output slot. This will not properly emulate precision or blending
+      if(details.texType == eTexType_3D)
+      {
+        ID3D11RenderTargetView *sparseRTVs[8] = {0};
+        sparseRTVs[rtIndex] = shadOutputRTV;
+        m_pImmediateContext->OMSetRenderTargets(rtIndex + 1, sparseRTVs, shaddepthOutputDSV);
+      }
+      else
+      {
+        m_pImmediateContext->OMSetRenderTargets(rtIndex + 1, RTVs, shaddepthOutputDSV);
+      }
 
       m_pDevice->ReplayLog(0, history[h].eventId, eReplay_OnlyDraw);
 
-      GetDebugManager()->PixelHistoryCopyPixel(colourCopyParams, postColSlot, 0);
-      postColSlot++;
+      if(details.texType != eTexType_3D)
+        GetDebugManager()->PixelHistoryCopyPixel(colourCopyParams, postColSlot++, 0);
+      else
+        GetDebugManager()->PixelHistoryCopyPixel(shadoutCopyParams, shadColSlot++, 0);
 
       GetDebugManager()->PixelHistoryCopyPixel(depthCopyParams, depthSlot, 1);
     }
@@ -2301,10 +2330,59 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
     {
       lastMod = false;
       // colour
+      if(details.texType != eTexType_3D)
       {
         uint32_t offsettedSlot = (postColSlot - discardedOffset);
         byte *data = pixstoreData + sizeof(Vec4f) * pixstoreStride * offsettedSlot;
         memcpy(&history[h].postMod.col.uintValue[0], data, sizeof(Vec4f));
+      }
+      else
+      {
+        // for 3D textures we copied to an extra shader output slot, because we needed a depth
+        // texture to count fragments and we can't bind depth with 3D
+        uint32_t offsettedSlot = (shadColSlot - discardedOffset);
+        RDCASSERT(discardedOffset <= shadColSlot);
+
+        byte *data = shadoutStoreData + sizeof(Vec4f) * pixstoreStride * offsettedSlot;
+
+        memcpy(&history[h].postMod.col.uintValue[0], data, sizeof(Vec4f));
+        shadColSlot++;
+
+        // this is a hack - we don't try to emulate precision but at least clamp representable ranges
+        ResourceFormat fmt = MakeResourceFormat(details.texFmt);
+        if(fmt.compType == CompType::UNorm)
+        {
+          for(uint32_t i = 0; i < 4; i++)
+            history[h].postMod.col.floatValue[i] =
+                RDCCLAMP(history[h].postMod.col.floatValue[i], 0.0f, 1.0f);
+        }
+        else if(fmt.compType == CompType::Float && fmt.compByteWidth == 2)
+        {
+          for(uint32_t i = 0; i < 4; i++)
+            history[h].postMod.col.floatValue[i] =
+                RDCCLAMP(history[h].postMod.col.floatValue[i], -65504.0f, 65504.0f);
+        }
+        else if(fmt.compType == CompType::UInt && fmt.compByteWidth < 4)
+        {
+          uint32_t maxVal = (1U << fmt.compByteWidth) - 1;
+          for(uint32_t i = 0; i < 4; i++)
+            history[h].postMod.col.uintValue[i] = RDCMIN(history[h].postMod.col.uintValue[i], maxVal);
+        }
+        else if(fmt.compType == CompType::SInt && fmt.compByteWidth == 2)
+        {
+          for(uint32_t i = 0; i < 4; i++)
+            history[h].postMod.col.intValue[i] =
+                RDCCLAMP(history[h].postMod.col.intValue[i], (int32_t)INT16_MIN, (int32_t)INT16_MAX);
+        }
+        else if(fmt.compType == CompType::SInt && fmt.compByteWidth == 1)
+        {
+          for(uint32_t i = 0; i < 4; i++)
+            history[h].postMod.col.intValue[i] =
+                RDCCLAMP(history[h].postMod.col.intValue[i], (int32_t)INT8_MIN, (int32_t)INT8_MAX);
+        }
+
+        for(uint32_t i = fmt.compCount; i < 4; i++)
+          history[h].postMod.col.uintValue[i] = 0;
       }
 
       {
