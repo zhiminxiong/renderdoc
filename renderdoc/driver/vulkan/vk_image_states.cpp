@@ -1234,6 +1234,12 @@ void ImageState::ResetToOldState(ImageBarrierSequence &barriers, ImageTransition
         /* image = */ wrappedHandle,
         /* subresourceRange = */ subRange,
     };
+    if(GetImageInfo().imageType == VK_IMAGE_TYPE_3D)
+    {
+      RDCASSERTEQUAL(subRange.baseArrayLayer, 0);
+      RDCASSERTEQUAL(subRange.layerCount, 1);
+      barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    }
     barriers.AddWrapped(MAIN_BATCH_INDEX, submitQueueFamilyIndex, barrier);
 
     // acquire the subresource in the dstQueueFamily, if necessary
@@ -1390,6 +1396,13 @@ void ImageState::Transition(const ImageState &dstState, VkAccessFlags srcAccessM
               /* layerCount = */ endArrayLayer - baseArrayLayer,
           },
       };
+      if(GetImageInfo().imageType == VK_IMAGE_TYPE_3D)
+      {
+        RDCASSERTEQUAL(baseArrayLayer, 0);
+        RDCASSERTEQUAL(barrier.subresourceRange.layerCount, 1);
+        barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+      }
+
       barriers.AddWrapped(MAIN_BATCH_INDEX, submitQueueFamilyIndex, barrier);
 
       // acquire the subresource in the dstQueueFamily, if necessary
