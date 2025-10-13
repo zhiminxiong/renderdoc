@@ -527,6 +527,10 @@ std::vector<uint32_t> CompileShaderToSpv(const std::string &source_text, SPIRVTa
     fread(&ret[0], sizeof(uint32_t), ret.size(), f);
     fclose(f);
   }
+  else
+  {
+    TEST_ERROR("Failed to run compiler:\n%s", command_line.c_str());
+  }
 
   unlink(infile.c_str());
   unlink(outfile.c_str());
