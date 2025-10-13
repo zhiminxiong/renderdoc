@@ -1063,6 +1063,12 @@ void VulkanGraphicsTest::setName(VkImage obj, const std::string &name)
 }
 
 template <>
+void VulkanGraphicsTest::setName(VkImageView obj, const std::string &name)
+{
+  setName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)obj, name);
+}
+
+template <>
 void VulkanGraphicsTest::setName(VkSampler obj, const std::string &name)
 {
   setName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)obj, name);
