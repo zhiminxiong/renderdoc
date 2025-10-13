@@ -179,6 +179,7 @@ struct PixelHistoryCallbackInfo
   uint32_t layers;
   uint32_t mipLevels;
   VkSampleCountFlagBits samples;
+  bool multisampled;
   VkExtent3D extent;
   // Information about the location of the pixel for which history was requested.
   Subresource targetSubresource;
@@ -1983,7 +1984,7 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
       params.srcImage = m_CallbackInfo.dsImage;
       params.srcImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       params.srcImageFormat = m_CallbackInfo.dsFormat;
-      params.multisampled = (m_CallbackInfo.samples != VK_SAMPLE_COUNT_1_BIT);
+      params.multisampled = m_CallbackInfo.multisampled;
       params.multiview = multiview;
       params.sub = m_CallbackInfo.targetSubresource;
       // Copy stencil value that indicates the number of fragments ignoring
@@ -2011,7 +2012,13 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
 
     // TODO: Need to re-start on the correct subpass.
     if(pipestate.graphics.pipeline != ResourceId() || pipestate.graphics.shaderObject)
-      pipestate.BeginRenderPassAndApplyState(m_pDriver, cmd, VulkanRenderState::BindGraphics, true);
+      pipestate.BeginRenderPassAndApplyState(m_pDriver, cmd,
+                                             m_CallbackInfo.multisampled
+                                                 ? VulkanRenderState::BindInitial
+                                                 : VulkanRenderState::BindGraphics,
+                                             true);
+    else if(m_CallbackInfo.multisampled)
+      pipestate.BindPipeline(m_pDriver, cmd, VulkanRenderState::BindInitial, false);
   }
 
   bool PostDraw(uint32_t eid, ActionFlags flags, VkCommandBuffer cmd)
@@ -2039,7 +2046,9 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
     CopyPixel(eid, cmd, storeOffset + offsetof(struct EventInfo, postmod));
 
     m_pDriver->GetCmdRenderState().BeginRenderPassAndApplyState(
-        m_pDriver, cmd, VulkanRenderState::BindGraphics, true);
+        m_pDriver, cmd,
+        m_CallbackInfo.multisampled ? VulkanRenderState::BindInitial : VulkanRenderState::BindGraphics,
+        true);
 
     // Get post-modification values
     m_EventIndices.insert(std::make_pair(eid, m_EventIndices.size()));
@@ -2094,7 +2103,12 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
 
     if(m_pDriver->GetCmdRenderState().ActiveRenderPass())
       m_pDriver->GetCmdRenderState().BeginRenderPassAndApplyState(
-          m_pDriver, cmd, VulkanRenderState::BindNone, true);
+          m_pDriver, cmd,
+          m_CallbackInfo.multisampled ? VulkanRenderState::BindInitial : VulkanRenderState::BindNone,
+          true);
+    else if(m_CallbackInfo.multisampled)
+      m_pDriver->GetCmdRenderState().BindPipeline(m_pDriver, cmd, VulkanRenderState::BindInitial,
+                                                  true);
   }
 
   void PostCmdExecute(uint32_t baseEid, uint32_t secondaryFirst, uint32_t secondaryLast,
@@ -2149,7 +2163,12 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
 
     if(m_pDriver->GetCmdRenderState().ActiveRenderPass())
       m_pDriver->GetCmdRenderState().BeginRenderPassAndApplyState(
-          m_pDriver, cmd, VulkanRenderState::BindNone, true);
+          m_pDriver, cmd,
+          m_CallbackInfo.multisampled ? VulkanRenderState::BindInitial : VulkanRenderState::BindNone,
+          true);
+    else if(m_CallbackInfo.multisampled)
+      m_pDriver->GetCmdRenderState().BindPipeline(m_pDriver, cmd, VulkanRenderState::BindInitial,
+                                                  true);
   }
 
   void PreDispatch(uint32_t eid, ActionFlags flags, VkCommandBuffer cmd)
@@ -2158,6 +2177,9 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
       return;
     size_t storeOffset = m_EventIndices.size() * sizeof(EventInfo);
     CopyPixel(eid, cmd, storeOffset, false);
+    if(m_CallbackInfo.multisampled)
+      m_pDriver->GetCmdRenderState().BindPipeline(m_pDriver, cmd, VulkanRenderState::BindInitial,
+                                                  false);
   }
   bool PostDispatch(uint32_t eid, ActionFlags flags, VkCommandBuffer cmd)
   {
@@ -2165,6 +2187,9 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
       return false;
     size_t storeOffset = m_EventIndices.size() * sizeof(EventInfo);
     CopyPixel(eid, cmd, storeOffset + offsetof(struct EventInfo, postmod), false);
+    if(m_CallbackInfo.multisampled)
+      m_pDriver->GetCmdRenderState().BindPipeline(m_pDriver, cmd, VulkanRenderState::BindInitial,
+                                                  false);
     m_EventIndices.insert(std::make_pair(eid, m_EventIndices.size()));
     return false;
   }
@@ -2254,7 +2279,7 @@ private:
     VkCopyPixelParams targetCopyParams = {};
     targetCopyParams.srcImage = m_CallbackInfo.targetImage;
     targetCopyParams.srcImageFormat = m_CallbackInfo.targetImageFormat;
-    targetCopyParams.multisampled = (m_CallbackInfo.samples != VK_SAMPLE_COUNT_1_BIT);
+    targetCopyParams.multisampled = m_CallbackInfo.multisampled;
     targetCopyParams.sub = m_CallbackInfo.targetSubresource;
     VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     if(IsDepthOrStencilFormat(m_CallbackInfo.targetImageFormat))
@@ -3179,7 +3204,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
     VkCopyPixelParams colourCopyParams = {};
     colourCopyParams.srcImage = m_CallbackInfo.subImage;
     colourCopyParams.srcImageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-    colourCopyParams.multisampled = (m_CallbackInfo.samples != VK_SAMPLE_COUNT_1_BIT);
+    colourCopyParams.multisampled = m_CallbackInfo.multisampled;
     colourCopyParams.multiview = multiview;
     colourCopyParams.sub = m_CallbackInfo.targetSubresource;
     if(IsDepthOrStencilFormat(m_CallbackInfo.targetImageFormat))
@@ -3413,7 +3438,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
 
     colourCopyParams.srcImage = m_CallbackInfo.targetImage;
     colourCopyParams.srcImageFormat = m_CallbackInfo.targetImageFormat;
-    colourCopyParams.multisampled = (m_CallbackInfo.samples != VK_SAMPLE_COUNT_1_BIT);
+    colourCopyParams.multisampled = m_CallbackInfo.multisampled;
     VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     if(IsDepthOrStencilFormat(m_CallbackInfo.targetImageFormat))
       aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -3513,7 +3538,9 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
 
     m_pDriver->GetCmdRenderState() = prevState;
     m_pDriver->GetCmdRenderState().BeginRenderPassAndApplyState(
-        m_pDriver, cmd, VulkanRenderState::BindGraphics, true);
+        m_pDriver, cmd,
+        m_CallbackInfo.multisampled ? VulkanRenderState::BindInitial : VulkanRenderState::BindGraphics,
+        true);
   }
   bool PostDraw(uint32_t eid, ActionFlags flags, VkCommandBuffer cmd) { return false; }
   void PostRedraw(uint32_t eid, ActionFlags flags, VkCommandBuffer cmd) {}
@@ -4522,6 +4549,7 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
   callbackInfo.dsFormat = resources.dsFormat;
   callbackInfo.dsImageView = resources.dsImageView;
   callbackInfo.dstBuffer = resources.dstBuffer;
+  callbackInfo.multisampled = imginfo.samples != VK_SAMPLE_COUNT_1_BIT;
 
   VulkanOcclusionCallback occlCb(m_pDriver, shaderCache, callbackInfo, occlusionPool, events);
   {
