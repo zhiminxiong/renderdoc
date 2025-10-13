@@ -826,7 +826,7 @@ void VulkanReplay::GetOutputWindowData(uint64_t id, bytebuf &retData)
 
   // map memory and readback
   byte *pData = NULL;
-  vkr = vt->MapMemory(Unwrap(device), readbackMem, 0, bufInfo.size, 0, (void **)&pData);
+  vkr = vt->MapMemory(Unwrap(device), readbackMem, 0, mrq.size, 0, (void **)&pData);
   CHECK_VKR(m_pDriver, vkr);
   if(vkr != VK_SUCCESS)
     return;
