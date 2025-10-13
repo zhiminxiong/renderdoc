@@ -5494,6 +5494,10 @@ VkBool32 WrappedVulkan::DebugCallback(MessageSeverity severity, MessageCategory 
     if(strstr(pMessageId, "VUID-VkSwapchainCreateInfoKHR-imageExtent"))
       return false;
 
+    // dedicated allocation size must match, but we have no choice but to ignore this one
+    if(strstr(pMessageId, "VUID-VkMemoryDedicatedAllocateInfo-image-02964"))
+      return false;
+
     // "Missing extension required by the device extension VK_KHR_driver_properties:
     // VK_KHR_get_physical_device_properties2. The Vulkan spec states: All required extensions for
     // each extension in the VkDeviceCreateInfo::ppEnabledExtensionNames list must also be present
