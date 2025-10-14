@@ -4178,6 +4178,11 @@ void Debugger::RegisterOp(Iter it)
           m_DebugInfo.types[dbg.result].vecSize = 0;
           break;
         }
+        case ShaderDbg::TypeTemplate:
+        {
+          m_DebugInfo.types[dbg.result] = m_DebugInfo.types[dbg.arg<Id>(0)];
+          break;
+        }
         case ShaderDbg::TypeMember:
         {
           rdcstr name = strings[dbg.arg<Id>(0)];
