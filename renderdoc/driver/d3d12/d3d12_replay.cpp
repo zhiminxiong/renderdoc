@@ -755,6 +755,7 @@ void D3D12Replay::FillDescriptor(Descriptor &dst, const D3D12Descriptor *src)
     return;
   }
 
+  dst = {};
   dst.resource = rm->GetOriginalID(src->GetResResourceId());
 
   if(dst.resource == ResourceId())
