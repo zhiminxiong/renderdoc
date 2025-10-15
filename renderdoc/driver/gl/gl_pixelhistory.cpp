@@ -2011,24 +2011,6 @@ void QueryPrimitiveIdPerFragment(WrappedOpenGL *driver, GLReplay *replay,
   }
 }
 
-bool depthTestPassed(int depthFunc, float shaderOutputDepth, float depthInBuffer)
-{
-  switch(depthFunc)
-  {
-    case eGL_NEVER: return false;
-    case eGL_LESS: return shaderOutputDepth < depthInBuffer;
-    case eGL_EQUAL: return shaderOutputDepth == depthInBuffer;
-    case eGL_LEQUAL: return shaderOutputDepth <= depthInBuffer;
-    case eGL_GREATER: return shaderOutputDepth > depthInBuffer;
-    case eGL_NOTEQUAL: return shaderOutputDepth != depthInBuffer;
-    case eGL_GEQUAL: return shaderOutputDepth >= depthInBuffer;
-    case eGL_ALWAYS: return true;
-
-    default: RDCERR("Unexpected depth function: %d", depthFunc);
-  }
-  return false;
-}
-
 void CalculateFragmentDepthTests(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
                                  const rdcarray<EventUsage> &modEvents,
                                  rdcarray<PixelModification> &history,
@@ -2060,9 +2042,9 @@ void CalculateFragmentDepthTests(WrappedOpenGL *driver, GLPixelHistoryResources 
 
     GLboolean depthTestEnabled = driver->glIsEnabled(eGL_DEPTH_TEST);
     // default for no depth test
-    int depthFunc = eGL_ALWAYS;
+    GLenum depthFunc = eGL_ALWAYS;
     if(depthTestEnabled)
-      driver->glGetIntegerv(eGL_DEPTH_FUNC, &depthFunc);
+      driver->glGetIntegerv(eGL_DEPTH_FUNC, (int *)&depthFunc);
     for(; historyIndex < history.size() && modEvents[i].eventId == history[historyIndex].eventId;
         ++historyIndex)
     {
@@ -2071,8 +2053,44 @@ void CalculateFragmentDepthTests(WrappedOpenGL *driver, GLPixelHistoryResources 
         continue;
       }
 
-      history[historyIndex].depthTestFailed = !depthTestPassed(
-          depthFunc, history[historyIndex].shaderOut.depth, history[historyIndex].preMod.depth);
+      GLuint curDepth = 0;
+      GLint depthType = 0;
+      driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
+                                                    eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME,
+                                                    (GLint *)&curDepth);
+
+      driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
+                                                    eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE,
+                                                    &depthType);
+
+      GLenum depthFormat = eGL_NONE;
+
+      if(curDepth != 0)
+      {
+        ResourceId id;
+        if(depthType != eGL_RENDERBUFFER)
+        {
+          id = driver->GetResourceManager()->GetResID(TextureRes(driver->GetCtx(), curDepth));
+        }
+        else
+        {
+          id = driver->GetResourceManager()->GetResID(RenderbufferRes(driver->GetCtx(), curDepth));
+        }
+        depthFormat = driver->m_Textures[id].internalFormat;
+
+        uint32_t depthBits = 32;
+        if(depthFormat == eGL_DEPTH_COMPONENT24 || depthFormat == eGL_DEPTH24_STENCIL8 ||
+           depthFormat == eGL_UNSIGNED_INT_24_8)
+        {
+          depthBits = 24;
+        }
+        else if(depthFormat == eGL_DEPTH_COMPONENT16)
+        {
+          depthBits = 16;
+        }
+
+        history[historyIndex].CheckDepthTestQuantised(depthBits, MakeCompareFunc(depthFunc));
+      }
     }
 
     if(i < modEvents.size() - 1)

@@ -2466,35 +2466,20 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
     if(history[h].preMod.depth >= 0.0f && history[h].shaderOut.depth >= 0.0f)
     {
       DXGI_FORMAT dfmt = depthFormats[history[h].eventId];
-      float shadDepth = history[h].shaderOut.depth;
 
-      // quantise depth to match before comparing
+      uint32_t depthBits = 32;
       if(dfmt == DXGI_FORMAT_D24_UNORM_S8_UINT || dfmt == DXGI_FORMAT_X24_TYPELESS_G8_UINT ||
          dfmt == DXGI_FORMAT_R24_UNORM_X8_TYPELESS || dfmt == DXGI_FORMAT_R24G8_TYPELESS)
       {
-        shadDepth = float(uint32_t(float(shadDepth * 0xffffff))) / float(0xffffff);
+        depthBits = 24;
       }
       else if(dfmt == DXGI_FORMAT_D16_UNORM || dfmt == DXGI_FORMAT_R16_TYPELESS ||
               dfmt == DXGI_FORMAT_R16_UNORM)
       {
-        shadDepth = float(uint32_t(float(shadDepth * 0xffff))) / float(0xffff);
+        depthBits = 16;
       }
 
-      bool passed = true;
-      if(depthOps[history[h].eventId] == D3D11_COMPARISON_EQUAL)
-        passed = (shadDepth == history[h].preMod.depth);
-      else if(depthOps[history[h].eventId] == D3D11_COMPARISON_NOT_EQUAL)
-        passed = (shadDepth != history[h].preMod.depth);
-      else if(depthOps[history[h].eventId] == D3D11_COMPARISON_LESS)
-        passed = (shadDepth < history[h].preMod.depth);
-      else if(depthOps[history[h].eventId] == D3D11_COMPARISON_LESS_EQUAL)
-        passed = (shadDepth <= history[h].preMod.depth);
-      else if(depthOps[history[h].eventId] == D3D11_COMPARISON_GREATER)
-        passed = (shadDepth > history[h].preMod.depth);
-      else if(depthOps[history[h].eventId] == D3D11_COMPARISON_GREATER_EQUAL)
-        passed = (shadDepth >= history[h].preMod.depth);
-
-      history[h].depthTestFailed = !passed;
+      history[h].CheckDepthTestQuantised(depthBits, MakeCompareFunc(depthOps[history[h].eventId]));
     }
   }
 

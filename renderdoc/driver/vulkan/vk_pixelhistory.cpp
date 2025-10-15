@@ -136,14 +136,15 @@ enum : uint32_t
   TestMustFail_SampleMask = 1 << 15,
 
   DepthTest_Shift = 29,
-  DepthTest_Always = 0U << DepthTest_Shift,
-  DepthTest_Never = 1U << DepthTest_Shift,
-  DepthTest_Equal = 2U << DepthTest_Shift,
-  DepthTest_NotEqual = 3U << DepthTest_Shift,
-  DepthTest_Less = 4U << DepthTest_Shift,
-  DepthTest_LessEqual = 5U << DepthTest_Shift,
-  DepthTest_Greater = 6U << DepthTest_Shift,
-  DepthTest_GreaterEqual = 7U << DepthTest_Shift,
+  DepthTest_Mask = 0x7U << DepthTest_Shift,
+  DepthTest_Always = uint32_t(CompareFunction::AlwaysTrue) << DepthTest_Shift,
+  DepthTest_Never = uint32_t(CompareFunction::Never) << DepthTest_Shift,
+  DepthTest_Equal = uint32_t(CompareFunction::Equal) << DepthTest_Shift,
+  DepthTest_NotEqual = uint32_t(CompareFunction::NotEqual) << DepthTest_Shift,
+  DepthTest_Less = uint32_t(CompareFunction::Less) << DepthTest_Shift,
+  DepthTest_LessEqual = uint32_t(CompareFunction::LessEqual) << DepthTest_Shift,
+  DepthTest_Greater = uint32_t(CompareFunction::Greater) << DepthTest_Shift,
+  DepthTest_GreaterEqual = uint32_t(CompareFunction::GreaterEqual) << DepthTest_Shift,
 };
 
 struct VkCopyPixelParams
@@ -4890,39 +4891,19 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
       if(history[h].preMod.depth >= 0.0f && history[h].shaderOut.depth >= 0.0f && tfCb &&
          tfCb->HasEventFlags(history[h].eventId))
       {
-        uint32_t flags = tfCb->GetEventFlags(history[h].eventId);
+        const uint32_t flags = tfCb->GetEventFlags(history[h].eventId);
 
-        flags &= 0x7 << DepthTest_Shift;
-
-        VkFormat dfmt = cb.GetDepthFormat(eid);
-        float shadDepth = history[h].shaderOut.depth;
+        const VkFormat dfmt = cb.GetDepthFormat(eid);
+        uint32_t depthBits = 32;
 
         // quantise depth to match before comparing
         if(dfmt == VK_FORMAT_D24_UNORM_S8_UINT || dfmt == VK_FORMAT_X8_D24_UNORM_PACK32)
-        {
-          shadDepth = float(uint32_t(float(shadDepth * 0xffffff))) / float(0xffffff);
-        }
+          depthBits = 24;
         else if(dfmt == VK_FORMAT_D16_UNORM || dfmt == VK_FORMAT_D16_UNORM_S8_UINT)
-        {
-          shadDepth = float(uint32_t(float(shadDepth * 0xffff))) / float(0xffff);
-        }
+          depthBits = 16;
 
-        bool passed = true;
-        if(flags == DepthTest_Equal)
-          passed = (shadDepth == history[h].preMod.depth);
-        else if(flags == DepthTest_NotEqual)
-          passed = (shadDepth != history[h].preMod.depth);
-        else if(flags == DepthTest_Less)
-          passed = (shadDepth < history[h].preMod.depth);
-        else if(flags == DepthTest_LessEqual)
-          passed = (shadDepth <= history[h].preMod.depth);
-        else if(flags == DepthTest_Greater)
-          passed = (shadDepth > history[h].preMod.depth);
-        else if(flags == DepthTest_GreaterEqual)
-          passed = (shadDepth >= history[h].preMod.depth);
-
-        if(!passed)
-          history[h].depthTestFailed = true;
+        history[h].CheckDepthTestQuantised(
+            depthBits, CompareFunction((flags & DepthTest_Mask) >> DepthTest_Shift));
 
         rdcpair<float, float> depthBounds = tfCb->GetEventDepthBounds(history[h].eventId);
 

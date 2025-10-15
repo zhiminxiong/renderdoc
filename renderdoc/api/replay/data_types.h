@@ -2736,6 +2736,51 @@ pixel.
            !viewClipped && !scissorClipped && !shaderDiscarded && !depthTestFailed &&
            !stencilTestFailed && !predicationSkipped;
   }
+
+  DOCUMENT(R"(Update the depth-test failure state based on known shader output depth value and
+preMod reference value, quantised to a certain number of depth bits with epsilon.
+
+This is primarily used internally and should not be needed to be called externally.
+
+:param int depthBits: How many bits are in the depth buffer: 16, 24 or 32.
+:param CompareFunction depthFunc: The comparison function active for the depth test
+)");
+  void CheckDepthTestQuantised(uint32_t depthBits, CompareFunction depthFunc)
+  {
+    float shadDepth = shaderOut.depth;
+    const float compareDepth = preMod.depth;
+
+    float eps = 1.2e-7f;
+    if(depthBits == 24)
+    {
+      shadDepth = float(uint32_t(float(shadDepth * 0xffffff))) / float(0xffffff);
+      eps = float(1.0f) / float(0xffffff);
+    }
+    else if(depthBits == 16)
+    {
+      shadDepth = float(uint32_t(float(shadDepth * 0xffff))) / float(0xffff);
+      eps = float(1.0f) / float(0xffff);
+    }
+
+    bool passed = true;
+    if(depthFunc == CompareFunction::Equal)
+      passed = shadDepth > compareDepth ? ((shadDepth - compareDepth) <= eps)
+                                        : ((compareDepth - shadDepth) <= eps);
+    else if(depthFunc == CompareFunction::NotEqual)
+      passed = shadDepth > compareDepth ? ((shadDepth - compareDepth) > eps)
+                                        : ((compareDepth - shadDepth) > eps);
+    else if(depthFunc == CompareFunction::Less)
+      passed = (shadDepth - eps < compareDepth);
+    else if(depthFunc == CompareFunction::LessEqual)
+      passed = (shadDepth - eps <= compareDepth);
+    else if(depthFunc == CompareFunction::Greater)
+      passed = (shadDepth + eps > compareDepth);
+    else if(depthFunc == CompareFunction::GreaterEqual)
+      passed = (shadDepth + eps >= compareDepth);
+
+    if(!passed)
+      depthTestFailed = true;
+  }
 };
 
 DECLARE_REFLECTION_STRUCT(PixelModification);
