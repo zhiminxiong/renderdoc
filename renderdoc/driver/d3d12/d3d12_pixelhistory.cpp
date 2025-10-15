@@ -468,12 +468,30 @@ void D3D12DebugManager::PixelHistoryCopyPixel(ID3D12GraphicsCommandListX *cmd,
   D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
   srvDesc.ViewDimension =
       p.multisampled ? D3D12_SRV_DIMENSION_TEXTURE2DMS : D3D12_SRV_DIMENSION_TEXTURE2D;
+  if(p.arraySlice > 0)
+  {
+    srvDesc.ViewDimension =
+        p.multisampled ? D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+    if(p.multisampled)
+      srvDesc.Texture2DMSArray.ArraySize = ~0U;
+    else
+      srvDesc.Texture2DArray.ArraySize = ~0U;
+  }
+
   srvDesc.Format = p.srcImageFormat;
   srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
   if(!p.multisampled)
   {
-    srvDesc.Texture2D.MipLevels = 1;
-    srvDesc.Texture2D.PlaneSlice = p.planeSlice;
+    if(p.arraySlice > 0)
+    {
+      srvDesc.Texture2DArray.MipLevels = 1;
+      srvDesc.Texture2DArray.PlaneSlice = p.planeSlice;
+    }
+    else
+    {
+      srvDesc.Texture2D.MipLevels = 1;
+      srvDesc.Texture2D.PlaneSlice = p.planeSlice;
+    }
   }
   m_pDevice->CreateShaderResourceView(p.srcImage, &srvDesc, srv);
 
@@ -673,9 +691,6 @@ protected:
     // already based on the target mip/slice
     if(p.srcImage == m_CallbackInfo.colorImage || p.srcImage == m_CallbackInfo.dsImage)
     {
-      // TODO: Is this always true when we call CopyImagePixel? Also need to test this case with MSAA
-      baseMip = 0;
-      baseSlice = 0;
       copy3d = false;
     }
     else if(copy3d)
@@ -2674,6 +2689,7 @@ private:
 };
 
 bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &resources,
+                                                   Subresource sub,
                                                    WrappedID3D12Resource *targetImage,
                                                    const D3D12_RESOURCE_DESC &desc,
                                                    uint32_t numEvents)
@@ -2719,6 +2735,24 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
   rtvDesc.Format = imageDesc.Format;
   rtvDesc.ViewDimension = imageDesc.SampleDesc.Count > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS
                                                          : D3D12_RTV_DIMENSION_TEXTURE2D;
+
+  if(imageDesc.DepthOrArraySize > 1)
+  {
+    if(imageDesc.SampleDesc.Count > 1)
+    {
+      rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+      rtvDesc.Texture2DMSArray.FirstArraySlice = sub.slice;
+      rtvDesc.Texture2DMSArray.ArraySize = 1;
+    }
+    else
+    {
+      rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+      rtvDesc.Texture2DArray.FirstArraySlice = sub.slice;
+      rtvDesc.Texture2DArray.ArraySize = 1;
+      rtvDesc.Texture2DArray.MipSlice = sub.mip;
+    }
+  }
+
   D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_RTV);
   m_pDevice->CreateRenderTargetView(colorImage, &rtvDesc, rtv);
 
@@ -2741,6 +2775,24 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
   dsvDesc.Format = imageDesc.Format;
   dsvDesc.ViewDimension = imageDesc.SampleDesc.Count > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS
                                                          : D3D12_DSV_DIMENSION_TEXTURE2D;
+
+  if(imageDesc.DepthOrArraySize > 1)
+  {
+    if(imageDesc.SampleDesc.Count > 1)
+    {
+      dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+      dsvDesc.Texture2DMSArray.FirstArraySlice = sub.slice;
+      dsvDesc.Texture2DMSArray.ArraySize = 1;
+    }
+    else
+    {
+      dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+      dsvDesc.Texture2DArray.FirstArraySlice = sub.slice;
+      dsvDesc.Texture2DArray.ArraySize = 1;
+      dsvDesc.Texture2DArray.MipSlice = sub.mip;
+    }
+  }
+
   D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_DSV);
   m_pDevice->CreateDepthStencilView(dsImage, &dsvDesc, dsv);
 
@@ -2874,7 +2926,7 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
   // TODO: perhaps should allocate most resources after D3D12OcclusionCallback, since we will
   // get a smaller subset of events that passed the occlusion query.
   D3D12PixelHistoryResources resources = {};
-  if(!GetDebugManager()->PixelHistorySetupResources(resources, pResource, resDesc,
+  if(!GetDebugManager()->PixelHistorySetupResources(resources, sub, pResource, resDesc,
                                                     (uint32_t)events.size()))
   {
     SAFE_RELEASE(pOcclusionQueryHeap);

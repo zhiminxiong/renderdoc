@@ -222,7 +222,7 @@ public:
   void PixelHistoryCopyPixel(ID3D12GraphicsCommandListX *cmd, ID3D12Resource *dstBuffer,
                              D3D12CopyPixelParams &params, size_t offset);
 
-  bool PixelHistorySetupResources(D3D12PixelHistoryResources &resources,
+  bool PixelHistorySetupResources(D3D12PixelHistoryResources &resources, Subresource sub,
                                   WrappedID3D12Resource *targetImage,
                                   const D3D12_RESOURCE_DESC &desc, uint32_t numEvents);
   bool PixelHistoryDestroyResources(D3D12PixelHistoryResources &resources);
