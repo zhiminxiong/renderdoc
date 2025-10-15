@@ -2922,8 +2922,10 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
     bool directWrite = IsDirectWrite(usage);
     EventInfo eventInfo = {};
     const ActionDescription *action = m_pDevice->GetAction(eventId);
-    eventInfo.hasDepth =
-        (action->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall)) ? true : false;
+    eventInfo.hasDepth = (action->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall |
+                                           ActionFlags::ClearDepthStencil))
+                             ? true
+                             : false;
 
     D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
     if(IsUavWrite(usage))
@@ -2956,7 +2958,6 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
     if(directWrite || clear)
     {
       modEvents.push_back(eventId);
-      RDCASSERT(eventInfo.hasDepth == false);
     }
     else
     {
