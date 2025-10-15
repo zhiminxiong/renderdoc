@@ -319,3 +319,9 @@ D3D12_INDIRECT_ARGUMENT_DESC dispatchArg();
       exit(1);                                                                            \
     }                                                                                     \
   }
+
+template <typename T>
+void setName(T obj, const std::string &name)
+{
+  obj->SetName(UTF82Wide(name).c_str());
+}
