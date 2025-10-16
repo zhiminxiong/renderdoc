@@ -196,7 +196,7 @@ void D3D11DebugManager::PixelHistoryCopyPixel(D3D11CopyPixelParams &p, size_t ev
   UINT curCSNumInst = D3D11_SHADER_MAX_INTERFACES;
   ID3D11Buffer *curCSCBuf[2] = {0};
   ID3D11ShaderResourceView *curCSSRVs[10] = {0};
-  ID3D11UnorderedAccessView *curCSUAV[4] = {0};
+  ID3D11UnorderedAccessView *curCSUAV[D3D11_1_UAV_SLOT_COUNT] = {0};
   UINT initCounts[D3D11_1_UAV_SLOT_COUNT];
   memset(&initCounts[0], 0xff, sizeof(initCounts));
 
@@ -234,6 +234,7 @@ void D3D11DebugManager::PixelHistoryCopyPixel(D3D11CopyPixelParams &p, size_t ev
       offs = 3;
   }
 
+  m_pImmediateContext->CSSetUnorderedAccessViews(0, D3D11_1_UAV_SLOT_COUNT, NULL, NULL);
   m_pImmediateContext->CSSetUnorderedAccessViews(offs, 1, &p.uav, initCounts);
 
   if(p.depthcopy)
