@@ -319,6 +319,8 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   details.texFmt = GetTypedFormat(details.texFmt, typeCast);
   details.texFmt = GetNonSRGBFormat(details.texFmt);
 
+  const bool targetImageIsDepth = IsDepthFormat(details.texFmt);
+
   SCOPED_TIMER("D3D11DebugManager::PixelHistory");
 
   if(sampleIdx > details.sampleCount)
@@ -1081,7 +1083,20 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
 
     {
       ID3D11DepthStencilView *dsv = NULL;
-      m_pImmediateContext->OMGetRenderTargets(0, NULL, &dsv);
+
+      if(events[ev].usage == ResourceUsage::Clear)
+      {
+        if(targetImageIsDepth)
+        {
+          dsv = (ID3D11DepthStencilView *)m_pDevice->GetResourceManager()->GetCurrentResource(
+              events[ev].view);
+          dsv->AddRef();
+        }
+      }
+      else
+      {
+        m_pImmediateContext->OMGetRenderTargets(0, NULL, &dsv);
+      }
 
       if(dsv)
       {
@@ -2325,7 +2340,26 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
     const ActionDescription *action = m_pDevice->GetAction(history[h].eventId);
 
     if(action->flags & ActionFlags::Clear)
+    {
+      if(action->flags & ActionFlags::ClearDepthStencil)
+      {
+        // no colour information with depth clears
+        RDCEraseEl(history[h].preMod.col);
+        RDCEraseEl(history[h].postMod.col);
+        RDCEraseEl(history[h].shaderOut.col);
+      }
+      else if(action->flags & ActionFlags::ClearColor)
+      {
+        // no depth information with colour clears
+        history[h].preMod.depth = -1;
+        history[h].preMod.stencil = -1;
+        history[h].postMod.depth = -1;
+        history[h].postMod.stencil = -1;
+        history[h].shaderOut.depth = -1;
+        history[h].shaderOut.stencil = -1;
+      }
       continue;
+    }
 
     // reset discarded offset every event
     if(h > 0 && history[h].eventId != history[h - 1].eventId)
@@ -2563,7 +2597,10 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
           history[h].shaderOut.depth = -1.0f;
           history[h].shaderOut.stencil = -1;
           if(!lastMod)
-            history[h].postMod = lastKnownGood;
+          {
+            history[h].postMod.col = lastKnownGood.col;
+            history[h].postMod.depth = lastKnownGood.depth;
+          }
         }
         else
         {
@@ -2573,6 +2610,13 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
 
       shadColSlot++;
       depthSlot++;
+    }
+
+    if(targetImageIsDepth)
+    {
+      RDCEraseEl(history[h].preMod.col);
+      RDCEraseEl(history[h].shaderOut.col);
+      RDCEraseEl(history[h].postMod.col);
     }
 
     // check the depth value between premod/shaderout against the known test if we have valid depth

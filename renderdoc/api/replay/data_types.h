@@ -2535,17 +2535,26 @@ struct ModificationValue
   }
   DOCUMENT(R"(The color value.
 
+If the modifications are for a color target, tthe contents will all be ``0``.
+
 :type: PixelValue
 )");
   PixelValue col;
 
-  DOCUMENT(R"(The depth output, as a ``float``.
+  DOCUMENT(R"(The depth value.
+
+If depth is not available/in-use for this modification, it will be ``-1.0``.
 
 :type: float
 )");
   float depth;
 
-  DOCUMENT(R"(The stencil output, or ``-1`` if not available.
+  DOCUMENT(R"(The stencil value.
+
+If stencil is not available for this modification, it will be negative. If stencil is not available
+at all and not in use then the stencil value will be ``-1``. If stencil was in use but can't be
+determined due to the pixel history implementation using stencil for its own purposes, the value
+will be ``-2``. This will only happen when looking at multiple modifications from the same event.
 
 :type: int
 )");

@@ -2996,6 +2996,8 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
   if(IsTypelessFormat(resDesc.Format))
     resDesc.Format = GetTypedFormat(resDesc.Format, typeCast);
 
+  const bool targetImageIsDepth = IsDepthFormat(resDesc.Format);
+
   // TODO: perhaps should allocate most resources after D3D12OcclusionCallback, since we will
   // get a smaller subset of events that passed the occlusion query.
   D3D12PixelHistoryResources resources = {};
@@ -3205,7 +3207,13 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
 
     const D3D12EventInfo &ei = eventsInfo[eventIndex];
 
-    if(multisampled)
+    if(targetImageIsDepth)
+    {
+      RDCEraseEl(mod.preMod);
+      RDCEraseEl(mod.shaderOut);
+      RDCEraseEl(mod.postMod);
+    }
+    else if(multisampled)
     {
       // If the resource uses MSAA, the copy pixel already expands it to floats
       // TODO: Need to verify this works as expected with uint/int MSAA targets
@@ -3220,40 +3228,36 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
       FillInColor(fmt, ei.postmod, mod.postMod);
     }
 
-    EventInfo eventInfo = eventInfos[eid];
-    bool hasDepth = eventInfo.hasDepth;
+    DXGI_FORMAT depthFormat = cb.GetDepthFormat(mod.eventId);
 
-    if(hasDepth)
+    if(eventInfos[eid].hasDepth && depthFormat != DXGI_FORMAT_UNKNOWN)
     {
-      DXGI_FORMAT depthFormat = cb.GetDepthFormat(mod.eventId);
-      if(depthFormat != DXGI_FORMAT_UNKNOWN)
+      mod.preMod.stencil = ei.premod.stencil;
+      mod.postMod.stencil = ei.postmod.stencil;
+      if(multisampled)
       {
-        mod.preMod.stencil = ei.premod.stencil;
-        mod.postMod.stencil = ei.postmod.stencil;
-        if(multisampled)
-        {
-          mod.preMod.depth = ei.premod.depth.fdepth;
-          mod.postMod.depth = ei.postmod.depth.fdepth;
-        }
-        else
-        {
-          mod.preMod.depth = GetDepthValue(depthFormat, ei.premod);
-          mod.postMod.depth = GetDepthValue(depthFormat, ei.postmod);
-        }
+        mod.preMod.depth = ei.premod.depth.fdepth;
+        mod.postMod.depth = ei.postmod.depth.fdepth;
+      }
+      else
+      {
+        mod.preMod.depth = GetDepthValue(depthFormat, ei.premod);
+        mod.postMod.depth = GetDepthValue(depthFormat, ei.postmod);
       }
     }
     else
     {
       mod.preMod.stencil = -1;
       mod.preMod.depth = -1;
+      // set shaderOut here, for non-shader events that won't be filled in below
+      mod.shaderOut.depth = -1;
+      mod.shaderOut.stencil = -1;
       mod.postMod.stencil = -1;
       mod.postMod.depth = -1;
     }
 
     int32_t frags = int32_t(ei.dsWithoutShaderDiscard[0]);
     int32_t fragsClipped = int32_t(ei.dsWithShaderDiscard[0]);
-    mod.shaderOut.col.intValue[0] = frags;
-    mod.shaderOut.col.intValue[1] = fragsClipped;
     bool someFragsClipped = (fragsClipped < frags);
     mod.primitiveID = someFragsClipped;
 
@@ -3367,41 +3371,73 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
         discardOffset = 0;
       if(eventsWithFrags.find(eid) != eventsWithFrags.end())
       {
+        bool hasDepth = eventInfos[eid].hasDepth && cb.GetDepthFormat(eid) != DXGI_FORMAT_UNKNOWN;
+
         if(history[h].shaderDiscarded)
         {
           discardOffset++;
+          RDCEraseEl(history[h].shaderOut);
+          history[h].shaderOut.depth = -1;
+          history[h].shaderOut.stencil = -1;
+          if(hasDepth && (h < history.size() - 1) && (history[h].eventId == history[h + 1].eventId))
+            history[h].shaderOut.stencil = -2;
           // Copy previous post-mod value if its not the first event
           if(h > 0)
-            history[h].postMod = history[h - 1].postMod;
+          {
+            history[h].postMod.col = history[h - 1].postMod.col;
+            history[h].postMod.depth = history[h - 1].postMod.depth;
+            if(!hasDepth)
+              history[h].postMod.stencil = -1;
+            else if((h < history.size() - 1) && (history[h].eventId == history[h + 1].eventId))
+              history[h].postMod.stencil = -2;
+          }
           continue;
         }
         if(perFragmentCB.ContainsEvent(eid))
         {
           uint32_t offset = perFragmentCB.GetEventOffset(eid) + f - discardOffset;
-          if(multisampled)
-            memcpy(history[h].shaderOut.col.floatValue.data(), &fragInfo[offset].shaderOut.color[0],
-                   history[h].shaderOut.col.floatValue.byteSize());
-          else
-            FillInColor(shaderOutFormat, fragInfo[offset].shaderOut, history[h].shaderOut);
 
-          if(multisampled)
-            history[h].shaderOut.depth = fragInfo[offset].shaderOut.depth.fdepth;
+          if(targetImageIsDepth)
+          {
+            RDCEraseEl(history[h].shaderOut.col);
+          }
           else
-            history[h].shaderOut.depth =
-                GetDepthValue(DXGI_FORMAT_D32_FLOAT_S8X24_UINT, fragInfo[offset].shaderOut);
+          {
+            if(multisampled)
+              memcpy(history[h].shaderOut.col.floatValue.data(), &fragInfo[offset].shaderOut.color[0],
+                     history[h].shaderOut.col.floatValue.byteSize());
+            else
+              FillInColor(shaderOutFormat, fragInfo[offset].shaderOut, history[h].shaderOut);
+          }
+
+          if(hasDepth)
+          {
+            if(multisampled)
+              history[h].shaderOut.depth = fragInfo[offset].shaderOut.depth.fdepth;
+            else
+              history[h].shaderOut.depth =
+                  GetDepthValue(DXGI_FORMAT_D32_FLOAT_S8X24_UINT, fragInfo[offset].shaderOut);
+          }
 
           if((h < history.size() - 1) && (history[h].eventId == history[h + 1].eventId))
           {
             // Get post-modification value if this is not the last fragment for the event.
-            ConvertAndFillInColor(shaderOutFormat, fragInfo[offset].postMod, fmt, history[h].postMod);
+            if(!targetImageIsDepth)
+            {
+              ConvertAndFillInColor(shaderOutFormat, fragInfo[offset].postMod, fmt,
+                                    history[h].postMod);
+            }
 
             // MSAA depth is expanded out to floats in the compute shader
-            if(multisampled)
-              history[h].postMod.depth = fragInfo[offset].postMod.depth.fdepth;
-            else
-              history[h].postMod.depth =
-                  GetDepthValue(DXGI_FORMAT_D32_FLOAT_S8X24_UINT, fragInfo[offset].postMod);
-            history[h].postMod.stencil = -2;
+            if(hasDepth)
+            {
+              if(multisampled)
+                history[h].postMod.depth = fragInfo[offset].postMod.depth.fdepth;
+              else
+                history[h].postMod.depth =
+                    GetDepthValue(DXGI_FORMAT_D32_FLOAT_S8X24_UINT, fragInfo[offset].postMod);
+              history[h].postMod.stencil = -2;
+            }
           }
           // If it is not the first fragment for the event, set the preMod to the
           // postMod of the previous fragment.

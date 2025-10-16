@@ -1061,19 +1061,47 @@ void readPixelValues(WrappedOpenGL *driver, const GLPixelHistoryResources &resou
       }
     }
 
-    modValue.depth = depthValues[i];
-    if(readStencil)
+    const ActionDescription *action = driver->GetAction(history[historyIndex + i].eventId);
+    if(action->flags & ActionFlags::ClearColor)
     {
-      modValue.stencil = stencilValues[i];
+      modValue.depth = -1;
+      modValue.stencil = -1;
     }
-    else
+    else if(history[historyIndex + i].directShaderWrite && !resources.depthTarget)
     {
-      // if this isn't the last fragment in this event, the stencil is unavailable
+      modValue.depth = -1;
       if(historyIndex + i + 1 < history.size() &&
          history[historyIndex + i].eventId == history[historyIndex + i + 1].eventId)
         modValue.stencil = -2;
       else
-        modValue.stencil = history[historyIndex + i].postMod.stencil;
+        modValue.stencil = -1;
+    }
+    else
+    {
+      if(action->flags & ActionFlags::ClearDepthStencil)
+      {
+        RDCEraseEl(modValue.col);
+      }
+
+      modValue.depth = depthValues[i];
+      if(readStencil)
+      {
+        modValue.stencil = stencilValues[i];
+      }
+      else
+      {
+        // if this isn't the last fragment in this event, the postmod stencil is unavailable
+        if(modType == ModType::PostMod && historyIndex + i + 1 < history.size() &&
+           history[historyIndex + i].eventId == history[historyIndex + i + 1].eventId)
+          modValue.stencil = -2;
+        // if this isn't the first fragment in this event, the premod stencil is unavailable
+        else if(modType == ModType::PreMod && historyIndex + i > 0 &&
+                history[historyIndex + i].eventId == history[historyIndex + i - 1].eventId)
+          modValue.stencil = -2;
+        else
+          modValue.stencil = modType == ModType::PreMod ? history[historyIndex + i].preMod.stencil
+                                                        : history[historyIndex + i].postMod.stencil;
+      }
     }
 
     if(modType == ModType::PreMod)
@@ -1101,10 +1129,45 @@ void readPixelValuesMS(WrappedOpenGL *driver, const GLPixelHistoryResources &res
   {
     modValue.col.floatValue[j] = pixelValue[j];
   }
-  modValue.depth = pixelValue[depthOffset];
-  if(readStencil)
+
+  const ActionDescription *action = driver->GetAction(history[historyIndex].eventId);
+  if(action->flags & ActionFlags::ClearColor)
   {
-    modValue.stencil = *(int *)&pixelValue[stencilOffset];
+    modValue.depth = -1;
+    modValue.stencil = -1;
+  }
+  else if(history[historyIndex].directShaderWrite && !resources.depthTarget)
+  {
+    modValue.depth = -1;
+    if(historyIndex + 1 < history.size() &&
+       history[historyIndex].eventId == history[historyIndex + 1].eventId)
+      modValue.stencil = -2;
+    else
+      modValue.stencil = -1;
+  }
+  else
+  {
+    if(action->flags & ActionFlags::ClearDepthStencil)
+    {
+      RDCEraseEl(modValue.col);
+    }
+
+    modValue.depth = pixelValue[depthOffset];
+    if(readStencil)
+    {
+      modValue.stencil = *(int *)&pixelValue[stencilOffset];
+    }
+    else
+    {
+      // if this isn't the last fragment in this event, the postmod stencil is unavailable
+      if(modType == ModType::PostMod && historyIndex + 1 < history.size() &&
+         history[historyIndex].eventId == history[historyIndex + 1].eventId)
+        modValue.stencil = -2;
+      // if this isn't the first fragment in this event, the premod stencil is unavailable
+      else if(modType == ModType::PreMod && historyIndex > 0 &&
+              history[historyIndex].eventId == history[historyIndex - 1].eventId)
+        modValue.stencil = -2;
+    }
   }
 }
 
@@ -1310,12 +1373,14 @@ ModificationValue readShaderOutMS(WrappedOpenGL *driver, const GLPixelHistoryRes
 struct EventFragmentData
 {
   std::map<uint32_t, uint32_t> eventFragments;
+  std::map<uint32_t, GLbitfield> eventFBMask;
   rdcarray<uint32_t> fragmentsClipped;
 };
 
 // This function gets:
 //  - calculates the number of fragments per event
 //  - per-event whether some fragments were discarded
+//  - a per-event mask of which of colour/depth is bound and valid
 //  - reads the shader output values per event (per-fragment shader output is fetched later)
 EventFragmentData QueryNumFragmentsByEvent(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
                                            const rdcarray<EventUsage> &modEvents,
@@ -1328,12 +1393,15 @@ EventFragmentData QueryNumFragmentsByEvent(WrappedOpenGL *driver, GLPixelHistory
 
   EventFragmentData ret;
   std::map<uint32_t, uint32_t> &eventFragments = ret.eventFragments;
+  std::map<uint32_t, GLbitfield> &eventFBMask = ret.eventFBMask;
   rdcarray<uint32_t> &fragmentsClipped = ret.fragmentsClipped;
 
   for(size_t i = 0; i < modEvents.size(); ++i)
   {
     GLRenderState state;
     state.FetchState(driver);
+
+    eventFBMask[modEvents[i].eventId] = getFramebufferCopyMask(driver);
 
     uint32_t colIdx = getFramebufferColIndex(driver, resources.target);
 
@@ -1501,6 +1569,20 @@ EventFragmentData QueryNumFragmentsByEvent(WrappedOpenGL *driver, GLPixelHistory
         numFragmentsWithoutDiscard =
             readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0).stencil;
       }
+    }
+
+    if(modEvents[i].usage == ResourceUsage::Clear)
+    {
+      history[i].shaderOut = history[i].postMod;
+      if(resources.depthTarget)
+        RDCEraseEl(history[i].shaderOut.col);
+    }
+
+    if(isDirectWrite(modEvents[i].usage))
+    {
+      RDCEraseEl(history[i].shaderOut);
+      history[i].shaderOut.depth = -1;
+      history[i].shaderOut.stencil = -1;
     }
 
     eventFragments.emplace(modEvents[i].eventId, numFragmentsWithoutDiscard);
@@ -1916,6 +1998,8 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
         modValue.stencil = historyIndex->shaderOut.stencil;
 
         historyIndex->shaderOut = modValue;
+        if(resources.depthTarget)
+          RDCEraseEl(historyIndex->shaderOut.col);
       }
       else
       {
@@ -1935,6 +2019,8 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
         historyIndex->shaderOut =
             readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0);
         historyIndex->shaderOut.stencil = oldStencil;
+        if(resources.depthTarget)
+          RDCEraseEl(historyIndex->shaderOut.col);
       }
       historyIndex++;
     }
@@ -2759,6 +2845,30 @@ rdcarray<PixelModification> GLReplay::PixelHistory(rdcarray<EventUsage> events, 
   QueryPrePostModPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
                              eventFragmentData, textureDesc.msSamp, sampleIdx, textureWidth,
                              textureHeight);
+
+  // clear depth or colour information when not available
+  for(size_t h = 0; h < history.size(); h++)
+  {
+    GLbitfield fbMask = eventFragmentData.eventFBMask[history[h].eventId];
+
+    if((fbMask & GL_COLOR_BUFFER_BIT) == 0)
+    {
+      RDCEraseEl(history[h].preMod.col);
+      RDCEraseEl(history[h].postMod.col);
+    }
+    if((fbMask & GL_DEPTH_BUFFER_BIT) == 0)
+    {
+      history[h].preMod.depth = -1;
+      history[h].shaderOut.depth = -1;
+      history[h].postMod.depth = -1;
+    }
+    if((fbMask & GL_STENCIL_BUFFER_BIT) == 0)
+    {
+      history[h].preMod.stencil = -1;
+      history[h].shaderOut.stencil = -1;
+      history[h].postMod.stencil = -1;
+    }
+  }
 
   CalculateFragmentDepthTests(m_pDriver, resources, modEvents, history, eventFragments);
 

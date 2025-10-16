@@ -2390,7 +2390,7 @@ private:
       rect.rect.extent.width = 1;
       rect.rect.extent.height = 1;
       rect.baseArrayLayer = 0;
-      rect.layerCount = m_CallbackInfo.layers;
+      rect.layerCount = 1;
       ObjDisp(cmd)->CmdClearAttachments(Unwrap(cmd), 1, &att, 1, &rect);
     }
 
@@ -3514,7 +3514,7 @@ struct VulkanPixelHistoryPerFragmentCallback : VulkanPixelHistoryCallback
                sizeof(clearAtts[0].clearValue.color));
 
         clearAtts[1].aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        clearAtts[1].clearValue.depthStencil.depth = premod.depth;
+        clearAtts[1].clearValue.depthStencil.depth = RDCCLAMP(premod.depth, 0.0f, 1.0f);
 
         if(IsDepthOrStencilFormat(m_CallbackInfo.targetImageFormat))
           ObjDisp(cmd)->CmdClearAttachments(Unwrap(cmd), 1, clearAtts + 1, 1, &rect);
@@ -4722,8 +4722,17 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
       continue;
     }
     const EventInfo &ei = eventsInfo[eventIndex];
-    FillInColor(fmt, ei.premod, mod.preMod);
-    FillInColor(fmt, ei.postmod, mod.postMod);
+    if(IsDepthOrStencilFormat(imginfo.format))
+    {
+      RDCEraseEl(mod.preMod);
+      RDCEraseEl(mod.shaderOut);
+      RDCEraseEl(mod.postMod);
+    }
+    else
+    {
+      FillInColor(fmt, ei.premod, mod.preMod);
+      FillInColor(fmt, ei.postmod, mod.postMod);
+    }
     VkFormat depthFormat = cb.GetDepthFormat(mod.eventId);
     if(depthFormat != VK_FORMAT_UNDEFINED)
     {
@@ -4740,11 +4749,19 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
         mod.postMod.depth = GetDepthValue(depthFormat, ei.postmod);
       }
     }
+    else
+    {
+      mod.preMod.depth = -1;
+      mod.preMod.stencil = -1;
+      // set shaderOut here, for non-shader events that won't be filled in below
+      mod.shaderOut.depth = -1;
+      mod.shaderOut.stencil = -1;
+      mod.postMod.depth = -1;
+      mod.postMod.stencil = -1;
+    }
 
     int32_t frags = int32_t(ei.dsWithoutShaderDiscard[4]);
     int32_t fragsClipped = int32_t(ei.dsWithShaderDiscard[4]);
-    mod.shaderOut.col.intValue[0] = frags;
-    mod.shaderOut.col.intValue[1] = fragsClipped;
     bool someFragsClipped = (fragsClipped < frags);
     mod.primitiveID = someFragsClipped;
     // Draws in secondary command buffers will fail this check,
@@ -4875,29 +4892,63 @@ rdcarray<PixelModification> VulkanReplay::PixelHistory(rdcarray<EventUsage> even
         if(history[h].shaderDiscarded)
         {
           discardOffset++;
+          RDCEraseEl(history[h].shaderOut);
+          history[h].shaderOut.depth = -1;
+          history[h].shaderOut.stencil = -1;
+          if(cb.GetDepthFormat(eid) != VK_FORMAT_UNDEFINED && (h < history.size() - 1) &&
+             (history[h].eventId == history[h + 1].eventId))
+            history[h].shaderOut.stencil = -2;
           // Copy previous post-mod value if its not the first event
           if(h > 0)
-            history[h].postMod = history[h - 1].postMod;
+          {
+            history[h].postMod.col = history[h - 1].postMod.col;
+            history[h].postMod.depth = history[h - 1].postMod.depth;
+            if(cb.GetDepthFormat(eid) == VK_FORMAT_UNDEFINED)
+              history[h].postMod.stencil = -1;
+            else if((h < history.size() - 1) && (history[h].eventId == history[h + 1].eventId))
+              history[h].postMod.stencil = -2;
+          }
           continue;
         }
         uint32_t offset = perFragmentCB.GetEventOffset(eid) + f - discardOffset;
-        FillInColor(shaderOutFormat, bp[offset].shaderOut, history[h].shaderOut);
+
+        if(!IsDepthOrStencilFormat(imginfo.format))
+        {
+          FillInColor(shaderOutFormat, bp[offset].shaderOut, history[h].shaderOut);
+          // Zero out elements the shader didn't write to.
+          for(int i = fmt.compCount; i < 4; i++)
+            history[h].shaderOut.col.floatValue[i] = 0.0f;
+        }
+        else
+        {
+          RDCEraseEl(history[h].shaderOut.col);
+        }
+
         history[h].shaderOut.depth = bp[offset].shaderOut.depth.fdepth;
-        // Zero out elements the shader didn't write to.
-        for(int i = fmt.compCount; i < 4; i++)
-          history[h].shaderOut.col.floatValue[i] = 0.0f;
+        if(cb.GetDepthFormat(eid) == VK_FORMAT_UNDEFINED)
+        {
+          history[h].shaderOut.depth = -1;
+          history[h].shaderOut.stencil = -1;
+        }
 
         if((h < history.size() - 1) && (history[h].eventId == history[h + 1].eventId))
         {
           // Get post-modification value if this is not the last fragment for the event.
-          FillInColor(fmt, bp[offset].postMod, history[h].postMod);
+          if(!IsDepthOrStencilFormat(imginfo.format))
+          {
+            FillInColor(fmt, bp[offset].postMod, history[h].postMod);
+          }
+
           // MSAA depth is expanded out to floats in the compute shader
-          if((uint32_t)callbackInfo.samples > 1)
-            history[h].postMod.depth = bp[offset].postMod.depth.fdepth;
-          else
-            history[h].postMod.depth =
-                GetDepthValue(VK_FORMAT_D32_SFLOAT_S8_UINT, bp[offset].postMod);
-          history[h].postMod.stencil = -2;
+          if(cb.GetDepthFormat(eid) != VK_FORMAT_UNDEFINED)
+          {
+            if((uint32_t)callbackInfo.samples > 1)
+              history[h].postMod.depth = bp[offset].postMod.depth.fdepth;
+            else
+              history[h].postMod.depth =
+                  GetDepthValue(VK_FORMAT_D32_SFLOAT_S8_UINT, bp[offset].postMod);
+            history[h].postMod.stencil = -2;
+          }
         }
         // If it is not the first fragment for the event, set the preMod to the
         // postMod of the previous fragment.
