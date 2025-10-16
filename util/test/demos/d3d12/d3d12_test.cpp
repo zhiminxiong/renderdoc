@@ -81,6 +81,7 @@ struct Capabilities
   D3D12_FEATURE_DATA_D3D12_OPTIONS5 opts5 = {};
   D3D12_FEATURE_DATA_D3D12_OPTIONS6 opts6 = {};
   D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7 = {};
+  D3D12_FEATURE_DATA_D3D12_OPTIONS19 opts19 = {};
   D3D_SHADER_MODEL sm = D3D_SHADER_MODEL_5_1;
 } caps;
 
@@ -386,6 +387,7 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
         tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps.opts5, sizeof(caps.opts5));
         tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps.opts6, sizeof(caps.opts6));
         tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps.opts7, sizeof(caps.opts7));
+        tmpdev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS19, &caps.opts19, sizeof(caps.opts19));
         D3D12_FEATURE_DATA_SHADER_MODEL oShaderModel = {};
         oShaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_7;
         while(oShaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_0)
@@ -430,6 +432,7 @@ void D3D12GraphicsTest::Prepare(int argc, char **argv)
   opts5 = caps.opts5;
   opts6 = caps.opts6;
   opts7 = caps.opts7;
+  opts19 = caps.opts19;
 
   for(int i = 0; i < argc; i++)
   {
@@ -594,7 +597,7 @@ void D3D12GraphicsTest::PostDeviceCreate()
 
     m_RTV->SetName(L"RTV heap");
 
-    desc.NumDescriptors = 16;
+    desc.NumDescriptors = 128;
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 
     CHECK_HR(dev->CreateDescriptorHeap(&desc, __uuidof(ID3D12DescriptorHeap), (void **)&m_DSV));
