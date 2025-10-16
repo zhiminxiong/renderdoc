@@ -124,7 +124,8 @@ struct D3D12PixelHistoryResources
 
   // Used for offscreen color/depth/stencil rendering for draw call events.
   ID3D12Resource *colorImage;
-  D3D12Descriptor *colorDescriptor;
+  D3D12Descriptor *typedColorDescriptor;
+  D3D12Descriptor *floatColorDescriptor;
   ID3D12Resource *dsImage;
   D3D12Descriptor *dsDescriptor;
 };
@@ -142,9 +143,13 @@ struct D3D12PixelHistoryCallbackInfo
   uint32_t y;
   uint32_t sampleMask;
 
+  // the RGBA 32 format with the correct type (float/uint/int)
+  DXGI_FORMAT shadOutFormat;
+
   // Image used to get per fragment data.
   ID3D12Resource *colorImage;
-  D3D12Descriptor *colorDescriptor;
+  D3D12Descriptor *typedColorDescriptor;
+  D3D12Descriptor *floatColorDescriptor;
 
   // Image used to get stencil counts.
   ID3D12Resource *dsImage;
@@ -2107,8 +2112,6 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
 
     D3D12CopyPixelParams colorCopyParams = {};
     colorCopyParams.srcImage = m_CallbackInfo.colorImage;
-    colorCopyParams.srcImageFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
-    colorCopyParams.copyFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
     colorCopyParams.srcImageState = D3D12_RESOURCE_STATE_RENDER_TARGET;
     colorCopyParams.multisampled = m_CallbackInfo.targetDesc.SampleDesc.Count > 1;
     colorCopyParams.x = m_CallbackInfo.x;
@@ -2173,14 +2176,18 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
                                    D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0, 1,
                                    &pixelScissor);
 
+        colorCopyParams.srcImageFormat = m_CallbackInfo.shadOutFormat;
+        colorCopyParams.copyFormat = m_CallbackInfo.shadOutFormat;
         if(isPrimPass)
         {
           state.rts.resize(1);
-          state.rts[0] = *m_CallbackInfo.colorDescriptor;
+          state.rts[0] = *m_CallbackInfo.floatColorDescriptor;
+          colorCopyParams.srcImageFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+          colorCopyParams.copyFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
         }
         else if(renderTargetIndex != D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT)
         {
-          state.rts[renderTargetIndex] = *m_CallbackInfo.colorDescriptor;
+          state.rts[renderTargetIndex] = *m_CallbackInfo.typedColorDescriptor;
         }
         state.dsv = *m_CallbackInfo.dsDescriptor;
         state.pipe = GetResID(psosIter[i]);
@@ -2221,7 +2228,7 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
 
     if(renderTargetIndex != D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT)
     {
-      state.rts[renderTargetIndex] = *m_CallbackInfo.colorDescriptor;
+      state.rts[renderTargetIndex] = *m_CallbackInfo.typedColorDescriptor;
     }
 
     // Get post-modification value, use the original framebuffer attachment.
@@ -2251,10 +2258,31 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
       {
         // Before starting the draw, initialize the pixel to the premodification value
         // for this event, for both color and depth. Depth was handled above already.
-        cmd->ClearRenderTargetView(m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_RTV),
-                                   premod.col.floatValue.data(), 1, &pixelScissor);
+        // this is only needed for correctly blended postmods, so we only worry about the float case
+        if(m_CallbackInfo.shadOutFormat == DXGI_FORMAT_R32G32B32A32_FLOAT ||
+           m_CallbackInfo.targetDesc.SampleDesc.Count > 1)
+        {
+          cmd->ClearRenderTargetView(
+              m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_FLOAT_RTV),
+              premod.col.floatValue.data(), 1, &pixelScissor);
+        }
+        else
+        {
+          D3D12_RESOURCE_BARRIER barrier = {};
+          barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+          barrier.Transition.pResource = m_CallbackInfo.colorImage;
+          barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+          barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+          barrier.Transition.Subresource = ~0U;
 
-        // TODO: Does anything different need to happen here if the target resource is depth/stencil?
+          cmd->ResourceBarrier(1, &barrier);
+          cmd->ClearUnorderedAccessViewUint(
+              m_pDevice->GetDebugManager()->GetGPUHandle(PIXEL_HISTORY_CLEAR_UAV),
+              m_pDevice->GetDebugManager()->GetUAVClearHandle(PIXEL_HISTORY_CLEAR_UAV),
+              m_CallbackInfo.colorImage, premod.col.uintValue.data(), 1, &pixelScissor);
+          std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+          cmd->ResourceBarrier(1, &barrier);
+        }
       }
 
       state.stencilRefFront = f;
@@ -2318,7 +2346,7 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
       // This results in a D3D12 debug layer warning, but shouldn't be hazardous in practice since
       // we restrict what we read from based on the source RT target. But maybe there's a way to
       // gather the right data and avoid  the debug layer warning.
-      DXGI_FORMAT colorFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+      DXGI_FORMAT colorFormat = m_CallbackInfo.shadOutFormat;
       // For this pass, we will be binding the color target for capturing the shader output to the
       //  slot in question. The others can be left intact.
       RDCASSERT(colorOutputIndex < pipeDesc.RTVFormats.NumRenderTargets);
@@ -2715,10 +2743,22 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
   heapProps.VisibleNodeMask = 1;
 
   D3D12_RESOURCE_DESC imageDesc = desc;
-  imageDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+  imageDesc.Format = DXGI_FORMAT_R32G32B32A32_TYPELESS;
   imageDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
   imageDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
   imageDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+  DXGI_FORMAT typedFmt = DXGI_FORMAT_R32G32B32A32_FLOAT;
+  if(IsUIntFormat(desc.Format))
+  {
+    typedFmt = DXGI_FORMAT_R32G32B32A32_UINT;
+    imageDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  }
+  else if(IsIntFormat(desc.Format))
+  {
+    typedFmt = DXGI_FORMAT_R32G32B32A32_SINT;
+    imageDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  }
 
   hr = m_pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &imageDesc,
                                           D3D12_RESOURCE_STATE_RENDER_TARGET, NULL,
@@ -2732,7 +2772,7 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
   colorImage->SetName(L"Pixel History Color Image");
 
   D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-  rtvDesc.Format = imageDesc.Format;
+  rtvDesc.Format = typedFmt;
   rtvDesc.ViewDimension = imageDesc.SampleDesc.Count > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS
                                                          : D3D12_RTV_DIMENSION_TEXTURE2D;
 
@@ -2753,8 +2793,39 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
     }
   }
 
-  D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_RTV);
-  m_pDevice->CreateRenderTargetView(colorImage, &rtvDesc, rtv);
+  D3D12_CPU_DESCRIPTOR_HANDLE rtv_typed =
+      m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_TYPED_RTV);
+  m_pDevice->CreateRenderTargetView(colorImage, &rtvDesc, rtv_typed);
+
+  rtvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+  D3D12_CPU_DESCRIPTOR_HANDLE rtv_float =
+      m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_FLOAT_RTV);
+  m_pDevice->CreateRenderTargetView(colorImage, &rtvDesc, rtv_float);
+
+  if(imageDesc.SampleDesc.Count == 1 && imageDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+  {
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+    uavDesc.Format = typedFmt;
+
+    if(imageDesc.DepthOrArraySize > 1)
+    {
+      uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+      uavDesc.Texture2DArray.FirstArraySlice = sub.slice;
+      uavDesc.Texture2DArray.ArraySize = 1;
+      uavDesc.Texture2DArray.MipSlice = sub.mip;
+    }
+    else
+    {
+      uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+      uavDesc.Texture2D.MipSlice = sub.mip;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uav =
+        m_pDevice->GetDebugManager()->GetCPUHandle(PIXEL_HISTORY_CLEAR_UAV);
+    m_pDevice->CreateUnorderedAccessView(colorImage, NULL, &uavDesc, uav);
+    uav = m_pDevice->GetDebugManager()->GetUAVClearHandle(PIXEL_HISTORY_CLEAR_UAV);
+    m_pDevice->CreateUnorderedAccessView(colorImage, NULL, &uavDesc, uav);
+  }
 
   imageDesc.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
   imageDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -2837,7 +2908,8 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
   dstBuffer->SetName(L"Pixel History DstBuffer");
 
   resources.colorImage = colorImage;
-  resources.colorDescriptor = GetWrapped(rtv);
+  resources.typedColorDescriptor = GetWrapped(rtv_typed);
+  resources.floatColorDescriptor = GetWrapped(rtv_float);
 
   resources.dsImage = dsImage;
   resources.dsDescriptor = GetWrapped(dsv);
@@ -2850,7 +2922,8 @@ bool D3D12DebugManager::PixelHistorySetupResources(D3D12PixelHistoryResources &r
 bool D3D12DebugManager::PixelHistoryDestroyResources(D3D12PixelHistoryResources &r)
 {
   SAFE_RELEASE(r.colorImage);
-  r.colorDescriptor = NULL;
+  r.typedColorDescriptor = NULL;
+  r.floatColorDescriptor = NULL;
   SAFE_RELEASE(r.dsImage);
   r.dsDescriptor = NULL;
   SAFE_RELEASE(r.dstBuffer);
@@ -2946,7 +3019,14 @@ rdcarray<PixelModification> D3D12Replay::PixelHistory(rdcarray<EventUsage> event
   callbackInfo.y = y;
   callbackInfo.sampleMask = sampleMask;
   callbackInfo.colorImage = resources.colorImage;
-  callbackInfo.colorDescriptor = resources.colorDescriptor;
+  callbackInfo.typedColorDescriptor = resources.typedColorDescriptor;
+  callbackInfo.floatColorDescriptor = resources.floatColorDescriptor;
+  if(IsUIntFormat(resDesc.Format))
+    callbackInfo.shadOutFormat = DXGI_FORMAT_R32G32B32A32_UINT;
+  else if(IsIntFormat(resDesc.Format))
+    callbackInfo.shadOutFormat = DXGI_FORMAT_R32G32B32A32_SINT;
+  else
+    callbackInfo.shadOutFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
   callbackInfo.dsImage = resources.dsImage;
   callbackInfo.dsDescriptor = resources.dsDescriptor;
 
