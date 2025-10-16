@@ -625,7 +625,7 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   if(details.texType == eTexType_3D)
     colourCopyParams.subres = mip;
   else
-    colourCopyParams.subres = details.texArraySize * slice + mip;
+    colourCopyParams.subres = details.texMips * slice + mip;
 
   D3D11CopyPixelParams depthCopyParams = colourCopyParams;
 
@@ -1103,11 +1103,32 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
                        (desc2d.BindFlags & D3D11_BIND_SHADER_RESOURCE) > 0;
 
         D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
         if(dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DMS)
+        {
           srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
-        srvDesc.Texture2D.MipLevels = 1;
-        srvDesc.Texture2D.MostDetailedMip = dsvDesc.Texture2D.MipSlice;
+        }
+        else if(dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DARRAY)
+        {
+          srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+
+          srvDesc.Texture2DArray.MipLevels = ~0U;
+          srvDesc.Texture2DArray.ArraySize = ~0U;
+        }
+        else if(dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY)
+        {
+          srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY;
+
+          srvDesc.Texture2DMSArray.ArraySize = ~0U;
+        }
+        else
+        {
+          srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+
+          srvDesc.Texture2D.MipLevels = ~0U;
+        }
+
+        copyDepthSRVDesc = srvDesc;
+        copyStencilSRVDesc = srvDesc;
 
         D3D11_TEXTURE2D_DESC *copyDesc = NULL;
         if(desc2d.Format == DXGI_FORMAT_R16_FLOAT || desc2d.Format == DXGI_FORMAT_R16_SINT ||
@@ -1279,8 +1300,10 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
       D3D11CopyPixelParams params = depthCopyParams;
       params.depthbound = true;
       params.srvTex = params.sourceTex = shaddepthOutput;
+      params.subres = 0;
       params.srv[0] = shaddepthOutputDepthSRV;
       params.srv[1] = shaddepthOutputStencilSRV;
+      params.srcxyCBuf = shadoutsrcxyCBuf;
 
       D3D11MarkerRegion::Set("Clearing depth/stencil for frag counting");
       m_pImmediateContext->ClearDepthStencilView(shaddepthOutputDSV, D3D11_CLEAR_STENCIL, 1.0f, 0);
@@ -1989,12 +2012,14 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   D3D11CopyPixelParams shadoutCopyParams = colourCopyParams;
   shadoutCopyParams.sourceTex = shadoutCopyParams.srvTex = shadOutput;
   shadoutCopyParams.srv[0] = shadOutputSRV;
+  shadoutCopyParams.subres = 0;
   shadoutCopyParams.uav = shadoutStoreUAV;
   shadoutCopyParams.srcxyCBuf = shadoutsrcxyCBuf;
 
   depthCopyParams.sourceTex = depthCopyParams.srvTex = shaddepthOutput;
   depthCopyParams.srv[0] = shaddepthOutputDepthSRV;
   depthCopyParams.srv[1] = shaddepthOutputStencilSRV;
+  depthCopyParams.srcxyCBuf = shadoutsrcxyCBuf;
 
   for(size_t h = 0; h < history.size(); h++)
   {
