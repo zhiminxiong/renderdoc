@@ -1093,8 +1093,7 @@ struct D3D12ColorAndStencilCallback : public D3D12PixelHistoryCallback
       params.depthcopy = true;
       params.planeSlice = 1;
       params.multisampled = m_CallbackInfo.targetDesc.SampleDesc.Count > 1;
-      CopyImagePixel(cmd, params,
-                     storeOffset + offsetof(struct D3D12EventInfo, dsWithoutShaderDiscard));
+      CopyImagePixel(cmd, params, storeOffset + offsetof(struct D3D12EventInfo, dsWithShaderDiscard));
 
       // TODO: In between draws, do we need to reset the depth/stencil value?
 
@@ -1106,7 +1105,8 @@ struct D3D12ColorAndStencilCallback : public D3D12PixelHistoryCallback
 
       ReplayDraw(cmd, eid, true);
 
-      CopyImagePixel(cmd, params, storeOffset + offsetof(struct D3D12EventInfo, dsWithShaderDiscard));
+      CopyImagePixel(cmd, params,
+                     storeOffset + offsetof(struct D3D12EventInfo, dsWithoutShaderDiscard));
     }
 
     // Restore the state.
