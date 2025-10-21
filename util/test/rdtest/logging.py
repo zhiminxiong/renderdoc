@@ -129,6 +129,9 @@ class TestLogger:
         self.rawprint("!! " + message)
 
     def failure(self, ex):
+        if self.section_failed:
+            return
+
         self.failed = self.section_failed = True
 
         if ex is TestFailureException:
