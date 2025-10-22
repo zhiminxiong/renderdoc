@@ -4543,8 +4543,9 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
         tagInfo.objectType = VK_OBJECT_TYPE_INSTANCE;
         tagInfo.objectHandle = uint64_t(Unwrap(m_Instance));
         tagInfo.tagName = RENDERDOC_DescriptorsReservation_UUID;
-        tagInfo.tagSize = 0;
-        tagInfo.pTag = NULL;
+        tagInfo.tagSize = sizeof(bool);
+        bool yes = true;
+        tagInfo.pTag = &yes;
 
         vkr = ObjDisp(m_Device)->SetDebugUtilsObjectTagEXT(Unwrap(m_Device), &tagInfo);
       }
