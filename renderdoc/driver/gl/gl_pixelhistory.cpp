@@ -105,11 +105,14 @@ struct GLPixelHistoryResources
   GLuint fullPrecisionFrameBuffer;
   GLuint primitiveIdFragmentShader;
   GLuint primitiveIdFragmentShaderSPIRV;
+  GLuint fixedColFragmentShader;
+  GLuint fixedColFragmentShaderSPIRV;
   GLuint msCopyComputeProgram;
   GLuint msCopyDepthComputeProgram;
   GLuint msCopyDstBuffer;
   GLuint msCopyUniformBlockBuffer;
-  std::unordered_map<GLuint, GLuint> programs;
+  std::unordered_map<GLuint, GLuint> primIdPrograms;
+  std::unordered_map<GLuint, GLuint> fixedColPrograms;
   std::map<FramebufferKey, CopyFramebuffer> copyFramebuffers;
   std::map<FramebufferKey, ShaderOutFramebuffer> shaderOutIntFramebuffers;
 };
@@ -120,6 +123,7 @@ enum class OpenGLTest
   ScissorTest,
   DepthClamp,
   DepthBounds,
+  Discard,
   StencilTest,
   DepthTest,
   SampleMask,
@@ -133,11 +137,11 @@ enum class PerFragmentQueryType
   PrimitiveId
 };
 
-GLuint GetPrimitiveIdProgram(WrappedOpenGL *driver, GLReplay *replay,
-                             GLPixelHistoryResources &resources, GLuint currentProgram)
+GLuint GetFixedColProgram(WrappedOpenGL *driver, GLReplay *replay,
+                          GLPixelHistoryResources &resources, GLuint currentProgram)
 {
-  auto programIterator = resources.programs.find(currentProgram);
-  if(programIterator != resources.programs.end())
+  auto programIterator = resources.fixedColPrograms.find(currentProgram);
+  if(programIterator != resources.fixedColPrograms.end())
   {
     return programIterator->second;
   }
@@ -145,12 +149,36 @@ GLuint GetPrimitiveIdProgram(WrappedOpenGL *driver, GLReplay *replay,
   GLRenderState rs;
   rs.FetchState(driver);
 
-  GLuint primitiveIdProgram = driver->glCreateProgram();
-  replay->CreateFragmentShaderReplacementProgram(
-      rs.Program.name, primitiveIdProgram, rs.Pipeline.name, resources.primitiveIdFragmentShader,
-      resources.primitiveIdFragmentShaderSPIRV);
+  GLuint ret = driver->glCreateProgram();
+  replay->CreateFragmentShaderReplacementProgram(rs.Program.name, ret, rs.Pipeline.name,
+                                                 resources.fixedColFragmentShader,
+                                                 resources.fixedColFragmentShaderSPIRV);
 
-  return primitiveIdProgram;
+  resources.fixedColPrograms[currentProgram] = ret;
+
+  return ret;
+}
+
+GLuint GetPrimitiveIdProgram(WrappedOpenGL *driver, GLReplay *replay,
+                             GLPixelHistoryResources &resources, GLuint currentProgram)
+{
+  auto programIterator = resources.primIdPrograms.find(currentProgram);
+  if(programIterator != resources.primIdPrograms.end())
+  {
+    return programIterator->second;
+  }
+
+  GLRenderState rs;
+  rs.FetchState(driver);
+
+  GLuint ret = driver->glCreateProgram();
+  replay->CreateFragmentShaderReplacementProgram(rs.Program.name, ret, rs.Pipeline.name,
+                                                 resources.primitiveIdFragmentShader,
+                                                 resources.primitiveIdFragmentShaderSPIRV);
+
+  resources.primIdPrograms[currentProgram] = ret;
+
+  return ret;
 }
 
 // Returns a Framebuffer that has the same depth and stencil formats of the currently bound
@@ -592,20 +620,26 @@ bool PixelHistorySetupResources(WrappedOpenGL *driver, GLPixelHistoryResources &
 
   ShaderType shaderType = IsGLES ? ShaderType::GLSLES : ShaderType::GLSL;
 
-  rdcstr glslSource;
+  rdcstr primIdGLSL;
   if(glslVersion >= 330 || (IsGLES && glslVersion >= 300))
   {
-    glslSource = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_primid_frag), shaderType,
+    primIdGLSL = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_primid_frag), shaderType,
                                     glslVersion);
   }
   else
   {
-    glslSource = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_primid_frag), shaderType,
+    primIdGLSL = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_primid_frag), shaderType,
                                     glslVersion, "#define INT_BITS_TO_FLOAT_NOT_SUPPORTED\n");
   }
+
   // SPIR-V shaders are always generated as desktop GL 430, for ease
-  rdcstr spirvSource = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_primid_frag),
+  rdcstr primIdSPIRV = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_primid_frag),
                                           ShaderType::GLSPIRV, 430);
+
+  rdcstr fixedColGLSL =
+      GenerateGLSLShader(GetEmbeddedResource(glsl_fixedcol_frag), shaderType, glslVersion);
+  rdcstr fixedColSPIRV =
+      GenerateGLSLShader(GetEmbeddedResource(glsl_fixedcol_frag), ShaderType::GLSPIRV, 430);
 
   rdcstr msCopySource = GenerateGLSLShader(GetEmbeddedResource(glsl_pixelhistory_mscopy_comp),
                                            shaderType, glslVersion);
@@ -613,9 +647,13 @@ bool PixelHistorySetupResources(WrappedOpenGL *driver, GLPixelHistoryResources &
       GetEmbeddedResource(glsl_pixelhistory_mscopy_depth_comp), shaderType, glslVersion);
 
   if(HasExt[ARB_gl_spirv])
-    resources.primitiveIdFragmentShaderSPIRV = CreateSPIRVShader(eGL_FRAGMENT_SHADER, spirvSource);
+  {
+    resources.primitiveIdFragmentShaderSPIRV = CreateSPIRVShader(eGL_FRAGMENT_SHADER, primIdSPIRV);
+    resources.fixedColFragmentShaderSPIRV = CreateSPIRVShader(eGL_FRAGMENT_SHADER, fixedColSPIRV);
+  }
 
-  resources.primitiveIdFragmentShader = CreateShader(eGL_FRAGMENT_SHADER, glslSource);
+  resources.primitiveIdFragmentShader = CreateShader(eGL_FRAGMENT_SHADER, primIdGLSL);
+  resources.fixedColFragmentShader = CreateShader(eGL_FRAGMENT_SHADER, fixedColGLSL);
   resources.msCopyComputeProgram = CreateCShaderProgram(msCopySource);
   resources.msCopyDepthComputeProgram = CreateCShaderProgram(msCopySourceDepth);
 
@@ -634,10 +672,11 @@ bool PixelHistoryDestroyResources(WrappedOpenGL *driver, const GLPixelHistoryRes
   driver->glDeleteBuffers(1, &resources.msCopyDstBuffer);
   driver->glDeleteBuffers(1, &resources.msCopyUniformBlockBuffer);
 
-  for(const std::pair<const GLuint, GLuint> &resourceProgram : resources.programs)
-  {
+  for(const std::pair<const GLuint, GLuint> &resourceProgram : resources.primIdPrograms)
     driver->glDeleteProgram(resourceProgram.second);
-  }
+
+  for(const std::pair<const GLuint, GLuint> &resourceProgram : resources.fixedColPrograms)
+    driver->glDeleteProgram(resourceProgram.second);
 
   for(const auto &pair : resources.copyFramebuffers)
   {
@@ -1370,6 +1409,13 @@ bool QueryTest(WrappedOpenGL *driver, GLPixelHistoryResources &resources, const 
     if(HasExt[EXT_depth_bounds_test])
       driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
   }
+  if(test < OpenGLTest::Discard)
+  {
+    GLint currentProgram = 0;
+    driver->glGetIntegerv(eGL_CURRENT_PROGRAM, &currentProgram);
+
+    driver->glUseProgram(GetFixedColProgram(driver, driver->GetReplay(), resources, currentProgram));
+  }
   if(test < OpenGLTest::StencilTest)
   {
     driver->glDisable(eGL_STENCIL_TEST);
@@ -1457,6 +1503,7 @@ void QueryFailedTests(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
     history[i].depthBoundsFailed = failedTest == OpenGLTest::DepthBounds;
     history[i].stencilTestFailed = failedTest == OpenGLTest::StencilTest;
     history[i].depthTestFailed = failedTest == OpenGLTest::DepthTest;
+    history[i].shaderDiscarded = failedTest == OpenGLTest::Discard;
     history[i].backfaceCulled = failedTest == OpenGLTest::FaceCulling;
     history[i].sampleMasked = failedTest == OpenGLTest::SampleMask;
   }
