@@ -1308,39 +1308,6 @@ void readShaderOutMS(WrappedOpenGL *driver, const GLPixelHistoryResources &resou
   history[historyIndex].shaderOut = modValue;
 }
 
-GLenum getShaderOutColourFormat(GLenum originalColourFormat)
-{
-  switch(originalColourFormat)
-  {
-    case eGL_RGBA8I:
-    case eGL_RGB8I:
-    case eGL_RG8I:
-    case eGL_R8I: return eGL_RGBA8I;
-    case eGL_RGBA8UI:
-    case eGL_RGB8UI:
-    case eGL_RG8UI:
-    case eGL_R8UI: return eGL_RGBA8UI;
-    case eGL_RGBA16I:
-    case eGL_RGB16I:
-    case eGL_RG16I:
-    case eGL_R16I: return eGL_RGBA16I;
-    case eGL_RGBA16UI:
-    case eGL_RGB16UI:
-    case eGL_RG16UI:
-    case eGL_R16UI: return eGL_RGBA16UI;
-    case eGL_RGBA32I:
-    case eGL_RGB32I:
-    case eGL_RG32I:
-    case eGL_R32I: return eGL_RGBA32I;
-    case eGL_RGBA32UI:
-    case eGL_RGB32UI:
-    case eGL_RG32UI:
-    case eGL_R32UI: return eGL_RGBA32UI;
-    case eGL_RGB10_A2UI: return eGL_RGB10_A2UI;
-    default: RDCERR("Unexpected colour format: %d", originalColourFormat); return eGL_NONE;
-  }
-}
-
 // This function a) calculates the number of fagments per event
 //           and b) calculates the shader output values per event
 std::map<uint32_t, uint32_t> QueryNumFragmentsByEvent(
@@ -1366,7 +1333,7 @@ std::map<uint32_t, uint32_t> QueryNumFragmentsByEvent(
 
     if(colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
     {
-      shaderOutColourFormat = getShaderOutColourFormat(colourFormat);
+      shaderOutColourFormat = colourFormatType == eGL_UNSIGNED_INT ? eGL_RGBA32UI : eGL_RGBA32I;
       FramebufferKey key = {ModType::PostMod, shaderOutColourFormat, eGL_DEPTH32F_STENCIL8,
                             eGL_DEPTH32F_STENCIL8, numSamples};
       ShaderOutFramebuffer framebuffer =
@@ -1702,7 +1669,7 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
 
       if(colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
       {
-        shaderOutColourFormat = getShaderOutColourFormat(colourFormat);
+        shaderOutColourFormat = colourFormatType == eGL_UNSIGNED_INT ? eGL_RGBA32UI : eGL_RGBA32I;
         FramebufferKey key = {ModType::PostMod, shaderOutColourFormat, eGL_DEPTH32F_STENCIL8,
                               eGL_DEPTH32F_STENCIL8, numSamples};
         ShaderOutFramebuffer framebuffer =
