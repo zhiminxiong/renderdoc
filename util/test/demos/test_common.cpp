@@ -297,6 +297,12 @@ bool SpvCompilationSupported()
     if(!pipe)
       continue;
 
+    char dummy[512];
+    while(!feof(pipe))
+    {
+      fread(dummy, 1, 512, pipe);
+    }
+
     int code = pclose(pipe);
 
     if(WEXITSTATUS(code) == 0)
@@ -514,6 +520,12 @@ std::vector<uint32_t> CompileShaderToSpv(const std::string &source_text, SPIRVTa
   {
     TEST_ERROR("Couldn't run %s to compile shaders.", externalCompiler.c_str());
     return ret;
+  }
+
+  char dummy[512];
+  while(!feof(pipe))
+  {
+    fread(dummy, 1, 512, pipe);
   }
 
   pclose(pipe);
