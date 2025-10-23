@@ -1659,10 +1659,16 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
                                GLPixelHistoryResources &resources,
                                const rdcarray<EventUsage> &modEvents, int x, int y,
                                rdcarray<PixelModification> &history,
-                               const std::map<uint32_t, uint32_t> &eventFragments,
-                               uint32_t numSamples, uint32_t sampleIndex, uint32_t width,
-                               uint32_t height)
+                               const EventFragmentData &eventFragmentData, uint32_t numSamples,
+                               uint32_t sampleIndex, uint32_t width, uint32_t height)
 {
+  const std::map<uint32_t, uint32_t> &eventFragments = eventFragmentData.eventFragments;
+  const rdcarray<uint32_t> &fragmentsClipped = eventFragmentData.fragmentsClipped;
+
+  // this is used to track if any previous fragments in the current draw
+  // discarded. If so, the stencil count will be off-by-one
+  uint32_t discardedOffset = 0;
+
   GLMarkerRegion region("QueryShaderOutPerFragment");
   driver->ReplayLog(0, modEvents[0].eventId, eReplay_WithoutDraw);
   for(size_t i = 0; i < modEvents.size(); ++i)
@@ -1678,6 +1684,11 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
       }
       continue;
     }
+
+    bool someFragsClipped = fragmentsClipped.contains(modEvents[i].eventId);
+
+    // reset discarded offset every event
+    discardedOffset = 0;
 
     GLRenderState state;
     state.FetchState(driver);
@@ -1737,7 +1748,117 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
     for(size_t j = 0; j < RDCMAX(numFragments, 1u); ++j)
     {
       //  Set the stencil function so only jth fragment will pass.
-      driver->glStencilFunc(eGL_EQUAL, (int)j, 0xff);
+      driver->glStencilFunc(eGL_EQUAL, (int)j - discardedOffset, 0xff);
+
+      // if some fragments clipped in this draw, we need to check to see if this
+      // primitive ID was one of the ones that clipped.
+      // Currently the way we do that is by drawing only that primitive
+      // and doing an occlusion query
+      if(someFragsClipped)
+      {
+        driver->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        driver->glDepthMask(GL_FALSE);
+        driver->glDisable(eGL_STENCIL_TEST);
+
+        GLuint samplesPassedQuery;
+        driver->glGenQueries(1, &samplesPassedQuery);
+
+        driver->SetFetchCounters(true);
+        driver->glBeginQuery(eGL_ANY_SAMPLES_PASSED, samplesPassedQuery);
+
+        const ActionDescription *action = driver->GetAction(modEvents[i].eventId);
+        const GLDrawParams &drawParams = driver->GetDrawParameters(modEvents[i].eventId);
+
+        Topology topo = drawParams.topo;
+        GLenum glTopo = MakeGLPrimitiveTopology(topo);
+        uint32_t numVerts = RENDERDOC_NumVerticesPerPrimitive(topo);
+
+        if(action->flags & ActionFlags::Indexed)
+        {
+          GLenum idxType = eGL_UNSIGNED_INT;
+          if(drawParams.indexWidth == 1)
+            idxType = eGL_UNSIGNED_BYTE;
+          else if(drawParams.indexWidth == 2)
+            idxType = eGL_UNSIGNED_SHORT;
+
+          void *indexOffset =
+              (void *)(uintptr_t)(action->indexOffset +
+                                  RENDERDOC_VertexOffset(topo, historyIndex->primitiveID));
+
+          if(action->flags & ActionFlags::Instanced)
+          {
+            if(HasExt[ARB_base_instance])
+            {
+              // TODO once pixel history distinguishes between instances, draw only the instance for
+              // this fragment
+              driver->glDrawElementsInstancedBaseVertexBaseInstance(
+                  glTopo, numVerts, idxType, indexOffset, RDCMAX(1U, action->numInstances),
+                  action->baseVertex, action->instanceOffset);
+            }
+            else
+            {
+              driver->glDrawElementsInstancedBaseVertex(glTopo, numVerts, idxType, indexOffset,
+                                                        RDCMAX(1U, action->numInstances),
+                                                        action->baseVertex);
+            }
+          }
+          else
+          {
+            driver->glDrawElementsBaseVertex(glTopo, numVerts, idxType, indexOffset,
+                                             action->baseVertex);
+          }
+        }
+        else
+        {
+          uint32_t vertexOffset =
+              action->vertexOffset + RENDERDOC_VertexOffset(topo, historyIndex->primitiveID);
+
+          if(action->flags & ActionFlags::Instanced)
+          {
+            if(HasExt[ARB_base_instance])
+            {
+              // TODO once pixel history distinguishes between instances, draw only the instance for
+              // this fragment
+              driver->glDrawArraysInstancedBaseInstance(glTopo, vertexOffset, numVerts,
+                                                        RDCMAX(1U, action->numInstances),
+                                                        action->instanceOffset);
+            }
+            else
+            {
+              driver->glDrawArraysInstanced(glTopo, vertexOffset, numVerts,
+                                            RDCMAX(1U, action->numInstances));
+            }
+          }
+          else
+          {
+            driver->glDrawArrays(glTopo, vertexOffset, numVerts);
+          }
+        }
+
+        driver->glEndQuery(eGL_ANY_SAMPLES_PASSED);
+        driver->SetFetchCounters(false);
+        int anySamplesPassed = GL_FALSE;
+        driver->glGetQueryObjectiv(samplesPassedQuery, eGL_QUERY_RESULT, &anySamplesPassed);
+        driver->glDeleteQueries(1, &samplesPassedQuery);
+
+        driver->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        driver->glDepthMask(GL_TRUE);
+        driver->glEnable(eGL_STENCIL_TEST);
+
+        if(anySamplesPassed == GL_FALSE)
+        {
+          historyIndex->shaderDiscarded = true;
+          discardedOffset++;
+          RDCEraseEl(historyIndex->shaderOut);
+          historyIndex->shaderOut.depth = -1;
+          if(historyIndex + 1 < history.end() && (historyIndex + 1)->eventId == historyIndex->eventId)
+            historyIndex->postMod.stencil = -2;
+          else
+            historyIndex->postMod.stencil = -1;
+          historyIndex++;
+          continue;
+        }
+      }
 
       if(colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
       {
@@ -1776,7 +1897,12 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
 
         ModificationValue modValue;
 
-        if(colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
+        if(colourFormatType == eGL_UNSIGNED_INT)
+        {
+          driver->glReadPixels(x, y, 1, 1, eGL_RGBA_INTEGER, eGL_UNSIGNED_INT,
+                               (void *)modValue.col.uintValue.data());
+        }
+        else if(colourFormatType == eGL_INT)
         {
           driver->glReadPixels(x, y, 1, 1, eGL_RGBA_INTEGER, eGL_INT,
                                (void *)modValue.col.intValue.data());
@@ -1830,6 +1956,12 @@ void QueryPrePostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
                                 uint32_t sampleIndex, uint32_t width, uint32_t height)
 {
   const std::map<uint32_t, uint32_t> &eventFragments = eventFragmentData.eventFragments;
+  const rdcarray<uint32_t> &fragmentsClipped = eventFragmentData.fragmentsClipped;
+
+  // this is used to track if any previous fragments in the current draw
+  // discarded. If so, the stencil count will be off-by-one
+  uint32_t discardedOffset = 0;
+
   GLMarkerRegion region("QueryPrePostModPerFragment");
   driver->ReplayLog(0, modEvents[0].eventId, eReplay_WithoutDraw);
 
@@ -1846,6 +1978,11 @@ void QueryPrePostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
       }
       continue;
     }
+
+    bool someFragsClipped = fragmentsClipped.contains(modEvents[i].eventId);
+
+    // reset discarded offset every event
+    discardedOffset = 0;
 
     GLRenderState state;
     state.FetchState(driver);
@@ -1971,7 +2108,121 @@ void QueryPrePostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
     for(size_t j = 0; j < std::max(numFragments, 1u); ++j)
     {
       // Set the stencil function so only jth fragment will pass.
-      driver->glStencilFunc(eGL_EQUAL, (int)j, 0xff);
+      driver->glStencilFunc(eGL_EQUAL, (int)j - discardedOffset, 0xff);
+
+      // if some fragments clipped in this draw, we need to check to see if this
+      // primitive ID was one of the ones that clipped.
+      // Currently the way we do that is by drawing only that primitive
+      // and doing an occlusion query
+      if(someFragsClipped)
+      {
+        auto curFragHistoryIndex = numSamples > 1 ? historyIndex : historyIndex + j;
+
+        driver->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        driver->glDepthMask(GL_FALSE);
+        driver->glDisable(eGL_STENCIL_TEST);
+
+        GLuint samplesPassedQuery;
+        driver->glGenQueries(1, &samplesPassedQuery);
+
+        driver->SetFetchCounters(true);
+        driver->glBeginQuery(eGL_ANY_SAMPLES_PASSED, samplesPassedQuery);
+
+        const ActionDescription *action = driver->GetAction(modEvents[i].eventId);
+        const GLDrawParams &drawParams = driver->GetDrawParameters(modEvents[i].eventId);
+
+        Topology topo = drawParams.topo;
+        GLenum glTopo = MakeGLPrimitiveTopology(topo);
+        uint32_t numVerts = RENDERDOC_NumVerticesPerPrimitive(topo);
+
+        if(action->flags & ActionFlags::Indexed)
+        {
+          GLenum idxType = eGL_UNSIGNED_INT;
+          if(drawParams.indexWidth == 1)
+            idxType = eGL_UNSIGNED_BYTE;
+          else if(drawParams.indexWidth == 2)
+            idxType = eGL_UNSIGNED_SHORT;
+
+          void *indexOffset =
+              (void *)(uintptr_t)(action->indexOffset +
+                                  RENDERDOC_VertexOffset(topo, curFragHistoryIndex->primitiveID));
+
+          if(action->flags & ActionFlags::Instanced)
+          {
+            if(HasExt[ARB_base_instance])
+            {
+              // TODO once pixel history distinguishes between instances, draw only the instance for
+              // this fragment
+              driver->glDrawElementsInstancedBaseVertexBaseInstance(
+                  glTopo, numVerts, idxType, indexOffset, RDCMAX(1U, action->numInstances),
+                  action->baseVertex, action->instanceOffset);
+            }
+            else
+            {
+              driver->glDrawElementsInstancedBaseVertex(glTopo, numVerts, idxType, indexOffset,
+                                                        RDCMAX(1U, action->numInstances),
+                                                        action->baseVertex);
+            }
+          }
+          else
+          {
+            driver->glDrawElementsBaseVertex(glTopo, numVerts, idxType, indexOffset,
+                                             action->baseVertex);
+          }
+        }
+        else
+        {
+          uint32_t vertexOffset =
+              action->vertexOffset + RENDERDOC_VertexOffset(topo, curFragHistoryIndex->primitiveID);
+
+          if(action->flags & ActionFlags::Instanced)
+          {
+            if(HasExt[ARB_base_instance])
+            {
+              // TODO once pixel history distinguishes between instances, draw only the instance for
+              // this fragment
+              driver->glDrawArraysInstancedBaseInstance(glTopo, vertexOffset, numVerts,
+                                                        RDCMAX(1U, action->numInstances),
+                                                        action->instanceOffset);
+            }
+            else
+            {
+              driver->glDrawArraysInstanced(glTopo, vertexOffset, numVerts,
+                                            RDCMAX(1U, action->numInstances));
+            }
+          }
+          else
+          {
+            driver->glDrawArrays(glTopo, vertexOffset, numVerts);
+          }
+        }
+
+        driver->glEndQuery(eGL_ANY_SAMPLES_PASSED);
+        driver->SetFetchCounters(false);
+        int anySamplesPassed = GL_FALSE;
+        driver->glGetQueryObjectiv(samplesPassedQuery, eGL_QUERY_RESULT, &anySamplesPassed);
+        driver->glDeleteQueries(1, &samplesPassedQuery);
+
+        driver->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        driver->glDepthMask(GL_TRUE);
+        driver->glEnable(eGL_STENCIL_TEST);
+
+        if(anySamplesPassed == GL_FALSE)
+        {
+          discardedOffset++;
+          curFragHistoryIndex->postMod = curFragHistoryIndex->preMod;
+          if(historyIndex + j + 1 < history.end() &&
+             (curFragHistoryIndex + 1)->eventId == curFragHistoryIndex->eventId)
+            curFragHistoryIndex->postMod.stencil = -2;
+          else
+            curFragHistoryIndex->postMod.stencil = -1;
+
+          if(numSamples > 1)
+            historyIndex++;
+          continue;
+        }
+      }
+
       driver->glClear(eGL_STENCIL_BUFFER_BIT);
 
       if(j > 0)
@@ -2499,12 +2750,12 @@ rdcarray<PixelModification> GLReplay::PixelHistory(rdcarray<EventUsage> events, 
     h += RDCMAX(1u, frags);
   }
 
-  QueryShaderOutPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
-                            eventFragments, textureDesc.msSamp, sampleIdx, textureWidth,
-                            textureHeight);
   QueryPrimitiveIdPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
                               eventFragments, usingFloatForPrimitiveId, textureDesc.msSamp,
                               sampleIdx);
+  QueryShaderOutPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
+                            eventFragmentData, textureDesc.msSamp, sampleIdx, textureWidth,
+                            textureHeight);
   QueryPrePostModPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
                              eventFragmentData, textureDesc.msSamp, sampleIdx, textureWidth,
                              textureHeight);
