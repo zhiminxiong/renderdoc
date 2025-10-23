@@ -91,6 +91,10 @@ struct GLPixelHistoryResources
   ResourceId target;
   bool depthTarget;
 
+  // a framebuffer with the target resource bound, used for copying for pre/post mod on direct writes
+  // (compute dispatches or clears) where the currently bound framebuffer won't necessarily match
+  GLuint copySourceFramebuffer;
+
   // Used for offscreen rendering for draw call events.
   GLuint fullPrecisionColorImage;
   GLuint fullPrecisionDsImage;
@@ -570,20 +574,42 @@ bool PixelHistorySetupResources(WrappedOpenGL *driver, GLPixelHistoryResources &
                                 const TextureDescription &desc, const Subresource &sub,
                                 uint32_t numEvents, GLuint glslVersion, uint32_t numSamples)
 {
+  driver->glGenFramebuffers(1, &resources.copySourceFramebuffer);
+  driver->glBindFramebuffer(eGL_FRAMEBUFFER, resources.copySourceFramebuffer);
+
+  GLResource targetTex = driver->GetResourceManager()->GetLiveResource(desc.resourceId);
+  GLenum targetAtt = eGL_COLOR_ATTACHMENT0;
   resources.depthTarget = false;
   if(desc.format.type == ResourceFormatType::D16S8 ||
      desc.format.type == ResourceFormatType::D24S8 || desc.format.type == ResourceFormatType::D32S8)
   {
+    targetAtt = eGL_DEPTH_STENCIL_ATTACHMENT;
     resources.depthTarget = true;
   }
   else if(desc.format.compType == CompType::Depth)
   {
+    targetAtt = eGL_DEPTH_ATTACHMENT;
     resources.depthTarget = true;
   }
   else if(desc.format.type == ResourceFormatType::S8)
   {
+    targetAtt = eGL_STENCIL_ATTACHMENT;
     resources.depthTarget = true;
   }
+
+  if(targetTex.Namespace == eResRenderbuffer)
+  {
+    driver->glFramebufferRenderbuffer(eGL_FRAMEBUFFER, targetAtt, eGL_RENDERBUFFER, targetTex.name);
+  }
+  else
+  {
+    if(desc.arraysize > 1)
+      driver->glFramebufferTextureLayer(eGL_FRAMEBUFFER, targetAtt, targetTex.name, sub.mip,
+                                        sub.slice);
+    else
+      driver->glFramebufferTexture(eGL_FRAMEBUFFER, targetAtt, targetTex.name, sub.mip);
+  }
+
   // Allocate a framebuffer that will render to the textures
   driver->glGenFramebuffers(1, &resources.fullPrecisionFrameBuffer);
   driver->glBindFramebuffer(eGL_FRAMEBUFFER, resources.fullPrecisionFrameBuffer);
@@ -671,6 +697,7 @@ bool PixelHistoryDestroyResources(WrappedOpenGL *driver, const GLPixelHistoryRes
 {
   driver->glDeleteTextures(1, &resources.fullPrecisionColorImage);
   driver->glDeleteTextures(1, &resources.fullPrecisionDsImage);
+  driver->glDeleteFramebuffers(1, &resources.copySourceFramebuffer);
   driver->glDeleteFramebuffers(1, &resources.fullPrecisionFrameBuffer);
   driver->glDeleteShader(resources.primitiveIdFragmentShader);
   driver->glDeleteShader(resources.primitiveIdFragmentShaderSPIRV);
