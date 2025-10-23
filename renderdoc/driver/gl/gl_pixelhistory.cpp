@@ -89,6 +89,7 @@ struct ShaderOutFramebuffer
 struct GLPixelHistoryResources
 {
   ResourceId target;
+  bool depthTarget;
 
   // Used for offscreen rendering for draw call events.
   GLuint fullPrecisionColorImage;
@@ -569,6 +570,20 @@ bool PixelHistorySetupResources(WrappedOpenGL *driver, GLPixelHistoryResources &
                                 const TextureDescription &desc, const Subresource &sub,
                                 uint32_t numEvents, GLuint glslVersion, uint32_t numSamples)
 {
+  resources.depthTarget = false;
+  if(desc.format.type == ResourceFormatType::D16S8 ||
+     desc.format.type == ResourceFormatType::D24S8 || desc.format.type == ResourceFormatType::D32S8)
+  {
+    resources.depthTarget = true;
+  }
+  else if(desc.format.compType == CompType::Depth)
+  {
+    resources.depthTarget = true;
+  }
+  else if(desc.format.type == ResourceFormatType::S8)
+  {
+    resources.depthTarget = true;
+  }
   // Allocate a framebuffer that will render to the textures
   driver->glGenFramebuffers(1, &resources.fullPrecisionFrameBuffer);
   driver->glBindFramebuffer(eGL_FRAMEBUFFER, resources.fullPrecisionFrameBuffer);
