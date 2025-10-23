@@ -1323,6 +1323,8 @@ std::map<uint32_t, uint32_t> QueryNumFragmentsByEvent(
     driver->glEnable(eGL_STENCIL_TEST);
     // depth test enable
     driver->glEnable(eGL_DEPTH_TEST);
+    if(HasExt[EXT_depth_bounds_test])
+      driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
     driver->glDepthFunc(eGL_ALWAYS);
     driver->glDepthMask(GL_TRUE);
     driver->glDisable(eGL_BLEND);
@@ -1565,6 +1567,8 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
     driver->glClearStencil(0);
 
     driver->glEnable(eGL_DEPTH_TEST);
+    if(HasExt[EXT_depth_bounds_test])
+      driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
     driver->glDepthFunc(eGL_ALWAYS);
     driver->glDepthMask(GL_TRUE);
     driver->glDisable(eGL_BLEND);
@@ -1993,6 +1997,8 @@ void QueryPrimitiveIdPerFragment(WrappedOpenGL *driver, GLReplay *replay,
 
     driver->glClearStencil(0);
     driver->glEnable(eGL_DEPTH_TEST);
+    if(HasExt[EXT_depth_bounds_test])
+      driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
     driver->glDepthFunc(eGL_ALWAYS);
     driver->glDepthMask(GL_TRUE);
     driver->glDisable(eGL_BLEND);
