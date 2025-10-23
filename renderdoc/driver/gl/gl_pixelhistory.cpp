@@ -118,6 +118,8 @@ enum class OpenGLTest
 {
   FaceCulling,
   ScissorTest,
+  DepthClamp,
+  DepthBounds,
   StencilTest,
   DepthTest,
   SampleMask,
@@ -1358,6 +1360,16 @@ bool QueryTest(WrappedOpenGL *driver, GLPixelHistoryResources &resources, const 
   {
     driver->glDisable(eGL_DEPTH_TEST);
   }
+  if(test < OpenGLTest::DepthClamp)
+  {
+    if(!IsGLES)
+      driver->glEnable(eGL_DEPTH_CLAMP);
+  }
+  if(test < OpenGLTest::DepthBounds)
+  {
+    if(HasExt[EXT_depth_bounds_test])
+      driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
+  }
   if(test < OpenGLTest::StencilTest)
   {
     driver->glDisable(eGL_STENCIL_TEST);
@@ -1441,6 +1453,8 @@ void QueryFailedTests(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
     // ensure that history objects are one-to-one mapped with modEvent objects
     RDCASSERT(history[i].eventId == modEvents[i].eventId);
     history[i].scissorClipped = failedTest == OpenGLTest::ScissorTest;
+    history[i].depthClipped = failedTest == OpenGLTest::DepthClamp;
+    history[i].depthBoundsFailed = failedTest == OpenGLTest::DepthBounds;
     history[i].stencilTestFailed = failedTest == OpenGLTest::StencilTest;
     history[i].depthTestFailed = failedTest == OpenGLTest::DepthTest;
     history[i].backfaceCulled = failedTest == OpenGLTest::FaceCulling;
@@ -2090,6 +2104,19 @@ void CalculateFragmentDepthTests(WrappedOpenGL *driver, GLPixelHistoryResources 
         }
 
         history[historyIndex].CheckDepthTestQuantised(depthBits, MakeCompareFunc(depthFunc));
+
+        if(HasExt[EXT_depth_bounds_test] && GL.glIsEnabled(eGL_DEPTH_BOUNDS_TEST_EXT))
+        {
+          GLdouble depthBounds[2] = {};
+          GL.glGetDoublev(eGL_DEPTH_BOUNDS_EXT, depthBounds);
+
+          if((history[historyIndex].preMod.depth < depthBounds[0] ||
+              history[historyIndex].preMod.depth > depthBounds[1]) &&
+             depthBounds[1] > depthBounds[0])
+          {
+            history[historyIndex].depthBoundsFailed = true;
+          }
+        }
       }
     }
 
