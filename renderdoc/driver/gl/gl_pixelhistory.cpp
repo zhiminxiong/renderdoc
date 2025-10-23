@@ -1108,113 +1108,166 @@ void readPixelValuesMS(WrappedOpenGL *driver, const GLPixelHistoryResources &res
   }
 }
 
-void QueryPostModPixelValues(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
-                             const rdcarray<EventUsage> &modEvents, int x, int y,
-                             rdcarray<PixelModification> &history, uint32_t numSamples,
-                             uint32_t sampleIndex)
+void QueryPrePostModPixelValues(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
+                                const rdcarray<EventUsage> &modEvents, int x, int y,
+                                rdcarray<PixelModification> &history, uint32_t numSamples,
+                                uint32_t sampleIndex)
 {
-  GLMarkerRegion region("QueryPostModPixelValues");
+  GLMarkerRegion region("QueryPrePostModPixelValues");
   driver->ReplayLog(0, modEvents[0].eventId, eReplay_WithoutDraw);
-  CopyFramebuffer copyFramebuffer;
-  RDCEraseEl(copyFramebuffer);
-  copyFramebuffer.framebufferId = ~0u;
-  int lastHistoryIdx = 0;
-
-  // get the premod of the first event
-  {
-    GLint savedReadFramebuffer, savedDrawFramebuffer;
-    driver->glGetIntegerv(eGL_DRAW_FRAMEBUFFER_BINDING, &savedDrawFramebuffer);
-    driver->glGetIntegerv(eGL_READ_FRAMEBUFFER_BINDING, &savedReadFramebuffer);
-
-    uint32_t colIdx = getFramebufferColIndex(driver, resources.target);
-
-    CopyFramebuffer preModFramebuffer =
-        getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers, ModType::PreMod, numSamples,
-                           int(modEvents.size()));
-
-    driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, preModFramebuffer.framebufferId);
-    driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
-
-    GLenum savedReadBuffer;
-    driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
-
-    driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
-    SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver), eGL_NEAREST);
-    if(numSamples > 1)
-      readPixelValuesMS(driver, resources, preModFramebuffer, sampleIndex, 0, 0, history, 0,
-                        ModType::PreMod, true);
-    else
-      readPixelValues(driver, resources, preModFramebuffer, history, 0, ModType::PreMod, true, 1);
-
-    driver->glReadBuffer(savedReadBuffer);
-
-    // restore the capture's framebuffer
-    driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, savedDrawFramebuffer);
-    driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedReadFramebuffer);
-  }
+  CopyFramebuffer premodCopyFramebuffer = {};
+  premodCopyFramebuffer.framebufferId = ~0u;
+  CopyFramebuffer postmodCopyFramebuffer = {};
+  postmodCopyFramebuffer.framebufferId = ~0u;
+  int preModLastIdx = 0, postModLastIdx = 0;
 
   for(size_t i = 0; i < modEvents.size(); i++)
   {
-    driver->ReplayLog(modEvents[i].eventId, modEvents[i].eventId, eReplay_OnlyDraw);
-
-    GLint savedReadFramebuffer, savedDrawFramebuffer;
-    driver->glGetIntegerv(eGL_DRAW_FRAMEBUFFER_BINDING, &savedDrawFramebuffer);
-    driver->glGetIntegerv(eGL_READ_FRAMEBUFFER_BINDING, &savedReadFramebuffer);
-
     uint32_t colIdx = getFramebufferColIndex(driver, resources.target);
 
-    if(numSamples > 1)
     {
-      copyFramebuffer = getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers,
-                                           ModType::PostMod, numSamples, int(modEvents.size()));
+      GLint savedReadFramebuffer, savedDrawFramebuffer;
+      driver->glGetIntegerv(eGL_DRAW_FRAMEBUFFER_BINDING, &savedDrawFramebuffer);
+      driver->glGetIntegerv(eGL_READ_FRAMEBUFFER_BINDING, &savedReadFramebuffer);
 
-      driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
-      driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
+      GLuint copySourceFramebuffer = savedDrawFramebuffer;
 
-      GLenum savedReadBuffer;
-      driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
-
-      driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
-      SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
-                          eGL_NEAREST);
-      readPixelValuesMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0, history, int(i),
-                        ModType::PostMod, true);
-
-      driver->glReadBuffer(savedReadBuffer);
-    }
-    else
-    {
-      CopyFramebuffer newCopyFramebuffer =
-          getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers, ModType::PostMod,
-                             1 /*single sampled*/, int(modEvents.size()));
-      if(newCopyFramebuffer.framebufferId != copyFramebuffer.framebufferId)
+      if(isDirectWrite(modEvents[i].usage))
       {
-        if(copyFramebuffer.framebufferId != ~0u)
-        {
-          readPixelValues(driver, resources, copyFramebuffer, history, lastHistoryIdx,
-                          ModType::PostMod, true, (uint32_t)(i - lastHistoryIdx));
-        }
-        lastHistoryIdx = int(i);
+        copySourceFramebuffer = resources.copySourceFramebuffer;
+
+        // bind this as the framebuffer so the below code which expects to duplicate based on bound
+        // framebuffer will work. We've already saved teh real one
+        driver->glBindFramebuffer(eGL_FRAMEBUFFER, copySourceFramebuffer);
       }
 
-      copyFramebuffer = newCopyFramebuffer;
-      driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
-      driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
+      if(numSamples > 1)
+      {
+        premodCopyFramebuffer =
+            getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers, ModType::PreMod,
+                               numSamples, int(modEvents.size()));
 
-      GLenum savedReadBuffer;
-      driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, premodCopyFramebuffer.framebufferId);
+        driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, copySourceFramebuffer);
 
-      driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
-      SafeBlitFramebuffer(x, y, x + 1, y + 1, GLint(i) - lastHistoryIdx, 0,
-                          GLint(i) + 1 - lastHistoryIdx, 1, getFramebufferCopyMask(driver),
-                          eGL_NEAREST);
+        GLenum savedReadBuffer;
+        driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
 
-      driver->glReadBuffer(savedReadBuffer);
+        driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
+        readPixelValuesMS(driver, resources, premodCopyFramebuffer, sampleIndex, 0, 0, history, i,
+                          ModType::PreMod, true);
+
+        driver->glReadBuffer(savedReadBuffer);
+      }
+      else
+      {
+        CopyFramebuffer newCopyFramebuffer =
+            getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers, ModType::PreMod,
+                               1 /*single sampled*/, int(modEvents.size()));
+        if(newCopyFramebuffer.framebufferId != premodCopyFramebuffer.framebufferId)
+        {
+          if(premodCopyFramebuffer.framebufferId != ~0u)
+          {
+            readPixelValues(driver, resources, premodCopyFramebuffer, history, preModLastIdx,
+                            ModType::PreMod, true, (uint32_t)(i - preModLastIdx));
+          }
+          preModLastIdx = int(i);
+        }
+
+        premodCopyFramebuffer = newCopyFramebuffer;
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, premodCopyFramebuffer.framebufferId);
+        driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, copySourceFramebuffer);
+
+        GLenum savedReadBuffer;
+        driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+
+        driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, GLint(i) - preModLastIdx, 0,
+                            GLint(i) + 1 - preModLastIdx, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
+
+        driver->glReadBuffer(savedReadBuffer);
+      }
+
+      // restore the capture's framebuffer
+      driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, savedDrawFramebuffer);
+      driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedReadFramebuffer);
     }
 
-    // restore the capture's framebuffer
-    driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, savedDrawFramebuffer);
-    driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedReadFramebuffer);
+    driver->ReplayLog(modEvents[i].eventId, modEvents[i].eventId, eReplay_OnlyDraw);
+
+    {
+      GLint savedReadFramebuffer, savedDrawFramebuffer;
+      driver->glGetIntegerv(eGL_DRAW_FRAMEBUFFER_BINDING, &savedDrawFramebuffer);
+      driver->glGetIntegerv(eGL_READ_FRAMEBUFFER_BINDING, &savedReadFramebuffer);
+
+      GLuint copySourceFramebuffer = savedDrawFramebuffer;
+
+      if(isDirectWrite(modEvents[i].usage))
+      {
+        copySourceFramebuffer = resources.copySourceFramebuffer;
+
+        // bind this as the framebuffer so the below code which expects to duplicate based on bound
+        // framebuffer will work. We've already saved teh real one
+        driver->glBindFramebuffer(eGL_FRAMEBUFFER, copySourceFramebuffer);
+      }
+
+      if(numSamples > 1)
+      {
+        postmodCopyFramebuffer =
+            getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers, ModType::PostMod,
+                               numSamples, int(modEvents.size()));
+
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, postmodCopyFramebuffer.framebufferId);
+        driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, copySourceFramebuffer);
+
+        GLenum savedReadBuffer;
+        driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+
+        driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
+        readPixelValuesMS(driver, resources, postmodCopyFramebuffer, sampleIndex, 0, 0, history, i,
+                          ModType::PostMod, true);
+
+        driver->glReadBuffer(savedReadBuffer);
+      }
+      else
+      {
+        CopyFramebuffer newCopyFramebuffer =
+            getCopyFramebuffer(driver, colIdx, resources.copyFramebuffers, ModType::PostMod,
+                               1 /*single sampled*/, int(modEvents.size()));
+        if(newCopyFramebuffer.framebufferId != postmodCopyFramebuffer.framebufferId)
+        {
+          if(postmodCopyFramebuffer.framebufferId != ~0u)
+          {
+            readPixelValues(driver, resources, postmodCopyFramebuffer, history, postModLastIdx,
+                            ModType::PostMod, true, (uint32_t)(i - postModLastIdx));
+          }
+          postModLastIdx = int(i);
+        }
+
+        postmodCopyFramebuffer = newCopyFramebuffer;
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, postmodCopyFramebuffer.framebufferId);
+        driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, copySourceFramebuffer);
+
+        GLenum savedReadBuffer;
+        driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+
+        driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, GLint(i) - postModLastIdx, 0,
+                            GLint(i) + 1 - postModLastIdx, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
+
+        driver->glReadBuffer(savedReadBuffer);
+      }
+
+      // restore the capture's framebuffer
+      driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, savedDrawFramebuffer);
+      driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedReadFramebuffer);
+    }
 
     if(i < modEvents.size() - 1)
     {
@@ -1222,10 +1275,15 @@ void QueryPostModPixelValues(WrappedOpenGL *driver, GLPixelHistoryResources &res
     }
   }
 
-  if(numSamples == 1 && copyFramebuffer.framebufferId != 0u)
+  if(numSamples == 1 && premodCopyFramebuffer.framebufferId != 0u)
   {
-    readPixelValues(driver, resources, copyFramebuffer, history, lastHistoryIdx, ModType::PostMod,
-                    true, int(modEvents.size()) - lastHistoryIdx);
+    readPixelValues(driver, resources, premodCopyFramebuffer, history, preModLastIdx,
+                    ModType::PreMod, true, int(modEvents.size()) - preModLastIdx);
+  }
+  if(numSamples == 1 && postmodCopyFramebuffer.framebufferId != 0u)
+  {
+    readPixelValues(driver, resources, postmodCopyFramebuffer, history, postModLastIdx,
+                    ModType::PostMod, true, int(modEvents.size()) - postModLastIdx);
   }
 }
 
@@ -2299,8 +2357,8 @@ rdcarray<PixelModification> GLReplay::PixelHistory(rdcarray<EventUsage> events, 
   }
 
   QueryFailedTests(m_pDriver, resources, modEvents, x, flippedY, history, sampleIdx);
-  QueryPostModPixelValues(m_pDriver, resources, modEvents, x, flippedY, history, textureDesc.msSamp,
-                          sampleIdx);
+  QueryPrePostModPixelValues(m_pDriver, resources, modEvents, x, flippedY, history,
+                             textureDesc.msSamp, sampleIdx);
 
   uint32_t textureWidth = textureDesc.width >> sub.mip;
   uint32_t textureHeight = textureDesc.height >> sub.mip;
