@@ -1963,6 +1963,14 @@ void QueryPrimitiveIdPerFragment(WrappedOpenGL *driver, GLReplay *replay,
     GLRenderState state;
     state.FetchState(driver);
 
+    ResourceId ps;
+    if(state.Program.name)
+      ps = driver->GetProgram(driver->GetResourceManager()->GetResID(state.Program))
+               .stageShaders[(int)ShaderStage::Pixel];
+    else
+      ps = driver->GetPipeline(driver->GetResourceManager()->GetResID(state.Pipeline))
+               .stageShaders[(int)ShaderStage::Pixel];
+
     driver->glBindFramebuffer(eGL_FRAMEBUFFER, resources.fullPrecisionFrameBuffer);
     driver->glReadBuffer(eGL_COLOR_ATTACHMENT0);
     // rebind colour image to 0
@@ -2066,6 +2074,9 @@ void QueryPrimitiveIdPerFragment(WrappedOpenGL *driver, GLReplay *replay,
         historyIndex->primitiveID = ~0u;
         RDCERR("Primitive ID was not written correctly");
       }
+
+      if(ps == ResourceId())
+        historyIndex->unboundPS = true;
 
       ++historyIndex;
     }
