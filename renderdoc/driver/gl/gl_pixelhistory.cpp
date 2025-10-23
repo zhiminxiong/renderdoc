@@ -1287,9 +1287,8 @@ void QueryPrePostModPixelValues(WrappedOpenGL *driver, GLPixelHistoryResources &
   }
 }
 
-void readShaderOutMS(WrappedOpenGL *driver, const GLPixelHistoryResources &resources,
-                     const CopyFramebuffer &copyFramebuffer, int sampleIdx, int x, int y,
-                     rdcarray<PixelModification> &history, int historyIndex)
+ModificationValue readShaderOutMS(WrappedOpenGL *driver, const GLPixelHistoryResources &resources,
+                                  const CopyFramebuffer &copyFramebuffer, int sampleIdx, int x, int y)
 {
   rdcarray<float> pixelValue;
   pixelValue.resize(8);
@@ -1305,20 +1304,31 @@ void readShaderOutMS(WrappedOpenGL *driver, const GLPixelHistoryResources &resou
   }
   modValue.depth = pixelValue[depthOffset];
   modValue.stencil = *(int *)&pixelValue[stencilOffset];
-  history[historyIndex].shaderOut = modValue;
+  return modValue;
 }
 
-// This function a) calculates the number of fagments per event
-//           and b) calculates the shader output values per event
-std::map<uint32_t, uint32_t> QueryNumFragmentsByEvent(
-    WrappedOpenGL *driver, GLPixelHistoryResources &resources,
-    const rdcarray<EventUsage> &modEvents, rdcarray<PixelModification> &history, int x, int y,
-    uint32_t numSamples, uint32_t sampleIndex, uint32_t width, uint32_t height)
+struct EventFragmentData
+{
+  std::map<uint32_t, uint32_t> eventFragments;
+  rdcarray<uint32_t> fragmentsClipped;
+};
+
+// This function gets:
+//  - calculates the number of fragments per event
+//  - per-event whether some fragments were discarded
+//  - reads the shader output values per event (per-fragment shader output is fetched later)
+EventFragmentData QueryNumFragmentsByEvent(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
+                                           const rdcarray<EventUsage> &modEvents,
+                                           rdcarray<PixelModification> &history, int x, int y,
+                                           uint32_t numSamples, uint32_t sampleIndex,
+                                           uint32_t width, uint32_t height)
 {
   GLMarkerRegion region("QueryNumFragmentsByEvent");
   driver->ReplayLog(0, modEvents[0].eventId, eReplay_WithoutDraw);
 
-  std::map<uint32_t, uint32_t> eventFragments;
+  EventFragmentData ret;
+  std::map<uint32_t, uint32_t> &eventFragments = ret.eventFragments;
+  rdcarray<uint32_t> &fragmentsClipped = ret.fragmentsClipped;
 
   for(size_t i = 0; i < modEvents.size(); ++i)
   {
@@ -1391,49 +1401,111 @@ std::map<uint32_t, uint32_t> QueryNumFragmentsByEvent(
     driver->ReplayLog(modEvents[i].eventId, modEvents[i].eventId, eReplay_OnlyDraw);
 
     uint32_t numFragments = 0;
-    if(numSamples == 1)
-    {
-      ScopedReadPixelsSanitiser scope;
+    uint32_t numFragmentsWithoutDiscard = 0;
 
-      ModificationValue modValue;
-      if(colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
+    if(modEvents[i].usage != ResourceUsage::Clear && !isDirectWrite(modEvents[i].usage))
+    {
+      if(numSamples == 1)
       {
-        driver->glReadPixels(x, y, 1, 1, eGL_RGBA_INTEGER, eGL_INT,
-                             (void *)modValue.col.intValue.data());
+        ScopedReadPixelsSanitiser scope;
+
+        ModificationValue modValue;
+        if(colourFormatType == eGL_UNSIGNED_INT)
+        {
+          driver->glReadPixels(x, y, 1, 1, eGL_RGBA_INTEGER, eGL_UNSIGNED_INT,
+                               (void *)modValue.col.uintValue.data());
+        }
+        else if(colourFormatType == eGL_INT)
+        {
+          driver->glReadPixels(x, y, 1, 1, eGL_RGBA_INTEGER, eGL_INT,
+                               (void *)modValue.col.intValue.data());
+        }
+        else
+        {
+          driver->glReadPixels(x, y, 1, 1, eGL_RGBA, eGL_FLOAT,
+                               (void *)modValue.col.floatValue.data());
+        }
+        driver->glReadPixels(x, y, 1, 1, eGL_DEPTH_COMPONENT, eGL_FLOAT, (void *)&modValue.depth);
+        driver->glReadPixels(x, y, 1, 1, eGL_STENCIL_INDEX, eGL_UNSIGNED_INT, (void *)&numFragments);
+
+        // We're not reading the stencil value here, so use the postMod instead.
+        // Shaders don't actually output stencil values, those are determined by the stencil op.
+        modValue.stencil = history[i].postMod.stencil;
+
+        history[i].shaderOut = modValue;
+
+        if(resources.depthTarget)
+          RDCEraseEl(history[i].shaderOut.col);
       }
       else
       {
-        driver->glReadPixels(x, y, 1, 1, eGL_RGBA, eGL_FLOAT, (void *)modValue.col.floatValue.data());
+        GLenum copyFramebufferColourFormat =
+            (colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
+                ? shaderOutColourFormat
+                : eGL_RGBA32F;
+
+        const CopyFramebuffer &copyFramebuffer = getCopyFramebuffer(
+            driver, resources.copyFramebuffers, ModType::PostMod, numSamples, int(modEvents.size()),
+            eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, copyFramebufferColourFormat);
+
+        GLint savedDrawFramebuffer;
+        driver->glGetIntegerv(eGL_DRAW_FRAMEBUFFER_BINDING, &savedDrawFramebuffer);
+
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
+
+        GLenum savedReadBuffer;
+        driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+
+        glReadBuffer(eGL_COLOR_ATTACHMENT0);
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
+
+        driver->glReadBuffer(savedReadBuffer);
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, savedDrawFramebuffer);
+
+        history[i].shaderOut = readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0);
+        numFragments = history[i].shaderOut.stencil;
+        history[i].shaderOut.stencil = history[i].postMod.stencil;
+
+        if(resources.depthTarget)
+          RDCEraseEl(history[i].shaderOut.col);
       }
-      driver->glReadPixels(x, y, 1, 1, eGL_DEPTH_COMPONENT, eGL_FLOAT, (void *)&modValue.depth);
-      driver->glReadPixels(x, y, 1, 1, eGL_STENCIL_INDEX, eGL_UNSIGNED_INT, (void *)&numFragments);
 
-      // We're not reading the stencil value here, so use the postMod instead.
-      // Shaders don't actually output stencil values, those are determined by the stencil op.
-      modValue.stencil = history[i].postMod.stencil;
+      GLint currentProgram = 0;
+      driver->glGetIntegerv(eGL_CURRENT_PROGRAM, &currentProgram);
 
-      history[i].shaderOut = modValue;
+      // re-run draw with program that outputs a fixed colour to count how many fragments we get without discards
+      driver->glUseProgram(GetFixedColProgram(driver, driver->GetReplay(), resources, currentProgram));
+      driver->glClear(eGL_STENCIL_BUFFER_BIT | eGL_COLOR_BUFFER_BIT | eGL_DEPTH_BUFFER_BIT);
+      driver->ReplayLog(modEvents[i].eventId, modEvents[i].eventId, eReplay_OnlyDraw);
+
+      if(numSamples == 1)
+      {
+        driver->glReadPixels(x, y, 1, 1, eGL_STENCIL_INDEX, eGL_UNSIGNED_INT,
+                             (void *)&numFragmentsWithoutDiscard);
+      }
+      else
+      {
+        GLenum copyFramebufferColourFormat =
+            (colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
+                ? shaderOutColourFormat
+                : eGL_RGBA32F;
+
+        const CopyFramebuffer &copyFramebuffer = getCopyFramebuffer(
+            driver, resources.copyFramebuffers, ModType::PostMod, numSamples, int(modEvents.size()),
+            eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, copyFramebufferColourFormat);
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
+        glReadBuffer(eGL_COLOR_ATTACHMENT0);
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
+        numFragmentsWithoutDiscard =
+            readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0).stencil;
+      }
     }
-    else
-    {
-      GLenum copyFramebufferColourFormat =
-          (colourFormatType == eGL_UNSIGNED_INT || colourFormatType == eGL_INT)
-              ? shaderOutColourFormat
-              : eGL_RGBA32F;
 
-      const CopyFramebuffer &copyFramebuffer = getCopyFramebuffer(
-          driver, resources.copyFramebuffers, ModType::PostMod, numSamples, int(modEvents.size()),
-          eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, copyFramebufferColourFormat);
-      driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
-      glReadBuffer(eGL_COLOR_ATTACHMENT0);
-      SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
-                          eGL_NEAREST);
-      readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0, history, int(i));
-      numFragments = history[i].shaderOut.stencil;
-      history[i].shaderOut.stencil = history[i].postMod.stencil;
-    }
-
-    eventFragments.emplace(modEvents[i].eventId, numFragments);
+    eventFragments.emplace(modEvents[i].eventId, numFragmentsWithoutDiscard);
+    if(numFragmentsWithoutDiscard > numFragments)
+      fragmentsClipped.push_back(modEvents[i].eventId);
 
     state.ApplyState(driver);
 
@@ -1443,7 +1515,7 @@ std::map<uint32_t, uint32_t> QueryNumFragmentsByEvent(
     }
   }
 
-  return eventFragments;
+  return ret;
 }
 
 bool QueryScissorTest(WrappedOpenGL *driver, GLPixelHistoryResources &resources,
@@ -1734,8 +1806,8 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
         SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
                             eGL_NEAREST);
         int oldStencil = historyIndex->shaderOut.stencil;
-        readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0, history,
-                        int(historyIndex - history.begin()));
+        historyIndex->shaderOut =
+            readShaderOutMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0);
         historyIndex->shaderOut.stencil = oldStencil;
       }
       historyIndex++;
@@ -2329,9 +2401,12 @@ rdcarray<PixelModification> GLReplay::PixelHistory(rdcarray<EventUsage> events, 
 
   uint32_t textureWidth = textureDesc.width >> sub.mip;
   uint32_t textureHeight = textureDesc.height >> sub.mip;
-  std::map<uint32_t, uint32_t> eventFragments =
+
+  EventFragmentData eventFragmentData =
       QueryNumFragmentsByEvent(m_pDriver, resources, modEvents, history, x, flippedY,
                                textureDesc.msSamp, sampleIdx, textureWidth, textureHeight);
+
+  std::map<uint32_t, uint32_t> &eventFragments = eventFragmentData.eventFragments;
 
   // copy history entries to create one history per fragment
   for(size_t h = 0; h < history.size();)
