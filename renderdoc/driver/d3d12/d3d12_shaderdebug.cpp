@@ -1694,13 +1694,14 @@ ID3D12Resource *D3D12Replay::CreateInputFetchBuffer(DXDebug::InputFetcher &fetch
   rdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
   rdesc.Width = fetcher.hitBufferStride * (DXDebug::maxPixelHits + 1);
 
+  const uint32_t countLaneElements =
+      (fetcher.laneDataBufferStride > 0) ? fetcher.numLanesPerHit * (DXDebug::maxPixelHits + 1) : 0;
   // if we have separate lane data, allocate that at the end
   if(fetcher.laneDataBufferStride > 0)
   {
     rdesc.Width = AlignToMultiple(rdesc.Width, (uint64_t)fetcher.laneDataBufferStride);
     laneDataOffset = rdesc.Width;
-    rdesc.Width +=
-        (fetcher.laneDataBufferStride * fetcher.numLanesPerHit) * (DXDebug::maxPixelHits + 1);
+    rdesc.Width += fetcher.laneDataBufferStride * countLaneElements;
   }
 
   // Create storage for MSAA evaluations captured in pixel shader
@@ -1756,7 +1757,7 @@ ID3D12Resource *D3D12Replay::CreateInputFetchBuffer(DXDebug::InputFetcher &fetch
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     uavDesc.Buffer.FirstElement = laneDataOffset / fetcher.laneDataBufferStride;
     uavDesc.Buffer.StructureByteStride = fetcher.laneDataBufferStride;
-    uavDesc.Buffer.NumElements = DXDebug::maxPixelHits + 1;
+    uavDesc.Buffer.NumElements = countLaneElements;
 
     uav = m_pDevice->GetDebugManager()->GetCPUHandle(SHADER_DEBUG_LANEDATA_UAV);
     m_pDevice->CreateUnorderedAccessView(dataBuffer, NULL, &uavDesc, uav);
