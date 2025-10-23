@@ -1822,14 +1822,15 @@ void QueryShaderOutPerFragment(WrappedOpenGL *driver, GLReplay *replay,
   }
 }
 
-void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
-                             GLPixelHistoryResources &resources,
-                             const rdcarray<EventUsage> &modEvents, int x, int y,
-                             rdcarray<PixelModification> &history,
-                             const std::map<uint32_t, uint32_t> &eventFragments, uint32_t numSamples,
-                             uint32_t sampleIndex, uint32_t width, uint32_t height)
+void QueryPrePostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
+                                GLPixelHistoryResources &resources,
+                                const rdcarray<EventUsage> &modEvents, int x, int y,
+                                rdcarray<PixelModification> &history,
+                                const EventFragmentData &eventFragmentData, uint32_t numSamples,
+                                uint32_t sampleIndex, uint32_t width, uint32_t height)
 {
-  GLMarkerRegion region("QueryPostModPerFragment");
+  const std::map<uint32_t, uint32_t> &eventFragments = eventFragmentData.eventFragments;
+  GLMarkerRegion region("QueryPrePostModPerFragment");
   driver->ReplayLog(0, modEvents[0].eventId, eReplay_WithoutDraw);
 
   for(size_t i = 0; i < modEvents.size(); i++)
@@ -1875,10 +1876,12 @@ void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
 
     uint32_t colIdx = getFramebufferColIndex(driver, resources.target);
 
-    CopyFramebuffer copyFramebuffer;
-    RDCEraseEl(copyFramebuffer);
-    copyFramebuffer.framebufferId = ~0u;
-    int lastJ = 0;
+    CopyFramebuffer postmodCopyFramebuffer = {};
+    postmodCopyFramebuffer.framebufferId = ~0u;
+    CopyFramebuffer premodCopyFramebuffer = {};
+    premodCopyFramebuffer.framebufferId = ~0u;
+    int preModLastJ = 0;
+    int postModLastJ = 0;
 
     // save D/S attachment since we'll substitute our own depth
     GLuint curDepth;
@@ -1971,15 +1974,75 @@ void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
       driver->glStencilFunc(eGL_EQUAL, (int)j, 0xff);
       driver->glClear(eGL_STENCIL_BUFFER_BIT);
 
+      if(j > 0)
+      {
+        if(numSamples > 1)
+        {
+          premodCopyFramebuffer = getCopyFramebuffer(
+              driver, resources.copyFramebuffers, ModType::PreMod, numSamples,
+              int(modEvents.size()), eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, colorFormat);
+
+          driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, premodCopyFramebuffer.framebufferId);
+          driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
+
+          GLenum savedReadBuffer;
+          driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+
+          driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
+          SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
+                              eGL_NEAREST);
+
+          readPixelValuesMS(driver, resources, premodCopyFramebuffer, sampleIndex, 0, 0, history,
+                            (historyIndex - history.begin()), ModType::PreMod, false);
+
+          driver->glReadBuffer(savedReadBuffer);
+        }
+        else
+        {
+          // Blit the values into out framebuffer
+          CopyFramebuffer newCopyFramebuffer = getCopyFramebuffer(
+              driver, resources.copyFramebuffers, ModType::PreMod, numSamples,
+              int(modEvents.size()), eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, colorFormat);
+          if(newCopyFramebuffer.framebufferId != premodCopyFramebuffer.framebufferId ||
+             (j - preModLastJ >= premodCopyFramebuffer.width))
+          {
+            if(premodCopyFramebuffer.framebufferId != ~0u)
+            {
+              readPixelValues(driver, resources, premodCopyFramebuffer, history,
+                              preModLastJ + int(historyIndex - history.begin()), ModType::PreMod,
+                              false, (uint32_t)(j - preModLastJ));
+            }
+            preModLastJ = int(j);
+          }
+          premodCopyFramebuffer = newCopyFramebuffer;
+          driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, premodCopyFramebuffer.framebufferId);
+          driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
+
+          GLenum savedReadBuffer;
+          driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
+
+          driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
+          SafeBlitFramebuffer(x, y, x + 1, y + 1, GLint(j) - preModLastJ, 0,
+                              GLint(j) + 1 - preModLastJ, 1, getFramebufferCopyMask(driver),
+                              eGL_NEAREST);
+
+          driver->glReadBuffer(savedReadBuffer);
+        }
+      }
+
+      // restore the capture's framebuffer
+      driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, savedDrawFramebuffer);
+      driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedReadFramebuffer);
+
       driver->ReplayLog(modEvents[i].eventId, modEvents[i].eventId, eReplay_OnlyDraw);
 
       if(numSamples > 1)
       {
-        copyFramebuffer = getCopyFramebuffer(
+        postmodCopyFramebuffer = getCopyFramebuffer(
             driver, resources.copyFramebuffers, ModType::PostMod, numSamples, int(modEvents.size()),
             eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, colorFormat);
 
-        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, postmodCopyFramebuffer.framebufferId);
         driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
 
         GLenum savedReadBuffer;
@@ -1989,8 +2052,8 @@ void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
         SafeBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, getFramebufferCopyMask(driver),
                             eGL_NEAREST);
 
-        readPixelValuesMS(driver, resources, copyFramebuffer, sampleIndex, 0, 0, history,
-                          int(historyIndex - history.begin()), ModType::PostMod, false);
+        readPixelValuesMS(driver, resources, postmodCopyFramebuffer, sampleIndex, 0, 0, history,
+                          (historyIndex - history.begin()), ModType::PostMod, false);
         historyIndex++;
 
         driver->glReadBuffer(savedReadBuffer);
@@ -2001,27 +2064,28 @@ void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
         CopyFramebuffer newCopyFramebuffer = getCopyFramebuffer(
             driver, resources.copyFramebuffers, ModType::PostMod, numSamples, int(modEvents.size()),
             eGL_DEPTH32F_STENCIL8, eGL_DEPTH32F_STENCIL8, colorFormat);
-        if(newCopyFramebuffer.framebufferId != copyFramebuffer.framebufferId ||
-           (j - lastJ >= copyFramebuffer.width))
+        if(newCopyFramebuffer.framebufferId != postmodCopyFramebuffer.framebufferId ||
+           (j - postModLastJ >= postmodCopyFramebuffer.width))
         {
-          if(copyFramebuffer.framebufferId != ~0u)
+          if(postmodCopyFramebuffer.framebufferId != ~0u)
           {
-            readPixelValues(driver, resources, copyFramebuffer, history,
-                            lastJ + int(historyIndex - history.begin()), ModType::PostMod, false,
-                            (uint32_t)(j - lastJ));
+            readPixelValues(driver, resources, postmodCopyFramebuffer, history,
+                            postModLastJ + int(historyIndex - history.begin()), ModType::PostMod,
+                            false, (uint32_t)(j - postModLastJ));
           }
-          lastJ = int(j);
+          postModLastJ = int(j);
         }
-        copyFramebuffer = newCopyFramebuffer;
-        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, copyFramebuffer.framebufferId);
+        postmodCopyFramebuffer = newCopyFramebuffer;
+        driver->glBindFramebuffer(eGL_DRAW_FRAMEBUFFER, postmodCopyFramebuffer.framebufferId);
         driver->glBindFramebuffer(eGL_READ_FRAMEBUFFER, savedDrawFramebuffer);
 
         GLenum savedReadBuffer;
         driver->glGetIntegerv(eGL_READ_BUFFER, (GLint *)&savedReadBuffer);
 
         driver->glReadBuffer(GLenum(eGL_COLOR_ATTACHMENT0 + colIdx));
-        SafeBlitFramebuffer(x, y, x + 1, y + 1, GLint(j) - lastJ, 0, GLint(j) + 1 - lastJ, 1,
-                            getFramebufferCopyMask(driver), eGL_NEAREST);
+        SafeBlitFramebuffer(x, y, x + 1, y + 1, GLint(j) - postModLastJ, 0,
+                            GLint(j) + 1 - postModLastJ, 1, getFramebufferCopyMask(driver),
+                            eGL_NEAREST);
 
         driver->glReadBuffer(savedReadBuffer);
       }
@@ -2055,11 +2119,18 @@ void QueryPostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
 
     driver->glDeleteTextures(1, &forcedDepth);
 
-    if(numSamples == 1 && copyFramebuffer.framebufferId != ~0u)
+    if(numSamples == 1 && premodCopyFramebuffer.framebufferId != ~0u)
     {
-      readPixelValues(driver, resources, copyFramebuffer, history,
-                      lastJ + int(historyIndex - history.begin()), ModType::PostMod, false,
-                      numFragments - lastJ);
+      readPixelValues(driver, resources, premodCopyFramebuffer, history,
+                      preModLastJ + int(historyIndex - history.begin()), ModType::PreMod, false,
+                      numFragments - preModLastJ);
+    }
+
+    if(numSamples == 1 && postmodCopyFramebuffer.framebufferId != ~0u)
+    {
+      readPixelValues(driver, resources, postmodCopyFramebuffer, history,
+                      postModLastJ + int(historyIndex - history.begin()), ModType::PostMod, false,
+                      numFragments - postModLastJ);
     }
 
     state.ApplyState(driver);
@@ -2434,20 +2505,9 @@ rdcarray<PixelModification> GLReplay::PixelHistory(rdcarray<EventUsage> events, 
   QueryPrimitiveIdPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
                               eventFragments, usingFloatForPrimitiveId, textureDesc.msSamp,
                               sampleIdx);
-  // copy the postMod depth to next history's preMod depth
-  // (preMode depth is to prime the depth buffer in QueryPostModPerFragment)
-  for(size_t i = 1; i < history.size(); ++i)
-  {
-    history[i].preMod.depth = history[i - 1].postMod.depth;
-  }
-  QueryPostModPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
-                          eventFragments, textureDesc.msSamp, sampleIdx, textureWidth, textureHeight);
-
-  // copy the postMod to next history's preMod
-  for(size_t i = 1; i < history.size(); ++i)
-  {
-    history[i].preMod = history[i - 1].postMod;
-  }
+  QueryPrePostModPerFragment(m_pDriver, this, resources, modEvents, x, flippedY, history,
+                             eventFragmentData, textureDesc.msSamp, sampleIdx, textureWidth,
+                             textureHeight);
 
   CalculateFragmentDepthTests(m_pDriver, resources, modEvents, history, eventFragments);
 
