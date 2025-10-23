@@ -864,13 +864,20 @@ rdcarray<EventUsage> QueryModifyingEvents(WrappedOpenGL *driver, GLPixelHistoryR
       GLRenderState state;
       state.FetchState(driver);
 
+      GLint currentProgram = 0;
+      driver->glGetIntegerv(eGL_CURRENT_PROGRAM, &currentProgram);
+
+      if(!IsGLES)
+        driver->glEnable(eGL_DEPTH_CLAMP);
+      if(HasExt[EXT_depth_bounds_test])
+        driver->glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
       driver->glDisable(eGL_DEPTH_TEST);
       driver->glDisable(eGL_STENCIL_TEST);
       driver->glDisable(eGL_CULL_FACE);
       driver->glDisable(eGL_SAMPLE_MASK);
-      driver->glDisable(eGL_DEPTH_CLAMP);
       driver->glEnable(eGL_SCISSOR_TEST);
       driver->glScissor(x, y, 1, 1);
+      driver->glUseProgram(GetFixedColProgram(driver, driver->GetReplay(), resources, currentProgram));
 
       driver->SetFetchCounters(true);
       driver->glBeginQuery(eGL_SAMPLES_PASSED, occlusionQueries[i]);
