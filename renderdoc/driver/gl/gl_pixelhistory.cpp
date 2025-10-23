@@ -846,7 +846,8 @@ rdcarray<EventUsage> QueryModifyingEvents(WrappedOpenGL *driver, GLPixelHistoryR
         eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &objectType);
     // Ignore the event if the framebuffer is attached to a different mip level than the one we're
     // interested in
-    if(objectType == eGL_TEXTURE)
+    if(objectType == eGL_TEXTURE && events[i].usage != ResourceUsage::Clear &&
+       !isDirectWrite(events[i].usage))
     {
       int attachedMipLevel;
       driver->glGetFramebufferAttachmentParameteriv(
