@@ -2690,7 +2690,8 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               if(result.name.isEmpty())
               {
                 if((resRef->resourceBase.resClass == ResourceClass::SRV) ||
-                   (resRef->resourceBase.resClass == ResourceClass::UAV))
+                   (resRef->resourceBase.resClass == ResourceClass::UAV) ||
+                   (resRef->resourceBase.resClass == ResourceClass::Sampler))
                 {
                   if(resIndexArgId < inst.args.size())
                   {
