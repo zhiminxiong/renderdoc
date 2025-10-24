@@ -54,6 +54,7 @@ float4 main() : SV_Target0
 
 Texture2D res1 : register(t6);
 Texture2D res2[2] : register(t7);
+SamplerState samplerArray[2] : register(s8);
 
 RWTexture2D<float> res1uav : register(u0);
 
@@ -77,6 +78,8 @@ float4 main() : SV_Target0
   uint ONE = ZERO + 1;
   color += (float4)test + float4(0.1f, 0.0f, 0.0f, 0.0f);
   float4 uavVal = res1uav[uint2(1, 1)];
+  color += res2[ONE].Sample(samplerArray[ZERO], float2(0.5f, 0.5f));
+  color += res2[ONE].Sample(samplerArray[ONE], float2(0.5f, 0.5f));
   return color + res1[uint2(0, 0)] + res2[ONE][uint2(0, 0)] + uavVal;
 }
 
@@ -85,6 +88,7 @@ float4 main() : SV_Target0
   std::string pixel_resArray = R"EOSHADER(
 
 Texture2DArray<float> resArray[4] : register(t10, space1);
+SamplerState samplerArray[4] : register(s10, space1);
 
 cbuffer consts : register(b3)
 {
@@ -98,7 +102,11 @@ float4 main(float4 pos : SV_Position) : SV_Target0
   float arrayVal1 = resArray[1].Load(uint4(0, 0, indices.y, 0));
   float arrayVal2 = resArray[test.x].Load(uint4(0, 0, indices.y, 0));
   float arrayVal3 = resArray[NonUniformResourceIndex(indices.x)].Load(uint4(0, 0, indices.y, 0));
-  return float4(arrayVal1, arrayVal2, arrayVal3, 1.0f);
+  float arrayVal4 = resArray[NonUniformResourceIndex(indices.x)].Sample(
+      samplerArray[NonUniformResourceIndex(indices.x)], float3(0.5f, 0.5f, 0.0f));
+  arrayVal4 += resArray[NonUniformResourceIndex(indices.x+0)].Sample(
+      samplerArray[NonUniformResourceIndex(indices.x+1)], float3(0.5f, 0.5f, 0.0f));
+  return float4(arrayVal1, arrayVal2, arrayVal3, arrayVal4);
 }
 
 )EOSHADER";
@@ -106,6 +114,7 @@ float4 main(float4 pos : SV_Position) : SV_Target0
   std::string pixel_bindless = R"EOSHADER(
 
 Texture2DArray<float> resArray[] : register(t0);
+SamplerState samplerArray[] : register(s0);
 
 cbuffer consts : register(b3)
 {
@@ -119,7 +128,11 @@ float4 main(float4 pos : SV_Position) : SV_Target0
   float arrayVal1 = resArray[1].Load(uint4(0, 0, indices.y, 0));
   float arrayVal2 = resArray[test.x].Load(uint4(0, 0, indices.y, 0));
   float arrayVal3 = resArray[NonUniformResourceIndex(indices.x)].Load(uint4(0, 0, indices.y, 0));
-  return float4(arrayVal1, arrayVal2, arrayVal3, 1.0f);
+  float arrayVal4 = resArray[NonUniformResourceIndex(indices.x)].Sample(
+      samplerArray[NonUniformResourceIndex(indices.x)], float3(0.5f, 0.5f, 0.0f));
+  arrayVal4 += resArray[NonUniformResourceIndex(indices.x+0)].Sample(
+      samplerArray[NonUniformResourceIndex(indices.x+1)], float3(0.5f, 0.5f, 0.0f));
+  return float4(arrayVal1, arrayVal2, arrayVal3, arrayVal4);
 }
 
 )EOSHADER";
@@ -317,14 +330,19 @@ float4 main(float4 pos : SV_Position) : SV_Target0
         tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0, 4, 12, 0),
         tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 0, 1, 20),
         tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 0, UINT_MAX, 50),
+        tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 0,
+                   UINT_MAX, 50),
     });
     ID3D12RootSignaturePtr sig_resArray = MakeSig({
         cbvParam(D3D12_SHADER_VISIBILITY_PIXEL, 0, 3),
         tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 10, 4, 30),
+        tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 10, 4, 30),
     });
     ID3D12RootSignaturePtr sig_bindless = MakeSig({
         cbvParam(D3D12_SHADER_VISIBILITY_PIXEL, 0, 3),
         tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 0, UINT_MAX, 30),
+        tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 0,
+                   UINT_MAX, 30),
     });
     ID3D12RootSignaturePtr sig_resourceAccess = MakeSig({
         tableParam(D3D12_SHADER_VISIBILITY_PIXEL, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 0, 1, 56),
