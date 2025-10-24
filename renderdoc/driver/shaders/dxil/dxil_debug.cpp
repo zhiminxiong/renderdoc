@@ -8913,7 +8913,7 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
 
   // Create the variables for Samplers
   count = reflection.samplers.size();
-  m_GlobalState.samplers.resize(count);
+  m_GlobalState.samplers.reserve(count);
   for(uint32_t i = 0; i < count; i++)
   {
     ShaderSampler sampler = reflection.samplers[i];
