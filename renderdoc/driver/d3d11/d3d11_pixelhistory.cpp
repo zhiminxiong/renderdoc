@@ -259,8 +259,10 @@ void D3D11DebugManager::PixelHistoryCopyPixel(D3D11CopyPixelParams &p, size_t ev
 
   m_pImmediateContext->CSSetShaderResources(offs, 2, p.srv);
 
-  m_pImmediateContext->CSSetShader(
-      !p.depthcopy || p.depthbound ? PixelHistoryCopyCS : PixelHistoryUnusedCS, NULL, 0);
+  m_pImmediateContext->CSSetShader((!p.depthcopy || p.depthbound) && (p.srv[0] || p.srv[1])
+                                       ? PixelHistoryCopyCS
+                                       : PixelHistoryUnusedCS,
+                                   NULL, 0);
   m_pImmediateContext->Dispatch(1, 1, 1);
 
   m_pImmediateContext->CSSetShader(curCS, curCSInst, curCSNumInst);
@@ -452,13 +454,14 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   ID3D11UnorderedAccessView *pixstoreUAV = NULL, *shadoutStoreUAV = NULL, *pixstoreDepthUAV = NULL;
   m_pDevice->CreateUnorderedAccessView(pixstore, &uavDesc, &pixstoreUAV);
   m_pDevice->CreateUnorderedAccessView(shadoutStore, &uavDesc, &shadoutStoreUAV);
+  uavDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
   m_pDevice->CreateUnorderedAccessView(pixstoreDepth, &uavDesc, &pixstoreDepthUAV);
 
   // very wasteful, but we must leave the viewport as is to get correct rasterisation which means
   // same dimensions of render target.
   D3D11_TEXTURE2D_DESC shadoutDesc = {
-      details.texWidth,
-      details.texHeight,
+      RDCMAX(1U, details.texWidth >> mip),
+      RDCMAX(1U, details.texHeight >> mip),
       1U,
       1U,
       DXGI_FORMAT_R32G32B32A32_FLOAT,
@@ -468,6 +471,10 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
       0,
       0,
   };
+  if(IsUIntFormat(details.texFmt))
+    shadoutDesc.Format = DXGI_FORMAT_R32G32B32A32_UINT;
+  else if(IsIntFormat(details.texFmt))
+    shadoutDesc.Format = DXGI_FORMAT_R32G32B32A32_SINT;
   ID3D11Texture2D *shadOutput = NULL;
   m_pDevice->CreateTexture2D(&shadoutDesc, NULL, &shadOutput);
 
@@ -648,6 +655,9 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
   colourCopyParams.srv[0] = details.srv[details.texType];
   colourCopyParams.srv[1] = NULL;
   colourCopyParams.uav = pixstoreUAV;
+
+  if(targetImageIsDepth)
+    colourCopyParams.srv[0] = NULL;
 
   depthCopyParams.depthcopy = true;
   depthCopyParams.uav = pixstoreDepthUAV;
