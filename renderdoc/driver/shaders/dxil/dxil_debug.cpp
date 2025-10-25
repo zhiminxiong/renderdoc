@@ -2077,11 +2077,12 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             // Only the active lane stores outputs
             if(m_State)
             {
-              const ShaderVariable &var = m_Output.var.members[outputIdx];
-              RDCASSERT(rowIdx < var.rows, rowIdx, var.rows);
-              RDCASSERT(colIdx < var.columns, colIdx, var.columns);
-              ShaderVariable &a = (var.rows <= 1) ? m_Output.var.members[outputIdx]
-                                                  : m_Output.var.members[outputIdx].members[rowIdx];
+              ShaderVariable &var = m_Output.var.members[outputIdx];
+              if(var.rows == 0)
+                RDCASSERT(rowIdx < var.members.size(), rowIdx, var.members.size());
+
+              ShaderVariable &a = (var.rows != 0) ? var : var.members[rowIdx];
+              RDCASSERT(colIdx < a.columns, colIdx, a.columns);
               const uint32_t c = colIdx;
 #undef _IMPL
 #define _IMPL(I, S, U) comp<I>(a, c) = comp<I>(arg, 0)
@@ -9528,6 +9529,9 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
         v.members[r].type = v.type;
         v.members[r].name = StringFormat::Fmt("[%u]", r);
       }
+      v.rows = 0;
+      v.columns = 0;
+      v.type = VarType::Struct;
     }
     // TODO: handle the output of system values
     // ShaderBuiltin::DepthOutput, ShaderBuiltin::DepthOutputLessEqual,
@@ -9535,14 +9539,14 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
     // ShaderBuiltin::StencilReference
 
     // Map the high level variables to the Output DXIL Signature
-    SourceVariableMapping outputMapping;
-    outputMapping.name = v.name;
-    outputMapping.type = v.type;
-    outputMapping.rows = v.rows;
-    outputMapping.columns = v.columns;
-    outputMapping.signatureIndex = i;
-    if(v.rows <= 1)
+    if(v.rows == 1)
     {
+      SourceVariableMapping outputMapping;
+      outputMapping.name = v.name;
+      outputMapping.type = v.type;
+      outputMapping.rows = v.rows;
+      outputMapping.columns = v.columns;
+      outputMapping.signatureIndex = i;
       outputMapping.variables.reserve(sig.cols);
       for(uint32_t c = 0; c < sig.cols; ++c)
       {
@@ -9552,15 +9556,30 @@ ShaderDebugTrace *Debugger::BeginDebug(uint32_t eventId, const DXBC::DXBCContain
         ref.component = c;
         outputMapping.variables.push_back(ref);
       }
+      ret->sourceVars.push_back(outputMapping);
     }
     else
     {
-      DebugVariableReference ref;
-      ref.type = DebugVariableType::Variable;
-      ref.name = outStruct.name + "." + v.name;
-      outputMapping.variables.push_back(ref);
+      // Make a mapping per element
+      for(const ShaderVariable &member : v.members)
+      {
+        SourceVariableMapping outputMapping;
+        outputMapping.name = v.name + member.name;
+        outputMapping.type = member.type;
+        outputMapping.rows = 1;
+        outputMapping.columns = member.columns;
+        outputMapping.signatureIndex = -1;
+        for(uint32_t c = 0; c < member.columns; ++c)
+        {
+          DebugVariableReference ref;
+          ref.type = DebugVariableType::Variable;
+          ref.name = outStruct.name + "." + v.name + member.name;
+          ref.component = c;
+          outputMapping.variables.push_back(ref);
+        }
+        ret->sourceVars.push_back(outputMapping);
+      }
     }
-    ret->sourceVars.push_back(outputMapping);
 
     if(0)
     {
