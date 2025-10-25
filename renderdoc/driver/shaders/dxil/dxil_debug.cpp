@@ -2984,9 +2984,13 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
           {
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
-            RDCASSERTEQUAL(arg.type, VarType::Float);
-            RDCASSERTEQUAL(result.type, VarType::Float);
-            result.value.f32v[0] = fabsf(arg.value.f32v[0]);
+            RDCASSERT(IsFloatingPointType(arg.type));
+            RDCASSERTEQUAL(result.type, arg.type);
+            const uint32_t c = 0;
+#undef _IMPL
+#define _IMPL(T) comp<T>(result, c) = fabs(comp<T>(arg, c));
+
+            IMPL_FOR_FLOAT_TYPES_FOR_TYPE(_IMPL, arg.type);
             break;
           }
           case DXOp::IMin:
