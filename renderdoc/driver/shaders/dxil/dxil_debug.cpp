@@ -3159,27 +3159,24 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
               numComps = 3;
             uint32_t argBStart = argAStart + numComps;
 
-            result.value.f32v[0] = 0.0f;
-            bool isFloat = (result.type == VarType::Float);
-            if(isFloat || result.type == VarType::SInt)
+            result.value.s64v[0] = 0L;
+            for(uint32_t c = 0; c < numComps; ++c)
             {
-              for(uint32_t c = 0; c < numComps; ++c)
-              {
-                ShaderVariable a;
-                ShaderVariable b;
-                RDCASSERT(GetShaderVariable(inst.args[argAStart + c], opCode, dxOpCode, a));
-                RDCASSERT(GetShaderVariable(inst.args[argBStart + c], opCode, dxOpCode, b));
-                RDCASSERTEQUAL(result.type, a.type);
-                RDCASSERTEQUAL(result.type, b.type);
-                if(isFloat)
-                  result.value.f32v[0] += a.value.f32v[0] * b.value.f32v[0];
-                else
-                  result.value.s32v[0] += a.value.s32v[0] * b.value.s32v[0];
-              }
-            }
-            else
-            {
-              RDCERR("Unhandled result type %s", ToStr(result.type).c_str());
+              ShaderVariable a;
+              ShaderVariable b;
+              RDCASSERT(GetShaderVariable(inst.args[argAStart + c], opCode, dxOpCode, a));
+              RDCASSERT(GetShaderVariable(inst.args[argBStart + c], opCode, dxOpCode, b));
+              RDCASSERTEQUAL(a.type, b.type);
+              RDCASSERTEQUAL(result.type, a.type);
+
+#undef _IMPL
+#define _IMPL(I, S, U) comp<I>(result, 0) += (comp<I>(a, 0) * comp<I>(b, 0));
+              IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, result.type);
+
+#undef _IMPL
+#define _IMPL(T) comp<T>(result, 0) += (comp<T>(a, 0) * comp<T>(b, 0));
+
+              IMPL_FOR_FLOAT_TYPES_FOR_TYPE(_IMPL, result.type);
             }
             break;
           }
