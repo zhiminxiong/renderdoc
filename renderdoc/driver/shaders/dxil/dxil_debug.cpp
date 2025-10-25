@@ -110,6 +110,28 @@ static bool IsFloatingPointType(VarType type)
   }
 }
 
+static bool IsSignedIntegerType(VarType type)
+{
+  switch(type)
+  {
+    case VarType::SLong:
+    case VarType::SInt:
+    case VarType::SShort: return true;
+    default: return false;
+  }
+}
+
+static bool IsUnsignedIntegerType(VarType type)
+{
+  switch(type)
+  {
+    case VarType::ULong:
+    case VarType::UInt:
+    case VarType::UShort: return true;
+    default: return false;
+  }
+}
+
 static bool IsEncodedPointer(const ShaderVariable &var)
 {
   if(var.type != VarType::GPUPointer)
@@ -3002,13 +3024,24 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             ShaderVariable b;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, a));
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, b));
-            RDCASSERTEQUAL(a.type, VarType::SInt);
-            RDCASSERTEQUAL(b.type, VarType::SInt);
-            RDCASSERTEQUAL(result.type, VarType::SInt);
+            RDCASSERT(IsSignedIntegerType(a.type));
+            RDCASSERTEQUAL(a.type, b.type);
+            RDCASSERTEQUAL(result.type, a.type);
+            const uint32_t c = 0;
             if(dxOpCode == DXOp::IMin)
-              result.value.s32v[0] = RDCMIN(a.value.s32v[0], b.value.s32v[0]);
+            {
+#undef _IMPL
+#define _IMPL(I, S, U) comp<S>(result, c) = RDCMIN(comp<S>(a, c), comp<S>(b, c));
+
+              IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, result.type);
+            }
             else if(dxOpCode == DXOp::IMax)
-              result.value.s32v[0] = RDCMAX(a.value.s32v[0], b.value.s32v[0]);
+            {
+#undef _IMPL
+#define _IMPL(I, S, U) comp<S>(result, c) = RDCMAX(comp<S>(a, c), comp<S>(b, c));
+              IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, result.type);
+            }
+            break;
           }
           case DXOp::UMin:
           case DXOp::UMax:
@@ -3019,13 +3052,23 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
             ShaderVariable b;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, a));
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, b));
-            RDCASSERTEQUAL(a.type, VarType::SInt);
-            RDCASSERTEQUAL(b.type, VarType::SInt);
-            RDCASSERTEQUAL(result.type, VarType::SInt);
+            RDCASSERT(IsUnsignedIntegerType(a.type));
+            RDCASSERTEQUAL(a.type, b.type);
+            RDCASSERTEQUAL(result.type, a.type);
+            const uint32_t c = 0;
             if(dxOpCode == DXOp::UMin)
-              result.value.u32v[0] = RDCMIN(a.value.u32v[0], b.value.u32v[0]);
+            {
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(result, c) = RDCMIN(comp<U>(a, c), comp<U>(b, c));
+
+              IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, result.type);
+            }
             else if(dxOpCode == DXOp::UMax)
-              result.value.u32v[0] = RDCMAX(a.value.u32v[0], b.value.u32v[0]);
+            {
+#undef _IMPL
+#define _IMPL(I, S, U) comp<U>(result, c) = RDCMAX(comp<U>(a, c), comp<U>(b, c));
+              IMPL_FOR_INT_TYPES_FOR_TYPE(_IMPL, result.type);
+            }
             break;
           }
           case DXOp::FMin:
