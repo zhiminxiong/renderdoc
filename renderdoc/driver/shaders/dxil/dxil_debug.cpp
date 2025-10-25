@@ -3125,16 +3125,30 @@ bool ThreadState::ExecuteInstruction(DebugAPIWrapper *apiWrapper,
           {
             ShaderVariable arg;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, arg));
-            RDCASSERTEQUAL(arg.type, VarType::Float);
-            RDCASSERTEQUAL(result.type, VarType::Float);
-            result.value.f32v[0] = dxbc_min(1.0f, dxbc_max(0.0f, arg.value.f32v[0]));
+            RDCASSERT(IsFloatingPointType(arg.type));
+            RDCASSERTEQUAL(result.type, arg.type);
+            if(result.type == VarType::Double)
+            {
+              result.value.f64v[0] = dxbc_min(1.0, dxbc_max(0.0, arg.value.f64v[0]));
+              break;
+            }
+            else if(result.type == VarType::Float)
+            {
+              result.value.f32v[0] = dxbc_min(1.0f, dxbc_max(0.0f, arg.value.f32v[0]));
+              break;
+            }
+            else if(result.type == VarType::Half)
+            {
+              result.value.u16v[0] =
+                  ConvertToHalf(dxbc_min(1.0f, dxbc_max(0.0f, ConvertFromHalf(arg.value.u16v[0]))));
+              break;
+            }
             break;
           }
           case DXOp::Dot2:
           case DXOp::Dot3:
           case DXOp::Dot4:
           {
-            // Float or Int
             // 2/3/4 Vector
             // Result type must match input types
             uint32_t numComps = 4;
