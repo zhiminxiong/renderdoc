@@ -549,7 +549,7 @@ vec4 ProcessColor(vec4 col)
       setMarker(cmd, "Depth Equal Setup");
       RunDraw(cmd, PixelHistory::DepthEqualSetup);
 
-      setMarker(cmd, "Unbound Fragment Shader");
+      setMarker(cmd, "Unbound Shader");
       vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, b.noFsPipe);
       RunDraw(cmd, PixelHistory::UnboundPS);
 
@@ -647,6 +647,10 @@ vec4 ProcessColor(vec4 col)
     setMarker(cmd, "Per-Fragment discarding");
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, b.backgroundPipe);
     RunDraw(cmd, PixelHistory::PerFragDiscard);
+
+    setMarker(cmd, "No Output Shader");
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, b.noFsPipe);
+    RunDraw(cmd, PixelHistory::UnboundPS);
   }
 
   int main()

@@ -165,6 +165,7 @@ void main()
     D3D11StateSetup stencilWriteState;
     D3D11StateSetup backgroundState;
     D3D11StateSetup noPsState;
+    D3D11StateSetup noOutState;
     D3D11StateSetup basicState;
     D3D11StateSetup colorMaskState;
     D3D11StateSetup cullFrontState;
@@ -269,8 +270,13 @@ float4 ProcessColor(float4 col)
     ID3DBlobPtr psBlob = Compile(defines + pixel, "main", "ps_5_0");
     ID3DBlobPtr psMsaaBlob = Compile(defines + mspixel, "main", "ps_5_0");
 
+    ID3DBlobPtr noOutPSBlob;
+
     if(colourFormat != DXGI_FORMAT_UNKNOWN)
     {
+      defines += "#undef COLOR\n#define COLOR 0\n";
+      noOutPSBlob = Compile(defines + pixel, "main", "ps_5_0");
+
       D3D11TextureCreator colCreator =
           MakeTexture(colourFormat, batch.width, batch.height, depth)
               .Mips(mips)
@@ -348,6 +354,14 @@ float4 ProcessColor(float4 col)
     SetDebugName(PS, batch.name + " NormalPS");
     stateInfo.PS = PS;
 
+    ID3D11PixelShaderPtr noOutPS;
+
+    if(noOutPSBlob)
+    {
+      noOutPS = CreatePS(noOutPSBlob);
+      SetDebugName(noOutPS, batch.name + " NoOutPS");
+    }
+
     stateInfo.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
 
     stateInfo.RasterizerState.FillMode = D3D11_FILL_SOLID;
@@ -413,6 +427,14 @@ float4 ProcessColor(float4 col)
       stateInfo.PS = PS;
     }
 
+    if(noOutPS)
+    {
+      stateInfo.PS = noOutPS;
+      stateInfo.DepthStencilState.StencilEnable = FALSE;
+      batch.noOutState.init(dev, stateInfo);
+      stateInfo.PS = PS;
+    }
+
     stateInfo.DepthStencilState.StencilEnable = TRUE;
     stateInfo.DepthStencilState.FrontFace.StencilFunc = D3D11_COMPARISON_GREATER;
     batch.basicState.init(dev, stateInfo);
@@ -474,7 +496,7 @@ float4 ProcessColor(float4 col)
       setMarker("Depth Equal Setup");
       RunDraw(PixelHistory::DepthEqualSetup);
 
-      setMarker("Unbound Fragment Shader");
+      setMarker("Unbound Shader");
       b.noPsState.set(ctx);
       RunDraw(PixelHistory::UnboundPS);
 
@@ -566,6 +588,13 @@ float4 ProcessColor(float4 col)
     setMarker("Per-Fragment discarding");
     b.backgroundState.set(ctx);
     RunDraw(PixelHistory::PerFragDiscard);
+
+    if(b.noOutState.VS)
+    {
+      setMarker("No Output Shader");
+      b.noOutState.set(ctx);
+      RunDraw(PixelHistory::UnboundPS);
+    }
   }
 
   int main()

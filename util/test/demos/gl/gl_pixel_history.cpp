@@ -548,7 +548,7 @@ vec4 ProcessColor(vec4 col)
       setMarker("Depth Equal Setup");
       RunDraw(PixelHistory::DepthEqualSetup);
 
-      setMarker("Unbound Fragment Shader");
+      setMarker("Unbound Shader");
       b.noPsState.set();
       RunDraw(PixelHistory::UnboundPS);
 
@@ -648,6 +648,10 @@ vec4 ProcessColor(vec4 col)
     setMarker("Per-Fragment discarding");
     b.backgroundState.set();
     RunDraw(PixelHistory::PerFragDiscard);
+
+    setMarker("No Output Shader");
+    b.noPsState.set();
+    RunDraw(PixelHistory::UnboundPS);
   }
 
   int main()

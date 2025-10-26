@@ -1718,7 +1718,24 @@ private:
 
     // TODO: is shader discard always possible when PS is bound?
     if(pipeDesc.PS.BytecodeLength > 0 && pipeDesc.PS.pShaderBytecode != NULL)
+    {
       flags |= TestEnabled_FragmentDiscard;
+
+      if(!IsDepthFormat(m_CallbackInfo.targetDesc.Format))
+      {
+        uint32_t rtIndex = GetPixelHistoryRenderTargetIndex(pipeState);
+
+        bool found = false;
+        for(const SigParameter &o : origPSO->PS()->GetDetails().outputSignature)
+        {
+          if(o.regIndex == rtIndex)
+            found = true;
+        }
+
+        if(!found)
+          flags |= UnboundFragmentShader;
+      }
+    }
 
     return flags;
   }

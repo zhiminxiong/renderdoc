@@ -2276,7 +2276,24 @@ rdcarray<PixelModification> D3D11Replay::PixelHistory(rdcarray<EventUsage> event
         m_pImmediateContext->PSSetShader(m_PixelHistory.PrimitiveIDPS, NULL, 0);
 
         if(curPS == NULL)
+        {
           history[h].unboundPS = true;
+        }
+        else if(!targetImageIsDepth)
+        {
+          WrappedID3D11Shader<ID3D11PixelShader> *wrappedShader =
+              (WrappedID3D11Shader<ID3D11PixelShader> *)curPS;
+
+          bool found = false;
+          for(const SigParameter &o : wrappedShader->GetDetails().outputSignature)
+          {
+            if(o.regIndex == rtIndex)
+              found = true;
+          }
+
+          if(!found)
+            history[h].unboundPS = true;
+        }
 
         m_pDevice->ReplayLog(0, history[h].eventId, eReplay_OnlyDraw);
 

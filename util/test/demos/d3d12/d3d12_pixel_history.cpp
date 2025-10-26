@@ -141,6 +141,7 @@ void main()
     ID3D12PipelineStatePtr stencilWritePipe;
     ID3D12PipelineStatePtr backgroundPipe;
     ID3D12PipelineStatePtr noPsPipe;
+    ID3D12PipelineStatePtr noOutPipe;
     ID3D12PipelineStatePtr basicPipe;
     ID3D12PipelineStatePtr colorMaskPipe;
     ID3D12PipelineStatePtr cullFrontPipe;
@@ -274,8 +275,13 @@ float4 ProcessColor(float4 col)
     ID3DBlobPtr psBlob = Compile(defines + pixel, "main", ("ps_" + sm_suffix).c_str());
     ID3DBlobPtr psMsaaBlob = Compile(defines + mspixel, "main", ("ps_" + sm_suffix).c_str());
 
+    ID3DBlobPtr nooutpsBlob;
+
     if(colourFormat != DXGI_FORMAT_UNKNOWN)
     {
+      defines += "#undef COLOR\n#define COLOR 0\n";
+      nooutpsBlob = Compile(defines + pixel, "main", ("ps_" + sm_suffix).c_str());
+
       D3D12TextureCreator colCreator =
           MakeTexture(colourFormat, batch.width, batch.height, depth)
               .Mips(mips)
@@ -450,6 +456,16 @@ float4 ProcessColor(float4 col)
       pipeInfo.GraphicsDesc.PS = PS;
     }
 
+    if(nooutpsBlob)
+    {
+      D3D12_SHADER_BYTECODE PS = pipeInfo.GraphicsDesc.PS;
+      pipeInfo.PS(nooutpsBlob);
+      pipeInfo.GraphicsDesc.DepthStencilState.StencilEnable = TRUE;
+      batch.noOutPipe = pipeInfo;
+      setName(batch.noOutPipe, batch.name + " noOutPipe");
+      pipeInfo.GraphicsDesc.PS = PS;
+    }
+
     pipeInfo.GraphicsDesc.DepthStencilState.StencilEnable = TRUE;
     pipeInfo.GraphicsDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_GREATER;
     batch.basicPipe = pipeInfo;
@@ -525,7 +541,7 @@ float4 ProcessColor(float4 col)
 
       cmd->OMSetStencilRef(0x33);
 
-      setMarker(cmd, "Unbound Fragment Shader");
+      setMarker(cmd, "Unbound Shader");
       cmd->SetPipelineState(b.noPsPipe);
       RunDraw(cmd, PixelHistory::UnboundPS);
 
@@ -629,6 +645,13 @@ float4 ProcessColor(float4 col)
     setMarker(cmd, "Per-Fragment discarding");
     cmd->SetPipelineState(b.backgroundPipe);
     RunDraw(cmd, PixelHistory::PerFragDiscard);
+
+    if(b.noOutPipe)
+    {
+      setMarker(cmd, "No Output Shader");
+      cmd->SetPipelineState(b.noOutPipe);
+      RunDraw(cmd, PixelHistory::UnboundPS);
+    }
   }
 
   int main()

@@ -2645,7 +2645,11 @@ struct PixelModification
 )");
   bool directShaderWrite;
 
-  DOCUMENT(R"(``True`` if no pixel shader was bound at this event.
+  DOCUMENT(R"(``True`` if no pixel shader was bound at this event. On D3D APIs this may also mean
+a pixel shader exists but declares no output for the corresponding target and so is skipped.
+
+On other APIs this is only reported if the pixel shader is entirely unbound but this means the
+output may have undefined values.
 
 :type: bool
 )");

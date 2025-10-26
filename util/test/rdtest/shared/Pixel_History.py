@@ -241,7 +241,7 @@ class Pixel_History(rdtest.TestCase):
                 'passed': True
             },
             {
-                'event_name': 'Unbound Fragment Shader',
+                'event_name': 'Unbound Shader',
                 'passed': True,
                 'unboundPS': True,
                 'primitive_id': 0,
@@ -265,7 +265,7 @@ class Pixel_History(rdtest.TestCase):
                 'passed': True
             },
             {
-                'event_name': 'Unbound Fragment Shader',
+                'event_name': 'Unbound Shader',
                 'passed': True,
                 'unboundPS': True,
                 'primitive_id': 0
@@ -872,6 +872,32 @@ class Pixel_History(rdtest.TestCase):
             ]
         self.check_events(events, modifs)
 
+        if self.has_colour:
+            x, y = self.relative_xy(120, 110)
+            rdtest.log.print("Testing D3D no-output shader {}, {}".format(x, y))
+            test_marker = self.find_action("No Output Shader", base_eid)
+            self.controller.SetFrameEvent(test_marker.next.eventId, True)
+
+            modifs = self.controller.PixelHistory(tex, x, y, sub, comp)
+            events = [
+                {
+                    'event_name': 'Begin RenderPass',
+                },
+                {
+                    'event_name': 'Unbound Shader',
+                },
+                {
+                    'event_name': 'Stencil Write',
+                },
+                {
+                    'event_name': 'No Output Shader',
+                    'passed': True,
+                    'unboundPS': True,
+                    'primitive_id': 0
+                },
+            ]
+            self.check_events(events, modifs)
+
     def check_final_colour(self, tex, x, y, modifs: List[rd.PixelModification], sub, comp):
         m = modifs[-1]
         if self.has_colour:
@@ -888,7 +914,7 @@ class Pixel_History(rdtest.TestCase):
 
         if len(modifs) != len(events):
             rdtest.log.print(str([e['event_name'] for e in events]))
-            rdtest.log.print(str([self.fetch_property['event_name'](m.eventId) for m in modifs]))
+            rdtest.log.print(str([self.fetch_property['event_name'](m) for m in modifs]))
             self.error(f"Expected {len(events)} events got {len(modifs)}")
             return
 
