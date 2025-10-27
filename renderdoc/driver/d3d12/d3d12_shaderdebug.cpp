@@ -1746,7 +1746,7 @@ ID3DBlob *D3D12Replay::CompileShaderDebugFetcher(const DXBC::DXBCContainer *dxbc
     else if(dxbc->m_Type == DXBC::ShaderType::Compute)
       stage = 'c';
 
-    const char *profile = StringFormat::Fmt("%cs_%u_%u", stage, smMajor, smMinor).c_str();
+    const rdcstr profile = StringFormat::Fmt("%cs_%u_%u", stage, smMajor, smMinor);
 
     ShaderCompileFlags compileFlags =
         DXBC::EncodeFlags(m_pDevice->GetShaderCache()->GetCompileFlags(), profile);
@@ -1756,7 +1756,7 @@ ID3DBlob *D3D12Replay::CompileShaderDebugFetcher(const DXBC::DXBCContainer *dxbc
       compileFlags.flags.push_back({"@compile_option", "-enable-16bit-types"});
 
     if(m_pDevice->GetShaderCache()->GetShaderBlob(hlsl.c_str(), "ExtractInputs", compileFlags, {},
-                                                  profile, &psBlob) != "")
+                                                  profile.c_str(), &psBlob) != "")
     {
       RDCERR("Failed to create shader to extract inputs");
       SAFE_RELEASE(psBlob);
