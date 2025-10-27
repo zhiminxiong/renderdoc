@@ -5482,7 +5482,7 @@ void Program::ParseReferences(const DXBC::Reflection *reflection)
                 {
                   RDCASSERT(!GetResourceReference(resultId));
                   ResourceReference resRef(resultIdStr, *resourceBase, resIndex);
-                  m_ResourceByIdHandles[resultId] = m_ResourceByIdHandles.size();
+                  m_ResourceByIdHandles[resultId] = m_ResourceReferences.size();
                   m_ResourceReferences.push_back(resRef);
                   resName = resourceBase->name;
                   uint32_t arrayIndex = 0;
@@ -5545,7 +5545,7 @@ void Program::ParseReferences(const DXBC::Reflection *reflection)
                 {
                   const ResourceReference resRef = *pResRef;
                   resBaseName = resRef.resourceBase.name;
-                  m_ResourceByIdHandles[resultId] = m_ResourceByIdHandles.size();
+                  m_ResourceByIdHandles[resultId] = m_ResourceReferences.size();
                   m_ResourceReferences.push_back(resRef);
                 }
                 uint32_t annotateHandleCount = m_ResourceAnnotateCounts[resBaseName];
