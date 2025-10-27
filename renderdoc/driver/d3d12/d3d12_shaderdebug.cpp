@@ -29,6 +29,7 @@
 #include "driver/shaders/dxbc/dxbc_debug.h"
 #include "driver/shaders/dxil/dxil_debug.h"
 #include "maths/formatpacking.h"
+#include "replay/common/var_dispatch_helpers.h"
 #include "strings/string_utils.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_debug.h"
@@ -252,6 +253,43 @@ bool D3D12ShaderDebug::QueueSampleGather(
   cbufferData.debugSampleLod = lodValue;
   cbufferData.debugSampleCompare = compareValue;
 
+  uint32_t srvStart = FIRST_SHADDEBUG_SRV;
+  srvStart += ShaderDebugConstants::COUNT_SRVS_PER_DEBUG * queueIndex;
+  CBVUAVSRVSlot srvSlot = (CBVUAVSRVSlot)srvStart;
+  D3D12_CPU_DESCRIPTOR_HANDLE srv = device->GetDebugManager()->GetCPUHandle(srvSlot);
+  srv.ptr += ((cbufferData.debugSampleTexDim - 1) + 5 * (cbufferData.debugSampleRetType - 1)) *
+             sizeof(D3D12Descriptor);
+  {
+    D3D12Descriptor descriptor =
+        FindDescriptor(device, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, resourceData.binding, shaderType);
+
+    descriptor.Create(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, device, srv);
+  }
+
+  uint32_t samplerStart = SHADDEBUG_SAMPLER0;
+  samplerStart += ShaderDebugConstants::COUNT_SAMPLERS_PER_DEBUG * queueIndex;
+  SamplerSlot samplerSlot = (SamplerSlot)samplerStart;
+  if(samplerData.mode != SamplerMode::NUM_SAMPLERS)
+  {
+    D3D12Descriptor descriptor =
+        FindDescriptor(device, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, samplerData.binding, shaderType);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE samp = device->GetDebugManager()->GetCPUHandle(samplerSlot);
+
+    if(sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_CMP || sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_CMP_LEVEL_ZERO ||
+       sampleOp == DEBUG_SAMPLE_TEX_GATHER4_CMP || sampleOp == DEBUG_SAMPLE_TEX_GATHER4_PO_CMP)
+      samp.ptr += sizeof(D3D12Descriptor);
+
+    if((sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_BIAS || sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_CMP_BIAS) &&
+       samplerData.bias != 0.0f)
+    {
+      D3D12_SAMPLER_DESC2 desc = descriptor.GetSampler();
+      desc.MipLODBias = RDCCLAMP(desc.MipLODBias + samplerData.bias, -15.99f, 15.99f);
+      descriptor.Init(&desc);
+    }
+    descriptor.Create(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, samp);
+  }
+
   // Store a copy of the event's render state to restore later
   D3D12RenderState &rs = device->GetQueue()->GetCommandData()->m_RenderState;
   D3D12RenderState prevState = rs;
@@ -269,37 +307,6 @@ bool D3D12ShaderDebug::QueueSampleGather(
   rs.scissors.clear();
   rs.scissors.push_back({0, 0, 1, 1});
 
-  D3D12_CPU_DESCRIPTOR_HANDLE srv = device->GetDebugManager()->GetCPUHandle(FIRST_SHADDEBUG_SRV);
-  srv.ptr += ((cbufferData.debugSampleTexDim - 1) + 5 * (cbufferData.debugSampleRetType - 1)) *
-             sizeof(D3D12Descriptor);
-  {
-    D3D12Descriptor descriptor =
-        FindDescriptor(device, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, resourceData.binding, shaderType);
-
-    descriptor.Create(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, device, srv);
-  }
-
-  if(samplerData.mode != SamplerMode::NUM_SAMPLERS)
-  {
-    D3D12Descriptor descriptor =
-        FindDescriptor(device, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, samplerData.binding, shaderType);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE samp = device->GetDebugManager()->GetCPUHandle(SHADDEBUG_SAMPLER0);
-
-    if(sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_CMP || sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_CMP_LEVEL_ZERO ||
-       sampleOp == DEBUG_SAMPLE_TEX_GATHER4_CMP || sampleOp == DEBUG_SAMPLE_TEX_GATHER4_PO_CMP)
-      samp.ptr += sizeof(D3D12Descriptor);
-
-    if((sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_BIAS || sampleOp == DEBUG_SAMPLE_TEX_SAMPLE_CMP_BIAS) &&
-       samplerData.bias != 0.0f)
-    {
-      D3D12_SAMPLER_DESC2 desc = descriptor.GetSampler();
-      desc.MipLODBias = RDCCLAMP(desc.MipLODBias + samplerData.bias, -15.99f, 15.99f);
-      descriptor.Init(&desc);
-    }
-    descriptor.Create(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, samp);
-  }
-
   device->GetDebugManager()->SetDescriptorHeaps(rs.heaps, true, true);
 
   // Set our modified root signature, and transfer sigelems if we're debugging a compute shader
@@ -315,10 +322,9 @@ bool D3D12ShaderDebug::QueueSampleGather(
       D3D12RenderState::SignatureElement(
           eRootCBV, device->GetDebugManager()->UploadConstants(&cbufferData, sizeof(cbufferData))),
       D3D12RenderState::SignatureElement(eRootUAV, pResultBuffer->GetGPUVirtualAddress()),
-      D3D12RenderState::SignatureElement(
-          eRootTable, device->GetDebugManager()->GetCPUHandle(FIRST_SHADDEBUG_SRV)),
-      D3D12RenderState::SignatureElement(
-          eRootTable, device->GetDebugManager()->GetCPUHandle(SHADDEBUG_SAMPLER0)),
+      D3D12RenderState::SignatureElement(eRootTable, device->GetDebugManager()->GetCPUHandle(srvSlot)),
+      D3D12RenderState::SignatureElement(eRootTable,
+                                         device->GetDebugManager()->GetCPUHandle(samplerSlot)),
   };
 
   rs.topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -335,7 +341,7 @@ bool D3D12ShaderDebug::QueueSampleGather(
   barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
   cmdList->ResourceBarrier(1, &barrier);
 
-  const uint64_t sampleGatherOpResultsStart(D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS *
+  const uint64_t sampleGatherOpResultsStart(ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS *
                                             s_MathOpResultByteSize);
 
   uint64_t destOffset = sampleGatherOpResultsStart + queueIndex * s_SampleGatherOpResultByteSize;
@@ -408,7 +414,7 @@ bool D3D12ShaderDebug::GetQueuedResults(WrappedID3D12Device *device,
     gpuMathOpResults += s_MathOpResultByteSize;
   }
 
-  const uint64_t sampleGatherOpResultsStart(D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS *
+  const uint64_t sampleGatherOpResultsStart(ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS *
                                             s_MathOpResultByteSize);
   byte *gpuSampleGatherOpResults = gpuResults + sampleGatherOpResultsStart;
   for(uint32_t s = 0; s < sampleGatherResults.size(); ++s)
@@ -564,8 +570,8 @@ D3D12Descriptor D3D12ShaderDebug::FindDescriptor(WrappedID3D12Device *device,
             srvDesc.Format = DXGI_FORMAT_UNKNOWN;
             srvDesc.Buffer.FirstElement = 0;
             // we don't know the real length or structure stride from a root descriptor, so set
-            // defaults. This behaviour seems undefined in drivers, so returning 1 as the number
-            // of elements is as sensible as anything else
+            // defaults. This behaviour seems undefined in drivers, so returning 1 as the number of
+            // elements is as sensible as anything else
             srvDesc.Buffer.NumElements = 1;
             srvDesc.Buffer.StructureByteStride = 4;
             srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
@@ -586,8 +592,8 @@ D3D12Descriptor D3D12ShaderDebug::FindDescriptor(WrappedID3D12Device *device,
             uavDesc.Format = DXGI_FORMAT_UNKNOWN;
             uavDesc.Buffer.FirstElement = 0;
             // we don't know the real length or structure stride from a root descriptor, so set
-            // defaults. This behaviour seems undefined in drivers, so returning 1 as the number
-            // of elements is as sensible as anything else
+            // defaults. This behaviour seems undefined in drivers, so returning 1 as the number of
+            // elements is as sensible as anything else
             uavDesc.Buffer.NumElements = 1;
             uavDesc.Buffer.StructureByteStride = 4;
             uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
@@ -607,9 +613,8 @@ D3D12Descriptor D3D12ShaderDebug::FindDescriptor(WrappedID3D12Device *device,
           {
             const D3D12_DESCRIPTOR_RANGE1 &range = param.ranges[r];
 
-            // For every range, check the number of descriptors so that we are accessing the
-            // correct data for append descriptor tables, even if the range type doesn't match
-            // what we need to fetch
+            // For every range, check the number of descriptors so that we are accessing the correct
+            // data for append descriptor tables, even if the range type doesn't match what we need to fetch
             UINT offset = range.OffsetInDescriptorsFromTableStart;
             if(range.OffsetInDescriptorsFromTableStart == D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND)
               offset = prevTableOffset;
@@ -620,8 +625,8 @@ D3D12Descriptor D3D12ShaderDebug::FindDescriptor(WrappedID3D12Device *device,
               // Find out how many descriptors are left after
               numDescriptors = heap->GetNumDescriptors() - offset - (UINT)element.offset;
 
-              // TODO: Should we look up the bind point in the D3D12 state to try to get
-              // a better guess at the number of descriptors?
+              // TODO: Should we look up the bind point in the D3D12 state to try to get a better
+              // guess at the number of descriptors?
             }
 
             prevTableOffset = offset + numDescriptors;
@@ -890,8 +895,7 @@ ShaderVariable D3D12ShaderDebug::GetResourceInfo(WrappedID3D12Device *device,
       case D3D12_SRV_DIMENSION_TEXTURECUBE:
       case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY:
       {
-        // Even though it's a texture cube, an individual face's dimensions are
-        // returned
+        // Even though it's a texture cube, an individual face's dimensions are returned
         dim = 2;
 
         bool isarray = srvDesc.ViewDimension == D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
@@ -899,8 +903,8 @@ ShaderVariable D3D12ShaderDebug::GetResourceInfo(WrappedID3D12Device *device,
         result.value.u32v[0] = RDCMAX(1U, (uint32_t)(resDesc.Width >> mipLevel));
         result.value.u32v[1] = RDCMAX(1U, (uint32_t)(resDesc.Height >> mipLevel));
 
-        // the spec says "If srcResource is a TextureCubeArray, [...]. dest.z is set
-        // to an undefined value."
+        // the spec says
+        // "If srcResource is a TextureCubeArray, [...]. dest.z is set to an undefined value."
         // but that's stupid, and implementations seem to return the number of cubes
         result.value.u32v[2] = isarray ? srvDesc.TextureCubeArray.NumCubes : 0;
         result.value.u32v[3] =
@@ -1061,8 +1065,8 @@ D3D12DebugAPIWrapper::D3D12DebugAPIWrapper(WrappedID3D12Device *device,
 
 D3D12DebugAPIWrapper::~D3D12DebugAPIWrapper()
 {
-  // if we replayed to before the action for fetching some UAVs, replay back to after the action
-  // to keep the state consistent.
+  // if we replayed to before the action for fetching some UAVs, replay back to after the action to
+  // keep the state consistent.
   if(m_DidReplay)
   {
     D3D12MarkerRegion region(m_pDevice->GetQueue()->GetReal(), "ResetReplay");
@@ -1123,17 +1127,15 @@ void D3D12DebugAPIWrapper::FetchSRV(const DXBCDebug::BindingSlot &slot)
             {
               D3D12_RESOURCE_DESC resDesc = pResource->GetDesc();
 
-              // DXBC allows root buffers to have a stride of up to 16 bytes in the shader, which
-              // means encoding the byte offset into the first element here is wrong without
-              // knowing what the actual accessed stride is. Instead we only fetch the data from
-              // that offset onwards.
+              // DXBC allows root buffers to have a stride of up to 16 bytes in the shader, which means
+              // encoding the byte offset into the first element here is wrong without knowing what
+              // the actual accessed stride is. Instead we only fetch the data from that offset onwards.
 
               // TODO: Root buffers can be 32-bit UINT/SINT/FLOAT. Using UINT for now, but the
               // resource desc format or the DXBC reflection info might be more correct.
               DXBCDebug::FillViewFmt(DXGI_FORMAT_R32_UINT, srvData.format);
               srvData.firstElement = 0;
-              // root arguments have no bounds checking, so use the most conservative number of
-              // elements
+              // root arguments have no bounds checking, so use the most conservative number of elements
               srvData.numElements = uint32_t(resDesc.Width - element.offset);
 
               if(resDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
@@ -1156,9 +1158,8 @@ void D3D12DebugAPIWrapper::FetchSRV(const DXBCDebug::BindingSlot &slot)
           {
             const D3D12_DESCRIPTOR_RANGE1 &range = param.ranges[r];
 
-            // For every range, check the number of descriptors so that we are accessing the
-            // correct data for append descriptor tables, even if the range type doesn't match
-            // what we need to fetch
+            // For every range, check the number of descriptors so that we are accessing the correct
+            // data for append descriptor tables, even if the range type doesn't match what we need to fetch
             UINT offset = range.OffsetInDescriptorsFromTableStart;
             if(range.OffsetInDescriptorsFromTableStart == D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND)
               offset = prevTableOffset;
@@ -1173,8 +1174,8 @@ void D3D12DebugAPIWrapper::FetchSRV(const DXBCDebug::BindingSlot &slot)
               // Find out how many descriptors are left after
               numDescriptors = heap->GetNumDescriptors() - offset - (UINT)element.offset;
 
-              // TODO: Should we look up the bind point in the D3D12 state to try to get
-              // a better guess at the number of descriptors?
+              // TODO: Should we look up the bind point in the D3D12 state to try to get a better
+              // guess at the number of descriptors?
             }
 
             prevTableOffset = offset + numDescriptors;
@@ -1297,17 +1298,15 @@ void D3D12DebugAPIWrapper::FetchUAV(const DXBCDebug::BindingSlot &slot)
             {
               D3D12_RESOURCE_DESC resDesc = pResource->GetDesc();
 
-              // DXBC allows root buffers to have a stride of up to 16 bytes in the shader, which
-              // means encoding the byte offset into the first element here is wrong without
-              // knowing what the actual accessed stride is. Instead we only fetch the data from
-              // that offset onwards.
+              // DXBC allows root buffers to have a stride of up to 16 bytes in the shader, which means
+              // encoding the byte offset into the first element here is wrong without knowing what
+              // the actual accessed stride is. Instead we only fetch the data from that offset onwards.
 
               // TODO: Root buffers can be 32-bit UINT/SINT/FLOAT. Using UINT for now, but the
               // resource desc format or the DXBC reflection info might be more correct.
               DXBCDebug::FillViewFmt(DXGI_FORMAT_R32_UINT, uavData.format);
               uavData.firstElement = 0;
-              // root arguments have no bounds checking, so use the most conservative number of
-              // elements
+              // root arguments have no bounds checking, so use the most conservative number of elements
               uavData.numElements = uint32_t(resDesc.Width - element.offset);
 
               if(resDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
@@ -1451,7 +1450,14 @@ bool D3D12DebugAPIWrapper::CalculateMathIntrinsic(DXBCBytecode::OpcodeType opcod
   const uint32_t queueIndex = 0;
   if(!D3D12ShaderDebug::QueueMathIntrinsic(false, m_pDevice, m_QueuedOpCmdList, mathOp, input,
                                            queueIndex))
+  {
+    HRESULT hr = m_QueuedOpCmdList->Close();
+    if(FAILED(hr))
+      RDCERR("Failed to close command list HRESULT: %s", ToStr(hr).c_str());
+
+    m_QueuedOpCmdList = NULL;
     return false;
+  }
 
   rdcarray<ShaderVariable *> mathOpResults;
   mathOpResults.push_back(&output1);
@@ -1586,7 +1592,15 @@ bool D3D12DebugAPIWrapper::CalculateSampleGather(
          false, m_pDevice, m_QueuedOpCmdList, sampleOp, resourceData, samplerData, uv, ddxCalc,
          ddyCalc, texelOffsets, multisampleIndex, lodOrCompareValue, lodOrCompareValue, swizzle,
          gatherChannel, GetShaderType(), m_instruction, opString, queueIndex, sampleRetType))
-    return false;
+  {
+    HRESULT hr = m_QueuedOpCmdList->Close();
+    if(FAILED(hr))
+      RDCERR("Failed to close command list HRESULT: %s", ToStr(hr).c_str());
+
+    m_QueuedOpCmdList = NULL;
+    set0001(output);
+    return true;
+  }
 
   rdcarray<ShaderVariable *> mathOpResults;
   rdcarray<ShaderVariable *> sampleGatherResults;
@@ -3048,11 +3062,11 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
     return new ShaderDebugTrace;
   }
 
-  // if we encounter multiple hits at our destination pixel co-ord (or any other) we check to see
-  // if a specific primitive was requested (via primitive parameter not being set to ~0U). If it
-  // was, debug that pixel, otherwise do a best-estimate of which fragment was the last to
-  // successfully depth test and debug that, just by checking if the depth test is ordered and
-  // picking the final fragment in the series
+  // if we encounter multiple hits at our destination pixel co-ord (or any other) we check to see if
+  // a specific primitive was requested (via primitive parameter not being set to ~0U). If it was,
+  // debug that pixel, otherwise do a best-estimate of which fragment was the last to successfully
+  // depth test and debug that, just by checking if the depth test is ordered and picking the final
+  // fragment in the series
 
   // Get depth func and determine "winner" pixel
   DXDebug::DebugHit *pWinnerHit = NULL;
@@ -3853,9 +3867,9 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
           ShaderVariable(rdcstr(), groupid[0], groupid[1], groupid[2], 0U);
 
       // if we have workgroup scope that means we need to simulate the whole workgroup but don't
-      // have subgroup ops. We assume the layout of this is irrelevant and don't attempt to read
-      // it back from the GPU like we do with subgroups. We lay things out in plain linear order,
-      // along X and then Y and then Z, with groups iterated together.
+      // have subgroup ops. We assume the layout of this is irrelevant and don't attempt to read it
+      // back from the GPU like we do with subgroups. We lay things out in plain linear order, along
+      // X and then Y and then Z, with groups iterated together.
 
       uint32_t i = 0;
       for(uint32_t tz = 0; tz < threadDim[2]; tz++)

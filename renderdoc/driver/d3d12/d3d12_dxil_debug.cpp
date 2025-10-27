@@ -575,8 +575,8 @@ D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Progra
       m_QueuedMathOpIndex(0),
       m_QueuedSampleGatherOpIndex(0),
       m_MathOpResultOffset(0),
-      m_MaxQueuedOps(D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS),
-      m_SampleGatherOpResultsStart(D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS *
+      m_MaxQueuedOps(ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS),
+      m_SampleGatherOpResultsStart(ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS *
                                    m_MathOpResultByteSize)
 {
   // Create the storage layout for the constant buffers
@@ -1626,8 +1626,13 @@ bool D3D12APIWrapper::QueueMathIntrinsic(DXIL::DXOp dxOp, const ShaderVariable &
       return false;
   }
 
-  return D3D12ShaderDebug::QueueMathIntrinsic(false, m_Device, cmdList, mathOp, input,
-                                              m_QueuedMathOpIndex++);
+  if(D3D12ShaderDebug::QueueMathIntrinsic(false, m_Device, cmdList, mathOp, input,
+                                          m_QueuedMathOpIndex))
+  {
+    m_QueuedMathOpIndex++;
+    return true;
+  }
+  return false;
 }
 
 // Must be called from the replay manager thread (the debugger thread)
@@ -1682,10 +1687,15 @@ bool D3D12APIWrapper::QueueSampleGather(DXIL::DXOp dxOp, SampleGatherResourceDat
 
   const char *opString = ToStr(dxOp).c_str();
   uint8_t swizzle[4] = {0, 1, 2, 3};
-  return D3D12ShaderDebug::QueueSampleGather(
-      true, m_Device, m_QueuedOpCmdList, sampleOp, resourceData, samplerData, uv, ddxCalc, ddyCalc,
-      texelOffsets, multisampleIndex, lodValue, compareValue, swizzle, gatherChannel, m_ShaderType,
-      instructionIdx, opString, m_QueuedSampleGatherOpIndex++, sampleRetType);
+  if(D3D12ShaderDebug::QueueSampleGather(
+         true, m_Device, m_QueuedOpCmdList, sampleOp, resourceData, samplerData, uv, ddxCalc,
+         ddyCalc, texelOffsets, multisampleIndex, lodValue, compareValue, swizzle, gatherChannel,
+         m_ShaderType, instructionIdx, opString, m_QueuedSampleGatherOpIndex, sampleRetType))
+  {
+    m_QueuedSampleGatherOpIndex++;
+    return true;
+  }
+  return false;
 }
 
 // Must be called from the replay manager thread (the debugger thread)

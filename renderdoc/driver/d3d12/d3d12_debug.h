@@ -42,6 +42,13 @@ class DXBCContainer;
 
 #define D3D12_MSAA_SAMPLECOUNT 4
 
+enum ShaderDebugConstants
+{
+  MAX_SHADER_DEBUG_QUEUED_OPS = 128,
+  COUNT_SRVS_PER_DEBUG = 25,
+  COUNT_SAMPLERS_PER_DEBUG = 2,
+};
+
 // baked indices in descriptor heaps
 enum CBVUAVSRVSlot
 {
@@ -81,7 +88,8 @@ enum CBVUAVSRVSlot
   STENCIL_MSAA_SRV32x,
 
   FIRST_SHADDEBUG_SRV,
-  LAST_SHADDEBUG_SRV = FIRST_SHADDEBUG_SRV + 25,
+  LAST_SHADDEBUG_SRV = FIRST_SHADDEBUG_SRV + ShaderDebugConstants::COUNT_SRVS_PER_DEBUG *
+                                                 ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS,
 
   FIRST_PIXELHISTORY_SRV,
   LAST_PIXELHISTORY_SRV = FIRST_PIXELHISTORY_SRV + 10,
@@ -116,7 +124,8 @@ enum SamplerSlot
   FIRST_SAMP = POINT_SAMP,
   LINEAR_SAMP,
   SHADDEBUG_SAMPLER0,
-  SHADDEBUG_SAMPLER1,
+  LAST_SHADDEBUG_SAMPLER = SHADDEBUG_SAMPLER0 + ShaderDebugConstants::COUNT_SAMPLERS_PER_DEBUG *
+                                                    ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS,
 };
 
 enum DSVSlot
@@ -151,11 +160,6 @@ class D3D12DebugManager
 public:
   D3D12DebugManager(WrappedID3D12Device *wrapper);
   ~D3D12DebugManager();
-
-  enum
-  {
-    MAX_SHADER_DEBUG_QUEUED_OPS = 128
-  };
 
   void GetBufferData(ID3D12Resource *buff, uint64_t offset, uint64_t length, bytebuf &retData);
 

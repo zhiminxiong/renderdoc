@@ -605,7 +605,7 @@ bool D3D12DebugManager::CreateShaderDebugResources()
 {
   // MathOp is 2, SampleGatherOp is 6
   const uint64_t resultMaxElementSize = sizeof(Vec4f) * (2 + 6);
-  const uint32_t maxQueuedResults = D3D12DebugManager::MAX_SHADER_DEBUG_QUEUED_OPS;
+  const uint32_t maxQueuedResults = ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS;
   const uint64_t shaderDebugReadbackSize = resultMaxElementSize * maxQueuedResults;
   RDCCOMPILE_ASSERT(shaderDebugReadbackSize < m_ReadbackSize, "Readback buffer is not big enough");
 
