@@ -333,6 +333,9 @@ void WrappedVulkan::VersionDescriptorBuffers(VkCommandBuffer cmd)
   uint32_t &version = m_BakedCmdBufferInfo[m_LastCmdBufferID].descBufVersionIdx;
   rdcarray<uint64_t> &offsets = m_BakedCmdBufferInfo[m_LastCmdBufferID].descBufOffsets;
 
+  if(renderstate.descBufs.empty())
+    return;
+
   uint64_t neededBytes = 0;
 
   offsets.clear();
