@@ -159,6 +159,11 @@ static bool IsUnsignedIntegerType(VarType type)
   }
 }
 
+static bool IsIntegerType(VarType type)
+{
+  return IsSignedIntegerType(type) || IsUnsignedIntegerType(type);
+}
+
 static bool IsEncodedPointer(const ShaderVariable &var)
 {
   if(var.type != VarType::GPUPointer)
@@ -2875,7 +2880,8 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             ShaderVariable b;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, a));
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, b));
-            RDCASSERT(IsUnsignedIntegerType(a.type));
+            // LLVM does not make unsigned types
+            RDCASSERT(IsIntegerType(a.type));
             RDCASSERTEQUAL(a.type, b.type);
             RDCASSERTEQUAL(result.type, a.type);
             const uint32_t c = 0;
