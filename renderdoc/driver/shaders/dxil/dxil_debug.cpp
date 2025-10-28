@@ -2941,13 +2941,27 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, a));
             RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, b));
             RDCASSERT(GetShaderVariable(inst.args[3], opCode, dxOpCode, c));
-            RDCASSERTEQUAL(a.type, VarType::Float);
-            RDCASSERTEQUAL(b.type, VarType::Float);
-            RDCASSERTEQUAL(c.type, VarType::Float);
-            RDCASSERTEQUAL(result.type, VarType::Float);
-            const double fma =
-                ((double)a.value.f32v[0] * (double)b.value.f32v[0]) + (double)c.value.f32v[0];
-            result.value.f32v[0] = (float)fma;
+            RDCASSERT(IsFloatingPointType(a.type));
+            RDCASSERTEQUAL(a.type, b.type);
+            RDCASSERTEQUAL(a.type, c.type);
+            RDCASSERTEQUAL(result.type, a.type);
+            if(result.type == VarType::Double)
+            {
+              result.value.f64v[0] = a.value.f64v[0] * b.value.f64v[0] + c.value.f64v[0];
+            }
+            else if(result.type == VarType::Float)
+            {
+              const double fma = ((double)(a.value.f32v[0]) * (double)(b.value.f32v[0])) +
+                                 (double)(c.value.f32v[0]);
+              result.value.f32v[0] = (float)fma;
+            }
+            else if(result.type == VarType::Half)
+            {
+              const double fma = ((double)ConvertFromHalf(a.value.u16v[0]) *
+                                  (double)ConvertFromHalf(b.value.u16v[0])) +
+                                 (double)ConvertFromHalf(c.value.u16v[0]);
+              result.value.u16v[0] = ConvertToHalf((float)fma);
+            }
             break;
           }
           case DXOp::Saturate:
