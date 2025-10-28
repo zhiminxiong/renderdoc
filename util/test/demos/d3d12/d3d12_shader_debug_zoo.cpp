@@ -1190,6 +1190,25 @@ void main(int3 inTestIndex : SV_GroupID)
     testResult.x += bufIn[0].x * (uint)col1z;
     testResult.y += bufIn[0].y * (uint)col2w;
   }
+  else if (testIndex == 3)
+  {
+    float floatA = bufIn[0].x/100.0 + 1.5f;
+    float floatB = bufIn[0].y/100.0 + 1.7f;
+    float floatC = bufIn[0].z/100.0 + 2.5f;
+    double doubleA = (double)floatA; 
+    double doubleB = (double)floatB;
+    double doubleC = (double)floatC;
+    half halfA = (half)floatA;
+    half halfB = (half)1.0;
+    half halfC = (half)floatC;
+
+    half halfFma = mad(halfA, halfB, halfC);
+    float floatFma = mad(floatA, floatB, floatC);
+    double doubleFma = mad(doubleA, doubleB, doubleC);
+    testResult.x = floatFma * 1000.0;
+    testResult.y = (float)halfFma * 1000.0;
+    testResult.z = (float)doubleFma * 1000.0;
+  }
   else
   {
     testResult.x = inTestIndex.x;
@@ -1238,6 +1257,10 @@ void main(int3 inTestIndex : SV_GroupID)
     lastTest = noResourcesPixel.rfind("IN.tri == ");
     lastTest += sizeof("IN.tri == ") - 1;
     const uint32_t numNoResTests = atoi(noResourcesPixel.c_str() + lastTest) + 1;
+
+    lastTest = compute.rfind("testIndex == ");
+    lastTest += sizeof("testIndex == ") - 1;
+    const uint32_t numComputeTests = atoi(compute.c_str() + lastTest) + 1;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
     inputLayout.reserve(4);
@@ -1946,7 +1969,7 @@ void main(int3 inTestIndex : SV_GroupID)
 
     if(supportSM66)
     {
-      csblob = Compile(compute, "main", "cs_6_6");
+      csblob = Compile(compute, "main", "cs_6_6", compileOptions);
       computePSOs[2] = MakePSO().RootSig(sigCompute).CS(csblob);
     }
 
@@ -2168,7 +2191,7 @@ void main(int3 inTestIndex : SV_GroupID)
 
         cmd->SetPipelineState(computePSOs[i]);
         setMarker(cmd, computeSMs[i]);
-        cmd->Dispatch(3, 2, 1);
+        cmd->Dispatch(numComputeTests, 2, 1);
       }
       popMarker(cmd);
 
