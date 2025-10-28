@@ -3093,7 +3093,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::DerivFineX:
           case DXOp::DerivFineY:
           {
-            if(m_ShaderType != DXBC::ShaderType::Pixel || workgroup.size() != 4)
+            if(m_ShaderType != DXBC::ShaderType::Pixel || workgroup.size() < 4)
             {
               RDCERR("Undefined results using derivative instruction outside of a pixel shader.");
             }
