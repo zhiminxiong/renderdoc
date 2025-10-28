@@ -118,6 +118,8 @@ enum RTVSlot
   LAST_TMP_RTV = FIRST_TMP_RTV + 16,
   FIRST_WIN_RTV,
   LAST_WIN_RTV = FIRST_WIN_RTV + 768,
+
+  MAX_RTV_SLOT,
 };
 
 enum SamplerSlot
@@ -128,6 +130,7 @@ enum SamplerSlot
   SHADDEBUG_SAMPLER0,
   LAST_SHADDEBUG_SAMPLER = SHADDEBUG_SAMPLER0 + ShaderDebugConstants::COUNT_SAMPLERS_PER_DEBUG *
                                                     ShaderDebugConstants::MAX_SHADER_DEBUG_QUEUED_OPS,
+  MAX_SAMPLER_SLOT,
 };
 
 enum DSVSlot
@@ -138,6 +141,8 @@ enum DSVSlot
   TMP_DSV,
   FIRST_WIN_DSV,
   LAST_WIN_DSV = FIRST_WIN_DSV + 64,
+
+  MAX_DSV_SLOT
 };
 
 struct MeshDisplayPipelines
