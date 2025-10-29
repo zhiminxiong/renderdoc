@@ -10133,13 +10133,8 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         const uint32_t threadId = ref.id;
         const uint32_t lane = threadId;
         ThreadState &thread = m_Workgroup[lane];
-        ++countActiveThreads;
 
-        if(thread.Finished())
-        {
-          tangle.SetThreadDead(threadId);
-          continue;
-        }
+        bool wasActive = !thread.Finished();
 
         threadExecutionStates[threadId] = thread.GetEnteredPoints();
 
@@ -10147,6 +10142,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         // the thread activated a new convergence point
         if(threadConvergencePoint != INVALID_EXECUTION_POINT)
         {
+          wasActive = true;
           if(newConvergencePoint == INVALID_EXECUTION_POINT)
           {
             newConvergencePoint = threadConvergencePoint;
@@ -10162,6 +10158,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         const DXIL::BlockArray *partialConvergentPoints = thread.GetPartialConvergencePoints();
         if(!partialConvergentPoints->empty())
         {
+          wasActive = true;
           if(newPartialConvergentPoints == NULL)
           {
             newPartialConvergentPoints = partialConvergentPoints;
@@ -10178,7 +10175,15 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         }
 
         if(thread.GetDiverged())
+        {
+          wasActive = true;
           ++countDivergedThreads;
+        }
+
+        if(thread.Finished())
+          tangle.SetThreadDead(threadId);
+
+        countActiveThreads += wasActive ? 1 : 0;
       }
 
       for(const ThreadReference &ref : threadRefs)
