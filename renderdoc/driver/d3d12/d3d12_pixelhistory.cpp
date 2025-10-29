@@ -2570,8 +2570,7 @@ struct D3D12PixelHistoryDiscardedFragmentsCallback : D3D12PixelHistoryCallback
 
     for(uint32_t i = 0; i < primIds.size(); i++)
     {
-      uint32_t queryId = (uint32_t)m_OcclusionQueries.size();
-      cmd->BeginQuery(m_OcclusionQueryHeap, D3D12_QUERY_TYPE_OCCLUSION, queryId);
+      cmd->BeginQuery(m_OcclusionQueryHeap, D3D12_QUERY_TYPE_OCCLUSION, m_CurQuery);
 
       uint32_t primId = primIds[i];
       ActionDescription action = *m_pDevice->GetAction(eid);
@@ -2584,9 +2583,10 @@ struct D3D12PixelHistoryDiscardedFragmentsCallback : D3D12PixelHistoryCallback
       // TODO replay with a dummy index buffer so that all primitives other than the target
       // one are degenerate - that way the vertex index etc is still the same as it should be.
       m_pDevice->ReplayDraw(cmd, action);
-      cmd->EndQuery(m_OcclusionQueryHeap, D3D12_QUERY_TYPE_OCCLUSION, queryId);
+      cmd->EndQuery(m_OcclusionQueryHeap, D3D12_QUERY_TYPE_OCCLUSION, m_CurQuery);
 
-      m_OcclusionQueries[make_rdcpair<uint32_t, uint32_t>(eid, primId)] = queryId;
+      m_OcclusionQueries[make_rdcpair<uint32_t, uint32_t>(eid, primId)] = m_CurQuery;
+      m_CurQuery++;
     }
 
     state = prevState;
@@ -2608,7 +2608,7 @@ struct D3D12PixelHistoryDiscardedFragmentsCallback : D3D12PixelHistoryCallback
     D3D12_RESOURCE_DESC bufDesc;
     bufDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     bufDesc.Alignment = 0;
-    bufDesc.Width = sizeof(uint64_t) * m_OcclusionQueries.size();
+    bufDesc.Width = sizeof(uint64_t) * m_CurQuery;
     bufDesc.Height = 1;
     bufDesc.DepthOrArraySize = 1;
     bufDesc.MipLevels = 1;
@@ -2633,8 +2633,8 @@ struct D3D12PixelHistoryDiscardedFragmentsCallback : D3D12PixelHistoryCallback
     if(!list)
       return;
 
-    list->ResolveQueryData(m_OcclusionQueryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0,
-                           (UINT)m_OcclusionQueries.size(), readbackBuf, 0);
+    list->ResolveQueryData(m_OcclusionQueryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0, m_CurQuery,
+                           readbackBuf, 0);
 
     list->Close();
 
@@ -2655,7 +2655,7 @@ struct D3D12PixelHistoryDiscardedFragmentsCallback : D3D12PixelHistoryCallback
       return;
     }
 
-    m_OcclusionResults.resize(m_OcclusionQueries.size());
+    m_OcclusionResults.resize(m_CurQuery);
     for(size_t i = 0; i < m_OcclusionResults.size(); ++i)
       m_OcclusionResults[i] = data[i];
 
@@ -2728,6 +2728,7 @@ private:
   }
 
   std::map<rdcpair<uint32_t, uint32_t>, uint32_t> m_OcclusionQueries;
+  uint32_t m_CurQuery = 0;
   rdcarray<uint64_t> m_OcclusionResults;
 
   rdcarray<ID3D12PipelineState *> m_PSOsToDestroy;
