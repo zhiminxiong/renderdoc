@@ -9622,7 +9622,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
           const ExecPointReference &current = info.maxExecPointPerId[localMapping.debugVarSSAId];
           if(!current.IsValid())
             continue;
-          uint32_t scopeEndInst = scope->maxInstruction + 1;
+          uint32_t scopeEndInst = scope->maxInstruction;
           scopeEndInst = RDCMIN(scopeEndInst, (uint32_t)info.instructionToBlock.size() - 1);
           const uint32_t scopeEndBlock = info.instructionToBlock[scopeEndInst];
           ExecPointReference scopeEnd(scopeEndBlock, scopeEndInst);
