@@ -2789,13 +2789,13 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         const uint32_t threadId = ref.id;
         const uint32_t lane = threadId;
         ThreadState &thread = workgroup[lane];
-        ++countActiveThreads;
 
         if(thread.nextInstruction >= instructionOffsets.size())
         {
           tangle.SetThreadDead(threadId);
           continue;
         }
+        bool wasActive = !thread.Finished();
 
         threadExecutionStates[threadId] = thread.GetEnteredPoints();
 
@@ -2804,6 +2804,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         // the thread activated a new convergence point
         if(threadConvergeInstruction != INVALID_EXECUTION_POINT)
         {
+          wasActive = true;
           if(newConvergeInstruction == INVALID_EXECUTION_POINT)
           {
             newConvergeInstruction = threadConvergeInstruction;
@@ -2817,6 +2818,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         // the thread activated a new function return point
         if(threadFunctionReturnPoint != INVALID_EXECUTION_POINT)
         {
+          wasActive = true;
           if(newFunctionReturnPoint == INVALID_EXECUTION_POINT)
           {
             newFunctionReturnPoint = threadFunctionReturnPoint;
@@ -2830,11 +2832,16 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
           ++countFunctionReturnThreads;
         }
 
+        if(thread.IsDiverged())
+        {
+          wasActive = true;
+          ++countDivergedThreads;
+        }
+
         if(thread.Finished())
           tangle.SetThreadDead(threadId);
 
-        if(thread.IsDiverged())
-          ++countDivergedThreads;
+        countActiveThreads += wasActive ? 1 : 0;
       }
 
       for(const ThreadReference &ref : threadRefs)
