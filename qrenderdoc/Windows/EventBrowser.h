@@ -193,6 +193,8 @@ private:
   QString getBookmarkColorName(uint32_t color);
 
   double CalculateBookmarkTotalGPUTime(uint32_t color=-1);
+
+  void addBookmarkWithColor(const QModelIndex &idx, uint32_t color);
   
   void ExpandNode(QModelIndex idx);
 
