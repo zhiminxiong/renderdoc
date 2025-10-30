@@ -76,6 +76,38 @@ double formatDuration(double seconds, TimeUnit timeUnit)
   return seconds;
 }
 
+QColor getBookmarkQColor(uint32_t color)
+{
+    switch(color)
+    {
+        case 0: return QColor();
+        case 1: return QColor(255, 100, 100);
+        case 2: return QColor(100, 255, 100);
+        case 3: return QColor(100, 100, 255);
+        default: return QColor();
+    }
+}
+
+QIcon GetBookmarkIcon(uint32_t color)
+{
+  if(color == 0)
+    return Icons::asterisk_orange();
+  
+  QColor bgColor = getBookmarkQColor(color);
+  if(!bgColor.isValid())
+    return Icons::asterisk_orange();
+  
+  QPixmap baseIcon = Icons::asterisk_orange().pixmap(16, 16);
+  QPixmap coloredIcon(16, 16);
+  coloredIcon.fill(bgColor);
+  
+  QPainter painter(&coloredIcon);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.drawPixmap(0, 0, baseIcon);
+  
+  return QIcon(coloredIcon);
+}
+
 struct EventBrowserPersistentStorage : public CustomPersistentStorage
 {
   EventBrowserPersistentStorage() : CustomPersistentStorage(rdcstr())
@@ -4107,7 +4139,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->bookmarkStrip->hide();
 
   m_BookmarkStripLayout = new FlowLayout(ui->bookmarkStrip, 0, 3, 3);
-  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);
+  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);    // 底下 8px 间隔
   m_BookmarkSpacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
   ui->bookmarkStrip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -6021,6 +6053,12 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
   QAction expandAll(tr("&Expand All"), this);
   QAction collapseAll(tr("&Collapse All"), this);
   QAction toggleBookmark(tr("Toggle &Bookmark"), this);
+  QAction bookmarkRed(tr("Bookmark (Red)"), this);
+  QAction bookmarkGreen(tr("Bookmark (Green)"), this);
+  QAction bookmarkBlue(tr("Bookmark (Blue)"), this);
+
+  
+
   QAction selectCols(tr("&Select Columns..."), this);
   QAction rgpSelect(tr("Select &RGP Event"), this);
   rgpSelect.setIcon(Icons::connect());
@@ -6028,6 +6066,9 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
   contextMenu.addAction(&expandAll);
   contextMenu.addAction(&collapseAll);
   contextMenu.addAction(&toggleBookmark);
+  contextMenu.addAction(&bookmarkRed);
+  contextMenu.addAction(&bookmarkGreen);
+  contextMenu.addAction(&bookmarkBlue);
   contextMenu.addAction(&selectCols);
 
   if (!m_Ctx.GetBookmarks().isEmpty())
@@ -6042,11 +6083,17 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
   expandAll.setIcon(Icons::arrow_out());
   collapseAll.setIcon(Icons::arrow_in());
   toggleBookmark.setIcon(Icons::asterisk_orange());
+  bookmarkRed.setIcon(GetBookmarkIcon(1));   // 1=Red
+  bookmarkGreen.setIcon(GetBookmarkIcon(2)); // 2=Green
+  bookmarkBlue.setIcon(GetBookmarkIcon(3));  // 3=Blue
   selectCols.setIcon(Icons::timeline_marker());
 
   expandAll.setEnabled(index.isValid() && ui->events->model()->rowCount(index) > 0);
   collapseAll.setEnabled(expandAll.isEnabled());
   toggleBookmark.setEnabled(m_Ctx.IsCaptureLoaded());
+  bookmarkRed.setEnabled(m_Ctx.IsCaptureLoaded());
+  bookmarkGreen.setEnabled(m_Ctx.IsCaptureLoaded());
+  bookmarkBlue.setEnabled(m_Ctx.IsCaptureLoaded());
 
   QObject::connect(&expandAll, &QAction::triggered,
                    [this, index]() { ui->events->expandAll(index); });
@@ -6055,6 +6102,11 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
                    [this, index]() { ui->events->collapseAll(index); });
 
   QObject::connect(&toggleBookmark, &QAction::triggered, this, &EventBrowser::on_bookmark_clicked);
+
+  QObject::connect(&bookmarkRed, &QAction::triggered, this, [this, index]() { addBookmarkWithColor(index, 1); });
+  QObject::connect(&bookmarkGreen, &QAction::triggered, this, [this, index]() { addBookmarkWithColor(index, 2); });
+  QObject::connect(&bookmarkBlue, &QAction::triggered, this,
+                   [this, index]() { addBookmarkWithColor(index, 3); });
 
   QObject::connect(&selectCols, &QAction::triggered, this, &EventBrowser::on_colSelect_clicked);
 
@@ -6072,6 +6124,16 @@ void EventBrowser::events_contextMenu(const QPoint &pos)
                                     {{"eventId", m_Ctx.CurEvent()}});
 
   RDDialog::show(&contextMenu, ui->events->viewport()->mapToGlobal(pos));
+}
+
+void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
+{
+  if(idx.isValid())
+  {
+    EventBookmark mark(GetSelectedEID(idx));
+    mark.color = color; // 1=Red, 2=Green, 3=Blue（你项目的color含义）
+    m_Ctx.SetBookmark(mark);
+  }
 }
 
 void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
@@ -6337,7 +6399,16 @@ void EventBrowser::updateBookmarkButtonColor(QRClickToolButton *button, uint32_t
     if(bgColor.isValid() && color != 0)
     {
         QColor darkerColor = bgColor.darker(120);
-        QColor hoverColor = bgColor.lighter(110);
+        QColor hoverColor;
+        if(color == 2)
+        {
+          // 绿色，悬停用更浅的绿色，避免lighter无效
+          hoverColor = QColor(180, 255, 180);
+        }
+        else
+        {
+          hoverColor = bgColor.lighter(110);
+        }
 
         QString style = lit("QToolButton { "
                                "background-color: %1 !important; "
