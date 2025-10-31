@@ -252,6 +252,85 @@ document.body.onload = function() {
   // move failed tests to the end
   [].slice.call(document.getElementsByClassName('failed test')).forEach((x) => {document.body.removeChild(x); document.body.insertBefore(x, summary);})
 
+  // do a pure javascript query and add a summary table of test timings
+  {
+    var div = document.createElement('div');
+    div.classList.add("expandable");
+
+    var toggle = document.createElement('span');
+    toggle.classList.add("expandtoggle");
+    div.appendChild(toggle);
+
+    var title = document.createElement('div');
+    title.classList.add("title");
+    title.innerHTML = "Test timing summary";
+    div.appendChild(title);
+
+    var contents = document.createElement('div');
+    contents.classList.add("contents");
+    div.appendChild(contents);
+
+    msgs = [].slice.call(document.getElementsByClassName('message'))
+    ran = msgs.filter((msg) => msg.innerText.includes("ran in 0:"))
+    timings = ran.map((msg) => [msg.parentElement.parentElement.id, msg.innerText.replace(/.*ran in /, '').replace(/\..*/, '').split(':').reduce((acc,time) => (60 * acc) + +time)])
+    timings.sort((a,b) => b[1] - a[1])
+
+    var table = document.createElement('table');
+
+    var header = document.createElement('tr');
+    {
+      var a = document.createElement('th');
+      a.innerHTML = 'Test Name';
+      header.appendChild(a);
+
+      var a = document.createElement('th');
+      a.innerHTML = 'Duration';
+      header.appendChild(a);
+    }
+    table.appendChild(header);
+
+    var total = 0;
+    timings.forEach((t) => {
+      var row = document.createElement('tr');
+
+      var a = document.createElement('td');
+      a.innerHTML = t[0];
+      row.appendChild(a);
+
+      var duration = t[1];
+      total += duration;
+      var minutes = Math.floor(duration/60);
+      var seconds = duration - (60*minutes);
+
+      var a = document.createElement('td');
+      a.innerHTML = String(minutes).padStart(2, 0) + ":" + String(seconds).padStart(2, 0);
+      row.appendChild(a);
+
+      table.appendChild(row);
+    });
+
+    {
+      var row = document.createElement('tr');
+
+      var a = document.createElement('td');
+      a.innerHTML = "Total";
+      row.appendChild(a);
+
+      var minutes = Math.floor(total/60);
+      var seconds = total - (60*minutes);
+
+      var a = document.createElement('td');
+      a.innerHTML = String(minutes).padStart(2, 0) + ":" + String(seconds).padStart(2, 0);
+      row.appendChild(a);
+
+      table.appendChild(row);
+    }
+
+    contents.appendChild(table);
+
+    document.body.appendChild(div);
+  }
+
   var toggles = document.getElementsByClassName('expandtoggle');
   
   for(var i=0; i < toggles.length; i++) {
