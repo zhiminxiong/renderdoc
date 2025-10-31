@@ -246,6 +246,12 @@ document.body.onload = function() {
     test.classList.add('expanded');
   }
 
+  var h1s = document.getElementsByTagName('h1');
+  var summary = h1s[h1s.length-1];
+
+  // move failed tests to the end
+  [].slice.call(document.getElementsByClassName('failed test')).forEach((x) => {document.body.removeChild(x); document.body.insertBefore(x, summary);})
+
   var toggles = document.getElementsByClassName('expandtoggle');
   
   for(var i=0; i < toggles.length; i++) {
