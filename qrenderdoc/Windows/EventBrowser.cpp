@@ -81,9 +81,9 @@ QColor getBookmarkQColor(uint32_t color)
     switch(color)
     {
         case 0: return QColor();
-        case 1: return QColor(255, 100, 100);
-        case 2: return QColor(100, 255, 100);
-        case 3: return QColor(100, 100, 255);
+        case 1: return QColor(217,106,106);
+        case 2: return QColor(102,187,106);
+        case 3: return QColor( 92,155,209);
         default: return QColor();
     }
 }
@@ -6399,16 +6399,7 @@ void EventBrowser::updateBookmarkButtonColor(QRClickToolButton *button, uint32_t
     if(bgColor.isValid() && color != 0)
     {
         QColor darkerColor = bgColor.darker(120);
-        QColor hoverColor;
-        if(color == 2)
-        {
-          // 绿色，悬停用更浅的绿色，避免lighter无效
-          hoverColor = QColor(180, 255, 180);
-        }
-        else
-        {
-          hoverColor = bgColor.lighter(110);
-        }
+        QColor hoverColor = bgColor.lighter(110);
 
         QString style = lit("QToolButton { "
                                "background-color: %1 !important; "
