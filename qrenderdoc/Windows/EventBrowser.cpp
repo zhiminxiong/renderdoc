@@ -90,22 +90,28 @@ QColor getBookmarkQColor(uint32_t color)
 
 QIcon GetBookmarkIcon(uint32_t color)
 {
-  if(color == 0)
-    return Icons::asterisk_orange();
+  if(color == 1)
+    return Icons::asterisk_red();
+  else if(color == 2)
+    return Icons::asterisk_green();
+  else if(color == 3)
+    return Icons::asterisk_blue();
+  else
+   return Icons::asterisk_orange();
   
-  QColor bgColor = getBookmarkQColor(color);
-  if(!bgColor.isValid())
-    return Icons::asterisk_orange();
+  // QColor bgColor = getBookmarkQColor(color);
+  // if(!bgColor.isValid())
+  //   return Icons::asterisk_orange();
   
-  QPixmap baseIcon = Icons::asterisk_orange().pixmap(16, 16);
-  QPixmap coloredIcon(16, 16);
-  coloredIcon.fill(bgColor);
+  // QPixmap baseIcon = Icons::asterisk_orange().pixmap(16, 16);
+  // QPixmap coloredIcon(16, 16);
+  // coloredIcon.fill(bgColor);
   
-  QPainter painter(&coloredIcon);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.drawPixmap(0, 0, baseIcon);
+  // QPainter painter(&coloredIcon);
+  // painter.setRenderHint(QPainter::Antialiasing);
+  // painter.drawPixmap(0, 0, baseIcon);
   
-  return QIcon(coloredIcon);
+  // return QIcon(coloredIcon);
 }
 
 struct EventBrowserPersistentStorage : public CustomPersistentStorage
