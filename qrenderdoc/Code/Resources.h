@@ -38,6 +38,9 @@
   RESOURCE_DEF(arrow_right, "arrow_right.png")                                 \
   RESOURCE_DEF(arrow_undo, "arrow_undo.png")                                   \
   RESOURCE_DEF(asterisk_orange, "asterisk_orange.png")                         \
+  RESOURCE_DEF(asterisk_red, "asterisk_red.png")                         \
+  RESOURCE_DEF(asterisk_green, "asterisk_green.png")                         \
+  RESOURCE_DEF(asterisk_blue, "asterisk_blue.png")                         \
   RESOURCE_DEF(bug, "bug.png")                                                 \
   RESOURCE_DEF(chart_curve, "chart_curve.png")                                 \
   RESOURCE_DEF(cog, "cog.png")                                                 \
