@@ -1725,6 +1725,9 @@ private:
       {
         uint32_t rtIndex = GetPixelHistoryRenderTargetIndex(pipeState);
 
+        if(rtIndex >= pipeDesc.RTVFormats.NumRenderTargets)
+          flags |= UnboundFragmentShader;
+
         bool found = false;
         for(const SigParameter &o : origPSO->PS()->GetDetails().outputSignature)
         {
@@ -2120,6 +2123,9 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
 
     D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC origPipeDesc;
     origPSO->Fill(origPipeDesc);
+
+    if(renderTargetIndex >= origPipeDesc.RTVFormats.NumRenderTargets)
+      return;
 
     PerFragmentPipelines pipes = CreatePerFragmentPipelines(state, eid, 0, renderTargetIndex);
 
