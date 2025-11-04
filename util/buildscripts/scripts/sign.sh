@@ -44,6 +44,8 @@ sign_file() {
 	elif  [ "$CLOUD_SIGN" == "1" ]; then
 		timeout 5 signtool.exe sign /d RenderDoc /f "${PUBFILE}" /fd sha256          /tr $TSS /td sha256 /csp "Google Cloud KMS Provider" /kc "${KEYNAME}" "${INPUTFILE}"
 	fi
+	signtool.exe verify /pa "$INPUTFILE" >/dev/null 2>&1
+	return $?
 }
 
 INPUTFILE="$1"
