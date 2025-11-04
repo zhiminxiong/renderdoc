@@ -2124,7 +2124,8 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
     D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC origPipeDesc;
     origPSO->Fill(origPipeDesc);
 
-    if(renderTargetIndex >= origPipeDesc.RTVFormats.NumRenderTargets)
+    if(!IsDepthFormat(m_CallbackInfo.targetDesc) &&
+       renderTargetIndex >= origPipeDesc.RTVFormats.NumRenderTargets)
       return;
 
     PerFragmentPipelines pipes = CreatePerFragmentPipelines(state, eid, 0, renderTargetIndex);
