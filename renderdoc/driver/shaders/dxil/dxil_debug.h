@@ -177,7 +177,12 @@ struct GlobalConstant
 
 struct ResourceReferenceInfo
 {
-  ResourceReferenceInfo() : resClass(DXIL::ResourceClass::Invalid) {}
+  ResourceReferenceInfo()
+      : resClass(DXIL::ResourceClass::Invalid),
+        varType(VarType::Unknown),
+        descType(DescriptorType::Unknown)
+  {
+  }
   void Create(const DXIL::ResourceReference *resRef, uint32_t arrayIndex);
   bool Valid() const { return resClass != DXIL::ResourceClass::Invalid; }
 
