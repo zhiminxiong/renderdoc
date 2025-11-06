@@ -5248,8 +5248,6 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
     case Operation::Alloca:
     {
       result.name = DXBC::BasicDemangle(result.name);
-      result.name += "_";
-      result.name += ToStr(resultId);
       m_Memory.AllocateMemoryForType(inst.type, resultId, false, false, result);
       break;
     }
