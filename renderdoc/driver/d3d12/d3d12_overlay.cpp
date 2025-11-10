@@ -166,7 +166,7 @@ struct D3D12QuadOverdrawCallback : public D3D12ActionCallback
         return;
       }
 
-      pipeDesc.pRootSignature = cache.sig;
+      pipeDesc.SetRootSig(cache.sig);
 
       hr = m_pDevice->CreatePipeState(pipeDesc, &cache.pipe);
       RDCASSERTEQUAL(hr, S_OK);
@@ -1617,7 +1617,7 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
 
       D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC pipeDesc;
       pipe->Fill(pipeDesc);
-      pipeDesc.pRootSignature = GetDebugManager()->GetMeshRootSig();
+      pipeDesc.SetRootSig(GetDebugManager()->GetMeshRootSig());
       pipeDesc.SampleMask = 0xFFFFFFFF;
       pipeDesc.SampleDesc = overlayTexDesc.SampleDesc;
       pipeDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;

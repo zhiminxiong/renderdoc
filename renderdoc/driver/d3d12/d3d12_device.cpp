@@ -1683,6 +1683,33 @@ ID3D12Resource *WrappedID3D12Device::GetUploadBuffer(uint64_t chunkOffset, uint6
   return buf;
 }
 
+ID3D12RootSignature *WrappedID3D12Device::CreateImplicitRootSig(
+    D3D12_SERIALIZED_ROOT_SIGNATURE_DESC &RootSigBlob)
+{
+  rdcfixedarray<uint32_t, 4> hash;
+  DXBC::DXBCContainer::GetHash(hash, false, RootSigBlob.pSerializedBlob,
+                               RootSigBlob.SerializedBlobSizeInBytes);
+
+  ID3D12RootSignature *cacheEntry = m_ImplicitRootSigs[hash];
+
+  // if we've already cached this root sig, return it! check for collisions by not trusting th
+  if(cacheEntry)
+    return cacheEntry;
+
+  // otherwise create it
+  HRESULT hr =
+      CreateRootSignature(0, RootSigBlob.pSerializedBlob, RootSigBlob.SerializedBlobSizeInBytes,
+                          __uuidof(ID3D12RootSignature), (void **)&cacheEntry);
+  if(cacheEntry)
+    InternalRef();
+  if(FAILED(hr))
+    RDCERR("Failed to create implicit root signature from blob: %s", ToStr(hr).c_str());
+
+  m_ImplicitRootSigs[hash] = cacheEntry;
+
+  return NULL;
+}
+
 void WrappedID3D12Device::ApplyInitialContents()
 {
   RENDERDOC_PROFILEFUNCTION();
@@ -3499,7 +3526,7 @@ HRESULT WrappedID3D12Device::CreatePipeState(D3D12_EXPANDED_PIPELINE_STATE_STREA
   if(desc.CS.BytecodeLength > 0)
   {
     D3D12_COMPUTE_PIPELINE_STATE_DESC compDesc;
-    compDesc.pRootSignature = desc.pRootSignature;
+    compDesc.pRootSignature = desc.GetOrCreateRootSig(this);
     compDesc.CS = desc.CS;
     compDesc.NodeMask = desc.NodeMask;
     compDesc.CachedPSO = desc.CachedPSO;
@@ -3509,7 +3536,7 @@ HRESULT WrappedID3D12Device::CreatePipeState(D3D12_EXPANDED_PIPELINE_STATE_STREA
   else
   {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsDesc;
-    graphicsDesc.pRootSignature = desc.pRootSignature;
+    graphicsDesc.pRootSignature = desc.GetOrCreateRootSig(this);
     graphicsDesc.VS = desc.VS;
     graphicsDesc.PS = desc.PS;
     graphicsDesc.DS = desc.DS;

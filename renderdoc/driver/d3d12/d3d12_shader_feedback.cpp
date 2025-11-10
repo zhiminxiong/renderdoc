@@ -1572,7 +1572,7 @@ bool D3D12Replay::FetchShaderFeedback(uint32_t eventId)
   ID3D12PipelineState *annotatedPipe = NULL;
 
   {
-    pipeDesc.pRootSignature = annotatedSig;
+    pipeDesc.SetRootSig(annotatedSig);
 
     HRESULT hr = m_pDevice->CreatePipeState(pipeDesc, &annotatedPipe);
     if(annotatedPipe == NULL || FAILED(hr))

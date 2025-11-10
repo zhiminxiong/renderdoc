@@ -2353,7 +2353,7 @@ ShaderDebugTrace *D3D12Replay::DebugVertex(uint32_t eventId, uint32_t vertid, ui
 
     pipeDesc.VS.BytecodeLength = vsBlob->GetBufferSize();
     pipeDesc.VS.pShaderBytecode = vsBlob->GetBufferPointer();
-    pipeDesc.pRootSignature = pRootSignature;
+    pipeDesc.SetRootSig(pRootSignature);
 
     // disable rasterizaion
     pipeDesc.PS = {};
@@ -2969,7 +2969,7 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
   // All PSO state is the same as the event's, except for the pixel shader and root signature
   pipeDesc.PS.BytecodeLength = psBlob->GetBufferSize();
   pipeDesc.PS.pShaderBytecode = psBlob->GetBufferPointer();
-  pipeDesc.pRootSignature = pRootSignature;
+  pipeDesc.SetRootSig(pRootSignature);
 
   ID3D12PipelineState *initialPso = NULL;
   HRESULT hr = m_pDevice->CreatePipeState(pipeDesc, &initialPso);
@@ -3632,7 +3632,7 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
 
       pipeDesc.CS.BytecodeLength = csBlob->GetBufferSize();
       pipeDesc.CS.pShaderBytecode = csBlob->GetBufferPointer();
-      pipeDesc.pRootSignature = pRootSignature;
+      pipeDesc.SetRootSig(pRootSignature);
 
       ID3D12PipelineState *initialPso = NULL;
       HRESULT hr = m_pDevice->CreatePipeState(pipeDesc, &initialPso);

@@ -942,6 +942,12 @@ private:
 
   static HRESULT WINAPI D3D12GetDebugInterface_hook(REFIID riid, void **ppvDebug)
   {
+    if(riid == CLSID_D3D12StateObjectFactory)
+    {
+      RDCLOG("Deliberately reporting no support for state object factories");
+      return E_NOINTERFACE;
+    }
+
     IUnknown *realUnk = NULL;
     HRESULT real = d3d12hooks.GetDebugInterface()(riid, (void **)&realUnk);
 
@@ -961,6 +967,12 @@ private:
 
   static HRESULT WINAPI D3D12GetInterface_hook(REFCLSID rclsid, REFIID riid, void **ppvDebug)
   {
+    if(riid == CLSID_D3D12StateObjectFactory)
+    {
+      RDCLOG("Deliberately reporting no support for state object factories");
+      return E_NOINTERFACE;
+    }
+
     IUnknown *realUnk = NULL;
     HRESULT real = d3d12hooks.GetInterface()(rclsid, riid, (void **)&realUnk);
 
