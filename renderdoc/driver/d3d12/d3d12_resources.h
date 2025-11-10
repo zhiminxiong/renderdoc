@@ -1536,7 +1536,15 @@ public:
   //////////////////////////////
   // implement ID3D12Resource
 
-  virtual D3D12_RESOURCE_DESC STDMETHODCALLTYPE GetDesc() { return m_pReal->GetDesc(); }
+  virtual D3D12_RESOURCE_DESC STDMETHODCALLTYPE GetDesc()
+  {
+    D3D12_RESOURCE_DESC ret = m_pReal->GetDesc();
+    // normalise alignment - sometimes D3D12 returns an alignment that is invalid to use
+    if(ret.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
+       ret.Alignment != D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT)
+      ret.Alignment = 0;
+    return ret;
+  }
   virtual D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE GetGPUVirtualAddress()
   {
     return m_pReal->GetGPUVirtualAddress();
