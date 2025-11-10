@@ -417,11 +417,13 @@ public:
   {
     rdcarray<IID> allowedIIDs;
 
-    // allow enabling unsigned DXIL.
+    // allow enabling unsigned DXIL, and GPU upload heaps on most windows versions
     for(UINT i = 0; i < NumFeatures; i++)
     {
       if(pIIDs[i] == D3D12ExperimentalShaderModels)
         allowedIIDs.push_back(D3D12ExperimentalShaderModels);
+      else if(pIIDs[i] == D3D12GPUUploadHeapsOnUnsupportedOS)
+        allowedIIDs.push_back(D3D12GPUUploadHeapsOnUnsupportedOS);
     }
 
     // there's no "partially successful" error code, so we just lie to the application and pretend
@@ -913,11 +915,13 @@ private:
   {
     rdcarray<IID> allowedIIDs;
 
-    // allow enabling unsigned DXIL.
+    // allow enabling unsigned DXIL, and GPU upload heaps on most windows versions
     for(UINT i = 0; i < NumFeatures; i++)
     {
       if(pIIDs[i] == D3D12ExperimentalShaderModels)
         allowedIIDs.push_back(D3D12ExperimentalShaderModels);
+      else if(pIIDs[i] == D3D12GPUUploadHeapsOnUnsupportedOS)
+        allowedIIDs.push_back(D3D12GPUUploadHeapsOnUnsupportedOS);
     }
 
     // there's no "partially successful" error code, so we just lie to the application and pretend

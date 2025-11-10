@@ -1083,6 +1083,7 @@ void WrappedID3D12CommandQueue::ExecuteCommandListsInternal(UINT NumCommandLists
           res->GetHeapProperties(&heapProps, NULL);
 
           if(heapProps.Type == D3D12_HEAP_TYPE_UPLOAD ||
+             heapProps.Type == D3D12_HEAP_TYPE_GPU_UPLOAD ||
              heapProps.CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE)
           {
             RDCLOG("Doing GPU readback of mapped memory");

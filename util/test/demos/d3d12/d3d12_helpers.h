@@ -137,6 +137,7 @@ public:
   D3D12BufferCreator &UAV();
   D3D12BufferCreator &ASB();
 
+  D3D12BufferCreator &GPUUpload();
   D3D12BufferCreator &Upload();
   D3D12BufferCreator &Readback();
 
