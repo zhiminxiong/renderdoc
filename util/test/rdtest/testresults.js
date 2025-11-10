@@ -237,8 +237,12 @@ document.body.onload = function() {
   var failed = document.getElementsByClassName('failed');
 
   for(var i=0; i < failed.length; i++) {
-    var test = failed[i].parentElement.parentElement;
-    test.classList.add('failed');
+    var search = failed[i];
+    while(search !== null && !search.classList.contains('test'))
+    search = search.parentElement;
+
+    if(search !== null)
+      search.classList.add('failed');
   }
 
   if(last_test != '') {
