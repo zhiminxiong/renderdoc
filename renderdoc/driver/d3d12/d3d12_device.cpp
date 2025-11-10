@@ -636,14 +636,19 @@ WrappedID3D12Device::WrappedID3D12Device(ID3D12Device *realDevice, D3D12InitPara
 
     HRESULT hr = S_OK;
 
+    m_RootSigVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    for(D3D_ROOT_SIGNATURE_VERSION verToCheck :
+        {D3D_ROOT_SIGNATURE_VERSION_1_2, D3D_ROOT_SIGNATURE_VERSION_1_1,
+         D3D_ROOT_SIGNATURE_VERSION_1_0})
     {
-      D3D12_FEATURE_DATA_ROOT_SIGNATURE rootSigVer;
+      D3D12_FEATURE_DATA_ROOT_SIGNATURE rootSigVer = {verToCheck};
       hr = m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &rootSigVer,
                                           sizeof(rootSigVer));
-      if(hr != S_OK)
-        rootSigVer.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-
-      m_RootSigVersion = rootSigVer.HighestVersion;
+      if(hr == S_OK)
+      {
+        m_RootSigVersion = rootSigVer.HighestVersion;
+        break;
+      }
     }
 
     hr = m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &m_D3D12Opts,
