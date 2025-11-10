@@ -3711,6 +3711,7 @@ void Program::MakeRDDisassemblyString(const DXBC::Reflection *reflection)
                       if(dxOpCode == DXOp::CBufferLoad)
                       {
                         // TODO: handle non 16-byte aligned offsets
+                        // TODO: this only loads a single value not four values
                         // Convert byte offset to a register index
                         regIndex = regIndex / 16;
                         // uint32_t alignment = getival<uint32_t>(inst.args[3]);

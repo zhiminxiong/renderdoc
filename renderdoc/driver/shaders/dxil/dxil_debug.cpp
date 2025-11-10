@@ -4936,14 +4936,21 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             }
             break;
           }
-          // Likely to implement when required
-          case DXOp::BufferUpdateCounter:
+
+          // Implement when required
           case DXOp::CBufferLoad:
+            // loads single value from byte offset in constant buffer, 8-byte alignment on the offset
+          case DXOp::BufferUpdateCounter:
+            // HLSL: DecrementCounter, IncrementCounter
+          case DXOp::CycleCounterLegacy:
 
           // MSAA
           case DXOp::EvalSnapped:
+            // HLSL : EvaluateAttributeSnapped
           case DXOp::EvalSampleIndex:
+            // HLSL : EvaluateAttributeAtSample
           case DXOp::EvalCentroid:
+            // HLSL : EvaluateAttributeCentroid
 
           // SM6.1
           case DXOp::AttributeAtVertex:
@@ -4962,8 +4969,6 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::StartInstanceLocation:
             // SV_StartInstanceLocation
             // StartInstanceLocation from Draw*Instanced
-
-          // SM 6.8
           case DXOp::BarrierByMemoryType:
           case DXOp::BarrierByMemoryHandle:
 
@@ -4975,6 +4980,12 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::WriteSamplerFeedbackBias:
           case DXOp::WriteSamplerFeedbackLevel:
           case DXOp::WriteSamplerFeedbackGrad:
+
+          // DXIL Internal operations used during DXBC conversion
+          case DXOp::TempRegLoad:
+          case DXOp::TempRegStore:
+          case DXOp::MinPrecXRegLoad:
+          case DXOp::MinPrecXRegStore:
 
           // Mesh Shaders
           case DXOp::SetMeshOutputCounts:
@@ -4995,7 +5006,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::CutStream:
           case DXOp::EmitThenCutStream:
 
-          // Wave Operations
+          // Wave Matrix Operations
           case DXOp::WaveMatrix_Annotate:
           case DXOp::WaveMatrix_Depth:
           case DXOp::WaveMatrix_Fill:
@@ -5085,13 +5096,6 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::GetRemainingRecursionLevels:
           case DXOp::FinishedCrossGroupSharing:
           case DXOp::BarrierByNodeRecordHandle:
-
-          // Unknown Instructions
-          case DXOp::TempRegLoad:
-          case DXOp::TempRegStore:
-          case DXOp::MinPrecXRegLoad:
-          case DXOp::MinPrecXRegStore:
-          case DXOp::CycleCounterLegacy:
 
           case DXOp::NumOpCodes:
             RDCERR("Unhandled dx.op method `%s` %s", callFunc->name.c_str(), ToStr(dxOpCode).c_str());
