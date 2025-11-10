@@ -1092,7 +1092,8 @@ void WrappedID3D12CommandQueue::ExecuteCommandListsInternal(UINT NumCommandLists
             queueReadback.Resize(size);
 
             queueReadback.list->Reset(queueReadback.alloc, NULL);
-            queueReadback.list->CopyBufferRegion(queueReadback.readbackBuf, 0, res, 0, size);
+            Unwrap(queueReadback.list)
+                ->CopyBufferRegion(queueReadback.unwrappedReadbackBuf, 0, res->GetReal(), 0, size);
             queueReadback.list->Close();
             ID3D12CommandList *listptr = Unwrap(queueReadback.list);
             queueReadback.unwrappedQueue->ExecuteCommandLists(1, &listptr);

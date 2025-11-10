@@ -4468,10 +4468,10 @@ void QueueReadbackData::Resize(uint64_t size)
   if(readbackSize >= size && size != 0)
     return;
 
-  if(readbackBuf)
+  if(unwrappedReadbackBuf)
   {
-    Unwrap(readbackBuf)->Unmap(0, NULL);
-    SAFE_RELEASE(readbackBuf);
+    unwrappedReadbackBuf->Unmap(0, NULL);
+    SAFE_RELEASE(unwrappedReadbackBuf);
     readbackMapped = NULL;
   }
 
@@ -4502,11 +4502,12 @@ void QueueReadbackData::Resize(uint64_t size)
   heapProps.CreationNodeMask = 1;
   heapProps.VisibleNodeMask = 1;
 
-  device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &readbackDesc,
-                                  D3D12_RESOURCE_STATE_COPY_DEST, NULL, __uuidof(ID3D12Resource),
-                                  (void **)&readbackBuf);
-  // don't intercept the map
-  Unwrap(readbackBuf)->Map(0, NULL, (void **)&readbackMapped);
+  // create this unwrapped to avoid intercepting the map during capture or having locking issues
+  // when creating this resource
+  device->GetReal()->CreateCommittedResource(
+      &heapProps, D3D12_HEAP_FLAG_NONE, &readbackDesc, D3D12_RESOURCE_STATE_COPY_DEST, NULL,
+      __uuidof(ID3D12Resource), (void **)&unwrappedReadbackBuf);
+  unwrappedReadbackBuf->Map(0, NULL, (void **)&readbackMapped);
 }
 
 void WrappedID3D12Device::CreateInternalResources()

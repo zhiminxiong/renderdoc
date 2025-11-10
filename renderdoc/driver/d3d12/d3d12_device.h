@@ -74,7 +74,7 @@ DECLARE_REFLECTION_STRUCT(D3D12InitParams);
 struct QueueReadbackData
 {
   Threading::CriticalSection lock;
-  ID3D12Resource *readbackBuf = NULL;
+  ID3D12Resource *unwrappedReadbackBuf = NULL;
   byte *readbackMapped = NULL;
   uint64_t readbackSize = 0;
 
