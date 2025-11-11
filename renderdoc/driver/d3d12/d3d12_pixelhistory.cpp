@@ -2378,11 +2378,18 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
 
       // In order to have different write masks per render target, we need to switch to independent
       //  blend if not already in use.
-      if(!pipeDesc.BlendState.IndependentBlendEnable)
+      if(!pipeDesc.BlendState.IndependentBlendEnable && pipeDesc.RTVFormats.NumRenderTargets > 1)
       {
         pipeDesc.BlendState.IndependentBlendEnable = TRUE;
         for(uint32_t i = 1; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+        {
           pipeDesc.BlendState.RenderTarget[i] = pipeDesc.BlendState.RenderTarget[0];
+          // Can't do this with logic ops as we can't used indepedent blend - would need an alternate
+          // solution to mask other targets (format as UNKNOWN maybe?)
+          // D3D12 ERROR: ID3D12Device::CreateBlendState: LogicOpEnable and IndependentBlendEnable
+          // cannot both be set to true.
+          RDCASSERT(!pipeDesc.BlendState.RenderTarget[0].LogicOpEnable);
+        }
       }
 
       // Mask out writes to targets which aren't the pixel history color target
@@ -2440,6 +2447,7 @@ struct D3D12PixelHistoryPerFragmentCallback : D3D12PixelHistoryCallback
     for(uint32_t i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
     {
       pipeDesc.BlendState.RenderTarget[i].BlendEnable = FALSE;
+      pipeDesc.BlendState.RenderTarget[i].LogicOpEnable = FALSE;
     }
 
     {
