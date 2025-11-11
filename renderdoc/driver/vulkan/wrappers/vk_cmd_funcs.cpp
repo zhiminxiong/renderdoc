@@ -4481,7 +4481,8 @@ void WrappedVulkan::vkCmdBindIndexBuffer(VkCommandBuffer commandBuffer, VkBuffer
     Serialise_vkCmdBindIndexBuffer(ser, commandBuffer, buffer, offset, indexType);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
-    record->MarkBufferFrameReferenced(GetRecord(buffer), 0, VK_WHOLE_SIZE, eFrameRef_Read);
+    if(buffer != VK_NULL_HANDLE)
+      record->MarkBufferFrameReferenced(GetRecord(buffer), 0, VK_WHOLE_SIZE, eFrameRef_Read);
   }
 }
 
@@ -9396,7 +9397,8 @@ void WrappedVulkan::vkCmdBindIndexBuffer2(VkCommandBuffer commandBuffer, VkBuffe
     Serialise_vkCmdBindIndexBuffer2(ser, commandBuffer, buffer, offset, size, indexType);
 
     record->AddChunk(scope.Get(&record->cmdInfo->alloc));
-    record->MarkBufferFrameReferenced(GetRecord(buffer), offset, size, eFrameRef_Read);
+    if(buffer != VK_NULL_HANDLE)
+      record->MarkBufferFrameReferenced(GetRecord(buffer), offset, size, eFrameRef_Read);
   }
 }
 
