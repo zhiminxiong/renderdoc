@@ -642,17 +642,20 @@ D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Progra
           v.members[r].type = v.type;
           v.members[r].name = StringFormat::Fmt("[%u]", r);
         }
+        v.rows = 0;
+        v.columns = 0;
+        v.type = VarType::Struct;
       }
 
-      SourceVariableMapping inputMapping;
-      inputMapping.name = v.name;
-      inputMapping.type = v.type;
-      inputMapping.rows = sig.rows;
-      inputMapping.columns = sig.cols;
-      inputMapping.variables.reserve(sig.cols);
-      inputMapping.signatureIndex = i;
-      if(v.rows <= 1)
+      if(v.rows == 1)
       {
+        SourceVariableMapping inputMapping;
+        inputMapping.name = v.name;
+        inputMapping.type = v.type;
+        inputMapping.rows = sig.rows;
+        inputMapping.columns = sig.cols;
+        inputMapping.variables.reserve(sig.cols);
+        inputMapping.signatureIndex = i;
         inputMapping.variables.reserve(sig.cols);
         for(uint32_t c = 0; c < sig.cols; ++c)
         {
@@ -662,15 +665,30 @@ D3D12APIWrapper::D3D12APIWrapper(WrappedID3D12Device *device, const DXIL::Progra
           ref.component = c;
           inputMapping.variables.push_back(ref);
         }
+        m_SourceVars.push_back(inputMapping);
       }
       else
       {
-        DebugVariableReference ref;
-        ref.type = DebugVariableType::Input;
-        ref.name = inStruct.name + "." + v.name;
-        inputMapping.variables.push_back(ref);
+        // Make a mapping per element
+        for(const ShaderVariable &member : v.members)
+        {
+          SourceVariableMapping inputMapping;
+          inputMapping.name = v.name + member.name;
+          inputMapping.type = member.type;
+          inputMapping.rows = 1;
+          inputMapping.columns = member.columns;
+          inputMapping.signatureIndex = -1;
+          for(uint32_t c = 0; c < member.columns; ++c)
+          {
+            DebugVariableReference ref;
+            ref.type = DebugVariableType::Input;
+            ref.name = inStruct.name + "." + v.name + member.name;
+            ref.component = c;
+            inputMapping.variables.push_back(ref);
+          }
+          m_SourceVars.push_back(inputMapping);
+        }
       }
-      m_SourceVars.push_back(inputMapping);
     }
 
     // Make a single source variable mapping for the whole input struct

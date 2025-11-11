@@ -3370,10 +3370,15 @@ ShaderDebugTrace *D3D12Replay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t
         }
         else
         {
-          if(invar.rows <= 1)
-            rawout = &invar.value.s32v[outElement];
-          else
+          if(invar.rows == 0)
+          {
+            RDCASSERT(input.array < invar.members.count(), input.array, invar.members.count());
             rawout = &invar.members[input.array].value.s32v[outElement];
+          }
+          else
+          {
+            rawout = &invar.value.s32v[outElement];
+          }
 
           memcpy(rawout, input.data, input.numwords * 4);
         }

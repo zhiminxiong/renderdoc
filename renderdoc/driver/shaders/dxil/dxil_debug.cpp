@@ -1838,11 +1838,13 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             uint32_t rowIdx = arg.value.u32v[0];
             RDCASSERT(GetShaderVariable(inst.args[3], opCode, dxOpCode, arg));
             uint32_t colIdx = arg.value.u32v[0];
+
             const ShaderVariable &var = m_Input.members[inputIdx];
-            RDCASSERT(rowIdx < var.rows, rowIdx, var.rows);
-            RDCASSERT(colIdx < var.columns, colIdx, var.columns);
-            ShaderVariable &a = (var.rows <= 1) ? m_Input.members[inputIdx]
-                                                : m_Input.members[inputIdx].members[rowIdx];
+            if(var.rows == 0)
+              RDCASSERT(rowIdx < var.members.size(), rowIdx, var.members.size());
+
+            const ShaderVariable &a = (var.rows != 0) ? var : var.members[rowIdx];
+            RDCASSERT(colIdx < a.columns, colIdx, a.columns);
             const uint32_t c = colIdx;
 
 #undef _IMPL
