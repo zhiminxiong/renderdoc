@@ -686,6 +686,12 @@ protected:
       return;
     }
 
+    if(p.copyFormat == DXGI_FORMAT_UNKNOWN)
+    {
+      RDCERR("Ignoring invalid source image format", p.x, p.y, srcDesc.Width, srcDesc.Height);
+      return;
+    }
+
     uint32_t baseMip = m_CallbackInfo.targetSubresource.mip;
     bool copy3d = m_CallbackInfo.targetDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D;
     uint32_t baseSlice = m_CallbackInfo.targetSubresource.slice;
