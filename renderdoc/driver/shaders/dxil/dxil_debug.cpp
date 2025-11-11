@@ -8864,7 +8864,7 @@ void Debugger::ParseDebugData()
                   usage->debugVarSuffix.clear();
                 }
               }
-              else if(typeWalk->vecSize != 0)
+              else if(typeWalk->vecSize > 1)
               {
                 // Index into the vector using byte offset and component size
                 const TypeData &scalar = m_DebugInfo.types[typeWalk->baseType];
