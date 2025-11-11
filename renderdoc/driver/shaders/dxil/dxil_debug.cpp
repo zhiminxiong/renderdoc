@@ -8790,7 +8790,6 @@ void Debugger::ParseDebugData()
                         for(uint32_t c = 0; c < columns; ++c)
                           usage->children[row].children[c].emitSourceVar = false;
                       }
-                      usage->children[row].emitSourceVar = true;
                     }
                   }
                   // Assigning to a row/col
@@ -8852,9 +8851,9 @@ void Debugger::ParseDebugData()
                         for(uint32_t c = 0; c < columns; ++c)
                           usage->children[r].children[c].emitSourceVar = false;
                       }
-                      usage->children[r].emitSourceVar = true;
                     }
                   }
+                  usage->emitSourceVar = false;
                 }
                 else
                 {
@@ -8920,7 +8919,6 @@ void Debugger::ParseDebugData()
                     for(uint32_t x = 0; x < columns; ++x)
                       usage->children[x].emitSourceVar = false;
                   }
-                  usage->emitSourceVar = true;
                 }
                 else
                 {
