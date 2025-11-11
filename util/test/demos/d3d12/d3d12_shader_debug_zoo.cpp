@@ -108,6 +108,7 @@ struct v2f
   float negoneVal : NEGONE;
   uint tri : TRIANGLE;
   uint intval : INTVAL;
+  row_major float2x3 mat : MAT;
 };
 
 )EOSHADER";
@@ -138,6 +139,13 @@ v2f main(consts IN, uint tri : SV_InstanceID)
   OUT.tri = tri;
   OUT.tinyVal = IN.oneVal * 1.0e-30f;
   OUT.intval = tri + 7;
+
+  OUT.mat[0].x = 1.0;
+  OUT.mat[0].y = 2.0;
+  OUT.mat[0].z = 3.0;
+  OUT.mat[1].x = 4.0;
+  OUT.mat[1].y = 5.0;
+  OUT.mat[1].z = 6.0;
 
   return OUT;
 }
@@ -1080,6 +1088,17 @@ float4 main(v2f IN) : SV_Target0
       discard;
     s *= posone * float2(0.55f, 0.48f);
     return float4(ddx(s.x), ddy(s.y), s.x, s.y);
+  }
+  if(IN.tri == 3)
+  {
+    float4 col = float4(0.0, 0.0, 0.0, 0.0);
+    col.x += IN.mat[0].x;
+    col.y += IN.mat[0].y;
+    col.z += IN.mat[0].z;
+    col.x += IN.mat[1].x;
+    col.y += IN.mat[1].y;
+    col.z += IN.mat[1].z;
+    return col;
   }
 
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
