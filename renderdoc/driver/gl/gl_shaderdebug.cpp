@@ -919,3 +919,42 @@ private:
 
   const uint64_t deviceThreadID;
 };
+
+ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint32_t instid,
+                                        uint32_t idx, uint32_t view)
+{
+  GLNOTIMP("DebugVertex");
+  return new ShaderDebugTrace();
+}
+
+ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
+                                       const DebugPixelInputs &inputs)
+{
+  GLNOTIMP("DebugPixel");
+  return new ShaderDebugTrace();
+}
+
+ShaderDebugTrace *GLReplay::DebugThread(uint32_t eventId, const rdcfixedarray<uint32_t, 3> &groupid,
+                                        const rdcfixedarray<uint32_t, 3> &threadid)
+{
+  GLNOTIMP("DebugThread");
+  return new ShaderDebugTrace();
+}
+
+ShaderDebugTrace *GLReplay::DebugMeshThread(uint32_t eventId,
+                                            const rdcfixedarray<uint32_t, 3> &groupid,
+                                            const rdcfixedarray<uint32_t, 3> &threadid)
+{
+  GLNOTIMP("DebugMeshThread");
+  return new ShaderDebugTrace();
+}
+
+rdcarray<ShaderDebugState> GLReplay::ContinueDebug(ShaderDebugger *debugger)
+{
+  return {};
+}
+
+void GLReplay::FreeDebugger(ShaderDebugger *debugger)
+{
+  delete debugger;
+}
