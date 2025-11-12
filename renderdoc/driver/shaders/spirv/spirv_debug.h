@@ -109,6 +109,7 @@ public:
   virtual ~DebugAPIWrapper() {}
   virtual void AddDebugMessage(MessageCategory c, MessageSeverity sv, MessageSource src, rdcstr d) = 0;
 
+  virtual bool SimulateThreaded() = 0;
   virtual ResourceId GetShaderID() = 0;
 
   virtual uint64_t GetBufferLength(const ShaderBindIndex &bind) = 0;

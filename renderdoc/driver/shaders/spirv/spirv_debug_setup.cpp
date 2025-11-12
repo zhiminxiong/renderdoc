@@ -30,13 +30,10 @@
 #include "spirv_op_helpers.h"
 #include "spirv_reflect.h"
 
-RDOC_CONFIG(bool, Vulkan_Debug_UseDebugColumnInformation, false,
+RDOC_CONFIG(bool, Shader_Debug_SPIRVUseDebugColumnInformation, false,
             "Control whether column information should be read from vulkan debug info.");
 
-RDOC_CONFIG(bool, Vulkan_Debug_EnableShaderDebugMT, true,
-            "Use multiple threads to run the shader debugger simulation.");
-
-RDOC_DEBUG_CONFIG(bool, Vulkan_Hack_ShaderDebugUsesJobSystemJobs, false,
+RDOC_DEBUG_CONFIG(bool, Shader_Debug_UseJobSystemJobs, false,
                   "Use individual job system jobs to run shader debugging simulation.");
 
 using namespace rdcshaders;
@@ -1823,14 +1820,14 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   ret->samplers = global.samplers;
   ret->inputs = active.inputs;
 
-  mtSimulation = Vulkan_Debug_EnableShaderDebugMT();
+  mtSimulation = apiWrapper->SimulateThreaded();
   if(threadsInWorkgroup < 4)
     mtSimulation = false;
 
   AtomicStore(&atomic_simulationFinished, 0);
   if(mtSimulation)
   {
-    if(!Vulkan_Hack_ShaderDebugUsesJobSystemJobs())
+    if(!Shader_Debug_UseJobSystemJobs())
     {
       uint32_t countJobs = RDCMIN(threadsInWorkgroup, Threading::JobSystem::GetCountWorkers() / 2U);
       for(uint32_t i = 0; i < countJobs; ++i)
@@ -4453,7 +4450,7 @@ void Debugger::RegisterOp(Iter it)
         {
           m_CurLineCol.lineStart = EvaluateConstant(dbg.arg<Id>(1), {}).value.u32v[0];
           m_CurLineCol.lineEnd = EvaluateConstant(dbg.arg<Id>(2), {}).value.u32v[0];
-          if(Vulkan_Debug_UseDebugColumnInformation())
+          if(Shader_Debug_SPIRVUseDebugColumnInformation())
           {
             m_CurLineCol.colStart = EvaluateConstant(dbg.arg<Id>(3), {}).value.u32v[0];
             m_CurLineCol.colEnd = EvaluateConstant(dbg.arg<Id>(4), {}).value.u32v[0];
@@ -5012,7 +5009,7 @@ void Debugger::QueueJob(uint32_t lane)
   thread.SetStepQueued();
   if(mtSimulation)
   {
-    if(Vulkan_Hack_ShaderDebugUsesJobSystemJobs())
+    if(Shader_Debug_UseJobSystemJobs())
     {
       Threading::JobSystem::AddJob(
           [this, lane]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS); });

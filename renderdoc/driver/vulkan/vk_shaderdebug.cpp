@@ -40,6 +40,9 @@ RDOC_CONFIG(rdcstr, Vulkan_Debug_PSDebugDumpDirPath, "",
 RDOC_CONFIG(bool, Vulkan_Debug_ShaderDebugLogging, false,
             "Output verbose debug logging messages when debugging shaders.");
 
+RDOC_CONFIG(bool, Vulkan_Debug_EnableShaderDebugMT, true,
+            "Use multiple threads to run the shader debugger simulation.");
+
 // needed for old linux compilers
 namespace std
 {
@@ -291,6 +294,8 @@ public:
     CHECK_DEVICE_THREAD();
     m_pDriver->AddDebugMessage(cat, sev, src, desc);
   }
+
+  virtual bool SimulateThreaded() override { return Vulkan_Debug_EnableShaderDebugMT(); }
 
   virtual ResourceId GetShaderID() override { return m_ShaderID; }
 

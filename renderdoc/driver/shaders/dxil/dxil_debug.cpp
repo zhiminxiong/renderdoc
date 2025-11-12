@@ -36,8 +36,7 @@ RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_Logging, false,
 RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_EnableMT, true,
             "Use multiple threads to run the shader debugger simulation.");
 
-RDOC_DEBUG_CONFIG(bool, D3D12_Hack_ShaderDebugUsesJobSystemJobs, false,
-                  "Use individual job system jobs to run shader debugging simulation.");
+RDOC_EXTERN_CONFIG(bool, Shader_Debug_UseJobSystemJobs);
 
 #if ENABLED(RDOC_RELEASE)
 #define CHECK_DEBUGGER_THREAD() \
@@ -9990,7 +9989,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   AtomicStore(&atomic_simulationFinished, 0);
   if(m_MTSimulation)
   {
-    if(!D3D12_Hack_ShaderDebugUsesJobSystemJobs())
+    if(!Shader_Debug_UseJobSystemJobs())
     {
       uint32_t countJobs = RDCMIN(threadsInWorkgroup, Threading::JobSystem::GetCountWorkers() / 2U);
       for(uint32_t i = 0; i < countJobs; ++i)
@@ -10656,7 +10655,7 @@ void Debugger::QueueJob(uint32_t lane)
   thread.SetStepQueued();
   if(m_MTSimulation)
   {
-    if(D3D12_Hack_ShaderDebugUsesJobSystemJobs())
+    if(Shader_Debug_UseJobSystemJobs())
     {
       Threading::JobSystem::AddJob(
           [this, lane]() { StepThread(lane, StepThreadMode::RUN_MULTIPLE_STEPS); });
