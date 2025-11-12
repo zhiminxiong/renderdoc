@@ -82,7 +82,7 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
         test_marker: rd.ActionDescription = self.find_action("SM6.0")
         if test_marker is None:
             rdtest.log.print("No SM6.0 action to test")
-            return failed
+            return not failed
         
         rdtest.log.begin_section("SM6.0 tests")
 
@@ -121,7 +121,7 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
         test_marker: rd.ActionDescription = self.find_action("SM6.6")
         if test_marker is None:
             rdtest.log.print("No SM6.6 action to test")
-            return failed
+            return not failed
 
         rdtest.log.begin_section("SM6.6 tests")
 
