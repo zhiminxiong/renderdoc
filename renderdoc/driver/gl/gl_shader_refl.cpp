@@ -1252,6 +1252,8 @@ void MakeShaderReflection(GLenum shadType, GLuint sepProg, ShaderReflection &ref
   refl.encoding = ShaderEncoding::GLSL;
   refl.debugInfo.compiler = KnownShaderTool::Unknown;
   refl.debugInfo.encoding = ShaderEncoding::GLSL;
+  refl.debugInfo.debuggable = false;
+  refl.debugInfo.debugStatus = "Shader debugging not supported for GLSL shaders";
 
   if(shadType == eGL_COMPUTE_SHADER)
   {
