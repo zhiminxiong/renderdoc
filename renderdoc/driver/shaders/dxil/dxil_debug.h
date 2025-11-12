@@ -34,7 +34,7 @@
 #include "dxil_controlflow.h"
 #include "dxil_debuginfo.h"
 
-#if defined(RELEASE)
+#if ENABLED(RDOC_RELEASE)
 #define DXIL_DEBUG_RDCASSERT(...) \
   do                              \
   {                               \

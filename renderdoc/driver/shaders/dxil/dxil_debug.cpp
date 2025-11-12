@@ -39,7 +39,7 @@ RDOC_CONFIG(bool, D3D12_DXILShaderDebugger_EnableMT, true,
 RDOC_DEBUG_CONFIG(bool, D3D12_Hack_ShaderDebugUsesJobSystemJobs, false,
                   "Use individual job system jobs to run shader debugging simulation.");
 
-#if defined(RELEASE)
+#if ENABLED(RDOC_RELEASE)
 #define CHECK_DEBUGGER_THREAD() \
   do                            \
   {                             \
@@ -47,9 +47,9 @@ RDOC_DEBUG_CONFIG(bool, D3D12_Hack_ShaderDebugUsesJobSystemJobs, false,
 #else
 #define CHECK_DEBUGGER_THREAD() \
   RDCASSERTMSG("Debugger function called from non-device thread!", IsDeviceThread());
-#endif    // #if defined(RELEASE)
+#endif    // #if ENABLED(RDOC_RELEASE)
 
-#if defined(RELEASE)
+#if ENABLED(RDOC_RELEASE)
 #define THREADSTATE_CHECK_DEBUGGER_THREAD() \
   do                                        \
   {                                         \
@@ -57,7 +57,7 @@ RDOC_DEBUG_CONFIG(bool, D3D12_Hack_ShaderDebugUsesJobSystemJobs, false,
 #else
 #define THREADSTATE_CHECK_DEBUGGER_THREAD() \
   RDCASSERTMSG("Function called from non-debugger thread!", m_Debugger.IsDeviceThread());
-#endif    // #if defined(RELEASE)
+#endif    // #if ENABLED(RDOC_RELEASE)
 
 using namespace rdcshaders;
 
@@ -10112,7 +10112,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         continue;
 
       const rdcarray<ThreadReference> &threadRefs = tangle.GetThreadRefs();
-#if !defined(RELEASE)
+#if ENABLED(RDOC_DEVEL)
       for(const ThreadReference &ref : threadRefs)
       {
         const uint32_t threadId = ref.id;
@@ -10120,7 +10120,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         ThreadState &thread = m_Workgroup[lane];
         RDCASSERT(!thread.IsSimulationStepActive());
       }
-#endif    // #if !defined(RELEASE)
+#endif    // #if ENABLED(RDOC_DEVEL)
 
       const DXIL::BlockArray *newPartialConvergentPoints = NULL;
       ExecutionPoint newConvergencePoint = INVALID_EXECUTION_POINT;

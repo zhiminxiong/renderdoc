@@ -36,7 +36,7 @@
 
 using namespace rdcshaders;
 
-#if defined(RELEASE)
+#if ENABLED(RDOC_RELEASE)
 #define CHECK_DEBUGGER_THREAD() \
   do                            \
   {                             \
@@ -44,7 +44,7 @@ using namespace rdcshaders;
 #else
 #define CHECK_DEBUGGER_THREAD() \
   RDCASSERTMSG("Function called from non-debugger thread!", debugger.IsDeviceThread());
-#endif    // #if defined(RELEASE)
+#endif    // #if ENABLED(RDOC_RELEASE)
 
 static bool ContainsNaNInf(const ShaderVariable &var)
 {

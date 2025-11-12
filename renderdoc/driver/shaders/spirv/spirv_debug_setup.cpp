@@ -281,7 +281,7 @@ void AssignValue(ShaderVariable &dst, const ShaderVariable &src)
     AssignValue(dst.members[i], src.members[i]);
 }
 
-#if defined(RELEASE)
+#if ENABLED(RDOC_RELEASE)
 #define CHECK_DEBUGGER_THREAD() \
   do                            \
   {                             \
@@ -289,7 +289,7 @@ void AssignValue(ShaderVariable &dst, const ShaderVariable &src)
 #else
 #define CHECK_DEBUGGER_THREAD() \
   RDCASSERTMSG("Debugger function called from non-device thread!", IsDeviceThread());
-#endif    // #if defined(RELEASE)
+#endif    // #if ENABLED(RDOC_RELEASE)
 
 Debugger::Debugger() : deviceThreadID(Threading::GetCurrentID())
 {
@@ -2800,7 +2800,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         continue;
 
       const rdcarray<ThreadReference> &threadRefs = tangle.GetThreadRefs();
-#if !defined(RELEASE)
+#if ENABLED(RDOC_DEVEL)
       for(const ThreadReference &ref : threadRefs)
       {
         const uint32_t threadId = ref.id;
@@ -2808,7 +2808,7 @@ rdcarray<ShaderDebugState> Debugger::ContinueDebug()
         ThreadState &thread = workgroup[lane];
         RDCASSERT(!thread.IsSimulationStepActive());
       }
-#endif    // #if !defined(RELEASE)
+#endif    // #if ENABLED(RDOC_DEVEL)
 
       ExecutionPoint newConvergeInstruction = INVALID_EXECUTION_POINT;
       ExecutionPoint newFunctionReturnPoint = INVALID_EXECUTION_POINT;
