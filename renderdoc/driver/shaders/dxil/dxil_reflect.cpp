@@ -1872,17 +1872,6 @@ rdcstr Program::GetDebugStatus()
               // Implement when required
               case DXOp::CBufferLoad:
                 // loads single value from byte offset in constant buffer, 8-byte alignment on the offset
-              case DXOp::BufferUpdateCounter:
-                // HLSL: DecrementCounter, IncrementCounter
-              case DXOp::CycleCounterLegacy:
-
-              // MSAA
-              case DXOp::EvalSnapped:
-                // HLSL : EvaluateAttributeSnapped
-              case DXOp::EvalSampleIndex:
-                // HLSL : EvaluateAttributeAtSample
-              case DXOp::EvalCentroid:
-                // HLSL : EvaluateAttributeCentroid
 
               // SM6.1
               case DXOp::AttributeAtVertex:
@@ -1895,7 +1884,7 @@ rdcstr Program::GetDebugStatus()
               case DXOp::TextureGatherRaw:
                 // Gather raw elements from 4 texels with no type conversions (SRV type is constrained)
 
-              // SM 6.8
+              // SM 6.8 : when SM6.8 is supporting by RenderDoc
               case DXOp::StartVertexLocation:
                 // SV_BaseVertexLocation
                 // BaseVertexLocation from DrawIndexedInstanced or StartVertexLocation from DrawInstanced
@@ -1906,6 +1895,18 @@ rdcstr Program::GetDebugStatus()
               case DXOp::BarrierByMemoryHandle:
 
               // No plans to implement
+
+              // MSAA
+              case DXOp::EvalSnapped:
+                // HLSL : EvaluateAttributeSnapped
+              case DXOp::EvalSampleIndex:
+                // HLSL : EvaluateAttributeAtSample
+              case DXOp::EvalCentroid:
+                // HLSL : EvaluateAttributeCentroid
+
+              case DXOp::CycleCounterLegacy:
+                // DXBC Shader-Internal Cycle Counter (Debug Only)
+
               case DXOp::CheckAccessFullyMapped:
                 // determines whether all values from a Sample, Gather, or Load operation
                 // accessed mapped tiles in a tiled resource

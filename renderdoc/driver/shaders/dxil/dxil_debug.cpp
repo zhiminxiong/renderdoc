@@ -144,6 +144,7 @@ static bool IsSignedIntegerType(VarType type)
     case VarType::SLong:
     case VarType::SInt:
     case VarType::SShort: return true;
+    case VarType::SByte: return true;
     default: return false;
   }
 }
@@ -155,6 +156,7 @@ static bool IsUnsignedIntegerType(VarType type)
     case VarType::ULong:
     case VarType::UInt:
     case VarType::UShort: return true;
+    case VarType::UByte: return true;
     default: return false;
   }
 }
@@ -4928,21 +4930,54 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             }
             break;
           }
+          case DXOp::BufferUpdateCounter:
+          {
+            // HLSL: DecrementCounter, IncrementCounter
+            // BufferUpdateCounter(uav,inc)
+            // Treat as an atomic operation on the UAV's hidden counter
+            SCOPED_LOCK(m_Debugger.GetAtomicMemoryLock());
+            const Id handleId = GetArgumentId(1);
+            bool annotatedHandle;
+            ShaderVariable handleVar;
+            ResourceReferenceInfo resRefInfo = GetResource(handleId, annotatedHandle, handleVar);
+            if(!resRefInfo.Valid())
+              break;
+
+            ResourceClass resClass = resRefInfo.resClass;
+            // handle must be a UAV
+            if(resClass != ResourceClass::UAV)
+            {
+              RDCERR("BufferUpdateCounter on non-UAV resource %s", ToStr(resClass).c_str());
+              break;
+            }
+
+            const BindingSlot &slot = resRefInfo.binding;
+            UAVInfo uavInfo;
+            if(m_Debugger.GetUAV(slot, uavInfo) == DeviceOpResult::NeedsDevice)
+            {
+              SetStepNeedsDeviceThread();
+              break;
+            }
+
+            RDCASSERTEQUAL(inst.args[2]->type->type, Type::TypeKind::Scalar);
+            RDCASSERTEQUAL(inst.args[2]->type->scalarType, Type::Int);
+
+            ShaderVariable value;
+            RDCASSERT(GetShaderVariable(inst.args[2], opCode, dxOpCode, value));
+
+            RDCASSERT(IsIntegerType(value.type));
+            RDCASSERT(IsIntegerType(result.type));
+
+            // Returns the pre-increment value of the hidden counter
+            result.value.s32v[0] = uavInfo.hiddenCounter;
+
+            uavInfo.hiddenCounter += value.value.s32v[0];
+            break;
+          }
 
           // Implement when required
           case DXOp::CBufferLoad:
             // loads single value from byte offset in constant buffer, 8-byte alignment on the offset
-          case DXOp::BufferUpdateCounter:
-            // HLSL: DecrementCounter, IncrementCounter
-          case DXOp::CycleCounterLegacy:
-
-          // MSAA
-          case DXOp::EvalSnapped:
-            // HLSL : EvaluateAttributeSnapped
-          case DXOp::EvalSampleIndex:
-            // HLSL : EvaluateAttributeAtSample
-          case DXOp::EvalCentroid:
-            // HLSL : EvaluateAttributeCentroid
 
           // SM6.1
           case DXOp::AttributeAtVertex:
@@ -4954,7 +4989,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::TextureGatherRaw:
             // Gather raw elements from 4 texels with no type conversions (SRV type is constrained)
 
-          // SM 6.8
+          // SM 6.8 : when SM6.8 is supporting by RenderDoc
           case DXOp::StartVertexLocation:
             // SV_BaseVertexLocation
             // BaseVertexLocation from DrawIndexedInstanced or StartVertexLocation from DrawInstanced
@@ -4965,6 +5000,18 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::BarrierByMemoryHandle:
 
           // No plans to implement
+
+          // MSAA
+          case DXOp::EvalSnapped:
+            // HLSL : EvaluateAttributeSnapped
+          case DXOp::EvalSampleIndex:
+            // HLSL : EvaluateAttributeAtSample
+          case DXOp::EvalCentroid:
+            // HLSL : EvaluateAttributeCentroid
+
+          case DXOp::CycleCounterLegacy:
+            // DXBC Shader-Internal Cycle Counter (Debug Only)
+
           case DXOp::CheckAccessFullyMapped:
             // determines whether all values from a Sample, Gather, or Load operation
             // accessed mapped tiles in a tiled resource

@@ -1341,7 +1341,6 @@ UAVInfo D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const Bi
 
     if(pResource)
     {
-      // TODO: Need to fetch counter resource if applicable
       D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = resDescriptor->GetUAV();
 
       if(uavDesc.ViewDimension == D3D12_UAV_DIMENSION_UNKNOWN)
@@ -1365,6 +1364,30 @@ UAVInfo D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const Bi
           uavData.resInfo.format.stride = mdStride;
 
         m_Device->GetDebugManager()->GetBufferData(pResource, 0, 0, data);
+
+        ResourceId counterId = resDescriptor->GetCounterResourceId();
+        if(counterId != ResourceId())
+        {
+          uint64_t counterByteOffset = uavDesc.Buffer.CounterOffsetInBytes;
+          ID3D12Resource *pCounterResource = rm->GetCurrentAs<ID3D12Resource>(counterId);
+          if(pCounterResource)
+          {
+            bytebuf counterData;
+            m_Device->GetDebugManager()->GetBufferData(pCounterResource, counterByteOffset, 4,
+                                                       counterData);
+            // Initialise the UAV counter from the buffer
+            if(counterData.size() == 4)
+              uavData.hiddenCounter = *((uint32_t *)counterData.data());
+            else
+              RDCERR("Couldn't read UAV counter data for UAV in slot %u space %u",
+                     slot.shaderRegister, slot.registerSpace);
+          }
+          else
+          {
+            RDCERR("NULL counter resource for UAV in slot %u space %u", slot.shaderRegister,
+                   slot.registerSpace);
+          }
+        }
       }
       else
       {
