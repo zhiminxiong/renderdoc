@@ -80,6 +80,8 @@
 #define RESOURCE_glsl_vk_depthbuf2ms_frag		     450
 #define RESOURCE_glsl_depth_copy_frag                451
 #define RESOURCE_glsl_depth_copyms_frag              452
+#define RESOURCE_glsl_debug_math_comp                453
+#define RESOURCE_glsl_debug_sample_frag              454
 
 // Next default values for new objects
 // 

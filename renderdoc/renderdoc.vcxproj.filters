@@ -1157,6 +1157,12 @@
     <None Include="data\hlsl\quadswizzle.hlsl">
       <Filter>Resources\hlsl</Filter>
     </None>
+    <None Include="data\glsl\debug_math.comp">
+      <Filter>Resources\glsl</Filter>
+    </None>
+    <None Include="data\glsl\debug_sample.frag">
+      <Filter>Resources\glsl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="data\renderdoc.rc">

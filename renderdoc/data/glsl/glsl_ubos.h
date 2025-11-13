@@ -218,3 +218,29 @@ BINDING(2) uniform HistogramUBOData
 INST_NAME(histogram_minmax);
 
 #endif    // defined(HISTOGRAM_UBO) || defined(__cplusplus)
+
+#if defined(DEBUGSAMPLE_UBO) || defined(__cplusplus)
+
+BINDING(0) uniform DebugSampleUBO
+{
+  ivec3 texel_uvw;
+  int texel_lod;
+
+  vec4 uvwa;    // last component for cubemap array index only
+
+  vec3 ddx_uvw;
+  float pad1;
+
+  vec3 ddy_uvw;
+  float pad2;
+
+  ivec3 dynoffset;
+  int sampleIdx;
+
+  float compare;
+  float lod;
+  float minlod;
+}
+INST_NAME(debugsample);
+
+#endif    // defined(DEBUGSAMPLE_UBO) || defined(__cplusplus)

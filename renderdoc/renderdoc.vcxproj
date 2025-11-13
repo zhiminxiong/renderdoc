@@ -671,6 +671,8 @@
     <None Include="data\glsl\array2ms.comp" />
     <None Include="data\glsl\blit.vert" />
     <None Include="data\glsl\checkerboard.frag" />
+    <None Include="data\glsl\debug_math.comp" />
+    <None Include="data\glsl\debug_sample.frag" />
     <None Include="data\glsl\depth_copy.frag" />
     <None Include="data\glsl\depth_copyms.frag" />
     <None Include="data\glsl\deptharr2ms.frag" />

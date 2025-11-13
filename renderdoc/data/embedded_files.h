@@ -75,5 +75,7 @@ DECLARE_EMBED(glsl_vk_buffer2ms_comp);
 DECLARE_EMBED(glsl_vk_depthbuf2ms_frag);
 DECLARE_EMBED(glsl_depth_copy_frag);
 DECLARE_EMBED(glsl_depth_copyms_frag);
+DECLARE_EMBED(glsl_debug_math_comp);
+DECLARE_EMBED(glsl_debug_sample_frag);
 
 #undef DECLARE_EMBED

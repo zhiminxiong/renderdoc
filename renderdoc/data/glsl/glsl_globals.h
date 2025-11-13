@@ -236,3 +236,29 @@ vec3 CalcCubeCoord(vec2 uv, int face)
 #define SINT_TEX 0
 
 #endif
+
+#define SPV_OpSin 13
+#define SPV_OpCos 14
+#define SPV_OpTan 15
+#define SPV_OpAsin 16
+#define SPV_OpAcos 17
+#define SPV_OpAtan 18
+#define SPV_OpSinh 19
+#define SPV_OpCosh 20
+#define SPV_OpTanh 21
+#define SPV_OpAsinh 22
+#define SPV_OpAcosh 23
+#define SPV_OpAtanh 24
+#define SPV_OpExp 27
+#define SPV_OpLog 28
+#define SPV_OpExp2 29
+#define SPV_OpLog2 30
+#define SPV_OpSqrt 31
+#define SPV_OpInverseSqrt 32
+#define SPV_OpNormalize 69
+#define SPV_OpAtan2 25
+#define SPV_OpPow 26
+#define SPV_OpFma 50
+#define SPV_OpLength 66
+#define SPV_OpDistance 67
+#define SPV_OpRefract 72

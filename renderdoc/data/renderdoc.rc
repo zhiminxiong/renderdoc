@@ -203,6 +203,8 @@ RESOURCE_glsl_vk_ms2buffer_comp        TYPE_EMBED   "glsl/vk_ms2buffer.comp"
 RESOURCE_glsl_vk_depthms2buffer_comp   TYPE_EMBED   "glsl/vk_depthms2buffer.comp"
 RESOURCE_glsl_vk_buffer2ms_comp        TYPE_EMBED   "glsl/vk_buffer2ms.comp" 
 RESOURCE_glsl_vk_depthbuf2ms_frag      TYPE_EMBED   "glsl/vk_depthbuf2ms.frag"
+RESOURCE_glsl_debug_math_comp          TYPE_EMBED   "glsl/debug_math.comp"
+RESOURCE_glsl_debug_sample_frag        TYPE_EMBED   "glsl/debug_sample.frag"
 
 #ifndef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////

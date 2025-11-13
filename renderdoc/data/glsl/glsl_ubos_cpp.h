@@ -41,6 +41,7 @@
 
 #define uint uint32_t
 #define uvec4 Vec4u
+#define ivec3 Vec3i
 
 #if !defined(VULKAN) && !defined(OPENGL)
 #error Must define VULKAN or OPENGL before including glsl_ubos.h
