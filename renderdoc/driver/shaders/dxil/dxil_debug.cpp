@@ -1808,7 +1808,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
   const Type *retType = inst.type;
   // Sensible defaults
   ShaderVariable result;
-  m_Program.MakeResultId(inst, result.name);
+  m_Program.GetSSAName(resultId, result.name);
   result.rows = 1;
   result.columns = 1;
   result.type = ConvertDXILTypeToVarType(retType);
@@ -2399,24 +2399,24 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
             // Default to unannotated handle
             ClearAnnotatedHandle(result);
-            rdcstr resName = m_Program.GetHandleAlias(result.name);
             result.type = resRefInfo.varType;
-            result.name = resName;
             result.SetDirectAccess(access);
             break;
           }
           case DXOp::AnnotateHandle:
           {
             // AnnotateHandle(res,props)
-            rdcstr baseResource = GetArgumentName(1);
+            rdcstr resultSSAName = result.name;
+            rdcstr baseResource;
             Id baseResourceId = GetSSAId(inst.args[1]);
+            m_Program.GetSSAName(baseResourceId, baseResource);
 
             ShaderVariable resource;
             RDCASSERT(GetShaderVariable(inst.args[1], opCode, dxOpCode, resource));
             rdcstr resName;
             if(resource.IsDirectAccess())
             {
-              resName = m_Program.GetHandleAlias(result.name);
+              resName = result.name;
               // Update m_DirectHeapAccessBindings for the annotated handle
               // to use the data from the source resource
               RDCASSERT(m_DirectHeapAccessBindings.count(baseResourceId) > 0);
@@ -2425,12 +2425,10 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             }
             else
             {
-              resName = m_Program.GetHandleAlias(baseResource);
+              resName = baseResource;
             }
-            // Use the handle alias of the result SSA ID to match the disassembly
-            rdcstr handleAlias = m_Program.GetHandleAlias(result.name);
             result = resource;
-            result.name = handleAlias;
+            result.name = resultSSAName;
 
             // Parse the packed annotate handle properties
             // resKind : {compType, compCount} | {structStride}
@@ -2508,7 +2506,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           {
             // CreateHandle(resourceClass,rangeId,index,nonUniformIndex
             // CreateHandleFromBinding(bind,index,nonUniformIndex)
-            rdcstr baseResource = result.name;
+            rdcstr resultSSAName = result.name;
             uint32_t resIndexArgId = ~0U;
             if(dxOpCode == DXOp::CreateHandle)
               resIndexArgId = 3;
@@ -2567,7 +2565,6 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
                     DescriptorCategory category = isSRV ? DescriptorCategory::ReadOnlyResource
                                                         : DescriptorCategory::ReadWriteResource;
                     result.SetBindIndex(ShaderBindIndex(category, resRef->resourceIndex, arrayIndex));
-                    result.name = resRef->resourceBase.name + StringFormat::Fmt("[%u]", arrayIndex);
                     result.type = isSRV ? VarType::ReadOnlyResource : VarType::ReadWriteResource;
                     // Default to unannotated handle
                     ClearAnnotatedHandle(result);
@@ -2604,15 +2601,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
                         RDCASSERT(arrayIndex < result.members.size(), arrayIndex,
                                   result.members.size());
                         if(arrayIndex < result.members.size())
-                        {
                           RDCASSERT(!result.members[arrayIndex].members.empty());
-                          if(!result.members[arrayIndex].members.empty())
-                          {
-                            rdcstr name =
-                                resRef->resourceBase.name + StringFormat::Fmt("[%u]", arrayIndex);
-                            result.name = name;
-                          }
-                        }
                       }
                     }
                     else
@@ -2630,13 +2619,13 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
                   ShaderVariable cbufferVar;
                   cbufferVar.members.resize(structSize / 16);
                   cbufferVar.type = VarType::Struct;
-                  cbufferVar.name = result.name;
+                  cbufferVar.name = resultSSAName;
                   for(size_t i = 0; i < cbufferVar.members.size(); ++i)
                   {
                     ShaderVariable &var = cbufferVar.members[i];
                     var.type = VarType::UInt;
                     var.columns = 4;
-                    var.name = StringFormat::Fmt("%s[%u]", result.name.c_str(), i);
+                    var.name = StringFormat::Fmt("%s[%u]", resultSSAName.c_str(), i);
                     var.rows = 1;
                     // Initialise to 0xCC to aid determinism and show unset values
                     memset(&var.value, 0XCC, sizeof(var.value));
@@ -2676,8 +2665,9 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
             }
             else
             {
-              RDCERR("Unknown Base Resource %s", baseResource.c_str());
+              RDCERR("Unknown Base Resource for %s", resultSSAName.c_str());
             }
+            result.name = resultSSAName;
             break;
           }
           case DXOp::CBufferLoadLegacy:
@@ -5253,7 +5243,6 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
     }
     case Operation::Alloca:
     {
-      result.name = DXBC::BasicDemangle(result.name);
       m_Memory.AllocateMemoryForType(inst.type, resultId, false, false, result);
       break;
     }
@@ -6947,7 +6936,10 @@ void ThreadState::ConvertSampleGatherReturn(DXIL::DXOp dxOpCode, const DXIL::Ins
 
 rdcstr ThreadState::GetArgumentName(uint32_t i) const
 {
-  return m_Program.GetArgumentName(m_CurrentInstruction->args[i]);
+  rdcstr name;
+  DXILDebug::Id id = GetArgumentId(i);
+  m_Program.GetSSAName(id, name);
+  return name;
 }
 
 DXILDebug::Id ThreadState::GetArgumentId(uint32_t i) const
@@ -7773,7 +7765,7 @@ Debugger::DebugInfo::~DebugInfo()
 rdcstr Debugger::GetResourceBaseName(const DXIL::Program *program,
                                      const DXIL::ResourceReference *resRef)
 {
-  rdcstr resName = program->GetHandleAlias(resRef->handleID);
+  rdcstr resName = resRef->resourceBase.name;
   // Special case for cbuffer arrays
   if((resRef->resourceBase.resClass == ResourceClass::CBuffer) && (resRef->resourceBase.regCount > 1))
   {
@@ -9204,7 +9196,8 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   for(const DXIL::GlobalVar *gv : m_Program->m_GlobalVars)
   {
     GlobalVariable globalVar;
-    rdcstr n = DXIL::GetGlobalVarName(gv);
+    rdcstr n;
+    m_Program->GetSSAName(gv->ssaId, n);
     globalVar.var.name = n;
     globalVar.id = gv->ssaId;
     globalVar.gsm = (gv->type->addrSpace == DXIL::Type::PointerAddrSpace::GroupShared);
@@ -9261,8 +9254,9 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
             ShaderVariable &var = constantVar.var;
             ConvertDXILTypeToShaderVariable(c->type, var);
             ConvertDXILConstantToShaderVariable(c, var);
-            var.name = m_Program->GetArgumentName(c);
+            var.name;
             Id id = c->ssaId;
+            m_Program->GetSSAName(id, var.name);
             RDCASSERTNOTEQUAL(id, DXILDebug::INVALID_ID);
             constantVar.id = id;
             if(var.type == VarType::GPUPointer)

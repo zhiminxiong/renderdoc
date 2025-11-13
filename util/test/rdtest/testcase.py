@@ -1101,15 +1101,13 @@ class TestCase:
                 else:
                     if c.after.name in variables:
                         # Step Forwards: not-first appearance of a variable "before" must equal currently known value
-                        if not (c.after.type == rd.VarType.ReadOnlyResource or c.after.type == rd.VarType.ReadWriteResource):
-                            (res, difference) = analyse.shadervariable_equal(c.before, variables[c.after.name])
-                            if not res:
-                                raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.after.name}' before does not match existing entry {difference}")
+                        (res, difference) = analyse.shadervariable_equal(c.before, variables[c.after.name])
+                        if not res:
+                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.after.name}' before does not match existing entry {difference}")
                     else:
                         # Step Forwards: first appearance of a variable must have "before" = {}
-                        if not (c.after.type == rd.VarType.ReadOnlyResource or c.after.type == rd.VarType.ReadWriteResource):
-                            if c.before != rd.ShaderVariable():
-                                raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.after.name}' does not have NULL before")
+                        if c.before != rd.ShaderVariable():
+                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.after.name}' does not have NULL before")
                     variables[c.after.name] = c.after
                     # Validate c.after
                     if not self.validate_shadervariable(c.after):
@@ -1130,15 +1128,13 @@ class TestCase:
                 else:
                     if c.before.name in variables:
                         # Step Backwards: not-first appearance of a variable "after" must equal currently known value
-                        if not (c.after.type == rd.VarType.ReadOnlyResource or c.after.type == rd.VarType.ReadWriteResource):
-                            (res, difference) = analyse.shadervariable_equal(c.after, variables[c.before.name])
-                            if not res:
-                                raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.before.name}' after does not match existing entry {difference}")
+                        (res, difference) = analyse.shadervariable_equal(c.after, variables[c.before.name])
+                        if not res:
+                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.before.name}' after does not match existing entry {difference}")
                     else:
                         # Step Backwards: first appearance of a variable must have "after" = {}
-                        if not (c.after.type == rd.VarType.ReadOnlyResource or c.after.type == rd.VarType.ReadWriteResource):
-                            if c.after != rd.ShaderVariable():
-                                raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.before.name}' does not have NULL after")
+                        if c.after != rd.ShaderVariable():
+                            raise TestFailureException(f"Step {i} ShaderVariableChange for '{c.before.name}' does not have NULL after")
                     variables[c.before.name] = c.before
                     # Validate c.before
                     if not self.validate_shadervariable(c.before):
