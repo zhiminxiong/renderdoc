@@ -2153,6 +2153,12 @@ void Deserialise(const D3D12_STATE_OBJECT_DESC &el)
           delete temp;
           break;
         }
+        case D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE:
+        {
+          D3D12_LOCAL_ROOT_SIGNATURE *temp = (D3D12_LOCAL_ROOT_SIGNATURE *)el.pSubobjects[i].pDesc;
+          delete temp;
+          break;
+        }
         case D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_SERIALIZED_ROOT_SIGNATURE:
         {
           D3D12_GLOBAL_SERIALIZED_ROOT_SIGNATURE *temp =
