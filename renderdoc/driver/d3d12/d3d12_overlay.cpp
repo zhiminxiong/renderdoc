@@ -1278,6 +1278,7 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
       psoDesc.SampleDesc.Count = RDCMAX(1U, psoDesc.SampleDesc.Count);
       psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
 
+      psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
       psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
       psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
       psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
