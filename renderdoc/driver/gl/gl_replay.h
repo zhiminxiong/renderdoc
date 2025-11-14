@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include "api/replay/renderdoc_replay.h"
 #include "core/core.h"
 #include "replay/replay_driver.h"
@@ -115,6 +116,65 @@ enum TexDisplayFlags
   eTexDisplay_RemapFloat = 0x4,
   eTexDisplay_RemapUInt = 0x8,
   eTexDisplay_RemapSInt = 0x10,
+};
+
+struct SamplingProgramConfig
+{
+  enum
+  {
+    TexBuffer,
+    Tex1D,
+    Tex2D,
+    Tex3D,
+    TexCube,
+    Tex1DArray,
+    Tex2DArray,
+    Tex3DArray,
+    TexCubeArray,
+    Tex2DRect,
+    Tex2DMS,
+    Tex2DMSArray,
+  } dim = Tex2D;
+
+  enum
+  {
+    Fetch,
+    QueryLod,
+    Sample,
+    SampleDref,
+    Gather,
+    GatherDref,
+  } op = Fetch;
+
+  enum
+  {
+    Float,
+    UInt,
+    SInt,
+  } resType = Float;
+
+  uint32_t gatherChannel = 0;
+  bool useGatherOffs = false;
+  bool useGrad = false;
+  rdcfixedarray<int32_t, 8> gatherOffsets = {};
+  Vec3i fetchOffset;
+
+  uint32_t hashKey() const
+  {
+    uint32_t hash = 5381;
+    hash = ((hash << 5) + hash) + (uint32_t)dim;
+    hash = ((hash << 5) + hash) + (uint32_t)op;
+    hash = ((hash << 5) + hash) + (uint32_t)resType;
+    hash = ((hash << 5) + hash) + gatherChannel;
+    hash = ((hash << 5) + hash) + useGatherOffs;
+    hash = ((hash << 5) + hash) + useGrad;
+    hash = ((hash << 5) + hash) + fetchOffset.x;
+    hash = ((hash << 5) + hash) + fetchOffset.y;
+    hash = ((hash << 5) + hash) + fetchOffset.z;
+    for(size_t i = 0; i < gatherOffsets.size(); i++)
+      hash = ((hash << 5) + hash) + gatherOffsets[i];
+    return hash;
+  }
 };
 
 class GLReplay : public IReplayDriver
@@ -287,6 +347,7 @@ public:
   void FileChanged() {}
   void SetReplayData(GLWindowingData data);
 
+  void UseReplayContext() { MakeCurrentReplayContext(&m_ReplayCtx); }
   bool IsReplayContext(void *ctx) { return m_ReplayCtx.ctx == NULL || ctx == m_ReplayCtx.ctx; }
   bool HasDebugContext() { return m_DebugCtx != NULL; }
   void FillWithDiscardPattern(DiscardType type, GLuint framebuffer, GLsizei numAttachments,
@@ -298,6 +359,9 @@ public:
 
   bool CreateFragmentShaderReplacementProgram(GLuint program, GLuint replacedProgram, GLuint pipeline,
                                               GLuint fragShader, GLuint fragShaderSPIRV);
+
+  GLuint GetShaderDebugMathProg();
+  GLuint MakeShaderDebugSampleProg(const SamplingProgramConfig &config);
 
 private:
   void OpenGLFillCBufferVariables(ResourceId shader, GLuint prog, bool bufferBacked, rdcstr prefix,
@@ -373,6 +437,8 @@ private:
 
     int glslVersion;
 
+    rdcstr texSampleDefines;
+
     // min/max data
     GLuint minmaxTileResult;          // tile result buffer
     GLuint minmaxResult;              // Vec4f[2] final result buffer
@@ -438,6 +504,8 @@ private:
     GLuint discardProg[3][4];
     GLuint discardPatternBuffer;
 
+    GLuint shaderDebugMathProg;
+
     ResourceId overlayTexId;
     GLuint overlayTex;
     GLuint overlayFBO;
@@ -453,6 +521,8 @@ private:
   bool m_Degraded;
 
   HighlightCache m_HighlightCache;
+
+  std::unordered_map<uint32_t, GLuint> m_ShaderDebugSampleProg;
 
   std::map<GLenum, bytebuf> m_DiscardPatterns;
 

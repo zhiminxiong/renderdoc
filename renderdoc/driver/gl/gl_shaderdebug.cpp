@@ -31,6 +31,9 @@
 #include "gl_driver.h"
 #include "gl_replay.h"
 
+#define OPENGL 1
+#include "data/glsl/glsl_ubos_cpp.h"
+
 #if ENABLED(RDOC_DEVEL)
 #define CHECK_DEVICE_THREAD() \
   RDCASSERTMSG("API Wrapper function called from non-device thread!", IsDeviceThread());
@@ -103,11 +106,13 @@ public:
   ~GLAPIWrapper()
   {
     CHECK_DEVICE_THREAD();
-    m_pDriver->glFlush();
-    m_pDriver->glFinish();
 
-    for(auto it = m_BiasSamplers.begin(); it != m_BiasSamplers.end(); it++)
-      m_pDriver->glDeleteSamplers(1, &it->second);
+    GL.glDeleteBuffers(1, &m_UBO);
+    GL.glDeleteBuffers(1, &m_MathBuffer);
+    GL.glDeleteBuffers(1, &m_SampleBuffer);
+
+    GL.glDeleteTextures(1, &m_ReadbackTex);
+    GL.glDeleteFramebuffers(1, &m_ReadbackFBO);
   }
 
   void ResetReplay()
@@ -118,7 +123,7 @@ public:
       GLMarkerRegion region("ResetReplay");
       // replay the action to get back to 'normal' state for this event, and mark that we need to
       // replay back to pristine state next time we need to fetch data.
-      m_pDriver->ReplayLog(0, m_EventID, eReplay_OnlyDraw);
+      m_pDriver->GetReplay()->ReplayLog(m_EventID, eReplay_OnlyDraw);
     }
     m_ResourcesDirty = true;
   }
@@ -550,6 +555,614 @@ public:
                          bool &hasResult) override
   {
     CHECK_DEVICE_THREAD();
+
+    DebugSampleUBO uniformParams = {};
+
+    const bool buffer = (texType & DebugAPIWrapper::Buffer_Texture) != 0;
+    const bool uintTex = (texType & DebugAPIWrapper::UInt_Texture) != 0;
+    const bool sintTex = (texType & DebugAPIWrapper::SInt_Texture) != 0;
+
+    // fetch the right type of descriptor depending on if we're buffer or not
+    bool valid = true;
+    rdcstr access = StringFormat::Fmt("performing %s operation", ToStr(opcode).c_str());
+    const Descriptor &imageDescriptor = buffer ? GetDescriptor(access, ShaderBindIndex(), valid)
+                                               : GetDescriptor(access, imageBind, valid);
+    const Descriptor &bufferViewDescriptor = buffer
+                                                 ? GetDescriptor(access, imageBind, valid)
+                                                 : GetDescriptor(access, ShaderBindIndex(), valid);
+
+    // fetch the sampler (if there's no sampler, this will silently return dummy data without
+    // marking invalid
+    const SamplerDescriptor &samplerDescriptor = GetSamplerDescriptor(access, samplerBind, valid);
+
+    // if any descriptor lookup failed, return now
+    if(!valid)
+    {
+      hasResult = false;
+      return false;
+    }
+
+    GLMarkerRegion markerRegion("QueueSampleGather");
+
+    GLResource texture = m_pDriver->GetResourceManager()->GetLiveResource(imageDescriptor.resource);
+    GLResource bufTexture =
+        m_pDriver->GetResourceManager()->GetLiveResource(bufferViewDescriptor.resource);
+    GLResource sampler = m_pDriver->GetResourceManager()->GetLiveResource(samplerDescriptor.object);
+
+    // NULL texture : return 0,0,0,0
+    if(!buffer && (texture.name == 0))
+    {
+      memset(&output.value, 0, sizeof(output.value));
+      hasResult = true;
+      return true;
+    }
+
+    WrappedOpenGL::TextureData &texDetails =
+        m_pDriver->m_Textures[m_pDriver->GetResourceManager()->GetLiveID(imageDescriptor.resource)];
+
+    SamplingProgramConfig config;
+
+    config.resType = SamplingProgramConfig::Float;
+    if(uintTex)
+      config.resType = SamplingProgramConfig::UInt;
+    else if(sintTex)
+      config.resType = SamplingProgramConfig::SInt;
+
+    // how many co-ordinates should there be
+    int coords = 0, gradCoords = 0;
+    if(buffer)
+    {
+      config.dim = SamplingProgramConfig::TexBuffer;
+      coords = gradCoords = 1;
+    }
+    else
+    {
+      switch(texDetails.curType)
+      {
+        case eGL_TEXTURE_1D:
+          coords = 1;
+          gradCoords = 1;
+          config.dim = SamplingProgramConfig::Tex1D;
+          break;
+        case eGL_TEXTURE_2D:
+          coords = 2;
+          gradCoords = 2;
+          config.dim = SamplingProgramConfig::Tex2D;
+          break;
+        case eGL_TEXTURE_3D:
+          coords = 3;
+          gradCoords = 3;
+          config.dim = SamplingProgramConfig::Tex3D;
+          break;
+        case eGL_TEXTURE_CUBE_MAP:
+          coords = 3;
+          gradCoords = 3;
+          config.dim = SamplingProgramConfig::TexCube;
+          break;
+        case eGL_TEXTURE_1D_ARRAY:
+          coords = 2;
+          gradCoords = 1;
+          config.dim = SamplingProgramConfig::Tex1DArray;
+          break;
+        case eGL_TEXTURE_2D_ARRAY:
+          coords = 3;
+          gradCoords = 2;
+          config.dim = SamplingProgramConfig::Tex2DArray;
+          break;
+        case eGL_TEXTURE_CUBE_MAP_ARRAY:
+          coords = 4;
+          gradCoords = 3;
+          config.dim = SamplingProgramConfig::TexCubeArray;
+          break;
+        case eGL_TEXTURE_RECTANGLE:
+          coords = 2;
+          gradCoords = 2;
+          config.dim = SamplingProgramConfig::Tex2DRect;
+          break;
+        case eGL_TEXTURE_BUFFER:
+          coords = 1;
+          gradCoords = 1;
+          config.dim = SamplingProgramConfig::TexBuffer;
+          break;
+        case eGL_TEXTURE_2D_MULTISAMPLE:
+          coords = 2;
+          gradCoords = 2;
+          config.dim = SamplingProgramConfig::Tex2DMS;
+          break;
+        case eGL_TEXTURE_2D_MULTISAMPLE_ARRAY:
+          coords = 3;
+          gradCoords = 2;
+          config.dim = SamplingProgramConfig::Tex2DMSArray;
+          break;
+        default: RDCERR("Invalid texture type %s", ToStr(texDetails.curType).c_str()); return false;
+      }
+    }
+
+    GLint firstMip = 0, numMips = 1;
+    if(texture.name)
+    {
+      GL.glGetTextureParameterivEXT(texture.name, texDetails.curType, eGL_TEXTURE_BASE_LEVEL,
+                                    &firstMip);
+      GL.glGetTextureParameterivEXT(texture.name, texDetails.curType, eGL_TEXTURE_MAX_LEVEL,
+                                    &numMips);
+    }
+
+    // handle query opcodes now
+    switch(opcode)
+    {
+      case rdcspv::Op::ImageQueryLevels:
+      {
+        output.value.u32v[0] = numMips;
+        hasResult = true;
+        return true;
+      }
+      case rdcspv::Op::ImageQuerySamples:
+      {
+        output.value.u32v[0] = (uint32_t)RDCMAX(1, texDetails.samples);
+        hasResult = true;
+        return true;
+      }
+      case rdcspv::Op::ImageQuerySize:
+      case rdcspv::Op::ImageQuerySizeLod:
+      {
+        uint32_t mip = firstMip;
+
+        if(opcode == rdcspv::Op::ImageQuerySizeLod)
+          mip += uintComp(lane.GetSrc(operands.lod), 0);
+
+        RDCEraseEl(output.value);
+
+        int i = 0;
+        setUintComp(output, i++, RDCMAX(1, texDetails.width >> mip));
+        if(coords >= 2)
+          setUintComp(output, i++, RDCMAX(1, texDetails.height >> mip));
+        if(texDetails.curType == eGL_TEXTURE_3D)
+          setUintComp(output, i++, RDCMAX(1, texDetails.depth >> mip));
+
+        if(texDetails.curType == eGL_TEXTURE_1D_ARRAY)
+          setUintComp(output, i++, texDetails.height);
+        else if(texDetails.curType == eGL_TEXTURE_2D_ARRAY)
+          setUintComp(output, i++, texDetails.depth);
+        else if(texDetails.curType == eGL_TEXTURE_CUBE_MAP ||
+                texDetails.curType == eGL_TEXTURE_CUBE_MAP_ARRAY)
+          setUintComp(output, i++, texDetails.depth / 6);
+
+        if(buffer)
+        {
+          uint64_t size = bufferViewDescriptor.byteSize;
+          GLenum format = MakeGLFormat(bufferViewDescriptor.format);
+
+          setUintComp(
+              output, 0,
+              uint32_t(size / GetByteSize(1, 1, 1, GetBaseFormat(format), GetDataType(format))));
+        }
+
+        hasResult = true;
+        return true;
+      }
+      default: break;
+    }
+
+    bool lodBiasRestore = false;
+    float lodBiasRestoreValue = 0.0f;
+
+    if(operands.flags & rdcspv::ImageOperands::Bias)
+    {
+      const ShaderVariable &biasVar = lane.GetSrc(operands.bias);
+
+      // silently cast parameters to 32-bit floats
+      float bias = floatComp(biasVar, 0);
+
+      if(bias != 0.0f)
+      {
+        // bias can only be used with implicit lod operations, but we want to do everything with
+        // explicit lod operations. So we instead push the bias into the sampler itself, which is
+        // entirely equivalent.
+
+        lodBiasRestore = true;
+        if(sampler.name)
+        {
+          GL.glGetSamplerParameterfv(sampler.name, eGL_TEXTURE_LOD_BIAS, &lodBiasRestoreValue);
+          GL.glSamplerParameterf(sampler.name, eGL_TEXTURE_LOD_BIAS, lodBiasRestoreValue + bias);
+        }
+        else
+        {
+          GL.glGetTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS,
+                                        &lodBiasRestoreValue);
+          float val = lodBiasRestoreValue + bias;
+          GL.glTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS, &val);
+        }
+      }
+    }
+
+    switch(opcode)
+    {
+      case rdcspv::Op::ImageFetch: config.op = SamplingProgramConfig::Fetch; break;
+      case rdcspv::Op::ImageQueryLod: config.op = SamplingProgramConfig::QueryLod; break;
+      case rdcspv::Op::ImageSampleExplicitLod:
+      case rdcspv::Op::ImageSampleImplicitLod:
+      case rdcspv::Op::ImageSampleProjExplicitLod:
+      case rdcspv::Op::ImageSampleProjImplicitLod: config.op = SamplingProgramConfig::Sample; break;
+      case rdcspv::Op::ImageSampleDrefExplicitLod:
+      case rdcspv::Op::ImageSampleDrefImplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefExplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefImplicitLod:
+        config.op = SamplingProgramConfig::SampleDref;
+        break;
+      case rdcspv::Op::ImageGather: config.op = SamplingProgramConfig::Gather; break;
+      case rdcspv::Op::ImageDrefGather: config.op = SamplingProgramConfig::GatherDref; break;
+      default:
+      {
+        RDCERR("Unsupported opcode %s", ToStr(opcode).c_str());
+        hasResult = false;
+        return false;
+      }
+    }
+
+    // proj opcodes have an extra q parameter, but we do the divide ourselves and 'demote' these to
+    // non-proj variants
+    bool proj = false;
+    switch(opcode)
+    {
+      case rdcspv::Op::ImageSampleProjExplicitLod:
+      case rdcspv::Op::ImageSampleProjImplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefExplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefImplicitLod:
+      {
+        proj = true;
+        break;
+      }
+      default: break;
+    }
+
+    bool useCompare = false;
+    switch(opcode)
+    {
+      case rdcspv::Op::ImageDrefGather:
+      case rdcspv::Op::ImageSampleDrefExplicitLod:
+      case rdcspv::Op::ImageSampleDrefImplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefExplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefImplicitLod:
+      {
+        useCompare = true;
+        break;
+      }
+      default: break;
+    }
+
+    bool gatherOp = false;
+
+    switch(opcode)
+    {
+      case rdcspv::Op::ImageFetch:
+      {
+        // co-ordinates after the used ones are read as 0s. This allows us to then read an implicit
+        // 0 for array layer when we promote accesses to arrays.
+        uniformParams.texel_uvw.x = uintComp(uv, 0);
+        if(coords >= 2)
+          uniformParams.texel_uvw.y = uintComp(uv, 1);
+        if(coords >= 3)
+          uniformParams.texel_uvw.z = uintComp(uv, 2);
+
+        if(!buffer && operands.flags & rdcspv::ImageOperands::Lod)
+          uniformParams.texel_lod = uintComp(lane.GetSrc(operands.lod), 0);
+        else
+          uniformParams.texel_lod = 0;
+
+        if(operands.flags & rdcspv::ImageOperands::Sample)
+          uniformParams.sampleIdx = uintComp(lane.GetSrc(operands.sample), 0);
+
+        break;
+      }
+      case rdcspv::Op::ImageGather:
+      case rdcspv::Op::ImageDrefGather:
+      {
+        gatherOp = true;
+
+        // silently cast parameters to 32-bit floats
+        for(int i = 0; i < coords; i++)
+          uniformParams.uvwa.fv[i] = floatComp(uv, i);
+
+        if(useCompare)
+          uniformParams.compare = floatComp(compare, 0);
+
+        config.gatherChannel = (uint32_t)gatherChannel;
+
+        if(operands.flags & rdcspv::ImageOperands::ConstOffsets)
+        {
+          ShaderVariable constOffsets = lane.GetSrc(operands.constOffsets);
+
+          config.useGatherOffs = true;
+
+          // should be an array of ivec2
+          RDCASSERT(constOffsets.members.size() == 4);
+
+          // sign extend variables lower than 32-bits
+          for(int i = 0; i < 4; i++)
+          {
+            if(constOffsets.members[i].type == VarType::SByte)
+            {
+              constOffsets.members[i].value.s32v[0] = constOffsets.members[i].value.s8v[0];
+              constOffsets.members[i].value.s32v[1] = constOffsets.members[i].value.s8v[1];
+            }
+            else if(constOffsets.members[i].type == VarType::SShort)
+            {
+              constOffsets.members[i].value.s32v[0] = constOffsets.members[i].value.s16v[0];
+              constOffsets.members[i].value.s32v[1] = constOffsets.members[i].value.s16v[1];
+            }
+          }
+
+          config.gatherOffsets[0] = constOffsets.members[0].value.s32v[0];
+          config.gatherOffsets[1] = constOffsets.members[0].value.s32v[1];
+          config.gatherOffsets[2] = constOffsets.members[1].value.s32v[0];
+          config.gatherOffsets[3] = constOffsets.members[1].value.s32v[1];
+          config.gatherOffsets[4] = constOffsets.members[2].value.s32v[0];
+          config.gatherOffsets[5] = constOffsets.members[2].value.s32v[1];
+          config.gatherOffsets[6] = constOffsets.members[3].value.s32v[0];
+          config.gatherOffsets[7] = constOffsets.members[3].value.s32v[1];
+        }
+
+        break;
+      }
+      case rdcspv::Op::ImageQueryLod:
+      case rdcspv::Op::ImageSampleExplicitLod:
+      case rdcspv::Op::ImageSampleImplicitLod:
+      case rdcspv::Op::ImageSampleProjExplicitLod:
+      case rdcspv::Op::ImageSampleProjImplicitLod:
+      case rdcspv::Op::ImageSampleDrefExplicitLod:
+      case rdcspv::Op::ImageSampleDrefImplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefExplicitLod:
+      case rdcspv::Op::ImageSampleProjDrefImplicitLod:
+      {
+        // silently cast parameters to 32-bit floats
+        for(int i = 0; i < coords; i++)
+          uniformParams.uvwa.fv[i] = floatComp(uv, i);
+
+        if(proj)
+        {
+          // coords shouldn't be 4 because that's only valid for cube arrays which can't be
+          // projected
+          RDCASSERT(coords < 4);
+
+          // do the divide ourselves rather than severely complicating the sample shader (as proj
+          // variants need non-arrayed textures)
+          float q = floatComp(uv, coords);
+
+          uniformParams.uvwa.fv[0] /= q;
+          uniformParams.uvwa.fv[1] /= q;
+          uniformParams.uvwa.fv[2] /= q;
+        }
+
+        if(operands.flags & rdcspv::ImageOperands::MinLod)
+        {
+          const ShaderVariable &minLodVar = lane.GetSrc(operands.minLod);
+
+          // silently cast parameters to 32-bit floats
+          uniformParams.minlod = floatComp(minLodVar, 0);
+        }
+
+        if(useCompare)
+        {
+          // silently cast parameters to 32-bit floats
+          uniformParams.compare = floatComp(compare, 0);
+        }
+
+        if(operands.flags & rdcspv::ImageOperands::Lod)
+        {
+          const ShaderVariable &lodVar = lane.GetSrc(operands.lod);
+
+          // silently cast parameters to 32-bit floats
+          uniformParams.lod = floatComp(lodVar, 0);
+          config.useGrad = false;
+        }
+        else if(operands.flags & rdcspv::ImageOperands::Grad)
+        {
+          ShaderVariable ddx = lane.GetSrc(operands.grad.first);
+          ShaderVariable ddy = lane.GetSrc(operands.grad.second);
+
+          config.useGrad = true;
+
+          // silently cast parameters to 32-bit floats
+          RDCASSERTEQUAL(ddx.type, ddy.type);
+          for(int i = 0; i < gradCoords; i++)
+          {
+            uniformParams.ddx_uvw.fv[i] = floatComp(ddx, i);
+            uniformParams.ddy_uvw.fv[i] = floatComp(ddy, i);
+          }
+        }
+
+        if(opcode == rdcspv::Op::ImageSampleImplicitLod ||
+           opcode == rdcspv::Op::ImageSampleProjImplicitLod || opcode == rdcspv::Op::ImageQueryLod)
+        {
+          // use grad to sub in for the implicit lod
+          config.useGrad = true;
+
+          // silently cast parameters to 32-bit floats
+          RDCASSERTEQUAL(ddxCalc.type, ddyCalc.type);
+          for(int i = 0; i < gradCoords; i++)
+          {
+            uniformParams.ddx_uvw.fv[i] = floatComp(ddxCalc, i);
+            uniformParams.ddy_uvw.fv[i] = floatComp(ddyCalc, i);
+          }
+        }
+
+        break;
+      }
+      default: break;
+    }
+
+    if(operands.flags & rdcspv::ImageOperands::ConstOffset)
+    {
+      ShaderVariable constOffset = lane.GetSrc(operands.constOffset);
+
+      // sign extend variables lower than 32-bits
+      for(uint8_t c = 0; c < constOffset.columns; c++)
+      {
+        if(constOffset.type == VarType::SByte)
+          constOffset.value.s32v[c] = constOffset.value.s8v[c];
+        else if(constOffset.type == VarType::SShort)
+          constOffset.value.s32v[c] = constOffset.value.s16v[c];
+      }
+
+      // pass offsets as uniform where possible - when the feature (widely available) on gather
+      // operations. On non-gather operations we are forced to use const offsets and must specialise
+      // the pipeline.
+      if(gatherOp)
+      {
+        uniformParams.dynoffset.x = constOffset.value.s32v[0];
+        if(gradCoords >= 2)
+          uniformParams.dynoffset.y = constOffset.value.s32v[1];
+        if(gradCoords >= 3)
+          uniformParams.dynoffset.z = constOffset.value.s32v[2];
+      }
+      else
+      {
+        config.fetchOffset.x = constOffset.value.s32v[0];
+        if(gradCoords >= 2)
+          config.fetchOffset.y = constOffset.value.s32v[1];
+        if(gradCoords >= 3)
+          config.fetchOffset.z = constOffset.value.s32v[2];
+      }
+    }
+    else if(operands.flags & rdcspv::ImageOperands::Offset)
+    {
+      ShaderVariable offset = lane.GetSrc(operands.offset);
+
+      // sign extend variables lower than 32-bits
+      for(uint8_t c = 0; c < offset.columns; c++)
+      {
+        if(offset.type == VarType::SByte)
+          offset.value.s32v[c] = offset.value.s8v[c];
+        else if(offset.type == VarType::SShort)
+          offset.value.s32v[c] = offset.value.s16v[c];
+      }
+
+      // if the app's shader used a dynamic offset, we can too!
+      uniformParams.dynoffset.x = offset.value.s32v[0];
+      if(gradCoords >= 2)
+        uniformParams.dynoffset.y = offset.value.s32v[1];
+      if(gradCoords >= 3)
+        uniformParams.dynoffset.z = offset.value.s32v[2];
+    }
+
+    GLuint prog = m_pDriver->GetReplay()->MakeShaderDebugSampleProg(config);
+
+    if(prog == 0)
+    {
+      m_pDriver->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
+                                 MessageSource::RuntimeWarning,
+                                 "Failed to compile graphics program for sampling operation");
+      return false;
+    }
+
+    m_pDriver->GetReplay()->UseReplayContext();
+
+    GLRenderState rs;
+    rs.FetchState(m_pDriver);
+
+    // do this 'lazily' so we are already inside the state push and pop
+    if(m_UBO == 0)
+    {
+      GL.glGenBuffers(1, &m_UBO);
+      GL.glBindBuffer(eGL_UNIFORM_BUFFER, m_UBO);
+      GL.glNamedBufferDataEXT(m_UBO, 2048, NULL, eGL_DYNAMIC_DRAW);
+
+      GL.glGenFramebuffers(1, &m_ReadbackFBO);
+      GL.glBindFramebuffer(eGL_FRAMEBUFFER, m_ReadbackFBO);
+
+      GL.glGenTextures(1, &m_ReadbackTex);
+      GL.glBindTexture(eGL_TEXTURE_2D, m_ReadbackTex);
+
+      GL.glBindBuffer(eGL_PIXEL_UNPACK_BUFFER, 0);
+      GL.glTextureImage2DEXT(m_ReadbackTex, eGL_TEXTURE_2D, 0, eGL_RGBA32F, 1, 1, 0, eGL_RGBA,
+                             eGL_FLOAT, NULL);
+      GL.glTextureParameteriEXT(m_ReadbackTex, eGL_TEXTURE_2D, eGL_TEXTURE_MAX_LEVEL, 0);
+      GL.glTextureParameteriEXT(m_ReadbackTex, eGL_TEXTURE_2D, eGL_TEXTURE_MIN_FILTER, eGL_NEAREST);
+      GL.glTextureParameteriEXT(m_ReadbackTex, eGL_TEXTURE_2D, eGL_TEXTURE_MAG_FILTER, eGL_NEAREST);
+      GL.glTextureParameteriEXT(m_ReadbackTex, eGL_TEXTURE_2D, eGL_TEXTURE_WRAP_S, eGL_CLAMP_TO_EDGE);
+      GL.glTextureParameteriEXT(m_ReadbackTex, eGL_TEXTURE_2D, eGL_TEXTURE_WRAP_T, eGL_CLAMP_TO_EDGE);
+      GL.glFramebufferTexture2D(eGL_FRAMEBUFFER, eGL_COLOR_ATTACHMENT0, eGL_TEXTURE_2D,
+                                m_ReadbackTex, 0);
+    }
+
+    if(m_SampleOffset >= m_SampleBufferSize || m_SampleBuffer == 0)
+    {
+      m_SampleBufferSize = m_SampleBufferSize * 2 + 1024 * mathOpResultByteSize;
+
+      GLuint oldBuf = m_SampleBuffer;
+      GLsizeiptr oldSize = m_SampleBufferSize;
+
+      // resize the buffer up
+      GL.glGenBuffers(1, &m_SampleBuffer);
+      GL.glBindBuffer(eGL_PIXEL_PACK_BUFFER, m_SampleBuffer);
+      GL.glNamedBufferDataEXT(m_SampleBuffer, m_SampleBufferSize, NULL, eGL_DYNAMIC_DRAW);
+
+      if(oldBuf)
+        GL.glNamedCopyBufferSubDataEXT(oldBuf, m_SampleBuffer, 0, 0, oldSize);
+      GL.glBindBuffer(eGL_PIXEL_PACK_BUFFER, 0);
+    }
+
+    GL.glUseProgram(prog);
+
+    GL.glActiveTexture(eGL_TEXTURE0);
+    if(texture.name)
+      GL.glBindTexture(texDetails.curType, texture.name);
+    if(bufTexture.name)
+      GL.glBindTexture(eGL_TEXTURE_BUFFER, bufTexture.name);
+    if(sampler.name)
+      GL.glBindSampler(0, sampler.name);
+
+    GL.glBindBufferBase(eGL_UNIFORM_BUFFER, 0, m_UBO);
+    DebugSampleUBO *cdata =
+        (DebugSampleUBO *)GL.glMapBufferRange(eGL_UNIFORM_BUFFER, 0, sizeof(DebugSampleUBO),
+                                              GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+
+    memcpy(cdata, &uniformParams, sizeof(uniformParams));
+    GL.glUnmapBuffer(eGL_UNIFORM_BUFFER);
+
+    // set UVW/DDX/DDY for vertex shader
+    GL.glUniform4fv(GL.glGetUniformLocation(prog, "in_uvwa"), 1, &uniformParams.uvwa.x);
+    GL.glUniform4fv(GL.glGetUniformLocation(prog, "in_ddx"), 1, &uniformParams.ddx_uvw.x);
+    GL.glUniform4fv(GL.glGetUniformLocation(prog, "in_ddy"), 1, &uniformParams.ddy_uvw.x);
+
+    GL.glBindFramebuffer(eGL_FRAMEBUFFER, m_ReadbackFBO);
+
+    float pixel[4] = {};
+    GL.glClearBufferfv(eGL_COLOR, 0, pixel);
+
+    if(HasExt[EXT_depth_bounds_test])
+      GL.glDisable(eGL_DEPTH_BOUNDS_TEST_EXT);
+    GL.glDisable(eGL_DEPTH_TEST);
+    GL.glDisable(eGL_STENCIL_TEST);
+    GL.glDisable(eGL_CULL_FACE);
+    if(HasExt[ARB_texture_multisample_no_array] || HasExt[ARB_texture_multisample])
+      GL.glDisable(eGL_SAMPLE_MASK);
+    GL.glDisable(eGL_SCISSOR_TEST);
+    GL.glDisable(eGL_BLEND);
+    GL.glViewport(0, 0, 1, 1);
+    GL.glDrawArrays(eGL_TRIANGLES, 0, 3);
+
+    RDCASSERT(m_SampleOffset + sampleGatherOpResultByteSize <= m_SampleBufferSize, m_SampleOffset,
+              sampleGatherOpResultByteSize, m_SampleBufferSize);
+
+    GL.glBindBuffer(eGL_PIXEL_PACK_BUFFER, m_SampleBuffer);
+    GL.glReadPixels(0, 0, 1, 1, eGL_RGBA, eGL_FLOAT, (void *)m_SampleOffset);
+    GL.glBindBuffer(eGL_PIXEL_PACK_BUFFER, 0);
+    m_SampleOffset += sampleGatherOpResultByteSize;
+
+    hasResult = false;
+
+    if(lodBiasRestore)
+    {
+      if(sampler.name)
+        GL.glSamplerParameterf(sampler.name, eGL_TEXTURE_LOD_BIAS, lodBiasRestoreValue);
+      else
+        GL.glTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS,
+                                   &lodBiasRestoreValue);
+    }
+
+    rs.ApplyState(m_pDriver);
+
     return true;
   }
 
@@ -557,6 +1170,95 @@ public:
                                     const rdcarray<ShaderVariable> &params) override
   {
     CHECK_DEVICE_THREAD();
+    RDCASSERT(params.size() <= 3, params.size());
+
+    RDCASSERTEQUAL(params[0].type, VarType::Float);
+
+    GLMarkerRegion markerRegion("QueueCalculateMathOp");
+
+    m_pDriver->GetReplay()->UseReplayContext();
+
+    GLRenderState rs;
+    rs.FetchState(m_pDriver);
+
+    RDCCOMPILE_ASSERT(SPV_OpSin == (int)rdcspv::GLSLstd450::Sin, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpCos == (int)rdcspv::GLSLstd450::Cos, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpTan == (int)rdcspv::GLSLstd450::Tan, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAsin == (int)rdcspv::GLSLstd450::Asin, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAcos == (int)rdcspv::GLSLstd450::Acos, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAtan == (int)rdcspv::GLSLstd450::Atan, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpSinh == (int)rdcspv::GLSLstd450::Sinh, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpCosh == (int)rdcspv::GLSLstd450::Cosh, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpTanh == (int)rdcspv::GLSLstd450::Tanh, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAsinh == (int)rdcspv::GLSLstd450::Asinh,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAcosh == (int)rdcspv::GLSLstd450::Acosh,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAtanh == (int)rdcspv::GLSLstd450::Atanh,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpExp == (int)rdcspv::GLSLstd450::Exp, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpLog == (int)rdcspv::GLSLstd450::Log, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpExp2 == (int)rdcspv::GLSLstd450::Exp2, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpLog2 == (int)rdcspv::GLSLstd450::Log2, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpSqrt == (int)rdcspv::GLSLstd450::Sqrt, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpInverseSqrt == (int)rdcspv::GLSLstd450::InverseSqrt,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpNormalize == (int)rdcspv::GLSLstd450::Normalize,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpAtan2 == (int)rdcspv::GLSLstd450::Atan2,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpPow == (int)rdcspv::GLSLstd450::Pow, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpFma == (int)rdcspv::GLSLstd450::Fma, "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpLength == (int)rdcspv::GLSLstd450::Length,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpDistance == (int)rdcspv::GLSLstd450::Distance,
+                      "Shader defines are mismatched");
+    RDCCOMPILE_ASSERT(SPV_OpRefract == (int)rdcspv::GLSLstd450::Refract,
+                      "Shader defines are mismatched");
+
+    GLuint mathProg = m_pDriver->GetReplay()->GetShaderDebugMathProg();
+
+    GL.glUniform1i(GL.glGetUniformLocation(mathProg, "outputs"), 0);
+
+    if(m_MathOffset >= m_MathBufferSize || m_MathBuffer == 0)
+    {
+      m_MathBufferSize = m_MathBufferSize * 2 + 1024 * mathOpResultByteSize;
+
+      GLuint oldBuf = m_MathBuffer;
+      GLsizeiptr oldSize = m_MathBufferSize;
+
+      // resize the buffer up
+      GL.glGenBuffers(1, &m_MathBuffer);
+      GL.glBindBuffer(eGL_SHADER_STORAGE_BUFFER, m_MathBuffer);
+      GL.glNamedBufferDataEXT(m_MathBuffer, m_MathBufferSize, NULL, eGL_DYNAMIC_DRAW);
+
+      if(oldBuf)
+        GL.glNamedCopyBufferSubDataEXT(oldBuf, m_MathBuffer, 0, 0, oldSize);
+    }
+
+    GL.glBindBufferRange(eGL_SHADER_STORAGE_BUFFER, 0, m_MathBuffer, (GLintptr)m_MathOffset,
+                         (GLsizeiptr)mathOpResultByteSize);
+
+    m_MathOffset += mathOpResultByteSize;
+
+    GL.glUseProgram(mathProg);
+
+    const char *names[] = {"a", "b", "c"};
+
+    // push the parameters
+    for(size_t i = 0; i < params.size(); i++)
+    {
+      RDCASSERTEQUAL(params[i].type, params[0].type);
+      GL.glUniform4fv(GL.glGetUniformLocation(mathProg, names[i]), 1, params[i].value.f32v.data());
+    }
+
+    // push the operation afterwards
+    GL.glUniform1ui(GL.glGetUniformLocation(mathProg, "op"), (uint32_t)op);
+
+    GL.glDispatchCompute(1, 1, 1);
+
+    rs.ApplyState(m_pDriver);
+
     return true;
   }
 
@@ -564,8 +1266,77 @@ public:
                                 rdcarray<ShaderVariable *> &sampleGatherResults) override
   {
     CHECK_DEVICE_THREAD();
-    return false;
+
+    bytebuf gpuResults;
+    gpuResults.resize(m_MathBufferSize + m_SampleBufferSize);
+    if(m_MathBuffer)
+    {
+      GL.glBindBuffer(eGL_COPY_READ_BUFFER, m_MathBuffer);
+      GL.glGetBufferSubData(eGL_COPY_READ_BUFFER, 0, m_MathBufferSize, gpuResults.data());
+    }
+    if(m_SampleBuffer)
+    {
+      GL.glBindBuffer(eGL_COPY_READ_BUFFER, m_SampleBuffer);
+      GL.glGetBufferSubData(eGL_COPY_READ_BUFFER, 0, m_SampleBufferSize,
+                            gpuResults.data() + m_MathBufferSize);
+    }
+
+    m_MathOffset = m_SampleOffset = 0;
+
+    uintptr_t bufferEnd = (uintptr_t)gpuResults.end();
+
+    byte *gpuMathOpResults = gpuResults.data();
+    for(ShaderVariable *result : mathOpResults)
+    {
+      size_t countBytes = VarTypeByteSize(result->type) * result->columns;
+      RDCASSERT((uintptr_t)gpuMathOpResults + countBytes <= bufferEnd, (uintptr_t)gpuMathOpResults,
+                countBytes, bufferEnd);
+      RDCASSERT(countBytes <= mathOpResultByteSize, countBytes, mathOpResultByteSize);
+      memcpy(result->value.u32v.data(), gpuMathOpResults, countBytes);
+      gpuMathOpResults += mathOpResultByteSize;
+    }
+
+    byte *gpuSampleGatherOpResults = gpuResults.data() + m_MathBufferSize;
+    for(ShaderVariable *result : sampleGatherResults)
+    {
+      float *retf = (float *)gpuSampleGatherOpResults;
+      uint32_t *retu = (uint32_t *)gpuSampleGatherOpResults;
+      int32_t *reti = (int32_t *)gpuSampleGatherOpResults;
+
+      size_t countBytes = 16;
+      RDCASSERT((uintptr_t)gpuSampleGatherOpResults + countBytes <= bufferEnd,
+                (uintptr_t)gpuSampleGatherOpResults, countBytes, bufferEnd);
+      RDCASSERT(countBytes <= sampleGatherOpResultByteSize, countBytes, sampleGatherOpResultByteSize);
+      // convert full precision results, we did all sampling at 32-bit precision
+      ShaderVariable &output = *result;
+      for(uint8_t c = 0; c < 4; c++)
+      {
+        if(VarTypeCompType(output.type) == CompType::Float)
+          setFloatComp(output, c, retf[c]);
+        else if(VarTypeCompType(output.type) == CompType::SInt)
+          setIntComp(output, c, reti[c]);
+        else
+          setUintComp(output, c, retu[c]);
+      }
+      gpuSampleGatherOpResults += sampleGatherOpResultByteSize;
+    }
+
+    return true;
   }
+
+  GLuint m_UBO = 0;
+  GLuint m_ReadbackTex = 0;
+  GLuint m_ReadbackFBO = 0;
+
+  GLuint m_MathBuffer = 0;
+  size_t m_MathBufferSize = 0;
+  GLuint m_SampleBuffer = 0;
+  size_t m_SampleBufferSize = 0;
+
+  size_t m_MathOffset = 0, m_SampleOffset = 0;
+
+  const size_t mathOpResultByteSize = sizeof(Vec4f) * 2;
+  const size_t sampleGatherOpResultByteSize = sizeof(Vec4f);
 
   virtual bool QueuedOpsHasSpace() override { return true; }
 
@@ -593,9 +1364,6 @@ private:
   rdcarray<DescriptorAccess> m_Access;
   rdcarray<Descriptor> m_Descriptors;
   rdcarray<SamplerDescriptor> m_SamplerDescriptors;
-
-  typedef rdcpair<ResourceId, float> SamplerBiasKey;
-  std::map<SamplerBiasKey, GLuint> m_BiasSamplers;
 
   Threading::RWLock bufferCacheLock;
   std::map<ShaderBindIndex, bytebuf> bufferCache;
@@ -763,7 +1531,7 @@ private:
       if(m_ResourcesDirty)
       {
         GLMarkerRegion region("un-dirtying resources");
-        m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
+        m_pDriver->GetReplay()->ReplayLog(m_EventID, eReplay_WithoutDraw);
         m_ResourcesDirty = false;
       }
 
@@ -797,7 +1565,7 @@ private:
       if(m_ResourcesDirty)
       {
         GLMarkerRegion region("un-dirtying resources");
-        m_pDriver->ReplayLog(0, m_EventID, eReplay_WithoutDraw);
+        m_pDriver->GetReplay()->ReplayLog(m_EventID, eReplay_WithoutDraw);
         m_ResourcesDirty = false;
       }
 

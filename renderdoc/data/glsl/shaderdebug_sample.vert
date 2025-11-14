@@ -50,8 +50,13 @@ uniform vec4 in_ddy;
 
 void main(void)
 {
+#ifdef VULKAN
   const vec4 verts[3] = vec4[3](vec4(-0.75, -0.75, 0.5, 1.0), vec4(1.25, -0.75, 0.5, 1.0),
                                 vec4(-0.75, 1.25, 0.5, 1.0));
+#else
+  const vec4 verts[3] =
+      vec4[3](vec4(-0.75, 0.75, 0.5, 1.0), vec4(1.25, 0.75, 0.5, 1.0), vec4(-0.75, -1.25, 0.5, 1.0));
+#endif
 
   gl_Position = verts[VERTEX_ID];
   uvwa = in_uvwa;

@@ -425,6 +425,8 @@ void GLReplay::InitDebugData()
           "#extension GL_ARB_shader_bit_encoding : require\n";
   }
 
+  DebugData.texSampleDefines = texSampleDefines;
+
   rdcstr vsDefines = "#define FORCE_IO_LOCATION 1";
 
   if(!IsGLES)
@@ -778,6 +780,9 @@ void GLReplay::InitDebugData()
     GL.glDeleteShader(vsShad);
     GL.glDeleteShader(fsShad);
   }
+
+  cs = GenerateGLSLShader(GetEmbeddedResource(glsl_debug_math_comp), shaderType, glslCSVer);
+  DebugData.shaderDebugMathProg = CreateCShaderProgram(cs);
 
   RenderDoc::Inst().SetProgress(LoadProgress::DebugManagerInit, 0.4f);
 
@@ -1274,6 +1279,14 @@ void GLReplay::DeleteDebugData()
   if(DebugData.trisizeProg)
     drv.glDeleteProgram(DebugData.trisizeProg);
 
+  if(DebugData.shaderDebugMathProg)
+    drv.glDeleteProgram(DebugData.shaderDebugMathProg);
+
+  for(auto it = m_ShaderDebugSampleProg.begin(); it != m_ShaderDebugSampleProg.end(); ++it)
+  {
+    drv.glDeleteProgram(it->second);
+  }
+
   drv.glDeleteBuffers(ARRAY_COUNT(DebugData.UBOs), DebugData.UBOs);
   drv.glDeleteFramebuffers(1, &DebugData.pickPixelFBO);
   drv.glDeleteTextures(1, &DebugData.pickPixelTex);
@@ -1327,6 +1340,117 @@ void GLReplay::DeleteDebugData()
 
   drv.glDeleteBuffers(1, &DebugData.axisFrustumBuffer);
   drv.glDeleteBuffers(1, &DebugData.triHighlightBuffer);
+}
+
+GLuint GLReplay::GetShaderDebugMathProg()
+{
+  return DebugData.shaderDebugMathProg;
+}
+
+GLuint GLReplay::MakeShaderDebugSampleProg(const SamplingProgramConfig &config)
+{
+  uint32_t hash = config.hashKey();
+
+  if(m_ShaderDebugSampleProg[hash])
+    return m_ShaderDebugSampleProg[hash];
+
+  rdcstr defines;
+
+  defines += rdcstr("#define SHADER_BASETYPE ") + ToStr((uint32_t)config.resType) + "\n";
+
+  defines += StringFormat::Fmt("#define FETCH_OFFSET ivec3(%u, %u, %u)\n", config.fetchOffset.x,
+                               config.fetchOffset.y, config.fetchOffset.z);
+
+  defines += StringFormat::Fmt(
+      "#define GATHER_OFFSETS ivec2[4](ivec2(%u, %u), ivec2(%u, %u), ivec2(%u, %u), ivec2(%u, "
+      "%u))\n",
+      config.gatherOffsets[0], config.gatherOffsets[1], config.gatherOffsets[2],
+      config.gatherOffsets[3], config.gatherOffsets[4], config.gatherOffsets[5],
+      config.gatherOffsets[6], config.gatherOffsets[7]);
+
+  defines += StringFormat::Fmt("#define USE_GRAD %u\n", config.useGrad);
+  defines += StringFormat::Fmt("#define USE_GATHER_OFFS %u\n", config.useGatherOffs);
+  defines += StringFormat::Fmt("#define GATHER_CHANNEL %u\n", config.gatherChannel);
+
+  rdcstr operation = "Do";
+  switch(config.op)
+  {
+    case SamplingProgramConfig::Fetch: operation += "Fetch"; break;
+    case SamplingProgramConfig::QueryLod: operation += "QueryLod"; break;
+    case SamplingProgramConfig::Sample: operation += "Sample"; break;
+    case SamplingProgramConfig::SampleDref: operation += "SampleDref"; break;
+    case SamplingProgramConfig::Gather: operation += "Gather"; break;
+    case SamplingProgramConfig::GatherDref: operation += "GatherDref"; break;
+  }
+
+  rdcstr dim;
+  switch(config.dim)
+  {
+    case SamplingProgramConfig::TexBuffer: dim = "Buffer"; break;
+    case SamplingProgramConfig::Tex1D: dim = "1D"; break;
+    case SamplingProgramConfig::Tex2D: dim = "2D"; break;
+    case SamplingProgramConfig::Tex3D: dim = "3D"; break;
+    case SamplingProgramConfig::TexCube: dim = "Cube"; break;
+    case SamplingProgramConfig::Tex1DArray: dim = "1DArray"; break;
+    case SamplingProgramConfig::Tex2DArray: dim = "2DArray"; break;
+    case SamplingProgramConfig::Tex3DArray: dim = "3DArray"; break;
+    case SamplingProgramConfig::TexCubeArray: dim = "CubeArray"; break;
+    case SamplingProgramConfig::Tex2DRect: dim = "2DRect"; break;
+    case SamplingProgramConfig::Tex2DMS: dim = "2DMS"; break;
+    case SamplingProgramConfig::Tex2DMSArray: dim = "2DMSArray"; break;
+  }
+  defines += StringFormat::Fmt("#define OPERATION %s%s\n", operation.c_str(), dim.c_str());
+  defines += StringFormat::Fmt("#define USE_GRAD %u\n", config.useGrad);
+
+  ShaderType shaderType;
+  int glslVersion;
+  int glslBaseVer;
+  int glslCSVer;    // compute shader
+
+  GetGLSLVersions(shaderType, glslVersion, glslBaseVer, glslCSVer);
+
+  if(!IsGLES)
+  {
+    glslVersion = 330;
+    if(GLCoreVersion >= 45)
+    {
+      glslVersion = 450;
+      defines += "#extension GL_ARB_sparse_texture_clamp : require\n";
+      defines += "#define USE_MINLOD 1\n";
+    }
+
+    if(HasExt[ARB_gpu_shader5] && HasExt[ARB_texture_gather])
+    {
+      defines += "#extension GL_ARB_texture_gather : require\n";
+      defines += "#extension GL_ARB_gpu_shader5 : require\n";
+      defines += "#define GATHER_SUPPORT 2\n";
+    }
+    else if(HasExt[ARB_texture_gather])
+    {
+      defines += "#extension GL_ARB_texture_gather : require\n";
+      defines += "#define GATHER_SUPPORT 1\n";
+    }
+    else
+    {
+      defines += "#define GATHER_SUPPORT 0\n";
+    }
+  }
+
+  rdcstr vs =
+      GenerateGLSLShader(GetEmbeddedResource(glsl_shaderdebug_sample_vert), shaderType, glslCSVer);
+  rdcstr ps = GenerateGLSLShader(GetEmbeddedResource(glsl_debug_sample_frag), shaderType, glslCSVer,
+                                 defines + DebugData.texSampleDefines);
+  GLuint prog = CreateShaderProgram(vs, ps, "");
+
+  if(config.op == SamplingProgramConfig::SampleDref || config.op == SamplingProgramConfig::GatherDref)
+    dim += "Shadow";
+
+  dim = "tex" + dim;
+
+  BindUBO(prog, "debugsample", 0);
+  GL.glUniform1i(GL.glGetUniformLocation(prog, dim.c_str()), 0);
+
+  return m_ShaderDebugSampleProg[hash] = prog;
 }
 
 GLReplay::TextureSamplerState GLReplay::SetSamplerParams(GLenum target, GLuint texname,

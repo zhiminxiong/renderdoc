@@ -93,10 +93,6 @@ uniform sampler2DRectShadow tex2DRectShadow;
 
 #endif
 
-#define CONCAT2(a, b, c) a##b##c
-#define CONCAT(a, b) CONCAT2(Do, a, b)
-#define FUNC(a, b) CONCAT(a, b)
-
 in vec4 input_uvwa;
 out RESULT Output;
 
@@ -716,5 +712,5 @@ RESULT DoGatherDref2DRect()
 
 void main()
 {
-  Output = FUNC(OPERATION, DIM)();
+  Output = OPERATION();
 }
