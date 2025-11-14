@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 #include "gl_shaderdebug.h"
+#include "core/settings.h"
 #include "driver/shaders/spirv/spirv_debug.h"
 #include "driver/shaders/spirv/spirv_editor.h"
 #include "driver/shaders/spirv/spirv_op_helpers.h"
@@ -30,6 +31,11 @@
 #include "replay/common/var_dispatch_helpers.h"
 #include "gl_driver.h"
 #include "gl_replay.h"
+
+RDOC_CONFIG(rdcstr, OpenGL_Debug_ShaderDebugDumpDirPath, "",
+            "Path to dump shader debugging generated SPIR-V files.");
+RDOC_CONFIG(bool, OpenGL_Debug_ShaderDebugLogging, false,
+            "Output verbose debug logging messages when debugging shaders.");
 
 #define OPENGL 1
 #include "data/glsl/glsl_ubos_cpp.h"
@@ -1688,6 +1694,122 @@ private:
   const uint64_t deviceThreadID;
 };
 
+enum class SubgroupSupport : uint32_t
+{
+  None = 0,
+  NoBallot,
+  All,
+};
+
+static const uint32_t validMagicNumber = 12345;
+
+static GLuint CreateInputFetcher(const WrappedOpenGL::ShaderData &shadDetails,
+                                 uint32_t storageBufferBinding, bool usePrimitiveID, bool useSampleID,
+                                 SubgroupSupport subgroupSupport, uint32_t maxSubgroupSize)
+{
+  rdcstr source;
+
+  if(shadDetails.spirvWords.empty())
+    return CreateShader(eGL_FRAGMENT_SHADER, source);
+
+  return CreateSPIRVShader(eGL_FRAGMENT_SHADER, source);
+}
+
+void CalculateSubgroupProperties(uint32_t &maxSubgroupSize, SubgroupSupport &subgroupSupport)
+{
+  if(HasExt[KHR_shader_subgroup])
+  {
+    GL.glGetIntegerv(eGL_SUBGROUP_SIZE_KHR, (GLint *)&maxSubgroupSize);
+
+    subgroupSupport = SubgroupSupport::All;
+
+    GLbitfield features = 0;
+    GL.glGetIntegerv(eGL_SUBGROUP_SUPPORTED_FEATURES_KHR, (GLint *)&features);
+
+    if((features & eGL_SUBGROUP_FEATURE_BALLOT_BIT_KHR) == 0)
+      subgroupSupport = SubgroupSupport::NoBallot;
+  }
+}
+
+rdcpair<uint32_t, uint32_t> GetAlignAndOutputSize(const ShaderReflection *refl,
+                                                  const SPIRVPatchData &patchData)
+{
+  uint32_t paramAlign = 16;
+
+  for(const SigParameter &sig : refl->inputSignature)
+  {
+    if(VarTypeByteSize(sig.varType) * sig.compCount > paramAlign)
+      paramAlign = 32;
+  }
+
+  // conservatively calculate structure stride with full amount for every input element
+  uint32_t structStride = (uint32_t)refl->inputSignature.size() * paramAlign;
+
+  // GLSL doesn't allow empty structs, so pad with 16 minimum
+  structStride = RDCMAX(paramAlign, structStride);
+
+  if(refl->stage == ShaderStage::Vertex)
+    structStride += sizeof(rdcspv::VertexLaneData);
+  else if(refl->stage == ShaderStage::Pixel)
+    structStride += sizeof(rdcspv::PixelLaneData);
+  else if(refl->stage == ShaderStage::Compute || refl->stage == ShaderStage::Task ||
+          refl->stage == ShaderStage::Mesh)
+    structStride += sizeof(rdcspv::ComputeLaneData);
+
+  if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  {
+    structStride += sizeof(rdcspv::SubgroupLaneData);
+  }
+
+  return {paramAlign, structStride};
+}
+
+uint32_t GetStorageBufferBinding(WrappedOpenGL *driver,
+                                 const ResourceId stagePrograms[NumShaderStages],
+                                 const ResourceId stageShaders[NumShaderStages], ShaderStage stage)
+{
+  rdcarray<uint32_t> avail;
+
+  GLint ssboCount = 0;
+  GL.glGetIntegerv(eGL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &ssboCount);
+
+  avail.resize(ssboCount);
+  for(GLint i = 0; i < ssboCount; i++)
+    avail[i] = i;
+
+  for(size_t i = 0; i < NumShaderStages; i++)
+  {
+    if(stageShaders[i] == ResourceId())
+      continue;
+
+    // we can use SSBOs from the stage we're replacing
+    if(ShaderStage(i) == stage)
+      continue;
+
+    const ShaderReflection *refl = driver->GetShader(stageShaders[i]).GetReflection();
+
+    GLuint prog = driver->GetResourceManager()->GetCurrentResource(stagePrograms[i]).name;
+
+    for(const ShaderResource &res : refl->readWriteResources)
+    {
+      // storage images use separate bindings
+      if(res.isTexture)
+        continue;
+
+      uint32_t slot = 0;
+      bool used = false;
+      GetCurrentBinding(prog, refl, res, slot, used);
+
+      if(used)
+        avail.removeOne(slot);
+    }
+  }
+
+  if(avail.empty())
+    return ~0U;
+  return avail.front();
+}
+
 ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint32_t instid,
                                         uint32_t idx, uint32_t view)
 {
@@ -1698,8 +1820,549 @@ ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint3
 ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
                                        const DebugPixelInputs &inputs)
 {
-  GLNOTIMP("DebugPixel");
-  return new ShaderDebugTrace();
+  uint32_t sample = inputs.sample;
+  uint32_t primitive = inputs.primitive;
+  uint32_t view = inputs.view;
+
+  MakeCurrentReplayContext(&m_ReplayCtx);
+
+  GLRenderState rs;
+  rs.FetchState(m_pDriver);
+
+  // When RenderDoc passed y, the value being passed in is with the Y axis starting from the top
+  // However, we need to have it starting from the bottom, so flip it by subtracting y from the
+  // height.
+  {
+    ContextPair &ctx = m_pDriver->GetCtx();
+    uint32_t height = 0;
+
+    GLint numCols = 8;
+    GL.glGetIntegerv(eGL_MAX_COLOR_ATTACHMENTS, &numCols);
+
+    GLuint obj = 0;
+    GLenum type = eGL_TEXTURE;
+    for(GLint i = 0; i < numCols; i++)
+    {
+      GL.glGetFramebufferAttachmentParameteriv(
+          eGL_DRAW_FRAMEBUFFER, GLenum(eGL_COLOR_ATTACHMENT0 + i),
+          eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, (GLint *)&obj);
+
+      if(obj)
+      {
+        GL.glGetFramebufferAttachmentParameteriv(
+            eGL_DRAW_FRAMEBUFFER, GLenum(eGL_COLOR_ATTACHMENT0 + i),
+            eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, (GLint *)&type);
+
+        ResourceId id = m_pDriver->GetResourceManager()->GetResID(
+            type == eGL_RENDERBUFFER ? RenderbufferRes(ctx, obj) : TextureRes(ctx, obj));
+
+        GLint firstMip = 0, firstSlice = 0;
+        GetFramebufferMipAndLayer(rs.DrawFBO.name, GLenum(eGL_COLOR_ATTACHMENT0 + i),
+                                  (GLint *)&firstMip, (GLint *)&firstSlice);
+
+        height = (uint32_t)RDCMAX(1, m_pDriver->m_Textures[id].height >> firstMip);
+        break;
+      }
+    }
+
+    if(height == 0)
+    {
+      GL.glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
+                                               eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, (GLint *)&obj);
+
+      if(obj)
+      {
+        GL.glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
+                                                 eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE,
+                                                 (GLint *)&type);
+
+        ResourceId id = m_pDriver->GetResourceManager()->GetResID(
+            type == eGL_RENDERBUFFER ? RenderbufferRes(ctx, obj) : TextureRes(ctx, obj));
+
+        GLint firstMip = 0, firstSlice = 0;
+        GetFramebufferMipAndLayer(rs.DrawFBO.name, eGL_DEPTH_ATTACHMENT, (GLint *)&firstMip,
+                                  (GLint *)&firstSlice);
+
+        height = (uint32_t)RDCMAX(1, m_pDriver->m_Textures[id].height >> firstMip);
+      }
+    }
+
+    if(height == 0)
+    {
+      GL.glGetFramebufferParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_FRAMEBUFFER_DEFAULT_HEIGHT,
+                                     (GLint *)&height);
+    }
+
+    y = height - y - 1;
+  }
+
+  rdcstr regionName = StringFormat::Fmt("DebugPixel @ %u of (%u,%u) sample %u primitive %u view %u",
+                                        eventId, x, y, sample, primitive, view);
+
+  GLMarkerRegion region(regionName);
+
+  if(OpenGL_Debug_ShaderDebugLogging())
+    RDCLOG("%s", regionName.c_str());
+
+  const ActionDescription *action = m_pDriver->GetAction(eventId);
+
+  if(!(action->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall)))
+  {
+    RDCLOG("No drawcall selected");
+    return new ShaderDebugTrace();
+  }
+
+  uint32_t storageBufferBinding = ~0U;
+
+  ResourceId geom;
+  ResourceId pixel;
+  if(rs.Program.name)
+  {
+    ResourceId id = m_pDriver->GetResourceManager()->GetResID(rs.Program);
+    const WrappedOpenGL::ProgramData &progDetails = m_pDriver->GetProgram(id);
+
+    geom = progDetails.stageShaders[(uint32_t)ShaderStage::Geometry];
+    pixel = progDetails.stageShaders[(uint32_t)ShaderStage::Pixel];
+
+    ResourceId stagePrograms[NumShaderStages];
+    for(size_t i = 0; i < NumShaderStages; i++)
+      stagePrograms[i] = id;
+    storageBufferBinding = GetStorageBufferBinding(m_pDriver, stagePrograms,
+                                                   progDetails.stageShaders, ShaderStage::Pixel);
+  }
+  else if(rs.Pipeline.name)
+  {
+    ResourceId id = m_pDriver->GetResourceManager()->GetResID(rs.Pipeline);
+    const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
+
+    geom = pipeDetails.stageShaders[(uint32_t)ShaderStage::Geometry];
+    pixel = pipeDetails.stageShaders[(uint32_t)ShaderStage::Pixel];
+
+    storageBufferBinding = GetStorageBufferBinding(m_pDriver, pipeDetails.stagePrograms,
+                                                   pipeDetails.stageShaders, ShaderStage::Pixel);
+  }
+
+  if(pixel == ResourceId())
+  {
+    RDCLOG("No pixel shader bound at draw");
+    return new ShaderDebugTrace();
+  }
+
+  if(storageBufferBinding == ~0U)
+  {
+    RDCLOG("No spare SSBO available in program");
+    return new ShaderDebugTrace();
+  }
+
+  // get ourselves in pristine state before this action (without any side effects it may have had)
+  m_pDriver->ReplayLog(0, eventId, eReplay_WithoutDraw);
+
+  WrappedOpenGL::ShaderData &shadDetails = m_pDriver->GetWriteableShader(pixel);
+
+  rdcstr entryPoint = shadDetails.entryPoint;
+  rdcarray<SpecConstant> spec;
+  for(size_t i = 0; i < shadDetails.specIDs.size() && i < shadDetails.specValues.size(); i++)
+    spec.push_back(SpecConstant(shadDetails.specIDs[i], shadDetails.specValues[i], 4));
+
+  const ShaderReflection *refl = shadDetails.GetReflection();
+
+  if(!refl->debugInfo.debuggable)
+  {
+    RDCLOG("Shader is not debuggable: %s", refl->debugInfo.debugStatus.c_str());
+    return new ShaderDebugTrace();
+  }
+
+  shadDetails.Disassemble(entryPoint);
+
+  GLAPIWrapper *apiWrapper = new GLAPIWrapper(m_pDriver, ShaderStage::Pixel, eventId, pixel);
+
+  SubgroupSupport subgroupSupport = SubgroupSupport::None;
+  uint32_t maxSubgroupSize = 1;
+  CalculateSubgroupProperties(maxSubgroupSize, subgroupSupport);
+
+  uint32_t numThreads = 4;
+
+  if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+    numThreads = RDCMAX(numThreads, maxSubgroupSize);
+
+  std::unordered_map<ShaderBuiltin, ShaderVariable> &global_builtins = apiWrapper->global_builtins;
+  global_builtins[ShaderBuiltin::DeviceIndex] = ShaderVariable(rdcstr(), 0U, 0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::DrawIndex] = ShaderVariable(rdcstr(), action->drawIndex, 0U, 0U, 0U);
+
+  // If the pipe contains a geometry shader, then Primitive ID cannot be used in the pixel
+  // shader without being emitted from the geometry shader. For now, check if this semantic
+  // will succeed in a new pixel shader with the rest of the pipe unchanged
+  bool usePrimitiveID = false;
+  if(geom != ResourceId())
+  {
+    const WrappedOpenGL::ShaderData &gsDetails = m_pDriver->GetShader(geom);
+
+    const ShaderReflection *gsRefl = gsDetails.GetReflection();
+
+    // check to see if the shader outputs a primitive ID
+    for(const SigParameter &e : gsRefl->outputSignature)
+    {
+      if(e.systemValue == ShaderBuiltin::PrimitiveIndex)
+      {
+        if(OpenGL_Debug_ShaderDebugLogging())
+        {
+          RDCLOG("Geometry shader exports primitive ID, can use");
+        }
+
+        usePrimitiveID = true;
+        break;
+      }
+    }
+
+    if(OpenGL_Debug_ShaderDebugLogging())
+    {
+      if(!usePrimitiveID)
+        RDCLOG("Geometry shader doesn't export primitive ID, can't use");
+    }
+  }
+  else
+  {
+    // no geometry shader - safe to use
+    usePrimitiveID = true;
+  }
+
+  bool useSampleID = HasExt[ARB_sample_shading];
+
+  if(OpenGL_Debug_ShaderDebugLogging())
+  {
+    RDCLOG("useSampleID is %u because of bare capability", useSampleID);
+  }
+
+  uint32_t paramAlign, structStride;
+  rdctie(paramAlign, structStride) = GetAlignAndOutputSize(refl, shadDetails.patchData);
+
+  uint32_t overdrawLevels = 100;    // maximum number of overdraw levels
+
+  // struct size is ResultDataBase header plus Nx structStride for the number of threads
+  uint32_t structSize = sizeof(rdcspv::ResultDataBase) + structStride * numThreads;
+
+  GLuint feedbackStorageSize = overdrawLevels * structSize + sizeof(Vec4f) * 3 + 1024;
+
+  if(OpenGL_Debug_ShaderDebugLogging())
+  {
+    RDCLOG("Output structure is %u sized, output buffer is %llu bytes", structStride,
+           feedbackStorageSize);
+  }
+
+  bytebuf data;
+  {
+    GLRenderState push;
+    push.FetchState(m_pDriver);
+
+    GLuint shaderFeedback;
+    GL.glGenBuffers(1, &shaderFeedback);
+    GL.glBindBuffer(eGL_SHADER_STORAGE_BUFFER, shaderFeedback);
+    GL.glNamedBufferDataEXT(shaderFeedback, feedbackStorageSize, NULL, eGL_DYNAMIC_DRAW);
+    byte *clear = (byte *)GL.glMapBufferRange(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize,
+                                              GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+    memset(clear, 0, feedbackStorageSize);
+    GL.glUnmapBuffer(eGL_SHADER_STORAGE_BUFFER);
+
+    Vec2f destXY(float(x) + 0.5f, float(y) + 0.5f);
+
+    GL.glBufferSubData(eGL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &overdrawLevels);
+    GL.glBufferSubData(eGL_SHADER_STORAGE_BUFFER, sizeof(uint32_t), sizeof(Vec2f), &destXY.x);
+
+    GLuint inputFetcher = CreateInputFetcher(shadDetails, storageBufferBinding, usePrimitiveID,
+                                             useSampleID, subgroupSupport, maxSubgroupSize);
+
+    GLuint inputShader = 0;
+    GLuint inputShaderSPIRV = 0;
+
+    if(shadDetails.spirvWords.empty())
+      inputShader = inputFetcher;
+    else
+      inputShaderSPIRV = inputFetcher;
+
+    GLuint replacementProgram = GL.glCreateProgram();
+
+    CreateShaderReplacementProgram(rs.Program.name, rs.Pipeline.name, replacementProgram,
+                                   ShaderStage::Pixel, inputShader, inputShaderSPIRV);
+
+    GL.glUseProgram(replacementProgram);
+
+    if(inputShader)
+    {
+      GLuint ssboIdx =
+          GL.glGetProgramResourceIndex(replacementProgram, eGL_SHADER_STORAGE_BLOCK, "Output");
+      GL.glShaderStorageBlockBinding(replacementProgram, ssboIdx, storageBufferBinding);
+    }
+    GL.glBindBufferBase(eGL_SHADER_STORAGE_BUFFER, storageBufferBinding, shaderFeedback);
+
+    m_pDriver->ReplayLog(eventId, eventId, eReplay_OnlyDraw);
+
+    GL.glDeleteProgram(replacementProgram);
+    GL.glDeleteShader(inputFetcher);
+
+    data.resize(feedbackStorageSize);
+    GL.glGetBufferSubData(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize, data.data());
+
+    push.ApplyState(m_pDriver);
+  }
+
+  byte *base = data.data();
+  base += sizeof(Vec4f);
+  base += sizeof(Vec4f);
+
+  uint32_t hit_count = ((uint32_t *)base)[0];
+  uint32_t total_count = ((uint32_t *)base)[1];
+
+  if(hit_count > overdrawLevels)
+  {
+    RDCERR("%u hits, more than max overdraw levels allowed %u. Clamping", hit_count, overdrawLevels);
+    hit_count = overdrawLevels;
+  }
+
+  base += sizeof(Vec4f);
+
+  rdcspv::ResultDataBase *winner = NULL;
+
+  RDCLOG("Got %u hit candidates out of %u total instances", hit_count, total_count);
+
+  // if we encounter multiple hits at our destination pixel co-ord (or any other) we
+  // check to see if a specific primitive was requested (via primitive parameter not
+  // being set to ~0U). If it was, debug that pixel, otherwise do a best-estimate
+  // of which fragment was the last to successfully depth test and debug that, just by
+  // checking if the depth test is ordered and picking the final fragment in the series
+
+  GLenum depthOp = rs.DepthFunc;
+
+  // depth tests disabled acts the same as always compare mode
+  if(!rs.Enabled[GLRenderState::eEnabled_DepthTest])
+    depthOp = eGL_ALWAYS;
+
+  for(uint32_t i = 0; i < hit_count; i++)
+  {
+    rdcspv::ResultDataBase *hit = (rdcspv::ResultDataBase *)(base + structSize * i);
+
+    if(hit->valid != validMagicNumber)
+    {
+      RDCWARN("Hit %u doesn't have valid magic number", i);
+      continue;
+    }
+
+    if(hit->ddxDerivCheck != 1.0f)
+    {
+      RDCWARN("Hit %u doesn't have valid derivatives", i);
+      continue;
+    }
+
+    // see if this hit is a closer match than the previous winner.
+
+    // if there's no previous winner it's clearly better
+    if(winner == NULL)
+    {
+      winner = hit;
+      continue;
+    }
+
+    // if we're looking for a specific primitive
+    if(primitive != ~0U)
+    {
+      // and this hit is a match and the winner isn't, it's better
+      if(winner->prim != primitive && hit->prim == primitive)
+      {
+        winner = hit;
+        continue;
+      }
+
+      // if the winner is a match and we're not, we can't be better so stop now
+      if(winner->prim == primitive && hit->prim != primitive)
+      {
+        continue;
+      }
+    }
+
+    // if we're looking for a particular sample, check that
+    if(sample != ~0U)
+    {
+      if(winner->sample != sample && hit->sample == sample)
+      {
+        winner = hit;
+        continue;
+      }
+
+      if(winner->sample == sample && hit->sample != sample)
+      {
+        continue;
+      }
+    }
+
+    // otherwise apply depth test
+    switch(depthOp)
+    {
+      case eGL_NEVER:
+      case eGL_EQUAL:
+      case eGL_NOTEQUAL:
+      case eGL_ALWAYS:
+      default:
+        // don't emulate equal or not equal since we don't know the reference value. Take any hit
+        // (thus meaning the last hit)
+        winner = hit;
+        break;
+      case eGL_LESS:
+        if(hit->pos.z < winner->pos.z)
+          winner = hit;
+        break;
+      case eGL_LEQUAL:
+        if(hit->pos.z <= winner->pos.z)
+          winner = hit;
+        break;
+      case eGL_GREATER:
+        if(hit->pos.z > winner->pos.z)
+          winner = hit;
+        break;
+      case eGL_GEQUAL:
+        if(hit->pos.z >= winner->pos.z)
+          winner = hit;
+        break;
+    }
+  }
+
+  ShaderDebugTrace *ret = NULL;
+
+  if(winner)
+  {
+    rdcspv::Debugger *debugger = new rdcspv::Debugger;
+    debugger->Parse(shadDetails.spirvWords);
+
+    // the per-thread data immediately follows the rdcspv::ResultDataBase header. Every piece of
+    // data is uniformly aligned, either 16-byte by default or 32-byte if larger components exist.
+    // The output is in input signature order.
+    byte *LaneData = (byte *)(winner + 1);
+
+    numThreads = 4;
+
+    if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+    {
+      RDCASSERTNOTEQUAL(winner->subgroupSize, 0);
+      numThreads = RDCMAX(numThreads, winner->subgroupSize);
+    }
+
+    apiWrapper->location_inputs.resize(numThreads);
+    apiWrapper->thread_builtins.resize(numThreads);
+    apiWrapper->thread_props.resize(numThreads);
+
+    for(uint32_t t = 0; t < numThreads; t++)
+    {
+      byte *value = LaneData + t * structStride;
+
+      if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+      {
+        rdcspv::SubgroupLaneData *subgroupData = (rdcspv::SubgroupLaneData *)value;
+        apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Active] = subgroupData->isActive;
+        apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Elected] = subgroupData->elect;
+        apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::SubgroupId] = t;
+
+        value += sizeof(rdcspv::SubgroupLaneData);
+      }
+
+      // read PixelLaneData
+      {
+        rdcspv::PixelLaneData *pixelData = (rdcspv::PixelLaneData *)value;
+
+        {
+          ShaderVariable &var = apiWrapper->thread_builtins[t][ShaderBuiltin::Position];
+
+          var.rows = 1;
+          var.columns = 4;
+          var.type = VarType::Float;
+
+          memcpy(var.value.u8v.data(), &pixelData->fragCoord, sizeof(Vec4f));
+        }
+
+        {
+          ShaderVariable &var = apiWrapper->thread_builtins[t][ShaderBuiltin::IsHelper];
+
+          var.rows = 1;
+          var.columns = 1;
+          var.type = VarType::Bool;
+
+          memcpy(var.value.u8v.data(), &pixelData->isHelper, sizeof(uint32_t));
+        }
+
+        if(numThreads == 4)
+          apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Active] = 1;
+        apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Helper] = pixelData->isHelper;
+        apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::QuadId] = pixelData->quadId;
+        apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::QuadLane] =
+            pixelData->quadLaneIndex;
+      }
+      value += sizeof(rdcspv::PixelLaneData);
+
+      for(size_t i = 0; i < refl->inputSignature.size(); i++)
+      {
+        const SigParameter &param = refl->inputSignature[i];
+
+        bool builtin = true;
+        if(param.systemValue == ShaderBuiltin::Undefined)
+        {
+          builtin = false;
+          apiWrapper->location_inputs[t].resize(
+              RDCMAX((uint32_t)apiWrapper->location_inputs.size(), param.regIndex + 1));
+        }
+
+        ShaderVariable &var = builtin ? apiWrapper->thread_builtins[t][param.systemValue]
+                                      : apiWrapper->location_inputs[t][param.regIndex];
+
+        var.rows = 1;
+        var.columns = param.compCount & 0xff;
+        var.type = param.varType;
+
+        const uint32_t firstComp = Bits::CountTrailingZeroes(uint32_t(param.regChannelMask));
+        const uint32_t elemSize = VarTypeByteSize(param.varType);
+
+        // we always store in 32-bit types
+        const size_t sz = RDCMAX(4U, elemSize) * param.compCount;
+
+        memcpy((var.value.u8v.data()) + elemSize * firstComp, value + i * paramAlign, sz);
+
+        // convert down from stored 32-bit types if they were smaller
+        if(elemSize == 1)
+        {
+          ShaderVariable tmp = var;
+
+          for(uint32_t comp = 0; comp < param.compCount; comp++)
+            var.value.u8v[comp] = tmp.value.u32v[comp] & 0xff;
+        }
+        else if(elemSize == 2)
+        {
+          ShaderVariable tmp = var;
+
+          for(uint32_t comp = 0; comp < param.compCount; comp++)
+          {
+            if(VarTypeCompType(param.varType) == CompType::Float)
+              var.value.f16v[comp] = rdhalf::make(tmp.value.f32v[comp]);
+            else
+              var.value.u16v[comp] = tmp.value.u32v[comp] & 0xffff;
+          }
+        }
+      }
+    }
+
+    apiWrapper->global_builtins[ShaderBuiltin::SubgroupSize] =
+        ShaderVariable(rdcstr(), numThreads, 0U, 0U, 0U);
+
+    ret = debugger->BeginDebug(apiWrapper, ShaderStage::Pixel, entryPoint, spec,
+                               shadDetails.spirvInstructionLines, shadDetails.patchData,
+                               winner->laneIndex, numThreads, numThreads);
+    apiWrapper->ResetReplay();
+  }
+  else
+  {
+    RDCLOG("Didn't get any valid hit to debug");
+    delete apiWrapper;
+
+    ret = new ShaderDebugTrace;
+    ret->stage = ShaderStage::Pixel;
+  }
+
+  return ret;
 }
 
 ShaderDebugTrace *GLReplay::DebugThread(uint32_t eventId, const rdcfixedarray<uint32_t, 3> &groupid,
@@ -1719,7 +2382,19 @@ ShaderDebugTrace *GLReplay::DebugMeshThread(uint32_t eventId,
 
 rdcarray<ShaderDebugState> GLReplay::ContinueDebug(ShaderDebugger *debugger)
 {
-  return {};
+  rdcspv::Debugger *spvDebugger = (rdcspv::Debugger *)debugger;
+
+  if(!spvDebugger)
+    return {};
+
+  GLMarkerRegion region("ContinueDebug Simulation Loop");
+
+  rdcarray<ShaderDebugState> ret = spvDebugger->ContinueDebug();
+
+  GLAPIWrapper *api = (GLAPIWrapper *)spvDebugger->GetAPIWrapper();
+  api->ResetReplay();
+
+  return ret;
 }
 
 void GLReplay::FreeDebugger(ShaderDebugger *debugger)

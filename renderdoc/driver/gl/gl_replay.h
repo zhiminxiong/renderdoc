@@ -357,8 +357,8 @@ public:
                               GLint yoffset = 0, GLint zoffset = 0, GLsizei width = 65536,
                               GLsizei height = 65536, GLsizei depth = 65536);
 
-  bool CreateFragmentShaderReplacementProgram(GLuint program, GLuint replacedProgram, GLuint pipeline,
-                                              GLuint fragShader, GLuint fragShaderSPIRV);
+  bool CreateShaderReplacementProgram(GLuint srcProgram, GLuint srcPipeline, GLuint replacedProgram,
+                                      ShaderStage stage, GLuint newShader, GLuint newShaderSPIRV);
 
   GLuint GetShaderDebugMathProg();
   GLuint MakeShaderDebugSampleProg(const SamplingProgramConfig &config);

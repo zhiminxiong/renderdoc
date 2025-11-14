@@ -146,9 +146,9 @@ GLuint GetFixedColProgram(WrappedOpenGL *driver, GLReplay *replay,
   rs.FetchState(driver);
 
   GLuint ret = driver->glCreateProgram();
-  replay->CreateFragmentShaderReplacementProgram(rs.Program.name, ret, rs.Pipeline.name,
-                                                 resources.fixedColFragmentShader,
-                                                 resources.fixedColFragmentShaderSPIRV);
+  replay->CreateShaderReplacementProgram(rs.Program.name, rs.Pipeline.name, ret, ShaderStage::Pixel,
+                                         resources.fixedColFragmentShader,
+                                         resources.fixedColFragmentShaderSPIRV);
 
   resources.fixedColPrograms[currentProgram] = ret;
 
@@ -168,9 +168,9 @@ GLuint GetPrimitiveIdProgram(WrappedOpenGL *driver, GLReplay *replay,
   rs.FetchState(driver);
 
   GLuint ret = driver->glCreateProgram();
-  replay->CreateFragmentShaderReplacementProgram(rs.Program.name, ret, rs.Pipeline.name,
-                                                 resources.primitiveIdFragmentShader,
-                                                 resources.primitiveIdFragmentShaderSPIRV);
+  replay->CreateShaderReplacementProgram(rs.Program.name, rs.Pipeline.name, ret, ShaderStage::Pixel,
+                                         resources.primitiveIdFragmentShader,
+                                         resources.primitiveIdFragmentShaderSPIRV);
 
   resources.primIdPrograms[currentProgram] = ret;
 

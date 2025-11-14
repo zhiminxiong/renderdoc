@@ -790,6 +790,7 @@ extern bool IsGLES;
   EXT_TO_CHECK(99, 99, EXT_texture_sRGB_decode)                  \
   EXT_TO_CHECK(99, 99, INTEL_performance_query)                  \
   EXT_TO_CHECK(99, 99, EXT_texture_buffer)                       \
+  EXT_TO_CHECK(99, 99, KHR_shader_subgroup)                      \
   /* OpenGL ES extensions */                                     \
   EXT_TO_CHECK(99, 32, EXT_color_buffer_float)                   \
   EXT_TO_CHECK(99, 99, EXT_color_buffer_half_float)              \
