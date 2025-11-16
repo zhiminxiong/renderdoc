@@ -1135,6 +1135,37 @@ float4 main(v2f IN, uint samp : SV_SampleIndex) : SV_Target0
 
 )EOSHADER";
 
+  std::string msaaPixel61 = R"EOSHADER(
+
+struct v2f
+{
+  float4 pos : SV_POSITION;
+  float4 col : COLOR0;
+  float2 uv : TEXCOORD0;
+};
+
+float4 main(v2f IN, uint samp : SV_SampleIndex, float3 bary : SV_Barycentrics) : SV_Target0 
+{
+  float2 uvCentroid = EvaluateAttributeCentroid(IN.uv);
+  float2 uvSamp0 = EvaluateAttributeAtSample(IN.uv, 0) - IN.uv;
+  float2 uvSampThis = EvaluateAttributeAtSample(IN.uv, samp) - IN.uv;
+  float2 uvOffset = EvaluateAttributeSnapped(IN.uv, int2(1, 1));
+
+  float x = (uvCentroid.x + uvCentroid.y) * 0.5f;
+  float y = (uvSamp0.x + uvSamp0.y) * 0.5f;
+  float z = (uvSampThis.x + uvSampThis.y) * 0.5f;
+  float w = (uvOffset.x + uvOffset.y) * 0.5f;
+  w += x * bary.x + y * bary.y + z * bary.z;
+
+  // Test sampleinfo with a MSAA rasterizer
+  uint numSamples = GetRenderTargetSampleCount();
+  float2 pos = GetRenderTargetSamplePosition(samp);
+
+  return float4(x + pos.x, y + pos.y, z + (float)numSamples, w);
+}
+
+)EOSHADER";
+
   std::string compute = R"EOSHADER(
 
 // error X3556: integer divides may be much slower, try using uints if possible.
@@ -1245,6 +1276,7 @@ void main(int3 inTestIndex : SV_GroupID)
       return 3;
 
     bool supportSM60 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_0) && m_DXILSupport;
+    bool supportSM61 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_1) && m_DXILSupport;
     bool supportSM62 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_2) && m_DXILSupport;
     bool supportSM66 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_6) && m_DXILSupport;
     TEST_ASSERT(!supportSM62 || supportSM60, "SM 6.2 requires SM 6.0 support");
@@ -1860,6 +1892,30 @@ void main(int3 inTestIndex : SV_GroupID)
                                          .PS(psmsaablob)
                                          .SampleCount(4)
                                          .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
+
+    ID3D12PipelineStatePtr msaaPSOs[3] = {psomsaa, NULL};
+    if(supportSM60)
+    {
+      msaaPSOs[1] = MakePSO()
+                        .RootSig(sigmsaa)
+                        .InputLayout()
+                        .VS(Compile(D3DDefaultVertex, "main", "vs_6_0"))
+                        .PS(Compile(msaaPixel, "main", "ps_6_0"))
+                        .SampleCount(4)
+                        .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
+
+      if(supportSM61)
+      {
+        msaaPSOs[2] = MakePSO()
+                          .RootSig(sigmsaa)
+                          .InputLayout()
+                          .VS(Compile(D3DDefaultVertex, "main", "vs_6_1"))
+                          .PS(Compile(msaaPixel61, "main", "ps_6_1"))
+                          .SampleCount(4)
+                          .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
+      }
+    }
+
     ID3D12ResourcePtr vbmsaa = MakeBuffer().Data(DefaultTri);
 
     ID3D12ResourcePtr msaaTex = MakeTexture(DXGI_FORMAT_R32G32B32A32_FLOAT, 8, 8)
@@ -2135,14 +2191,25 @@ void main(int3 inTestIndex : SV_GroupID)
       IASetVertexBuffer(cmd, vbmsaa, sizeof(DefaultA2V), 0);
       cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-      cmd->SetGraphicsRootSignature(sigmsaa);
-      cmd->SetPipelineState(psomsaa);
       RSSetViewport(cmd, {0.0f, 0.0f, 8.0f, 8.0f, 0.0f, 1.0f});
       RSSetScissorRect(cmd, {0, 0, 8, 8});
 
-      // Add a marker so we can easily locate this draw
-      setMarker(cmd, "MSAA");
-      cmd->DrawInstanced(3, 1, 0, 0);
+      size_t countMSAAPasses = supportSM60 ? (supportSM61 ? 3 : 2) : 1;
+      TEST_ASSERT(countMSAAPasses <= ARRAY_COUNT(msaaPSOs), "More MSAA passes than psos");
+      const char *msaa_markers[3] = {
+          "MSAA sm_5_0",
+          "MSAA sm_6_0",
+          "MSAA sm_6_1",
+      };
+      for(int i = 0; i < countMSAAPasses; ++i)
+      {
+        cmd->SetGraphicsRootSignature(sigmsaa);
+        cmd->SetPipelineState(msaaPSOs[i]);
+
+        // Add a marker so we can easily locate this draw
+        setMarker(cmd, msaa_markers[i]);
+        cmd->DrawInstanced(3, 1, 0, 0);
+      }
 
       OMSetRenderTargets(cmd, {fltRTV}, {});
       ClearRenderTargetView(cmd, fltRTV, {0.3f, 0.5f, 0.8f, 1.0f});
