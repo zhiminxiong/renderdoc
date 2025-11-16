@@ -452,6 +452,7 @@ struct ThreadState
   bool CanRunAnotherStep() const;
   const ShaderVariable &GetInput() const { return m_Input; }
   const GlobalVariable &GetOutput() const { return m_Output; }
+  const BuiltinInputs &GetBuiltins() const { return m_Builtins; }
   bool IsDead() const { return m_Dead; }
   uint32_t GetQuadId() const { return m_QuadId; }
   uint32_t GetQuadLaneIndex() const { return m_QuadLaneIndex; }

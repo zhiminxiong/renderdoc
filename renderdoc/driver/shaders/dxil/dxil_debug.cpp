@@ -9848,6 +9848,101 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   }
 
   ret->inputs = {activeState.GetInput()};
+
+  if(shaderStage == ShaderStage::Compute)
+  {
+    // For Compute shaders add fake inputs for semantics
+    const BuiltinInputs &globalBuiltins = m_GlobalState.builtins;
+    const BuiltinInputs &activeBuiltins = activeState.GetBuiltins();
+    rdcarray<ShaderBuiltin> builtinsToAdd;
+    // Parse the instructions to find which builtins are read
+    // ShaderBuiltin::DispatchThreadIndex,
+    // ShaderBuiltin::GroupIndex,
+    // ShaderBuiltin::GroupFlatIndex,
+    // ShaderBuiltin::GroupThreadIndex,
+    for(const Function *f : m_Program->m_Functions)
+    {
+      if(f->external)
+        continue;
+      for(const Instruction *inst : f->instructions)
+      {
+        switch(inst->op)
+        {
+          case Operation::Call:
+          {
+            const Function *callFunc = inst->getFuncCall();
+            if(callFunc->family == FunctionFamily::DXOp)
+            {
+              DXOp dxOpCode;
+              RDCASSERT(getival<DXOp>(inst->args[0], dxOpCode));
+              RDCASSERT(dxOpCode < DXOp::NumOpCodes, dxOpCode, DXOp::NumOpCodes);
+              switch(dxOpCode)
+              {
+                case DXOp::ThreadId:
+                  if(!builtinsToAdd.contains(ShaderBuiltin::DispatchThreadIndex))
+                    builtinsToAdd.push_back(ShaderBuiltin::DispatchThreadIndex);
+                  break;
+                case DXOp::GroupId:
+                  if(!builtinsToAdd.contains(ShaderBuiltin::GroupIndex))
+                    builtinsToAdd.push_back(ShaderBuiltin::GroupIndex);
+                  break;
+                case DXOp::FlattenedThreadIdInGroup:
+                  if(!builtinsToAdd.contains(ShaderBuiltin::GroupFlatIndex))
+                    builtinsToAdd.push_back(ShaderBuiltin::GroupFlatIndex);
+                  break;
+                case DXOp::ThreadIdInGroup:
+                  if(!builtinsToAdd.contains(ShaderBuiltin::GroupThreadIndex))
+                    builtinsToAdd.push_back(ShaderBuiltin::GroupThreadIndex);
+                  break;
+                default: break;
+              }
+            }
+          }
+          default: break;
+        }
+      }
+    }
+
+    for(const ShaderBuiltin &builtin : builtinsToAdd)
+    {
+      ShaderVariable value;
+      bool found = false;
+      auto itThread = activeBuiltins.find(builtin);
+      if(itThread != activeBuiltins.end())
+      {
+        value = itThread->second;
+        found = true;
+      }
+      else
+      {
+        auto itGlobal = globalBuiltins.find(builtin);
+        if(itGlobal != activeBuiltins.end())
+        {
+          value = itGlobal->second;
+          found = true;
+        }
+      }
+      if(found)
+      {
+        value.rows = 1;
+        value.columns = 3;
+        value.type = VarType::UInt;
+        switch(builtin)
+        {
+          case ShaderBuiltin::DispatchThreadIndex: value.name = "SV_DispatchThreadID"; break;
+          case ShaderBuiltin::GroupIndex: value.name = "SV_GroupID"; break;
+          case ShaderBuiltin::GroupFlatIndex:
+            value.name = "SV_GroupIndex";
+            value.columns = 1;
+            break;
+          case ShaderBuiltin::GroupThreadIndex: value.name = "SV_GroupThreadID"; break;
+          default: RDCERR("Unhandled builtin %s", ToStr(builtin).c_str()); break;
+        }
+        ret->inputs.push_back(value);
+      }
+    }
+  }
+
   ret->constantBlocks = m_GlobalState.constantBlocks;
   ret->readOnlyResources = m_GlobalState.readOnlyResources;
   ret->readWriteResources = m_GlobalState.readWriteResources;
