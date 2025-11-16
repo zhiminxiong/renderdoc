@@ -179,16 +179,18 @@ static bool IsEncodedPointer(const ShaderVariable &var)
   return true;
 }
 
-static void EncodePointer(DXILDebug::Id ptrId, uint64_t offset, uint64_t size, ShaderVariable &var)
+static void EncodePointer(DXILDebug::Id ptrId, uint64_t offset, uint64_t size, VarType baseType,
+                          ShaderVariable &var)
 {
   var.type = VarType::GPUPointer;
   var.value.u32v[0] = ptrId;
   var.value.u32v[1] = POINTER_MAGIC;
   var.value.u64v[1] = offset;
   var.value.u64v[2] = size;
+  var.value.u64v[3] = (uint64_t)baseType;
 }
 
-static bool DecodePointer(DXILDebug::Id &ptrId, uint64_t &offset, uint64_t &size,
+static bool DecodePointer(DXILDebug::Id &ptrId, uint64_t &offset, uint64_t &size, VarType &baseType,
                           const ShaderVariable &var)
 {
   if(!IsEncodedPointer(var))
@@ -200,6 +202,7 @@ static bool DecodePointer(DXILDebug::Id &ptrId, uint64_t &offset, uint64_t &size
   ptrId = var.value.u32v[0];
   offset = var.value.u64v[1];
   size = var.value.u64v[2];
+  baseType = (VarType)var.value.u64v[3];
   return true;
 }
 
@@ -1108,8 +1111,8 @@ static bool ConvertDXILConstantToShaderVariable(const Constant *constant, Shader
         if(indexes.size() > 1)
           offset += indexes[1] * elementSize;
         RDCASSERT(indexes.size() <= 2);
-        // Encode the pointer allocation: ptrId, offset, size
-        EncodePointer(ptrId, offset, size, var);
+        // Encode the pointer allocation: ptrId, offset, size, baseType
+        EncodePointer(ptrId, offset, size, baseType, var);
         return true;
       }
       // case Operation::Trunc:
@@ -9311,8 +9314,9 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
               Id ptrId;
               uint64_t offset;
               uint64_t size;
+              VarType baseType;
               // Decode the pointer allocation: ptrId, offset, size
-              RDCASSERT(DecodePointer(ptrId, offset, size, var));
+              RDCASSERT(DecodePointer(ptrId, offset, size, baseType, var));
 
               auto it = globalMemory.m_Allocations.find(ptrId);
               if(it != globalMemory.m_Allocations.end())
