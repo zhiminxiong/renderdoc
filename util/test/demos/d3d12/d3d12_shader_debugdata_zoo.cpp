@@ -189,27 +189,27 @@ struct TestChild : TestParent
 
   if(testIndex == 0)
   {
-    testResult = intVal;
-  }
-  else if(testIndex == 1)
-  {
-    testResult = intVal * 2;
-  }
-  else if(testIndex == 2)
-  {
-    testResult = intVal / 2;
-  }
-  else if(testIndex == 3)
-  {
-    testResult.x = testStruct.anon.a.x;
-    testResult.y = testStruct.anon.b.x;
-  }
-  else if(testIndex == 4)
-  {
     testResult.x = intVal * 7;
     testResult.y = intVal * 5;
     SET_DATA(testIndex, testResult);
     EARLY_RETURN;
+  }
+  else if(testIndex == 1)
+  {
+    testResult = intVal;
+  }
+  else if(testIndex == 2)
+  {
+    testResult = intVal * 2;
+  }
+  else if(testIndex == 3)
+  {
+    testResult = intVal / 2;
+  }
+  else if(testIndex == 4)
+  {
+    testResult.x = testStruct.anon.a.x;
+    testResult.y = testStruct.anon.b.x;
   }
   else if(testIndex == 5)
   {
