@@ -1726,12 +1726,28 @@ rdcstr Program::DisassembleGlobalVars(int &instructionLine) const
     const GlobalVar &g = *m_GlobalVars[i];
 
     rdcstr n;
-    if(!m_DXCStyle)
+    if(!dxcStyleFormatting)
       GetSSAName(g.ssaId, n);
     else
       n = g.name;
 
-    ret += StringFormat::Fmt("@%s = ", escapeStringIfNeeded(n).c_str());
+    if(!dxcStyleFormatting)
+    {
+      switch(g.type->addrSpace)
+      {
+        case DXIL::Type::PointerAddrSpace::Default: break;
+        case DXIL::Type::PointerAddrSpace::DeviceMemory: ret += "DeviceMemory "; break;
+        case DXIL::Type::PointerAddrSpace::CBuffer: ret += "CBuffer "; break;
+        case DXIL::Type::PointerAddrSpace::GroupShared: ret += "GroupShared "; break;
+        case DXIL::Type::PointerAddrSpace::GenericPointer: break;
+        case DXIL::Type::PointerAddrSpace::ImmediateCBuffer: ret += "ImmediateCBuffer "; break;
+      };
+      ret += StringFormat::Fmt("%s = ", escapeStringIfNeeded(n).c_str());
+    }
+    else
+    {
+      ret += StringFormat::Fmt("@%s = ", escapeStringIfNeeded(n).c_str());
+    }
     switch(g.flags & GlobalFlags::LinkageMask)
     {
       case GlobalFlags::ExternalLinkage:
@@ -1755,7 +1771,7 @@ rdcstr Program::DisassembleGlobalVars(int &instructionLine) const
       ret += "local_unnamed_addr ";
     else if(g.flags & GlobalFlags::GlobalUnnamedAddr)
       ret += "unnamed_addr ";
-    if(g.type->addrSpace != Type::PointerAddrSpace::Default)
+    if(dxcStyleFormatting && (g.type->addrSpace != Type::PointerAddrSpace::Default))
       ret += StringFormat::Fmt("addrspace(%d) ", g.type->addrSpace);
     if(g.flags & GlobalFlags::IsConst)
       ret += "constant ";
