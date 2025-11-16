@@ -7619,6 +7619,20 @@ void ThreadState::OperationAtomic(const DXIL::Instruction &inst, DXIL::Operation
     a = m_Variables[ptrId];
   }
 
+  // Get the underling type of the GPUPointer
+  if(a.type == VarType::GPUPointer)
+  {
+    Id id;
+    uint64_t offset;
+    uint64_t size;
+    VarType baseType;
+    // Decode the pointer allocation: ptrId, offset, size
+    RDCASSERT(DecodePointer(id, offset, size, baseType, a));
+    RDCASSERTEQUAL(baseMemoryId, id);
+    RDCASSERTEQUAL(allocSize, size);
+    a.type = baseType;
+  }
+
   // GSM variable, read from the global backing memory
   if(allocation.gsm)
   {
