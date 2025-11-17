@@ -225,7 +225,9 @@ APIProperties GLReplay::GetAPIProperties()
   ret.degraded = m_Degraded;
   ret.vendor = m_DriverInfo.vendor;
   ret.pixelHistory = true;
-  ret.shaderDebugging = OpenGL_ShaderDebugging();
+  // we require storage buffers and compute shaders
+  ret.shaderDebugging = OpenGL_ShaderDebugging() && HasExt[ARB_shader_storage_buffer_object] &&
+                        HasExt[ARB_compute_shader];
 
   return ret;
 }
