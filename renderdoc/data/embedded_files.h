@@ -77,5 +77,6 @@ DECLARE_EMBED(glsl_depth_copy_frag);
 DECLARE_EMBED(glsl_depth_copyms_frag);
 DECLARE_EMBED(glsl_debug_math_comp);
 DECLARE_EMBED(glsl_debug_sample_frag);
+DECLARE_EMBED(hlsl_quadswizzle_hlsl);
 
 #undef DECLARE_EMBED

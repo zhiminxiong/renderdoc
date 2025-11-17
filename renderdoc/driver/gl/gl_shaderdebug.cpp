@@ -24,6 +24,7 @@
 
 #include "gl_shaderdebug.h"
 #include "core/settings.h"
+#include "data/glsl_shaders.h"
 #include "driver/shaders/spirv/spirv_debug.h"
 #include "driver/shaders/spirv/spirv_editor.h"
 #include "driver/shaders/spirv/spirv_op_helpers.h"
@@ -1697,22 +1698,864 @@ private:
 enum class SubgroupSupport : uint32_t
 {
   None = 0,
-  NoBallot,
-  All,
+  Basic,
+  Ballot,
+  Vote,
+  Quad,
 };
 
+BITMASK_OPERATORS(SubgroupSupport);
+
 static const uint32_t validMagicNumber = 12345;
+static const uint32_t maxHits = 100;    // maximum number of overdraw levels
+
+struct InputFetcherConfig
+{
+  uint32_t x = 0, y = 0;
+
+  uint32_t vert = 0, inst = 0;
+
+  rdcfixedarray<uint32_t, 3> threadid = {0, 0, 0};
+  rdcfixedarray<uint32_t, 3> groupid = {0, 0, 0};
+
+  bool usePrimitiveID = false;
+  bool useSampleID = false;
+};
+
+static void sanitiseVarName(rdcstr &name)
+{
+  for(char &c : name)
+  {
+    if(isalnum(c))
+      continue;
+
+    c = '_';
+  }
+}
+
+static bool DeclareSignatureElement(const ShaderReflection *refl, size_t i, rdcstr &name,
+                                    rdcstr &sigDecl, rdcstr &storeDecl)
+{
+  const SigParameter &sig = refl->inputSignature[i];
+
+  if(name.empty())
+    name = sig.varName;
+
+  // sanitise name
+  sanitiseVarName(name);
+
+  if(name.beginsWith("gl_"))
+    name.insert(0, '_');
+
+  char prefix = (sig.varType == VarType::Float)  ? ' '
+                : (sig.varType == VarType::UInt) ? 'u'
+                : (sig.varType == VarType::SInt) ? 'i'
+                                                 : 'x';
+  if(sig.compCount == 1)
+  {
+    sigDecl += ToStr(sig.varType);
+  }
+  else
+  {
+    sigDecl += StringFormat::Fmt("%cvec%u", prefix, sig.compCount);
+  }
+
+  if(sig.varName.contains("[0]"))
+  {
+    // handle arrays
+    storeDecl = sigDecl + " " + name + ";";
+
+    size_t nonArrayLength = sig.varName.indexOf('[');
+    rdcstr basename = name.substr(0, nonArrayLength);
+
+    uint32_t arraySize = 1;
+
+    for(size_t j = i + 1; j < refl->inputSignature.size(); j++)
+    {
+      if(refl->inputSignature[j].varName[nonArrayLength] == '[' &&
+         refl->inputSignature[j].varName.beginsWith(basename))
+      {
+        // account for potential holes, take array size from this signature's index
+        arraySize = 0;
+        const char *c = &refl->inputSignature[j].varName[nonArrayLength + 1];
+        while(*c >= '0' && *c <= '9')
+        {
+          arraySize *= 10;
+          arraySize += int((*c) - '0');
+          c++;
+        }
+        arraySize++;
+        continue;
+      }
+
+      break;
+    }
+
+    sigDecl += StringFormat::Fmt(" %s[%u];", basename.c_str(), arraySize);
+  }
+  else if(sig.varName.contains('['))
+  {
+    storeDecl = sigDecl + " " + name + ";";
+    sigDecl = "";
+    return true;
+  }
+  else if(sig.varName.contains(":col"))
+  {
+    size_t nonColLength = sig.varName.find(":col");
+    name = name.substr(0, nonColLength);
+
+    // only return a declaration for the first column
+    if(sig.varName.contains(":col0"))
+    {
+      uint32_t numCols = 1;
+
+      for(size_t j = i + 1; j < refl->inputSignature.size(); j++)
+      {
+        if(refl->inputSignature[j].varName[nonColLength] == ':' &&
+           refl->inputSignature[j].varName.beginsWith(name))
+        {
+          numCols++;
+          continue;
+        }
+
+        break;
+      }
+
+      storeDecl = sigDecl =
+          StringFormat::Fmt("%cmat%ux%u %s;", prefix, numCols, sig.compCount, name.c_str());
+      return true;
+    }
+
+    storeDecl.clear();
+    sigDecl.clear();
+    return false;
+  }
+  else
+  {
+    sigDecl += " " + name + ";";
+    storeDecl = sigDecl;
+  }
+
+  return true;
+}
 
 static GLuint CreateInputFetcher(const WrappedOpenGL::ShaderData &shadDetails,
-                                 uint32_t storageBufferBinding, bool usePrimitiveID, bool useSampleID,
-                                 SubgroupSupport subgroupSupport, uint32_t maxSubgroupSize)
+                                 uint32_t storageBufferBinding, InputFetcherConfig cfg,
+                                 SubgroupSupport subgroupSupport, uint32_t paramAlign,
+                                 uint32_t numThreads)
 {
   rdcstr source;
 
-  if(shadDetails.spirvWords.empty())
-    return CreateShader(eGL_FRAGMENT_SHADER, source);
+  ShaderType shaderType;
+  int glslVersion;
+  int glslBaseVer;
+  int glslCSVer;    // compute shader
+  GetGLSLVersions(shaderType, glslVersion, glslBaseVer, glslCSVer);
 
-  return CreateSPIRVShader(eGL_FRAGMENT_SHADER, source);
+  // require at least version 400 since that's what SSBOs need but use the newest version available for safety
+  if(shaderType == ShaderType::GLSL)
+  {
+    glslVersion = glslBaseVer = 400;
+
+    if(GLCoreVersion >= 41)
+      glslVersion = glslBaseVer = 410;
+
+    if(GLCoreVersion >= 42)
+      glslVersion = glslBaseVer = 420;
+
+    if(GLCoreVersion >= 43)
+      glslVersion = glslBaseVer = 430;
+
+    // if we want to use GL_ARB_ES3_1_compatibility for gl_HelperInvocation we need minimum 440
+    if(HasExt[ARB_ES3_1_compatibility] || GLCoreVersion >= 44)
+      glslVersion = glslBaseVer = 440;
+
+    // when compiling to SPIR-V might as well use a modern version
+    if(!shadDetails.spirvWords.empty() || GLCoreVersion >= 45)
+      glslVersion = glslBaseVer = 450;
+
+    if(GLCoreVersion >= 46)
+      glslVersion = glslBaseVer = 460;
+  }
+
+  if(shadDetails.spirvWords.empty())
+    source += "#define USE_SPIRV 0\n";
+  else
+    source += "#define USE_SPIRV 1\n";
+
+  source += StringFormat::Fmt(
+      "#define VALID_MAGIC %u\n"
+      "#define STAGE_VS %u\n"
+      "#define STAGE_PS %u\n"
+      "#define STAGE_CS %u\n"
+      "#define STAGE %u\n"
+      "#define MAXHIT %u\n"
+      "#define STORAGE_BINDING %u\n"
+      "#define NUMLANES %u\n"
+      "#define USEPRIM %u\n"
+      "#define USESAMP %u\n"
+      "#define SUBGROUP_BASIC %u\n"
+      "#define SUBGROUP_BALLOT %u\n"
+      "#define SUBGROUP_VOTE %u\n"
+      "#define SUBGROUP_QUAD %u\n"
+      "#define HELPER %u\n"
+      "#define PROPER_DERIVS %u\n",
+      validMagicNumber, eGL_VERTEX_SHADER, eGL_FRAGMENT_SHADER, eGL_COMPUTE_SHADER,
+      shadDetails.type, maxHits, storageBufferBinding, numThreads, cfg.usePrimitiveID ? 1 : 0,
+      cfg.useSampleID ? 1 : 0, (subgroupSupport & SubgroupSupport::Basic) ? 1 : 0,
+      (subgroupSupport & SubgroupSupport::Ballot) ? 1 : 0,
+      (subgroupSupport & SubgroupSupport::Vote) ? 1 : 0,
+      (subgroupSupport & SubgroupSupport::Quad) ? 1 : 0,
+      // helpers (gl_HelperInvocation)
+      HasExt[ARB_ES3_1_compatibility] ? 1 : 0,
+      // fine derivatives (dFdxFine)
+      HasExt[ARB_derivative_control] ? 1 : 0);
+
+  if(shadDetails.type == eGL_VERTEX_SHADER)
+  {
+    source += StringFormat::Fmt(
+        "#define DEST_VERT %u\n"
+        "#define DEST_INST %u\n",
+        cfg.vert, cfg.inst);
+  }
+  else if(shadDetails.type == eGL_FRAGMENT_SHADER)
+  {
+    source += StringFormat::Fmt(
+        "#define DESTX %u.5\n"
+        "#define DESTY %u.5\n",
+        cfg.x, cfg.y);
+  }
+  else if(shadDetails.type == eGL_COMPUTE_SHADER)
+  {
+    source += StringFormat::Fmt(
+        "#define DESTX %u\n"
+        "#define DESTY %u\n"
+        "#define DESTZ %u\n",
+        cfg.threadid[0], cfg.threadid[1], cfg.threadid[2]);
+    source += StringFormat::Fmt(
+        "#define GROUPX %u\n"
+        "#define GROUPY %u\n"
+        "#define GROUPZ %u\n",
+        cfg.groupid[0], cfg.groupid[1], cfg.groupid[2]);
+    source += StringFormat::Fmt("layout(local_size_x = %u,local_size_y = %u, local_size_z = %u)\n",
+                                shadDetails.GetReflection()->dispatchThreadsDimension[0],
+                                shadDetails.GetReflection()->dispatchThreadsDimension[1],
+                                shadDetails.GetReflection()->dispatchThreadsDimension[2]);
+  }
+  else
+  {
+    RDCERR("Unexpected type of shader");
+  }
+
+  source += R"EOSHADER(
+#extension GL_ARB_shader_storage_buffer_object : require
+
+#if PROPER_DERIVS
+  #extension GL_ARB_derivative_control : require
+#endif
+
+#if HELPER && !USE_SPIRV
+  // required for gl_HelperInvocation, but don't enable with glslang due to a bug -
+  // we compile at a high enough core version to satisfy the requirement that way
+  #extension GL_ARB_ES3_1_compatibility : require
+#endif
+
+#if SUBGROUP_BASIC
+  #extension GL_KHR_shader_subgroup_basic : require
+#endif
+
+#if SUBGROUP_VOTE
+  #extension GL_KHR_shader_subgroup_vote : require
+#endif
+
+#if SUBGROUP_BALLOT
+  #extension GL_KHR_shader_subgroup_ballot : require
+#endif
+
+#if SUBGROUP_QUAD
+  #extension GL_KHR_shader_subgroup_quad : require
+#endif
+
+// bool signature elements get reflected as ints, make macros for their access to cast to int
+#define gl_FrontFacing (gl_FrontFacing ? 1 : 0)
+#define gl_HelperInvocation (gl_HelperInvocation ? 1 : 0)
+
+)EOSHADER";
+
+  rdcarray<rdcpair<rdcstr, rdcstr>> floatInputs;
+  rdcarray<rdcpair<rdcstr, rdcstr>> nonfloatInputs;
+  if(shadDetails.type == eGL_COMPUTE_SHADER)
+  {
+    glslVersion = glslCSVer;
+
+    // can't have an empty struct in GLSL
+    source = R"(
+struct Inputs { vec4 dummy; };
+void SetInputs(out Inputs inputs) {}
+)";
+  }
+  else
+  {
+    rdcstr inputDecl, inputFetch;
+
+    inputDecl += "struct Inputs {\n";
+    inputFetch += "void SetInputs(out Inputs inputs) {\n";
+
+    const ShaderReflection *refl = shadDetails.GetReflection();
+    const SPIRVPatchData &patchData = shadDetails.patchData;
+
+    rdcarray<rdcpair<rdcstr, size_t>> blockVarsToDeclare;
+
+    for(size_t i = 0; i < refl->inputSignature.size(); i++)
+    {
+      const SigParameter &sig = refl->inputSignature[i];
+
+      rdcstr name;
+      rdcstr sigDecl;
+      rdcstr storeDecl;
+      bool doDeclare = DeclareSignatureElement(refl, i, name, sigDecl, storeDecl);
+
+      if(sig.varName.contains(":col"))
+      {
+        rdcstr inName = sig.varName;
+        inName.replace(inName.find(":col"), 4, "[");
+        inName += "]";
+
+        if(sig.varType == VarType::Float)
+          floatInputs.push_back({name + inName.substr(inName.size() - 3), inName});
+        else
+          nonfloatInputs.push_back({name + inName.substr(inName.size() - 3), inName});
+      }
+      else
+      {
+        rdcstr inName = sig.varName;
+
+        if(sig.varType == VarType::Float)
+          floatInputs.push_back({name, inName});
+        else
+          nonfloatInputs.push_back({name, inName});
+      }
+
+      if(!doDeclare)
+        continue;
+      inputDecl += "  " + storeDecl + "\n";
+
+      const uint32_t byteSize = sig.compCount * VarTypeByteSize(sig.varType);
+
+      // don't pad after matrices, these don't have padding that can be explicitly filled
+      if(!sig.varName.contains(":col"))
+      {
+        for(size_t pad = byteSize; pad < AlignUp(byteSize, paramAlign); pad += 4)
+        {
+          inputDecl += StringFormat::Fmt("  uint pad%u%u;\n", i, pad);
+        }
+      }
+
+      // don't declare builtins!
+      if(sig.systemValue == ShaderBuiltin::Undefined && !sigDecl.empty())
+      {
+        // block variables with a . like blockName.variable need to be declared specially
+        if(sig.varName.contains('.'))
+        {
+          blockVarsToDeclare.push_back({sig.varName, i});
+        }
+        else
+        {
+          // if the register index is high, it was auto-mapped so don't declare it
+          if(sig.regIndex < 256)
+            source += StringFormat::Fmt("layout(location = %u) ", sig.regIndex);
+          if(sig.varType != VarType::Float && shadDetails.type == eGL_FRAGMENT_SHADER)
+            source += "flat ";
+          source += StringFormat::Fmt("in %s\n", sigDecl.c_str());
+        }
+      }
+
+      rdcstr inputName = sig.varName;
+
+      // copy whole matrices, if we get the :col0 element
+      int trim = inputName.find(":col");
+      if(trim >= 0)
+        inputName.erase(trim, ~0U);
+
+      switch(sig.systemValue)
+      {
+        case ShaderBuiltin::BaseInstance: inputName = "gl_BaseInstance"; break;
+        case ShaderBuiltin::BaseVertex: inputName = "gl_BaseVertex"; break;
+        case ShaderBuiltin::DispatchSize: inputName = "gl_NumWorkGroups"; break;
+        case ShaderBuiltin::DispatchThreadIndex: inputName = "gl_GlobalInvocationID"; break;
+        case ShaderBuiltin::DomainLocation: inputName = "gl_TessCoord"; break;
+        case ShaderBuiltin::DrawIndex: inputName = "gl_DrawID"; break;
+        case ShaderBuiltin::GroupFlatIndex: inputName = "gl_LocalInvocationIndex"; break;
+        case ShaderBuiltin::GroupIndex: inputName = "gl_WorkGroupID"; break;
+        case ShaderBuiltin::GroupThreadIndex: inputName = "gl_LocalInvocationID"; break;
+        case ShaderBuiltin::GSInstanceIndex: inputName = "gl_InvocationID"; break;
+        case ShaderBuiltin::InstanceIndex: inputName = "gl_InstanceID"; break;
+        case ShaderBuiltin::IsFrontFace: inputName = "gl_FrontFacing"; break;
+        case ShaderBuiltin::MSAACoverage: inputName = "gl_SampleMaskIn"; break;
+        case ShaderBuiltin::MSAASampleIndex: inputName = "gl_SampleID"; break;
+        case ShaderBuiltin::MSAASamplePosition: inputName = "gl_SamplePosition"; break;
+        case ShaderBuiltin::OutputControlPointIndex: inputName = "gl_InvocationID"; break;
+        case ShaderBuiltin::PatchNumVertices: inputName = "gl_PatchVerticesIn"; break;
+        case ShaderBuiltin::Position: inputName = "gl_FragCoord"; break;
+        case ShaderBuiltin::PrimitiveIndex: inputName = "gl_PrimitiveID"; break;
+        case ShaderBuiltin::RTIndex:
+          if(shadDetails.type == eGL_FRAGMENT_SHADER)
+            inputName = "gl_PointCoord";
+          else
+            inputName = "gl_Layer";
+          break;
+        case ShaderBuiltin::VertexIndex: inputName = "gl_VertexID"; break;
+        case ShaderBuiltin::ViewportIndex: inputName = "gl_ViewportIndex"; break;
+        default: break;
+      }
+
+      // works for arrays with modified name per element
+      inputFetch += StringFormat::Fmt("inputs.%s = %s;\n", name.c_str(), inputName.c_str());
+    }
+
+    if(refl->inputSignature.empty())
+      inputDecl += "  vec4 dummy;\n";
+
+    inputDecl += "};\n";
+    inputFetch += "}\n";
+
+    while(!blockVarsToDeclare.empty())
+    {
+      rdcpair<rdcstr, size_t> var = blockVarsToDeclare.takeAt(0);
+      rdcstr base = var.first.substr(0, var.first.indexOf('.'));
+
+      rdcarray<rdcpair<rdcstr, size_t>> siblings;
+
+      siblings.push_back(var);
+
+      // collect all other vars with the same base. We don't really care about doing this
+      // efficiently since we expect extremely few variables and all in the same block
+      for(size_t j = 0; j < blockVarsToDeclare.size();)
+      {
+        rdcstr jbase =
+            blockVarsToDeclare[j].first.substr(0, blockVarsToDeclare[j].first.indexOf('.'));
+        if(base == jbase)
+        {
+          siblings.push_back(blockVarsToDeclare.takeAt(j));
+          // continue with the new [j], if it exists
+          continue;
+        }
+        j++;
+      }
+
+      // need to get the block name and it's not available via normal GL reflection
+      rdcstr blockName = shadDetails.spirv.GetDataType(patchData.inputs[var.second].structID).name;
+
+      // if the register index is high, it was auto-mapped so don't declare it
+      // assume locations are tightly packed with the first location, it's all we can do.
+      if(refl->inputSignature[var.second].regIndex < 256)
+        source +=
+            StringFormat::Fmt("layout(location = %u) ", refl->inputSignature[var.second].regIndex);
+      source += StringFormat::Fmt("in %s {\n", blockName.c_str());
+
+      rdcstr name;
+      for(const rdcpair<rdcstr, size_t> &sig : siblings)
+      {
+        name = sig.first.substr(base.size() + 1);
+        source += "  ";
+
+        if(refl->inputSignature[sig.second].varType != VarType::Float &&
+           shadDetails.type == eGL_FRAGMENT_SHADER)
+          source += "flat ";
+
+        rdcstr sigDecl, storeDecl;
+        if(DeclareSignatureElement(refl, sig.second, name, sigDecl, storeDecl))
+          source += sigDecl + "\n";
+      }
+
+      source += StringFormat::Fmt("} %s;\n", base.c_str());
+    }
+
+    source += inputDecl + inputFetch;
+  }
+
+  source += R"EOSHADER(
+#if STAGE == STAGE_VS
+struct VSLaneData
+{
+  uint inst;
+  uint vert;
+  uint view;
+  uint pad;
+};
+#endif
+
+#if STAGE == STAGE_PS
+struct PSLaneData
+{
+  vec4 fragCoord;
+
+  uint isHelper;
+  uint quadId;
+  uint quadLane;
+  uint pad;
+};
+#endif
+
+#if STAGE == STAGE_CS
+struct CSLaneData
+{
+  uvec3 threadid;
+  uint activeSubgroup;
+};
+#endif
+
+struct SubgroupLaneData
+{
+  uint elect;
+  uint rd_active;
+  uint pad;
+  uint pad2;
+};
+
+struct LaneData
+{
+#if SUBGROUP_BASIC
+  SubgroupLaneData sub;
+#endif
+
+#if STAGE == STAGE_VS
+  VSLaneData vs;
+#elif STAGE == STAGE_PS
+  PSLaneData ps;
+#else
+  CSLaneData cs;
+#endif
+
+  Inputs inputs;
+};
+
+struct ResultData
+{
+  vec4 pos;
+
+  uint prim;
+  uint rd_sample;
+  uint view;
+  uint valid;
+
+  float ddxDerivCheck;
+  uint quadLaneIndex;
+  uint laneIndex;
+  uint subgroupSize;
+
+  uvec4 globalBallot;
+  uvec4 electBallot;
+  uvec4 helperBallot;
+
+  uint numSubgroups;
+  // split out because we use std140 packing which won't pack {uint, uvec3}
+  uint pad1;
+  uint pad2;
+  uint pad3;
+
+  LaneData laneData[NUMLANES];
+};
+
+#if USE_SPIRV
+layout(binding = STORAGE_BINDING)
+#endif
+layout(std140) buffer Output
+{
+  uint hit_count;
+  uint total_count;
+  uvec2 pad;
+  
+  ResultData hits[];
+} outbuffer;
+
+#if STAGE == STAGE_PS
+
+#if !SUBGROUP_QUAD
+
+// a couple of define helpers to get the hlsl to compile :)
+
+#if PROPER_DERIVS
+#define ddx_fine dFdxFine
+#define ddy_fine dFdyFine
+#else
+#define ddx_fine dFdx
+#define ddy_fine dFdx
+#endif
+
+#define float4 vec4
+#define float3 vec3
+#define float2 vec2
+#define uint4 uvec4
+#define uint3 uvec3
+#define uint2 uvec2
+#define int4 ivec4
+#define int3 ivec3
+#define int2 ivec2
+#include "quadswizzle.hlsl"
+
+#else
+
+#define quadSwizzleHelper(value, quadLaneIndex, readIndex) subgroupQuadBroadcast(value, readIndex)
+
+#endif
+
+#endif
+
+void main()
+{
+  vec4 debug_pixelPos = vec4(0,0,0,0);
+  uint primitive = 0;
+  uint rd_sample = 0;
+  uint isFrontFace = 0;
+
+#if STAGE == STAGE_VS
+  uint vert = gl_VertexID;
+  uint inst = gl_InstanceID;
+#elif STAGE == STAGE_PS
+  debug_pixelPos = gl_FragCoord;
+
+#if USEPRIM 
+  primitive = gl_PrimitiveID;
+#endif
+
+#if USESAMP
+  rd_sample = gl_SampleID;
+#endif
+
+  isFrontFace = gl_FrontFacing;
+
+#endif
+
+#if STAGE == STAGE_VS
+  VSLaneData vs;
+  vs.pad = 0;
+#elif STAGE == STAGE_PS
+  PSLaneData ps;
+  ps.pad = 0;
+#else
+  CSLaneData cs;
+#endif
+
+#if SUBGROUP_BASIC
+  SubgroupLaneData sub;
+  sub.elect = subgroupElect() ? 1 : 0;
+  sub.rd_active = 1;
+#endif
+
+  uint isHelper = 0;
+  uint quadLaneIndex = 0;
+  uint quadId = 0;
+  uint laneIndex = 0;
+  uvec4 globalBallot = uvec4(0,0,0,0);
+  uvec4 electBallot = uvec4(0,0,0,0);
+  uvec4 helperBallot = uvec4(0,0,0,0);
+  float derivValid = 1.0f;
+
+  quadLaneIndex = (2u * (uint(debug_pixelPos.y) & 1u)) + (uint(debug_pixelPos.x) & 1u);
+
+#if SUBGROUP_BALLOT
+  globalBallot = subgroupBallot(true);
+  electBallot = subgroupBallot(subgroupElect());
+#endif
+
+#if SUBGROUP_BASIC
+  laneIndex = gl_SubgroupInvocationID;
+#endif
+
+#if STAGE == STAGE_VS
+  bool candidateThread = (vert == DEST_VERT && inst == DEST_INST);
+
+  vs.vert = vert;
+  vs.inst = inst;
+#elif STAGE == STAGE_PS
+  bool candidateThread = (abs(debug_pixelPos.x - DESTX) < 0.5f && abs(debug_pixelPos.y - DESTY) < 0.5f);
+
+  derivValid = dFdx(debug_pixelPos.x);
+#if HELPER
+  isHelper = gl_HelperInvocation;
+#else
+  // must just assume all non-candidate threads are helpers since helpers can't store their
+  // own data so the candidate must do it.
+  isHelper = candidateThread ? 0 : 1;
+#endif
+
+#if !SUBGROUP_BASIC
+  laneIndex = quadLaneIndex;
+#endif
+
+#if SUBGROUP_BALLOT
+  helperBallot = subgroupBallot(isHelper != 0);
+#endif
+
+  // quadId is a single value that's unique for this quad and uniform across the quad. Degenerate
+  // for the simple quad case
+  quadId = 1000+quadSwizzleHelper(laneIndex, quadLaneIndex, 0u);
+
+  LaneData helper0data;
+  LaneData helper1data;
+  LaneData helper2data;
+  LaneData helper3data;
+
+  uint helper0lane;
+  uint helper1lane;
+  uint helper2lane;
+  uint helper3lane;
+
+)EOSHADER";
+
+  for(uint32_t q = 0; q < 4; q++)
+  {
+    source += StringFormat::Fmt("  // quad %u\n", q);
+    source += "  {\n";
+    source += StringFormat::Fmt(
+        "    helper%ulane = quadSwizzleHelper(laneIndex, quadLaneIndex, %uu);\n", q, q);
+    source += StringFormat::Fmt(
+        "    helper%udata.ps.fragCoord = quadSwizzleHelper(debug_pixelPos, quadLaneIndex, %uu);\n",
+        q, q);
+    source += StringFormat::Fmt(
+        "    helper%udata.ps.isHelper = quadSwizzleHelper(isHelper, quadLaneIndex, %uu);\n", q, q);
+    source += StringFormat::Fmt("    helper%udata.ps.quadId = quadId;\n", q);
+    source += StringFormat::Fmt("    helper%udata.ps.quadLane = %uu;\n", q, q);
+    for(size_t i = 0; i < floatInputs.size(); i++)
+    {
+      source += StringFormat::Fmt(
+          "    helper%udata.inputs.%s = quadSwizzleHelper(%s, quadLaneIndex, %u);\n", q,
+          floatInputs[i].first.c_str(), floatInputs[i].second.c_str(), q);
+    }
+    if(!nonfloatInputs.empty())
+    {
+      source += "#if SUBGROUP_QUAD\n";
+      for(size_t i = 0; i < nonfloatInputs.size(); i++)
+      {
+        source += StringFormat::Fmt(
+            "    helper%udata.inputs.%s = quadSwizzleHelper(%s, quadLaneIndex, %u);\n", q,
+            nonfloatInputs[i].first.c_str(), nonfloatInputs[i].second.c_str(), q);
+      }
+      source += "#else\n";
+      for(size_t i = 0; i < nonfloatInputs.size(); i++)
+      {
+        source +=
+            StringFormat::Fmt("    helper%udata.inputs.%s = %s;\n", q,
+                              nonfloatInputs[i].first.c_str(), nonfloatInputs[i].second.c_str(), q);
+      }
+      source += "#endif\n";
+    }
+    source += "  }\n\n";
+  }
+
+  source += R"EOSHADER(
+
+  ps.fragCoord = debug_pixelPos;
+
+  ps.isHelper = isHelper;
+  ps.quadId = quadId;
+  ps.quadLane = quadLaneIndex;
+#elif STAGE == STAGE_CS
+  bool candidateThread = (dtid.x == DESTX && dtid.y == DESTY && dtid.z == DESTZ);
+  cs.threadid = threadid;
+#endif
+
+  ResultData result;
+
+#if SUBGROUP_VOTE
+  bool activeSubgroup = subgroupAny(candidateThread);
+#else
+  bool activeSubgroup = candidateThread;
+#endif
+
+#if STAGE == STAGE_CS
+  cs.activeSubgroup = activeSubgroup ? 1 : 0;
+#endif
+
+  if(activeSubgroup)
+  {
+    if(isHelper == 0)
+    {
+      uint idx = MAXHIT;
+#if SUBGROUP_BALLOT
+      if(subgroupElect())
+      {
+        atomicAdd(outbuffer.total_count, 1u);
+        idx = atomicAdd(outbuffer.hit_count, 1u);
+      }
+      idx = subgroupBroadcastFirst(idx);
+#else
+      atomicAdd(outbuffer.total_count, 1u);
+      idx = atomicAdd(outbuffer.hit_count, 1u);
+#endif
+      if(idx < MAXHIT)
+      {
+        if(candidateThread)
+        {
+          outbuffer.hits[idx].pos = debug_pixelPos;
+          outbuffer.hits[idx].prim = primitive;
+          outbuffer.hits[idx].valid = VALID_MAGIC;
+          outbuffer.hits[idx].rd_sample = rd_sample;
+          outbuffer.hits[idx].ddxDerivCheck = derivValid;
+          outbuffer.hits[idx].laneIndex = laneIndex;
+          outbuffer.hits[idx].quadLaneIndex = quadLaneIndex;
+#if SUBGROUP_BASIC
+          outbuffer.hits[idx].subgroupSize = gl_SubgroupSize;
+          outbuffer.hits[idx].numSubgroups = gl_NumSubgroups;
+#else
+          outbuffer.hits[idx].subgroupSize = 0;
+          outbuffer.hits[idx].numSubgroups = 0;
+#endif
+          outbuffer.hits[idx].globalBallot = globalBallot;
+          outbuffer.hits[idx].electBallot = electBallot;
+          outbuffer.hits[idx].helperBallot = helperBallot;
+        }
+
+#if STAGE == STAGE_PS
+
+// with subgroups, only store helpers since the whole subgroup will be in here
+#if SUBGROUP_BASIC
+        if(helper0data.ps.isHelper != 0u)
+          outbuffer.hits[idx].laneData[helper0lane] = helper0data;
+
+        if(helper1data.ps.isHelper != 0u)
+          outbuffer.hits[idx].laneData[helper1lane] = helper1data;
+
+        if(helper2data.ps.isHelper != 0u)
+          outbuffer.hits[idx].laneData[helper2lane] = helper2data;
+
+        if(helper3data.ps.isHelper != 0u)
+          outbuffer.hits[idx].laneData[helper3lane] = helper3data;
+#else
+        // without subgroups only the candidate thread is in here, so it should store its helpers
+        outbuffer.hits[idx].laneData[helper0lane] = helper0data;
+        outbuffer.hits[idx].laneData[helper1lane] = helper1data;
+        outbuffer.hits[idx].laneData[helper2lane] = helper2data;
+        outbuffer.hits[idx].laneData[helper3lane] = helper3data;
+#endif
+
+#endif
+
+#if SUBGROUP_BASIC
+        outbuffer.hits[idx].laneData[laneIndex].sub = sub;
+#endif
+
+#if STAGE == STAGE_VS
+        outbuffer.hits[idx].laneData[laneIndex].vs = vs;
+#elif STAGE == STAGE_PS
+        outbuffer.hits[idx].laneData[laneIndex].ps = ps;
+#else
+        outbuffer.hits[idx].laneData[laneIndex].cs = cs;
+#endif
+        SetInputs(outbuffer.hits[idx].laneData[laneIndex].inputs);
+      }
+    }
+  }
+}
+
+)EOSHADER";
+
+  if(shadDetails.spirvWords.empty())
+    return CreateShader(shadDetails.type, GenerateGLSLShader(source, shaderType, glslVersion));
+
+  // when compiling to SPIR-V might as well use a modern version
+  return CreateSPIRVShader(shadDetails.type, GenerateGLSLShader(source, shaderType, 450));
 }
 
 void CalculateSubgroupProperties(uint32_t &maxSubgroupSize, SubgroupSupport &subgroupSupport)
@@ -1721,13 +2564,20 @@ void CalculateSubgroupProperties(uint32_t &maxSubgroupSize, SubgroupSupport &sub
   {
     GL.glGetIntegerv(eGL_SUBGROUP_SIZE_KHR, (GLint *)&maxSubgroupSize);
 
-    subgroupSupport = SubgroupSupport::All;
-
     GLbitfield features = 0;
     GL.glGetIntegerv(eGL_SUBGROUP_SUPPORTED_FEATURES_KHR, (GLint *)&features);
 
-    if((features & eGL_SUBGROUP_FEATURE_BALLOT_BIT_KHR) == 0)
-      subgroupSupport = SubgroupSupport::NoBallot;
+    if((features & eGL_SUBGROUP_FEATURE_BASIC_BIT_KHR))
+      subgroupSupport |= SubgroupSupport::Basic;
+
+    if((features & eGL_SUBGROUP_FEATURE_VOTE_BIT_KHR))
+      subgroupSupport |= SubgroupSupport::Vote;
+
+    if((features & eGL_SUBGROUP_FEATURE_BALLOT_BIT_KHR))
+      subgroupSupport |= SubgroupSupport::Ballot;
+
+    if((features & eGL_SUBGROUP_FEATURE_QUAD_BIT_KHR))
+      subgroupSupport |= SubgroupSupport::Quad;
   }
 }
 
@@ -1825,6 +2675,10 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   uint32_t view = inputs.view;
 
   MakeCurrentReplayContext(&m_ReplayCtx);
+
+  // try to get fine derivatives
+  if(IsGLES)
+    GL.glHint(eGL_FRAGMENT_SHADER_DERIVATIVE_HINT, eGL_NICEST);
 
   GLRenderState rs;
   rs.FetchState(m_pDriver);
@@ -1977,22 +2831,28 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   GLAPIWrapper *apiWrapper = new GLAPIWrapper(m_pDriver, ShaderStage::Pixel, eventId, pixel);
 
   SubgroupSupport subgroupSupport = SubgroupSupport::None;
-  uint32_t maxSubgroupSize = 1;
-  CalculateSubgroupProperties(maxSubgroupSize, subgroupSupport);
-
   uint32_t numThreads = 4;
 
   if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  {
+    uint32_t maxSubgroupSize = 1;
+    CalculateSubgroupProperties(maxSubgroupSize, subgroupSupport);
     numThreads = RDCMAX(numThreads, maxSubgroupSize);
+  }
 
   std::unordered_map<ShaderBuiltin, ShaderVariable> &global_builtins = apiWrapper->global_builtins;
   global_builtins[ShaderBuiltin::DeviceIndex] = ShaderVariable(rdcstr(), 0U, 0U, 0U, 0U);
   global_builtins[ShaderBuiltin::DrawIndex] = ShaderVariable(rdcstr(), action->drawIndex, 0U, 0U, 0U);
 
+  InputFetcherConfig cfg;
+
+  cfg.x = x;
+  cfg.y = y;
+
   // If the pipe contains a geometry shader, then Primitive ID cannot be used in the pixel
   // shader without being emitted from the geometry shader. For now, check if this semantic
   // will succeed in a new pixel shader with the rest of the pipe unchanged
-  bool usePrimitiveID = false;
+  cfg.usePrimitiveID = false;
   if(geom != ResourceId())
   {
     const WrappedOpenGL::ShaderData &gsDetails = m_pDriver->GetShader(geom);
@@ -2009,39 +2869,37 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
           RDCLOG("Geometry shader exports primitive ID, can use");
         }
 
-        usePrimitiveID = true;
+        cfg.usePrimitiveID = true;
         break;
       }
     }
 
     if(OpenGL_Debug_ShaderDebugLogging())
     {
-      if(!usePrimitiveID)
+      if(!cfg.usePrimitiveID)
         RDCLOG("Geometry shader doesn't export primitive ID, can't use");
     }
   }
   else
   {
     // no geometry shader - safe to use
-    usePrimitiveID = true;
+    cfg.usePrimitiveID = true;
   }
 
-  bool useSampleID = HasExt[ARB_sample_shading];
+  cfg.useSampleID = HasExt[ARB_sample_shading];
 
   if(OpenGL_Debug_ShaderDebugLogging())
   {
-    RDCLOG("useSampleID is %u because of bare capability", useSampleID);
+    RDCLOG("useSampleID is %u because of bare capability", cfg.useSampleID);
   }
 
   uint32_t paramAlign, structStride;
   rdctie(paramAlign, structStride) = GetAlignAndOutputSize(refl, shadDetails.patchData);
 
-  uint32_t overdrawLevels = 100;    // maximum number of overdraw levels
-
   // struct size is ResultDataBase header plus Nx structStride for the number of threads
   uint32_t structSize = sizeof(rdcspv::ResultDataBase) + structStride * numThreads;
 
-  GLuint feedbackStorageSize = overdrawLevels * structSize + sizeof(Vec4f) * 3 + 1024;
+  GLuint feedbackStorageSize = maxHits * structSize + sizeof(Vec4f) + 1024;
 
   if(OpenGL_Debug_ShaderDebugLogging())
   {
@@ -2063,13 +2921,8 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
     memset(clear, 0, feedbackStorageSize);
     GL.glUnmapBuffer(eGL_SHADER_STORAGE_BUFFER);
 
-    Vec2f destXY(float(x) + 0.5f, float(y) + 0.5f);
-
-    GL.glBufferSubData(eGL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &overdrawLevels);
-    GL.glBufferSubData(eGL_SHADER_STORAGE_BUFFER, sizeof(uint32_t), sizeof(Vec2f), &destXY.x);
-
-    GLuint inputFetcher = CreateInputFetcher(shadDetails, storageBufferBinding, usePrimitiveID,
-                                             useSampleID, subgroupSupport, maxSubgroupSize);
+    GLuint inputFetcher = CreateInputFetcher(shadDetails, storageBufferBinding, cfg,
+                                             subgroupSupport, paramAlign, numThreads);
 
     GLuint inputShader = 0;
     GLuint inputShaderSPIRV = 0;
@@ -2106,16 +2959,14 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   }
 
   byte *base = data.data();
-  base += sizeof(Vec4f);
-  base += sizeof(Vec4f);
 
   uint32_t hit_count = ((uint32_t *)base)[0];
   uint32_t total_count = ((uint32_t *)base)[1];
 
-  if(hit_count > overdrawLevels)
+  if(hit_count > maxHits)
   {
-    RDCERR("%u hits, more than max overdraw levels allowed %u. Clamping", hit_count, overdrawLevels);
-    hit_count = overdrawLevels;
+    RDCERR("%u hits, more than max overdraw levels allowed %u. Clamping", hit_count, maxHits);
+    hit_count = maxHits;
   }
 
   base += sizeof(Vec4f);

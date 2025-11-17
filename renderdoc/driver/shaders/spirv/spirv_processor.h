@@ -574,6 +574,14 @@ public:
       return empty;
     return it->second;
   }
+  const DataType &GetDataType(Id id) const
+  {
+    static DataType empty;
+    auto it = dataTypes.find(id);
+    if(it == dataTypes.end())
+      return empty;
+    return it->second;
+  }
   const Decorations &GetDecorations(Id id) const { return decorations[id]; };
   const rdcarray<uint32_t> &GetSPIRV() const { return m_SPIRV; }
 protected:

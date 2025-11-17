@@ -479,6 +479,7 @@ set(data
     data/glsl/vk_depthbuf2ms.frag
     data/glsl/debug_math.comp
     data/glsl/debug_sample.frag
+    data/hlsl/quadswizzle.hlsl
     data/sourcecodepro.ttf
     driver/vulkan/renderdoc.json)
 

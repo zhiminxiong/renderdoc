@@ -21,7 +21,7 @@
 #define RESOURCE_d3d12_pixelhistory_hlsl  119
 #define RESOURCE_depth_copy_hlsl    120
 #define RESOURCE_raytracing_hlsl    121
-#define RESOURCE_quadswizzle_hlsl   131
+#define RESOURCE_hlsl_quadswizzle_hlsl   131
 
 #define RESOURCE_fixedcol_0_dxbc    113
 #define RESOURCE_fixedcol_1_dxbc    114

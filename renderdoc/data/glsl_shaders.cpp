@@ -38,11 +38,15 @@
   HEADER(gl_texsample)       \
   HEADER(gles_texsample)
 
+#define HLSL_HEADERS(HEADER) HEADER(quadswizzle)
+
 class EmbeddedIncluder : public glslang::TShader::Includer
 {
 #define DECL(header) rdcstr header = GetEmbeddedResource(CONCAT(glsl_, CONCAT(header, _h)));
   GLSL_HEADERS(DECL)
 #undef DECL
+
+  rdcstr quadswizzle = GetEmbeddedResource(hlsl_quadswizzle_hlsl);
 
 public:
   // For the "system" or <>-style includes; search the "system" paths.
@@ -54,6 +58,11 @@ public:
     return new IncludeResult(headerName, header.data(), header.length(), NULL);
     GLSL_HEADERS(GET)
 #undef GET
+
+    if(!strcmp(headerName, "quadswizzle.hlsl"))
+    {
+      return new IncludeResult("quadswizzle.hlsl", quadswizzle.data(), quadswizzle.length(), NULL);
+    }
 
     return NULL;
   }

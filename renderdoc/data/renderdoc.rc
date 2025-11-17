@@ -118,7 +118,7 @@ RESOURCE_shaderdebug_hlsl  TYPE_EMBED   "hlsl/shaderdebug.hlsl"
 RESOURCE_d3d12_pixelhistory_hlsl TYPE_EMBED   "hlsl/d3d12_pixelhistory.hlsl"
 RESOURCE_depth_copy_hlsl   TYPE_EMBED   "hlsl/depth_copy.hlsl"
 RESOURCE_raytracing_hlsl   TYPE_EMBED   "hlsl/raytracing.hlsl"
-RESOURCE_quadswizzle_hlsl  TYPE_EMBED   "hlsl/quadswizzle.hlsl"
+RESOURCE_hlsl_quadswizzle_hlsl  TYPE_EMBED   "hlsl/quadswizzle.hlsl"
 
 #ifdef RENDERDOC_BAKED_DXC_SHADERS
 

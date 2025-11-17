@@ -30,13 +30,13 @@ float4 quadSwizzleHelper(float4 c0, uint quadLaneIndex, uint readIndex)
   bool readX = ((readIndex & 1u) != 0u);
   bool readY = ((readIndex & 2u) != 0u);
 
-  float4 sign_x = 1.0f;
+  float4 sign_x = float4(0, 0, 0, 0);
   sign_x.x = quadX ? -1.0f : 1.0f;
   sign_x.y = quadX ? -1.0f : 1.0f;
   sign_x.z = quadX ? -1.0f : 1.0f;
   sign_x.w = quadX ? -1.0f : 1.0f;
 
-  float4 sign_y = 1.0f;
+  float4 sign_y = float4(0, 0, 0, 0);
   sign_y.x = quadY ? -1.0f : 1.0f;
   sign_y.y = quadY ? -1.0f : 1.0f;
   sign_y.z = quadY ? -1.0f : 1.0f;
@@ -96,20 +96,20 @@ uint quadSwizzleHelper(uint c0, uint quadLaneIndex, uint readIndex)
 
 int4 quadSwizzleHelper(int4 c0, uint quadLaneIndex, uint readIndex)
 {
-  return uint4(quadSwizzleHelper(float4(c0), quadLaneIndex, readIndex));
+  return int4(quadSwizzleHelper(float4(c0), quadLaneIndex, readIndex));
 }
 
 int3 quadSwizzleHelper(int3 c0, uint quadLaneIndex, uint readIndex)
 {
-  return uint3(quadSwizzleHelper(float3(c0), quadLaneIndex, readIndex));
+  return int3(quadSwizzleHelper(float3(c0), quadLaneIndex, readIndex));
 }
 
 int2 quadSwizzleHelper(int2 c0, uint quadLaneIndex, uint readIndex)
 {
-  return uint2(quadSwizzleHelper(float2(c0), quadLaneIndex, readIndex));
+  return int2(quadSwizzleHelper(float2(c0), quadLaneIndex, readIndex));
 }
 
 int quadSwizzleHelper(int c0, uint quadLaneIndex, uint readIndex)
 {
-  return uint(quadSwizzleHelper(float(c0), quadLaneIndex, readIndex));
+  return int(quadSwizzleHelper(float(c0), quadLaneIndex, readIndex));
 }

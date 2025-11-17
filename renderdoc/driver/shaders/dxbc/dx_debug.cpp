@@ -390,7 +390,7 @@ void CreateLegacyInputFetcher(const DXBC::DXBCContainer *dxbc, const InputFetche
 
   // work around NV driver bug - it miscompiles the quad swizzle helper sometimes, so use the wave op instead
   if(!dxil || !cfg.waveOps)
-    fetcher.hlsl += GetEmbeddedResource(quadswizzle_hlsl);
+    fetcher.hlsl += GetEmbeddedResource(hlsl_quadswizzle_hlsl);
   else
     fetcher.hlsl +=
         "#define quadSwizzleHelper(value, quadLaneIndex, readIndex) "

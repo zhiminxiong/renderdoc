@@ -760,6 +760,7 @@ extern bool IsGLES;
   EXT_TO_CHECK(43, 31, ARB_compute_shader)                       \
   EXT_TO_CHECK(43, 32, ARB_copy_image)                           \
   EXT_TO_CHECK(43, 30, ARB_ES3_compatibility)                    \
+  EXT_TO_CHECK(45, 31, ARB_ES3_1_compatibility)                  \
   EXT_TO_CHECK(43, 30, ARB_invalidate_subdata)                   \
   EXT_TO_CHECK(43, 99, ARB_internalformat_query2)                \
   EXT_TO_CHECK(43, 31, ARB_program_interface_query)              \
