@@ -1196,7 +1196,7 @@ struct TestStruct
 };
 
 groupshared int gsmInt;
-groupshared TestStruct gsmStruct[8];
+groupshared TestStruct gsmStruct[64];
 groupshared int gsmIntArray[128];
 groupshared int gsmInt2DArray[2][1024];
 
@@ -1240,6 +1240,7 @@ void main(int3 inTestIndex : SV_GroupID)
     testResult.x += bufIn[0].x * (uint)col1z;
     testResult.y += bufIn[0].y * (uint)col2w;
   }
+#if (SM_6_2 || SM_6_6) && HAS_16BIT_SHADER_OPS 
   else if (testIndex == 3)
   {
     float floatA = bufIn[0].x/100.0 + 1.5f;
@@ -1259,6 +1260,375 @@ void main(int3 inTestIndex : SV_GroupID)
     testResult.y = (float)halfFma * 1000.0;
     testResult.z = (float)doubleFma * 1000.0;
   }
+  else if (testIndex == 4)
+  {
+    float floatA = bufIn[0].x/100.0 + 1.5f;
+    float floatB = bufIn[0].y/100.0 + 1.7f;
+    double doubleA = (double)floatA; 
+    double doubleB = (double)floatB;
+    half halfA = (half)floatA;
+    half halfB = (half)floatB;
+
+    half half_val = min(halfA, halfB);
+    float float_val = min(floatA, floatB);
+    double double_val = min(doubleA, doubleB);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+    testResult.z = (float)double_val * 1000.0;
+  }
+  else if (testIndex == 5)
+  {
+    float floatA = bufIn[0].x/100.0 + 1.5f;
+    float floatB = bufIn[0].y/100.0 + 1.7f;
+    double doubleA = (double)floatA; 
+    double doubleB = (double)floatB;
+    half halfA = (half)floatA;
+    half halfB = (half)floatB;
+
+    half half_val = max(halfA, halfB);
+    float float_val = max(floatA, floatB);
+    double double_val = max(doubleA, doubleB);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+    testResult.z = (float)double_val * 1000.0;
+  }
+  else if (testIndex == 6)
+  {
+    float floatA = bufIn[0].x/100.0 + 1.5f;
+    double doubleA = (double)floatA; 
+    half halfA = (half)floatA;
+
+    half half_val = abs(halfA);
+    float float_val = abs(floatA);
+    double double_val = abs(doubleA);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+    testResult.z = (float)double_val * 1000.0;
+  }
+  else if (testIndex == 7)
+  {
+    float floatA = bufIn[0].x/100.0 + 0.5f;
+    half halfA = (half)floatA;
+
+    half half_val = frac(halfA);
+    float float_val = frac(floatA);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+  }
+  else if (testIndex == 8)
+  {
+    float floatA = bufIn[0].x/100.0 + 1.5f;
+    double doubleA = (double)floatA; 
+    half halfA = (half)floatA;
+
+    half half_val = saturate(halfA);
+    float float_val = saturate(floatA);
+    double double_val = saturate(doubleA);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+    testResult.z = (float)double_val * 1000.0;
+  }
+  else if (testIndex == 9)
+  {
+    float2 floatA = float2(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f);
+    float2 floatB = float2(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f);
+    half2 halfA = half2(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f);
+    half2 halfB = half2(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f);
+
+    half half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+  }
+  else if (testIndex == 10)
+  {
+    float3 floatA = float3(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f);
+    float3 floatB = float3(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 - 2.7f);
+    half3 halfA = half3(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f);
+    half3 halfB = half3(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f, bufIn[0].y/100.0 - 2.7f);
+
+    half half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+  }
+  else if (testIndex == 11)
+  {
+    float4 floatA = float4(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f, bufIn[0].y/100.0 + 3.7f);
+    float4 floatB = float4(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f, bufIn[0].y/100.0 - 2.7f, bufIn[0].y/100.0 - 3.7f);
+    half4 halfA = half4(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f, bufIn[0].y/100.0 + 3.7f);
+    half4 halfB = half4(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f, bufIn[0].y/100.0 - 2.7f, bufIn[0].y/100.0 - 3.7f);
+
+    half half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    testResult.x = float_val * 1000.0;
+    testResult.y = (float)half_val * 1000.0;
+  }
+)EOSHADER"
+                        R"EOSHADER(
+  else if (testIndex == 12)
+  {
+    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    int64_t slong_A = (int64_t)int_A; 
+    int64_t slong_B = (int64_t)int_B;
+    int16_t short_A = (int16_t)int_A;
+    int16_t short_B = (int16_t)int_B;
+
+    int16_t short_val = min(short_A, short_B);
+    int int_val = min(int_A, int_B);
+    int64_t slong_val = min(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 13)
+  {
+    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    int64_t slong_A = (int64_t)int_A; 
+    int64_t slong_B = (int64_t)int_B;
+    int16_t short_A = (int16_t)int_A;
+    int16_t short_B = (int16_t)int_B;
+
+    int16_t short_val = max(short_A, short_B);
+    int int_val = max(int_A, int_B);
+    int64_t slong_val = max(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 14)
+  {
+    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    int64_t slong_A = (int64_t)int_A; 
+    int64_t slong_B = (int64_t)int_B;
+    int16_t short_A = (int16_t)int_A;
+    int16_t short_B = (int16_t)int_B;
+
+    int16_t short_val = short_A * short_B;
+    int int_val = int_A * int_B;
+    int64_t slong_val = slong_A * slong_B;
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 15)
+  {
+    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    int64_t slong_A = (int64_t)int_A; 
+    int64_t slong_B = (int64_t)int_B;
+    int16_t short_A = (int16_t)int_A;
+    int16_t short_B = (int16_t)int_B;
+
+    int16_t short_val = short_A / short_B;
+    int int_val = int_A / int_B;
+    int64_t slong_val = slong_A / slong_B;
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 16)
+  {
+    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    int32_t int_C = bufIn[0].y/100.0 + 2.7f;
+    int64_t slong_A = (int64_t)int_A; 
+    int64_t slong_B = (int64_t)int_B;
+    int64_t slong_C = (int64_t)int_C;
+    int16_t short_A = (int16_t)int_A;
+    int16_t short_B = (int16_t)int_B;
+    int16_t short_C = (int16_t)int_C;
+
+    int16_t short_val = mad(short_A, short_B, short_C);
+    int int_val = mad(int_A, int_B, int_C);
+    int64_t slong_val = mad(slong_A, slong_B, slong_C);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 17)
+  {
+    vector<int32_t,2> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f};
+    vector<int32_t,2> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f};
+    vector<int64_t,2> slong_A = {(int64_t)int_A.x, (int64_t)int_A.y}; 
+    vector<int64_t,2> slong_B = {(int64_t)int_B.x, (int64_t)int_B.y};
+    vector<int16_t,2> short_A = {(int16_t)int_A.x, (int16_t)int_A.y};
+    vector<int16_t,2> short_B = {(int16_t)int_B.x, (int16_t)int_B.y};
+
+    int16_t short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    int64_t slong_val = dot(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 18)
+  {
+    vector<int32_t,3> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f};
+    vector<int32_t,3> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f};
+    vector<int64_t,3> slong_A = {(int64_t)int_A.x, (int64_t)int_A.y, (int64_t)int_A.z};
+    vector<int64_t,3> slong_B = {(int64_t)int_B.x, (int64_t)int_B.y, (int64_t)int_B.z};
+    vector<int16_t,3> short_A = {(int16_t)int_A.x, (int16_t)int_A.y, (int16_t)int_A.z};
+    vector<int16_t,3> short_B = {(int16_t)int_B.x, (int16_t)int_B.y, (int16_t)int_B.z};
+
+    int16_t short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    int64_t slong_val = dot(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 19)
+  {
+    vector<int32_t,4> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f, bufIn[0].x + 3.7f};
+    vector<int32_t,4> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f, bufIn[0].x -3.3f};
+    vector<int64_t,4> slong_A = {(int64_t)int_A.x, (int64_t)int_A.y, (int64_t)int_A.z, (int64_t)int_A.w};
+    vector<int64_t,4> slong_B = {(int64_t)int_B.x, (int64_t)int_B.y, (int64_t)int_B.z, (int64_t)int_B.w};
+    vector<int16_t,4> short_A = {(int16_t)int_A.x, (int16_t)int_A.y, (int16_t)int_A.z, (int16_t)int_A.w};
+    vector<int16_t,4> short_B = {(int16_t)int_B.x, (int16_t)int_B.y, (int16_t)int_B.z, (int16_t)int_B.w};
+
+    int16_t short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    int64_t slong_val = dot(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 20)
+  {
+    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    uint64_t slong_A = (uint64_t)int_A; 
+    uint64_t slong_B = (uint64_t)int_B;
+    uint16_t short_A = (uint16_t)int_A;
+    uint16_t short_B = (uint16_t)int_B;
+
+    uint16_t short_val = min(short_A, short_B);
+    uint int_val = min(int_A, int_B);
+    uint64_t slong_val = min(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 21)
+  {
+    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    uint64_t slong_A = (uint64_t)int_A; 
+    uint64_t slong_B = (uint64_t)int_B;
+    uint16_t short_A = (uint16_t)int_A;
+    uint16_t short_B = (uint16_t)int_B;
+
+    uint16_t short_val = max(short_A, short_B);
+    uint int_val = max(int_A, int_B);
+    uint64_t slong_val = max(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 22)
+  {
+    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    uint64_t slong_A = (uint64_t)int_A; 
+    uint64_t slong_B = (uint64_t)int_B;
+    uint16_t short_A = (uint16_t)int_A;
+    uint16_t short_B = (uint16_t)int_B;
+
+    uint16_t short_val = short_A * short_B;
+    uint int_val = int_A * int_B;
+    uint64_t slong_val = slong_A * slong_B;
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 23)
+  {
+    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    uint64_t slong_A = (uint64_t)int_A; 
+    uint64_t slong_B = (uint64_t)int_B;
+    uint16_t short_A = (uint16_t)int_A;
+    uint16_t short_B = (uint16_t)int_B;
+
+    uint16_t short_val = short_A / short_B;
+    uint int_val = int_A / int_B;
+    uint64_t slong_val = slong_A / slong_B;
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 24)
+  {
+    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
+    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
+    uint32_t int_C = bufIn[0].y/100.0 + 2.7f;
+    uint64_t slong_A = (uint64_t)int_A; 
+    uint64_t slong_B = (uint64_t)int_B;
+    uint64_t slong_C = (uint64_t)int_C;
+    uint16_t short_A = (uint16_t)int_A;
+    uint16_t short_B = (uint16_t)int_B;
+    uint16_t short_C = (uint16_t)int_C;
+
+    uint16_t short_val = mad(short_A, short_B, short_C);
+    uint int_val = mad(int_A, int_B, int_C);
+    uint64_t slong_val = mad(slong_A, slong_B, slong_C);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 25)
+  {
+    vector<uint32_t,2> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f};
+    vector<uint32_t,2> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f};
+    vector<uint64_t,2> slong_A = {(uint64_t)int_A.x, (uint64_t)int_A.y}; 
+    vector<uint64_t,2> slong_B = {(uint64_t)int_B.x, (uint64_t)int_B.y};
+    vector<uint16_t,2> short_A = {(uint16_t)int_A.x, (uint16_t)int_A.y};
+    vector<uint16_t,2> short_B = {(uint16_t)int_B.x, (uint16_t)int_B.y};
+
+    uint16_t short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    uint64_t slong_val = dot(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 26)
+  {
+    vector<uint32_t,3> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f};
+    vector<uint32_t,3> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f};
+    vector<uint64_t,3> slong_A = {(uint64_t)int_A.x, (uint64_t)int_A.y, (uint64_t)int_A.z};
+    vector<uint64_t,3> slong_B = {(uint64_t)int_B.x, (uint64_t)int_B.y, (uint64_t)int_B.z};
+    vector<uint16_t,3> short_A = {(uint16_t)int_A.x, (uint16_t)int_A.y, (uint16_t)int_A.z};
+    vector<uint16_t,3> short_B = {(uint16_t)int_B.x, (uint16_t)int_B.y, (uint16_t)int_B.z};
+
+    uint16_t short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    uint64_t slong_val = dot(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+  else if (testIndex == 27)
+  {
+    vector<uint32_t,4> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f, bufIn[0].x + 3.7f};
+    vector<uint32_t,4> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f, bufIn[0].x -3.3f};
+    vector<uint64_t,4> slong_A = {(uint64_t)int_A.x, (uint64_t)int_A.y, (uint64_t)int_A.z, (uint64_t)int_A.w};
+    vector<uint64_t,4> slong_B = {(uint64_t)int_B.x, (uint64_t)int_B.y, (uint64_t)int_B.z, (uint64_t)int_B.w};
+    vector<uint16_t,4> short_A = {(uint16_t)int_A.x, (uint16_t)int_A.y, (uint16_t)int_A.z, (uint16_t)int_A.w};
+    vector<uint16_t,4> short_B = {(uint16_t)int_B.x, (uint16_t)int_B.y, (uint16_t)int_B.z, (uint16_t)int_B.w};
+
+    uint16_t short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    uint64_t slong_val = dot(slong_A, slong_B);
+    testResult.x = (float)int_val;
+    testResult.y = (float)short_val;
+    testResult.z = (float)slong_val;
+  }
+#endif // #if (SM_6_2 || SM_6_6) && HAS_16BIT_SHADER_OPS 
   else
   {
     testResult.x = inTestIndex.x;
@@ -2038,13 +2408,14 @@ void main(int3 inTestIndex : SV_GroupID)
 
     if(supportSM60)
     {
-      csblob = Compile(compute, "main", "cs_6_0");
+      csblob = Compile("#define SM_6_0 1\n" + shaderDefines + compute, "main", "cs_6_0");
       computePSOs[1] = MakePSO().RootSig(sigCompute).CS(csblob);
     }
 
     if(supportSM66)
     {
-      csblob = Compile(compute, "main", "cs_6_6", compileOptions);
+      csblob =
+          Compile("#define SM_6_6 1\n" + shaderDefines + compute, "main", "cs_6_6", compileOptions);
       computePSOs[2] = MakePSO().RootSig(sigCompute).CS(csblob);
     }
 
