@@ -87,6 +87,46 @@ float4 main(float4 pos : SV_Position) : SV_Target0
 
 )EOSHADER";
 
+  std::string shaderTypes = R"EOSHADER(
+#if SM_6_6
+
+#define INT32 int32_t
+#define UINT32 uint32_t
+
+#if HAS_16BIT_SHADER_OPS 
+#define INT16 int16_t
+#define UINT16 uint16_t
+#define HALF half
+#else // #if HAS_16BIT_SHADER_OPS 
+#define INT16 int
+#define UINT16 uint
+#define HALF float
+#endif // #if HAS_16BIT_SHADER_OPS 
+
+#if HAS_DOUBLE_SHADER_OPS
+#define INT64 int64_t
+#define UINT64 uint64_t
+#define DOUBLE double
+#else // #if HAS_DOUBLE_SHADER_OPS
+#define INT64 int
+#define UINT64 uint
+#define DOUBLE float
+#endif // #if HAS_DOUBLE_SHADER_OPS
+
+#else // #if SM_6_6
+
+#define INT32 int
+#define UINT32 uint
+#define INT16 int
+#define UINT16 uint
+#define INT64 int
+#define UINT64 uint
+
+#define HALF float
+#define DOUBLE float
+#endif // #if SM_6_6
+)EOSHADER";
+
   std::string common = R"EOSHADER(
 
 struct consts
@@ -152,7 +192,7 @@ v2f main(consts IN, uint tri : SV_InstanceID)
 
 )EOSHADER";
 
-  std::string pixel = R"EOSHADER(
+  std::string pixel = shaderTypes + R"EOSHADER(
 
 // error X3556: integer divides may be much slower, try using uints if possible.
 // we want to do this on purpose
@@ -525,7 +565,7 @@ float4 main(v2f IN) : SV_Target0
     return float4(read.a, read.e, read.d.b[z+0], read.d.c);
   }
 )EOSHADER"
-                      R"EOSHADER(
+                                    R"EOSHADER(
 
   // storing in bounds
   if(IN.tri == 52)
@@ -900,15 +940,13 @@ float4 main(v2f IN) : SV_Target0
     uint res = dot4add_u8packed(a, b, c);
     return float4(res & 0xFF, (res >> 8) & 0xFF, (res >> 16) & 0xFF, (res >> 24) & 0xFF);
   }
-#if HAS_16BIT_SHADER_OPS
   if(IN.tri == 96)
   {
-    half2 a = half2(IN.tri - 96 + 0.25f, IN.tri - 96 + 0.5f);
-    half2 b = half2(IN.tri - 96 + 0.5f, IN.tri - 96 + 0.25f);
+    vector<HALF, 2> a = {IN.tri - 96 + 0.25f, IN.tri - 96 + 0.5f};
+    vector<HALF, 2> b = {IN.tri - 96 + 0.5f, IN.tri - 96 + 0.25f};
     float c = IN.tri - 96 + 0.3f;
     return dot2add(a, b, c);
   }
-#endif
   if(IN.tri == 97)
   {
     int val = IN.tri - 97;
@@ -1045,6 +1083,444 @@ float4 main(v2f IN) : SV_Target0
     }
     return Color;
   }
+  if(IN.tri == 109)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    float floatB = IN.tri/100.0 + 1.7f;
+    float floatC = IN.tri/100.0 + 2.5f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    DOUBLE doubleB = (DOUBLE)floatB;
+    DOUBLE doubleC = (DOUBLE)floatC;
+    HALF halfA = (HALF)floatA;
+    HALF halfB = (HALF)1.0;
+    HALF halfC = (HALF)floatC;
+
+    HALF halfFma = mad(halfA, halfB, halfC);
+    float floatFma = mad(floatA, floatB, floatC);
+    DOUBLE doubleFma = mad(doubleA, doubleB, doubleC);
+    Color.x = floatFma * 1000.0;
+    Color.y = (float)halfFma * 1000.0;
+    Color.z = (float)doubleFma * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 110)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    float floatB = IN.tri/100.0 + 1.7f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    DOUBLE doubleB = (DOUBLE)floatB;
+    HALF halfA = (HALF)floatA;
+    HALF halfB = (HALF)floatB;
+
+    HALF half_val = min(halfA, halfB);
+    float float_val = min(floatA, floatB);
+    DOUBLE double_val = min(doubleA, doubleB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 111)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    float floatB = IN.tri/100.0 + 1.7f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    DOUBLE doubleB = (DOUBLE)floatB;
+    HALF halfA = (HALF)floatA;
+    HALF halfB = (HALF)floatB;
+
+    HALF half_val = max(halfA, halfB);
+    float float_val = max(floatA, floatB);
+    DOUBLE double_val = max(doubleA, doubleB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 112)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    HALF halfA = (HALF)floatA;
+
+    HALF half_val = abs(halfA);
+    float float_val = abs(floatA);
+    DOUBLE double_val = abs(doubleA);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+)EOSHADER"
+
+                                    R"EOSHADER(
+  if(IN.tri == 113)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 0.5f;
+    HALF halfA = (HALF)floatA;
+
+    HALF half_val = frac(halfA);
+    float float_val = frac(floatA);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 114)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    HALF halfA = (HALF)floatA;
+
+    HALF half_val = saturate(halfA);
+    float float_val = saturate(floatA);
+    DOUBLE double_val = saturate(doubleA);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 115)
+  {
+    float4 Color = float4(0,0,0,0);
+    float2 floatA = float2(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f);
+    float2 floatB = float2(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f);
+    vector<HALF, 2> halfA = {IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f};
+    vector<HALF, 2> halfB = {IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f};
+
+    HALF half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 116)
+  {
+    float4 Color = float4(0,0,0,0);
+    float3 floatA = float3(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f);
+    float3 floatB = float3(IN.tri/100.0 - 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 - 2.7f);
+    vector<HALF, 3> halfA = {IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f};
+    vector<HALF, 3> halfB = {IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f};
+
+    HALF half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 117)
+  {
+    float4 Color = float4(0,0,0,0);
+    float4 floatA = float4(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f, IN.tri/100.0 + 3.7f);
+    float4 floatB = float4(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f, IN.tri/100.0 - 3.7f);
+    vector<HALF, 4> halfA = {IN.tri + 1.5f, IN.tri + 1.7f, IN.tri + 2.7f, IN.tri + 3.7f};
+    vector<HALF, 4> halfB = {IN.tri - 1.5f, IN.tri - 1.7f, IN.tri - 2.7f, IN.tri - 3.7f};
+
+    HALF half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 118)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = min(short_A, short_B);
+    int int_val = min(int_A, int_B);
+    INT64 slong_val = min(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 119)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = max(short_A, short_B);
+    int int_val = max(int_A, int_B);
+    INT64 slong_val = max(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 120)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = short_A * short_B;
+    int int_val = int_A * int_B;
+    INT64 slong_val = slong_A * slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 121)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = short_A / short_B;
+    int int_val = int_A / int_B;
+    INT64 slong_val = slong_A / slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 122)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT32 int_C = IN.tri/100.0 + 2.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT64 slong_C = (INT64)int_C;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+    INT16 short_C = (INT16)int_C;
+
+    INT16 short_val = mad(short_A, short_B, short_C);
+    int int_val = mad(int_A, int_B, int_C);
+    INT64 slong_val = mad(slong_A, slong_B, slong_C);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 123)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<INT32,2> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f};
+    vector<INT32,2> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f};
+    vector<INT64,2> slong_A = {(INT64)int_A.x, (INT64)int_A.y}; 
+    vector<INT64,2> slong_B = {(INT64)int_B.x, (INT64)int_B.y};
+    vector<INT16,2> short_A = {(INT16)int_A.x, (INT16)int_A.y};
+    vector<INT16,2> short_B = {(INT16)int_B.x, (INT16)int_B.y};
+
+    INT16 short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    INT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 124)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<INT32,3> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f};
+    vector<INT32,3> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f};
+    vector<INT64,3> slong_A = {(INT64)int_A.x, (INT64)int_A.y, (INT64)int_A.z};
+    vector<INT64,3> slong_B = {(INT64)int_B.x, (INT64)int_B.y, (INT64)int_B.z};
+    vector<INT16,3> short_A = {(INT16)int_A.x, (INT16)int_A.y, (INT16)int_A.z};
+    vector<INT16,3> short_B = {(INT16)int_B.x, (INT16)int_B.y, (INT16)int_B.z};
+
+    INT16 short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    INT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 125)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<INT32,4> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f, IN.tri + 3.7f};
+    vector<INT32,4> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f, IN.tri -3.3f};
+    vector<INT64,4> slong_A = {(INT64)int_A.x, (INT64)int_A.y, (INT64)int_A.z, (INT64)int_A.w};
+    vector<INT64,4> slong_B = {(INT64)int_B.x, (INT64)int_B.y, (INT64)int_B.z, (INT64)int_B.w};
+    vector<INT16,4> short_A = {(INT16)int_A.x, (INT16)int_A.y, (INT16)int_A.z, (INT16)int_A.w};
+    vector<INT16,4> short_B = {(INT16)int_B.x, (INT16)int_B.y, (INT16)int_B.z, (INT16)int_B.w};
+
+    INT16 short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    INT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 126)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = min(short_A, short_B);
+    uint int_val = min(int_A, int_B);
+    UINT64 slong_val = min(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 127)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = max(short_A, short_B);
+    uint int_val = max(int_A, int_B);
+    UINT64 slong_val = max(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 128)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = short_A * short_B;
+    uint int_val = int_A * int_B;
+    UINT64 slong_val = slong_A * slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 129)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = short_A / short_B;
+    uint int_val = int_A / int_B;
+    UINT64 slong_val = slong_A / slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 130)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT32 int_C = IN.tri/100.0 + 2.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT64 slong_C = (UINT64)int_C;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+    UINT16 short_C = (UINT16)int_C;
+
+    UINT16 short_val = mad(short_A, short_B, short_C);
+    uint int_val = mad(int_A, int_B, int_C);
+    UINT64 slong_val = mad(slong_A, slong_B, slong_C);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 131)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<UINT32,2> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f};
+    vector<UINT32,2> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f};
+    vector<UINT64,2> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y}; 
+    vector<UINT64,2> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y};
+    vector<UINT16,2> short_A = {(UINT16)int_A.x, (UINT16)int_A.y};
+    vector<UINT16,2> short_B = {(UINT16)int_B.x, (UINT16)int_B.y};
+
+    UINT16 short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    UINT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 132)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<UINT32,3> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f};
+    vector<UINT32,3> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f};
+    vector<UINT64,3> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y, (UINT64)int_A.z};
+    vector<UINT64,3> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y, (UINT64)int_B.z};
+    vector<UINT16,3> short_A = {(UINT16)int_A.x, (UINT16)int_A.y, (UINT16)int_A.z};
+    vector<UINT16,3> short_B = {(UINT16)int_B.x, (UINT16)int_B.y, (UINT16)int_B.z};
+
+    UINT16 short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    UINT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 133)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<UINT32,4> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f, IN.tri + 3.7f};
+    vector<UINT32,4> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f, IN.tri -3.3f};
+    vector<UINT64,4> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y, (UINT64)int_A.z, (UINT64)int_A.w};
+    vector<UINT64,4> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y, (UINT64)int_B.z, (UINT64)int_B.w};
+    vector<UINT16,4> short_A = {(UINT16)int_A.x, (UINT16)int_A.y, (UINT16)int_A.z, (UINT16)int_A.w};
+    vector<UINT16,4> short_B = {(UINT16)int_B.x, (UINT16)int_B.y, (UINT16)int_B.z, (UINT16)int_B.w};
+
+    UINT16 short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    UINT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
 
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }
@@ -1166,7 +1642,7 @@ float4 main(v2f IN, uint samp : SV_SampleIndex, float3 bary : SV_Barycentrics) :
 
 )EOSHADER";
 
-  std::string compute = R"EOSHADER(
+  std::string computeMain = shaderTypes + R"EOSHADER(
 
 // error X3556: integer divides may be much slower, try using uints if possible.
 // we want to do this on purpose
@@ -1177,7 +1653,7 @@ cbuffer consts : register(b0)
   bool boolX;
   uint intY;
   float floatZ;
-  double doubleX;
+  DOUBLE doubleX;
 };
 
 cbuffer packed_consts : register(b1)
@@ -1240,395 +1716,6 @@ void main(int3 inTestIndex : SV_GroupID)
     testResult.x += bufIn[0].x * (uint)col1z;
     testResult.y += bufIn[0].y * (uint)col2w;
   }
-#if (SM_6_2 || SM_6_6) && HAS_16BIT_SHADER_OPS 
-  else if (testIndex == 3)
-  {
-    float floatA = bufIn[0].x/100.0 + 1.5f;
-    float floatB = bufIn[0].y/100.0 + 1.7f;
-    float floatC = bufIn[0].z/100.0 + 2.5f;
-    double doubleA = (double)floatA; 
-    double doubleB = (double)floatB;
-    double doubleC = (double)floatC;
-    half halfA = (half)floatA;
-    half halfB = (half)1.0;
-    half halfC = (half)floatC;
-
-    half halfFma = mad(halfA, halfB, halfC);
-    float floatFma = mad(floatA, floatB, floatC);
-    double doubleFma = mad(doubleA, doubleB, doubleC);
-    testResult.x = floatFma * 1000.0;
-    testResult.y = (float)halfFma * 1000.0;
-    testResult.z = (float)doubleFma * 1000.0;
-  }
-  else if (testIndex == 4)
-  {
-    float floatA = bufIn[0].x/100.0 + 1.5f;
-    float floatB = bufIn[0].y/100.0 + 1.7f;
-    double doubleA = (double)floatA; 
-    double doubleB = (double)floatB;
-    half halfA = (half)floatA;
-    half halfB = (half)floatB;
-
-    half half_val = min(halfA, halfB);
-    float float_val = min(floatA, floatB);
-    double double_val = min(doubleA, doubleB);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-    testResult.z = (float)double_val * 1000.0;
-  }
-  else if (testIndex == 5)
-  {
-    float floatA = bufIn[0].x/100.0 + 1.5f;
-    float floatB = bufIn[0].y/100.0 + 1.7f;
-    double doubleA = (double)floatA; 
-    double doubleB = (double)floatB;
-    half halfA = (half)floatA;
-    half halfB = (half)floatB;
-
-    half half_val = max(halfA, halfB);
-    float float_val = max(floatA, floatB);
-    double double_val = max(doubleA, doubleB);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-    testResult.z = (float)double_val * 1000.0;
-  }
-  else if (testIndex == 6)
-  {
-    float floatA = bufIn[0].x/100.0 + 1.5f;
-    double doubleA = (double)floatA; 
-    half halfA = (half)floatA;
-
-    half half_val = abs(halfA);
-    float float_val = abs(floatA);
-    double double_val = abs(doubleA);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-    testResult.z = (float)double_val * 1000.0;
-  }
-  else if (testIndex == 7)
-  {
-    float floatA = bufIn[0].x/100.0 + 0.5f;
-    half halfA = (half)floatA;
-
-    half half_val = frac(halfA);
-    float float_val = frac(floatA);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-  }
-  else if (testIndex == 8)
-  {
-    float floatA = bufIn[0].x/100.0 + 1.5f;
-    double doubleA = (double)floatA; 
-    half halfA = (half)floatA;
-
-    half half_val = saturate(halfA);
-    float float_val = saturate(floatA);
-    double double_val = saturate(doubleA);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-    testResult.z = (float)double_val * 1000.0;
-  }
-  else if (testIndex == 9)
-  {
-    float2 floatA = float2(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f);
-    float2 floatB = float2(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f);
-    half2 halfA = half2(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f);
-    half2 halfB = half2(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f);
-
-    half half_val = dot(halfA, halfB);
-    float float_val = dot(floatA, floatB);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-  }
-  else if (testIndex == 10)
-  {
-    float3 floatA = float3(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f);
-    float3 floatB = float3(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 - 2.7f);
-    half3 halfA = half3(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f);
-    half3 halfB = half3(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f, bufIn[0].y/100.0 - 2.7f);
-
-    half half_val = dot(halfA, halfB);
-    float float_val = dot(floatA, floatB);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-  }
-  else if (testIndex == 11)
-  {
-    float4 floatA = float4(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f, bufIn[0].y/100.0 + 3.7f);
-    float4 floatB = float4(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f, bufIn[0].y/100.0 - 2.7f, bufIn[0].y/100.0 - 3.7f);
-    half4 halfA = half4(bufIn[0].x/100.0 + 1.5f, bufIn[0].y/100.0 + 1.7f, bufIn[0].y/100.0 + 2.7f, bufIn[0].y/100.0 + 3.7f);
-    half4 halfB = half4(bufIn[0].x/100.0 - 1.5f, bufIn[0].y/100.0 - 1.7f, bufIn[0].y/100.0 - 2.7f, bufIn[0].y/100.0 - 3.7f);
-
-    half half_val = dot(halfA, halfB);
-    float float_val = dot(floatA, floatB);
-    testResult.x = float_val * 1000.0;
-    testResult.y = (float)half_val * 1000.0;
-  }
-)EOSHADER"
-                        R"EOSHADER(
-  else if (testIndex == 12)
-  {
-    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    int64_t slong_A = (int64_t)int_A; 
-    int64_t slong_B = (int64_t)int_B;
-    int16_t short_A = (int16_t)int_A;
-    int16_t short_B = (int16_t)int_B;
-
-    int16_t short_val = min(short_A, short_B);
-    int int_val = min(int_A, int_B);
-    int64_t slong_val = min(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 13)
-  {
-    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    int64_t slong_A = (int64_t)int_A; 
-    int64_t slong_B = (int64_t)int_B;
-    int16_t short_A = (int16_t)int_A;
-    int16_t short_B = (int16_t)int_B;
-
-    int16_t short_val = max(short_A, short_B);
-    int int_val = max(int_A, int_B);
-    int64_t slong_val = max(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 14)
-  {
-    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    int64_t slong_A = (int64_t)int_A; 
-    int64_t slong_B = (int64_t)int_B;
-    int16_t short_A = (int16_t)int_A;
-    int16_t short_B = (int16_t)int_B;
-
-    int16_t short_val = short_A * short_B;
-    int int_val = int_A * int_B;
-    int64_t slong_val = slong_A * slong_B;
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 15)
-  {
-    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    int64_t slong_A = (int64_t)int_A; 
-    int64_t slong_B = (int64_t)int_B;
-    int16_t short_A = (int16_t)int_A;
-    int16_t short_B = (int16_t)int_B;
-
-    int16_t short_val = short_A / short_B;
-    int int_val = int_A / int_B;
-    int64_t slong_val = slong_A / slong_B;
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 16)
-  {
-    int32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    int32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    int32_t int_C = bufIn[0].y/100.0 + 2.7f;
-    int64_t slong_A = (int64_t)int_A; 
-    int64_t slong_B = (int64_t)int_B;
-    int64_t slong_C = (int64_t)int_C;
-    int16_t short_A = (int16_t)int_A;
-    int16_t short_B = (int16_t)int_B;
-    int16_t short_C = (int16_t)int_C;
-
-    int16_t short_val = mad(short_A, short_B, short_C);
-    int int_val = mad(int_A, int_B, int_C);
-    int64_t slong_val = mad(slong_A, slong_B, slong_C);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 17)
-  {
-    vector<int32_t,2> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f};
-    vector<int32_t,2> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f};
-    vector<int64_t,2> slong_A = {(int64_t)int_A.x, (int64_t)int_A.y}; 
-    vector<int64_t,2> slong_B = {(int64_t)int_B.x, (int64_t)int_B.y};
-    vector<int16_t,2> short_A = {(int16_t)int_A.x, (int16_t)int_A.y};
-    vector<int16_t,2> short_B = {(int16_t)int_B.x, (int16_t)int_B.y};
-
-    int16_t short_val = dot(short_A, short_B);
-    int int_val = dot(int_A, int_B);
-    int64_t slong_val = dot(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 18)
-  {
-    vector<int32_t,3> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f};
-    vector<int32_t,3> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f};
-    vector<int64_t,3> slong_A = {(int64_t)int_A.x, (int64_t)int_A.y, (int64_t)int_A.z};
-    vector<int64_t,3> slong_B = {(int64_t)int_B.x, (int64_t)int_B.y, (int64_t)int_B.z};
-    vector<int16_t,3> short_A = {(int16_t)int_A.x, (int16_t)int_A.y, (int16_t)int_A.z};
-    vector<int16_t,3> short_B = {(int16_t)int_B.x, (int16_t)int_B.y, (int16_t)int_B.z};
-
-    int16_t short_val = dot(short_A, short_B);
-    int int_val = dot(int_A, int_B);
-    int64_t slong_val = dot(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 19)
-  {
-    vector<int32_t,4> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f, bufIn[0].x + 3.7f};
-    vector<int32_t,4> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f, bufIn[0].x -3.3f};
-    vector<int64_t,4> slong_A = {(int64_t)int_A.x, (int64_t)int_A.y, (int64_t)int_A.z, (int64_t)int_A.w};
-    vector<int64_t,4> slong_B = {(int64_t)int_B.x, (int64_t)int_B.y, (int64_t)int_B.z, (int64_t)int_B.w};
-    vector<int16_t,4> short_A = {(int16_t)int_A.x, (int16_t)int_A.y, (int16_t)int_A.z, (int16_t)int_A.w};
-    vector<int16_t,4> short_B = {(int16_t)int_B.x, (int16_t)int_B.y, (int16_t)int_B.z, (int16_t)int_B.w};
-
-    int16_t short_val = dot(short_A, short_B);
-    int int_val = dot(int_A, int_B);
-    int64_t slong_val = dot(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 20)
-  {
-    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    uint64_t slong_A = (uint64_t)int_A; 
-    uint64_t slong_B = (uint64_t)int_B;
-    uint16_t short_A = (uint16_t)int_A;
-    uint16_t short_B = (uint16_t)int_B;
-
-    uint16_t short_val = min(short_A, short_B);
-    uint int_val = min(int_A, int_B);
-    uint64_t slong_val = min(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 21)
-  {
-    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    uint64_t slong_A = (uint64_t)int_A; 
-    uint64_t slong_B = (uint64_t)int_B;
-    uint16_t short_A = (uint16_t)int_A;
-    uint16_t short_B = (uint16_t)int_B;
-
-    uint16_t short_val = max(short_A, short_B);
-    uint int_val = max(int_A, int_B);
-    uint64_t slong_val = max(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 22)
-  {
-    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    uint64_t slong_A = (uint64_t)int_A; 
-    uint64_t slong_B = (uint64_t)int_B;
-    uint16_t short_A = (uint16_t)int_A;
-    uint16_t short_B = (uint16_t)int_B;
-
-    uint16_t short_val = short_A * short_B;
-    uint int_val = int_A * int_B;
-    uint64_t slong_val = slong_A * slong_B;
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 23)
-  {
-    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    uint64_t slong_A = (uint64_t)int_A; 
-    uint64_t slong_B = (uint64_t)int_B;
-    uint16_t short_A = (uint16_t)int_A;
-    uint16_t short_B = (uint16_t)int_B;
-
-    uint16_t short_val = short_A / short_B;
-    uint int_val = int_A / int_B;
-    uint64_t slong_val = slong_A / slong_B;
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 24)
-  {
-    uint32_t int_A = bufIn[0].x/100.0 + 1.5f;
-    uint32_t int_B = bufIn[0].y/100.0 + 1.7f;
-    uint32_t int_C = bufIn[0].y/100.0 + 2.7f;
-    uint64_t slong_A = (uint64_t)int_A; 
-    uint64_t slong_B = (uint64_t)int_B;
-    uint64_t slong_C = (uint64_t)int_C;
-    uint16_t short_A = (uint16_t)int_A;
-    uint16_t short_B = (uint16_t)int_B;
-    uint16_t short_C = (uint16_t)int_C;
-
-    uint16_t short_val = mad(short_A, short_B, short_C);
-    uint int_val = mad(int_A, int_B, int_C);
-    uint64_t slong_val = mad(slong_A, slong_B, slong_C);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 25)
-  {
-    vector<uint32_t,2> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f};
-    vector<uint32_t,2> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f};
-    vector<uint64_t,2> slong_A = {(uint64_t)int_A.x, (uint64_t)int_A.y}; 
-    vector<uint64_t,2> slong_B = {(uint64_t)int_B.x, (uint64_t)int_B.y};
-    vector<uint16_t,2> short_A = {(uint16_t)int_A.x, (uint16_t)int_A.y};
-    vector<uint16_t,2> short_B = {(uint16_t)int_B.x, (uint16_t)int_B.y};
-
-    uint16_t short_val = dot(short_A, short_B);
-    uint int_val = dot(int_A, int_B);
-    uint64_t slong_val = dot(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 26)
-  {
-    vector<uint32_t,3> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f};
-    vector<uint32_t,3> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f};
-    vector<uint64_t,3> slong_A = {(uint64_t)int_A.x, (uint64_t)int_A.y, (uint64_t)int_A.z};
-    vector<uint64_t,3> slong_B = {(uint64_t)int_B.x, (uint64_t)int_B.y, (uint64_t)int_B.z};
-    vector<uint16_t,3> short_A = {(uint16_t)int_A.x, (uint16_t)int_A.y, (uint16_t)int_A.z};
-    vector<uint16_t,3> short_B = {(uint16_t)int_B.x, (uint16_t)int_B.y, (uint16_t)int_B.z};
-
-    uint16_t short_val = dot(short_A, short_B);
-    uint int_val = dot(int_A, int_B);
-    uint64_t slong_val = dot(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-  else if (testIndex == 27)
-  {
-    vector<uint32_t,4> int_A = {bufIn[0].x/100.0 + 1.5f, bufIn[0].x - 1.5f, bufIn[0].x - 2.5f, bufIn[0].x + 3.7f};
-    vector<uint32_t,4> int_B = {bufIn[0].y/100.0 + 1.7f, bufIn[0].x - 1.7f, bufIn[0].x + 2.5f, bufIn[0].x -3.3f};
-    vector<uint64_t,4> slong_A = {(uint64_t)int_A.x, (uint64_t)int_A.y, (uint64_t)int_A.z, (uint64_t)int_A.w};
-    vector<uint64_t,4> slong_B = {(uint64_t)int_B.x, (uint64_t)int_B.y, (uint64_t)int_B.z, (uint64_t)int_B.w};
-    vector<uint16_t,4> short_A = {(uint16_t)int_A.x, (uint16_t)int_A.y, (uint16_t)int_A.z, (uint16_t)int_A.w};
-    vector<uint16_t,4> short_B = {(uint16_t)int_B.x, (uint16_t)int_B.y, (uint16_t)int_B.z, (uint16_t)int_B.w};
-
-    uint16_t short_val = dot(short_A, short_B);
-    uint int_val = dot(int_A, int_B);
-    uint64_t slong_val = dot(slong_A, slong_B);
-    testResult.x = (float)int_val;
-    testResult.y = (float)short_val;
-    testResult.z = (float)slong_val;
-  }
-#endif // #if (SM_6_2 || SM_6_6) && HAS_16BIT_SHADER_OPS 
   else
   {
     testResult.x = inTestIndex.x;
@@ -1652,8 +1739,15 @@ void main(int3 inTestIndex : SV_GroupID)
     TEST_ASSERT(!supportSM62 || supportSM60, "SM 6.2 requires SM 6.0 support");
     TEST_ASSERT(!supportSM66 || supportSM62, "SM 6.6 requires SM 6.2 support");
 
-    std::string shaderDefines =
-        opts4.Native16BitShaderOpsSupported ? "#define HAS_16BIT_SHADER_OPS 1\n" : "";
+    std::string shaderDefines = "";
+    if(opts4.Native16BitShaderOpsSupported)
+      shaderDefines += "#define HAS_16BIT_SHADER_OPS 1\n";
+    else
+      shaderDefines += "#define HAS_16BIT_SHADER_OPS 0\n";
+    if(opts.DoublePrecisionFloatShaderOps)
+      shaderDefines += "#define HAS_DOUBLE_SHADER_OPS 1\n";
+    else
+      shaderDefines += "#define HAS_DOUBLE_SHADER_OPS 0\n";
 
     size_t lastTest = pixel.rfind("IN.tri == ");
     lastTest += sizeof("IN.tri == ") - 1;
@@ -1679,9 +1773,9 @@ void main(int3 inTestIndex : SV_GroupID)
     lastTest += sizeof("IN.tri == ") - 1;
     const uint32_t numNoResTests = atoi(noResourcesPixel.c_str() + lastTest) + 1;
 
-    lastTest = compute.rfind("testIndex == ");
+    lastTest = computeMain.rfind("testIndex == ");
     lastTest += sizeof("testIndex == ") - 1;
-    const uint32_t numComputeTests = atoi(compute.c_str() + lastTest) + 1;
+    const uint32_t numComputeTests = atoi(computeMain.c_str() + lastTest) + 1;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
     inputLayout.reserve(4);
@@ -1802,15 +1896,17 @@ void main(int3 inTestIndex : SV_GroupID)
                   .RootSig(sig)
                   .InputLayout(inputLayout)
                   .VS(vs5blob)
-                  .PS(Compile(common + pixel, "main", "ps_5_0", CompileOptionFlags::SkipOptimise))
+                  .PS(Compile(common + shaderDefines + pixel, "main", "ps_5_0",
+                              CompileOptionFlags::SkipOptimise))
                   .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
     psos[0]->SetName(L"ps_5_0");
-    psos[1] = MakePSO()
-                  .RootSig(sig)
-                  .InputLayout(inputLayout)
-                  .VS(vs5blob)
-                  .PS(Compile(common + pixel, "main", "ps_5_0", CompileOptionFlags::None))
-                  .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
+    psos[1] =
+        MakePSO()
+            .RootSig(sig)
+            .InputLayout(inputLayout)
+            .VS(vs5blob)
+            .PS(Compile(common + shaderDefines + pixel, "main", "ps_5_0", CompileOptionFlags::None))
+            .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
     psos[1]->SetName(L"ps_5_0_opt");
 
     // Recompile the same PS with SM 5.1 to test shader debugging with the different bytecode
@@ -1818,16 +1914,16 @@ void main(int3 inTestIndex : SV_GroupID)
                   .RootSig(sig)
                   .InputLayout(inputLayout)
                   .VS(vs5blob)
-                  .PS(Compile(common + "\n#define SM_5_1 1\n" + pixel, "main", "ps_5_1",
-                              CompileOptionFlags::SkipOptimise))
+                  .PS(Compile(common + "\n#define SM_5_1 1\n" + shaderDefines + pixel, "main",
+                              "ps_5_1", CompileOptionFlags::SkipOptimise))
                   .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
     psos[2]->SetName(L"ps_5_1");
     psos[3] = MakePSO()
                   .RootSig(sig)
                   .InputLayout(inputLayout)
                   .VS(vs5blob)
-                  .PS(Compile(common + "\n#define SM_5_1 1\n" + pixel, "main", "ps_5_1",
-                              CompileOptionFlags::None))
+                  .PS(Compile(common + "\n#define SM_5_1 1\n" + shaderDefines + pixel, "main",
+                              "ps_5_1", CompileOptionFlags::None))
                   .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
     psos[3]->SetName(L"ps_5_1_opt");
 
@@ -2403,19 +2499,19 @@ void main(int3 inTestIndex : SV_GroupID)
     const uint32_t countComputeSMs = 3;
     ID3D12PipelineStatePtr computePSOs[countComputeSMs] = {NULL, NULL, NULL};
     std::string computeSMs[countComputeSMs] = {"cs_5_0", "cs_6_0", "cs_6_6"};
+    std::string compute = shaderDefines + computeMain;
     ID3DBlobPtr csblob = Compile(compute, "main", "cs_5_0");
     computePSOs[0] = MakePSO().RootSig(sigCompute).CS(csblob);
 
     if(supportSM60)
     {
-      csblob = Compile("#define SM_6_0 1\n" + shaderDefines + compute, "main", "cs_6_0");
+      csblob = Compile("#define SM_6_0 1\n" + compute, "main", "cs_6_0");
       computePSOs[1] = MakePSO().RootSig(sigCompute).CS(csblob);
     }
 
     if(supportSM66)
     {
-      csblob =
-          Compile("#define SM_6_6 1\n" + shaderDefines + compute, "main", "cs_6_6", compileOptions);
+      csblob = Compile("#define SM_6_6 1\n" + compute, "main", "cs_6_6", compileOptions);
       computePSOs[2] = MakePSO().RootSig(sigCompute).CS(csblob);
     }
 
