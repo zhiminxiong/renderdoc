@@ -69,11 +69,6 @@ enum class ShaderDebugBind
   MathResult = 9,
 };
 
-struct Vec3i
-{
-  int32_t x, y, z;
-};
-
 struct GatherOffsets
 {
   int32_t u0, v0, u1, v1, u2, v2, u3, v3;
