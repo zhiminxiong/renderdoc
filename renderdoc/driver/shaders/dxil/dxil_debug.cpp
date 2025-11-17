@@ -670,31 +670,27 @@ static bool IsAnnotatedHandle(const ShaderVariable &var)
   return (var.value.u32v[15] == 1);
 }
 
-static ShaderEvents AssignValue(ShaderVariable &result, const ShaderVariable &src, bool flushDenorm)
+static ShaderEvents AssignValue(ShaderVariable &result, bool flushDenorm)
 {
-  RDCASSERTEQUAL(result.type, src.type);
-
   ShaderEvents flags = ShaderEvents::NoEvent;
 
   if(result.type == VarType::Float)
   {
-    float ft = src.value.f32v[0];
+    float ft = result.value.f32v[0];
     if(!RDCISFINITE(ft))
       flags |= ShaderEvents::GeneratedNanOrInf;
   }
   else if(result.type == VarType::Double)
   {
-    double dt = src.value.f64v[0];
+    double dt = result.value.f64v[0];
     if(!RDCISFINITE(dt))
       flags |= ShaderEvents::GeneratedNanOrInf;
   }
 
-  result.value.u32v[0] = src.value.u32v[0];
-
   if(flushDenorm)
   {
     if(result.type == VarType::Float)
-      result.value.f32v[0] = flush_denorm(src.value.f32v[0]);
+      result.value.f32v[0] = flush_denorm(result.value.f32v[0]);
     else if(result.type == VarType::Double)
       RDCERR("Unhandled flushing denormalised double");
   }
@@ -6254,8 +6250,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
 
   if(!result.name.empty() && resultId != DXILDebug::INVALID_ID)
   {
-    if(m_HasDebugState)
-      SetResult(resultId, result, opCode, dxOpCode, eventFlags);
+    SetResult(resultId, result, opCode, dxOpCode, eventFlags);
 
     // Fake Output results won't be in the referencedIds
     RDCASSERT(resultId == m_Output.id || m_FunctionInfo->referencedIds.count(resultId) == 1);
@@ -6545,7 +6540,7 @@ void ThreadState::SetResult(const Id &id, ShaderVariable &result, Operation op, 
   // Can only flush denorms for float types
   bool flushDenorm = OperationFlushing(op, dxOpCode) && (result.type == VarType::Float);
 
-  flags |= AssignValue(result, result, flushDenorm);
+  flags |= AssignValue(result, flushDenorm);
 
   if(m_HasDebugState)
   {
