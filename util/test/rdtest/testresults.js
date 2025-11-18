@@ -238,8 +238,11 @@ document.body.onload = function() {
 
   for(var i=0; i < failed.length; i++) {
     var search = failed[i];
-    while(search !== null && !search.classList.contains('test'))
-    search = search.parentElement;
+		while(search !== null && !search.classList.contains('test')) {
+			if(search.classList.contains('expandable'))
+				search.classList.add('failed');
+			search = search.parentElement;
+		}
 
     if(search !== null)
       search.classList.add('failed');
