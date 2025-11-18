@@ -1083,451 +1083,11 @@ float4 main(v2f IN) : SV_Target0
     }
     return Color;
   }
-  if(IN.tri == 109)
-  {
-    float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 1.5f;
-    float floatB = IN.tri/100.0 + 1.7f;
-    float floatC = IN.tri/100.0 + 2.5f;
-    DOUBLE doubleA = (DOUBLE)floatA; 
-    DOUBLE doubleB = (DOUBLE)floatB;
-    DOUBLE doubleC = (DOUBLE)floatC;
-    HALF halfA = (HALF)floatA;
-    HALF halfB = (HALF)1.0;
-    HALF halfC = (HALF)floatC;
-
-    HALF halfFma = mad(halfA, halfB, halfC);
-    float floatFma = mad(floatA, floatB, floatC);
-    DOUBLE doubleFma = mad(doubleA, doubleB, doubleC);
-    Color.x = floatFma * 1000.0;
-    Color.y = (float)halfFma * 1000.0;
-    Color.z = (float)doubleFma * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 110)
-  {
-    float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 1.5f;
-    float floatB = IN.tri/100.0 + 1.7f;
-    DOUBLE doubleA = (DOUBLE)floatA; 
-    DOUBLE doubleB = (DOUBLE)floatB;
-    HALF halfA = (HALF)floatA;
-    HALF halfB = (HALF)floatB;
-
-    HALF half_val = min(halfA, halfB);
-    float float_val = min(floatA, floatB);
-    DOUBLE double_val = min(doubleA, doubleB);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    Color.z = (float)double_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 111)
-  {
-    float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 1.5f;
-    float floatB = IN.tri/100.0 + 1.7f;
-    DOUBLE doubleA = (DOUBLE)floatA; 
-    DOUBLE doubleB = (DOUBLE)floatB;
-    HALF halfA = (HALF)floatA;
-    HALF halfB = (HALF)floatB;
-
-    HALF half_val = max(halfA, halfB);
-    float float_val = max(floatA, floatB);
-    DOUBLE double_val = max(doubleA, doubleB);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    Color.z = (float)double_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 112)
-  {
-    float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 1.5f;
-    DOUBLE doubleA = (DOUBLE)floatA; 
-    HALF halfA = (HALF)floatA;
-
-    HALF half_val = abs(halfA);
-    float float_val = abs(floatA);
-    DOUBLE double_val = abs(doubleA);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    Color.z = (float)double_val * 1000.0;
-    return Color;
-  }
-)EOSHADER"
-
-                                    R"EOSHADER(
-  if(IN.tri == 113)
-  {
-    float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 0.5f;
-    HALF halfA = (HALF)floatA;
-
-    HALF half_val = frac(halfA);
-    float float_val = frac(floatA);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 114)
-  {
-    float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 1.5f;
-    DOUBLE doubleA = (DOUBLE)floatA; 
-    HALF halfA = (HALF)floatA;
-
-    HALF half_val = saturate(halfA);
-    float float_val = saturate(floatA);
-    DOUBLE double_val = saturate(doubleA);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    Color.z = (float)double_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 115)
-  {
-    float4 Color = float4(0,0,0,0);
-    float2 floatA = float2(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f);
-    float2 floatB = float2(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f);
-    vector<HALF, 2> halfA = {IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f};
-    vector<HALF, 2> halfB = {IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f};
-
-    HALF half_val = dot(halfA, halfB);
-    float float_val = dot(floatA, floatB);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 116)
-  {
-    float4 Color = float4(0,0,0,0);
-    float3 floatA = float3(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f);
-    float3 floatB = float3(IN.tri/100.0 - 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 - 2.7f);
-    vector<HALF, 3> halfA = {IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f};
-    vector<HALF, 3> halfB = {IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f};
-
-    HALF half_val = dot(halfA, halfB);
-    float float_val = dot(floatA, floatB);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 117)
-  {
-    float4 Color = float4(0,0,0,0);
-    float4 floatA = float4(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f, IN.tri/100.0 + 3.7f);
-    float4 floatB = float4(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f, IN.tri/100.0 - 3.7f);
-    vector<HALF, 4> halfA = {IN.tri + 1.5f, IN.tri + 1.7f, IN.tri + 2.7f, IN.tri + 3.7f};
-    vector<HALF, 4> halfB = {IN.tri - 1.5f, IN.tri - 1.7f, IN.tri - 2.7f, IN.tri - 3.7f};
-
-    HALF half_val = dot(halfA, halfB);
-    float float_val = dot(floatA, floatB);
-    Color.x = float_val * 1000.0;
-    Color.y = (float)half_val * 1000.0;
-    return Color;
-  }
-  if(IN.tri == 118)
-  {
-    float4 Color = float4(0,0,0,0);
-    INT32 int_A = IN.tri/100.0 + 1.5f;
-    INT32 int_B = IN.tri/100.0 + 1.7f;
-    INT64 slong_A = (INT64)int_A; 
-    INT64 slong_B = (INT64)int_B;
-    INT16 short_A = (INT16)int_A;
-    INT16 short_B = (INT16)int_B;
-
-    INT16 short_val = min(short_A, short_B);
-    int int_val = min(int_A, int_B);
-    INT64 slong_val = min(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 119)
-  {
-    float4 Color = float4(0,0,0,0);
-    INT32 int_A = IN.tri/100.0 + 1.5f;
-    INT32 int_B = IN.tri/100.0 + 1.7f;
-    INT64 slong_A = (INT64)int_A; 
-    INT64 slong_B = (INT64)int_B;
-    INT16 short_A = (INT16)int_A;
-    INT16 short_B = (INT16)int_B;
-
-    INT16 short_val = max(short_A, short_B);
-    int int_val = max(int_A, int_B);
-    INT64 slong_val = max(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 120)
-  {
-    float4 Color = float4(0,0,0,0);
-    INT32 int_A = IN.tri/100.0 + 1.5f;
-    INT32 int_B = IN.tri/100.0 + 1.7f;
-    INT64 slong_A = (INT64)int_A; 
-    INT64 slong_B = (INT64)int_B;
-    INT16 short_A = (INT16)int_A;
-    INT16 short_B = (INT16)int_B;
-
-    INT16 short_val = short_A * short_B;
-    int int_val = int_A * int_B;
-    INT64 slong_val = slong_A * slong_B;
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 121)
-  {
-    float4 Color = float4(0,0,0,0);
-    INT32 int_A = IN.tri/100.0 + 1.5f;
-    INT32 int_B = IN.tri/100.0 + 1.7f;
-    INT64 slong_A = (INT64)int_A; 
-    INT64 slong_B = (INT64)int_B;
-    INT16 short_A = (INT16)int_A;
-    INT16 short_B = (INT16)int_B;
-
-    INT16 short_val = short_A / short_B;
-    int int_val = int_A / int_B;
-    INT64 slong_val = slong_A / slong_B;
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 122)
-  {
-    float4 Color = float4(0,0,0,0);
-    INT32 int_A = IN.tri/100.0 + 1.5f;
-    INT32 int_B = IN.tri/100.0 + 1.7f;
-    INT32 int_C = IN.tri/100.0 + 2.7f;
-    INT64 slong_A = (INT64)int_A; 
-    INT64 slong_B = (INT64)int_B;
-    INT64 slong_C = (INT64)int_C;
-    INT16 short_A = (INT16)int_A;
-    INT16 short_B = (INT16)int_B;
-    INT16 short_C = (INT16)int_C;
-
-    INT16 short_val = mad(short_A, short_B, short_C);
-    int int_val = mad(int_A, int_B, int_C);
-    INT64 slong_val = mad(slong_A, slong_B, slong_C);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 123)
-  {
-    float4 Color = float4(0,0,0,0);
-    vector<INT32,2> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f};
-    vector<INT32,2> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f};
-    vector<INT64,2> slong_A = {(INT64)int_A.x, (INT64)int_A.y}; 
-    vector<INT64,2> slong_B = {(INT64)int_B.x, (INT64)int_B.y};
-    vector<INT16,2> short_A = {(INT16)int_A.x, (INT16)int_A.y};
-    vector<INT16,2> short_B = {(INT16)int_B.x, (INT16)int_B.y};
-
-    INT16 short_val = dot(short_A, short_B);
-    int int_val = dot(int_A, int_B);
-    INT64 slong_val = dot(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 124)
-  {
-    float4 Color = float4(0,0,0,0);
-    vector<INT32,3> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f};
-    vector<INT32,3> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f};
-    vector<INT64,3> slong_A = {(INT64)int_A.x, (INT64)int_A.y, (INT64)int_A.z};
-    vector<INT64,3> slong_B = {(INT64)int_B.x, (INT64)int_B.y, (INT64)int_B.z};
-    vector<INT16,3> short_A = {(INT16)int_A.x, (INT16)int_A.y, (INT16)int_A.z};
-    vector<INT16,3> short_B = {(INT16)int_B.x, (INT16)int_B.y, (INT16)int_B.z};
-
-    INT16 short_val = dot(short_A, short_B);
-    int int_val = dot(int_A, int_B);
-    INT64 slong_val = dot(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 125)
-  {
-    float4 Color = float4(0,0,0,0);
-    vector<INT32,4> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f, IN.tri + 3.7f};
-    vector<INT32,4> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f, IN.tri -3.3f};
-    vector<INT64,4> slong_A = {(INT64)int_A.x, (INT64)int_A.y, (INT64)int_A.z, (INT64)int_A.w};
-    vector<INT64,4> slong_B = {(INT64)int_B.x, (INT64)int_B.y, (INT64)int_B.z, (INT64)int_B.w};
-    vector<INT16,4> short_A = {(INT16)int_A.x, (INT16)int_A.y, (INT16)int_A.z, (INT16)int_A.w};
-    vector<INT16,4> short_B = {(INT16)int_B.x, (INT16)int_B.y, (INT16)int_B.z, (INT16)int_B.w};
-
-    INT16 short_val = dot(short_A, short_B);
-    int int_val = dot(int_A, int_B);
-    INT64 slong_val = dot(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 126)
-  {
-    float4 Color = float4(0,0,0,0);
-    UINT32 int_A = IN.tri/100.0 + 1.5f;
-    UINT32 int_B = IN.tri/100.0 + 1.7f;
-    UINT64 slong_A = (UINT64)int_A; 
-    UINT64 slong_B = (UINT64)int_B;
-    UINT16 short_A = (UINT16)int_A;
-    UINT16 short_B = (UINT16)int_B;
-
-    UINT16 short_val = min(short_A, short_B);
-    uint int_val = min(int_A, int_B);
-    UINT64 slong_val = min(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 127)
-  {
-    float4 Color = float4(0,0,0,0);
-    UINT32 int_A = IN.tri/100.0 + 1.5f;
-    UINT32 int_B = IN.tri/100.0 + 1.7f;
-    UINT64 slong_A = (UINT64)int_A; 
-    UINT64 slong_B = (UINT64)int_B;
-    UINT16 short_A = (UINT16)int_A;
-    UINT16 short_B = (UINT16)int_B;
-
-    UINT16 short_val = max(short_A, short_B);
-    uint int_val = max(int_A, int_B);
-    UINT64 slong_val = max(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 128)
-  {
-    float4 Color = float4(0,0,0,0);
-    UINT32 int_A = IN.tri/100.0 + 1.5f;
-    UINT32 int_B = IN.tri/100.0 + 1.7f;
-    UINT64 slong_A = (UINT64)int_A; 
-    UINT64 slong_B = (UINT64)int_B;
-    UINT16 short_A = (UINT16)int_A;
-    UINT16 short_B = (UINT16)int_B;
-
-    UINT16 short_val = short_A * short_B;
-    uint int_val = int_A * int_B;
-    UINT64 slong_val = slong_A * slong_B;
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 129)
-  {
-    float4 Color = float4(0,0,0,0);
-    UINT32 int_A = IN.tri/100.0 + 1.5f;
-    UINT32 int_B = IN.tri/100.0 + 1.7f;
-    UINT64 slong_A = (UINT64)int_A; 
-    UINT64 slong_B = (UINT64)int_B;
-    UINT16 short_A = (UINT16)int_A;
-    UINT16 short_B = (UINT16)int_B;
-
-    UINT16 short_val = short_A / short_B;
-    uint int_val = int_A / int_B;
-    UINT64 slong_val = slong_A / slong_B;
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 130)
-  {
-    float4 Color = float4(0,0,0,0);
-    UINT32 int_A = IN.tri/100.0 + 1.5f;
-    UINT32 int_B = IN.tri/100.0 + 1.7f;
-    UINT32 int_C = IN.tri/100.0 + 2.7f;
-    UINT64 slong_A = (UINT64)int_A; 
-    UINT64 slong_B = (UINT64)int_B;
-    UINT64 slong_C = (UINT64)int_C;
-    UINT16 short_A = (UINT16)int_A;
-    UINT16 short_B = (UINT16)int_B;
-    UINT16 short_C = (UINT16)int_C;
-
-    UINT16 short_val = mad(short_A, short_B, short_C);
-    uint int_val = mad(int_A, int_B, int_C);
-    UINT64 slong_val = mad(slong_A, slong_B, slong_C);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 131)
-  {
-    float4 Color = float4(0,0,0,0);
-    vector<UINT32,2> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f};
-    vector<UINT32,2> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f};
-    vector<UINT64,2> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y}; 
-    vector<UINT64,2> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y};
-    vector<UINT16,2> short_A = {(UINT16)int_A.x, (UINT16)int_A.y};
-    vector<UINT16,2> short_B = {(UINT16)int_B.x, (UINT16)int_B.y};
-
-    UINT16 short_val = dot(short_A, short_B);
-    uint int_val = dot(int_A, int_B);
-    UINT64 slong_val = dot(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 132)
-  {
-    float4 Color = float4(0,0,0,0);
-    vector<UINT32,3> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f};
-    vector<UINT32,3> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f};
-    vector<UINT64,3> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y, (UINT64)int_A.z};
-    vector<UINT64,3> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y, (UINT64)int_B.z};
-    vector<UINT16,3> short_A = {(UINT16)int_A.x, (UINT16)int_A.y, (UINT16)int_A.z};
-    vector<UINT16,3> short_B = {(UINT16)int_B.x, (UINT16)int_B.y, (UINT16)int_B.z};
-
-    UINT16 short_val = dot(short_A, short_B);
-    uint int_val = dot(int_A, int_B);
-    UINT64 slong_val = dot(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-  if(IN.tri == 133)
-  {
-    float4 Color = float4(0,0,0,0);
-    vector<UINT32,4> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f, IN.tri + 3.7f};
-    vector<UINT32,4> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f, IN.tri -3.3f};
-    vector<UINT64,4> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y, (UINT64)int_A.z, (UINT64)int_A.w};
-    vector<UINT64,4> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y, (UINT64)int_B.z, (UINT64)int_B.w};
-    vector<UINT16,4> short_A = {(UINT16)int_A.x, (UINT16)int_A.y, (UINT16)int_A.z, (UINT16)int_A.w};
-    vector<UINT16,4> short_B = {(UINT16)int_B.x, (UINT16)int_B.y, (UINT16)int_B.z, (UINT16)int_B.w};
-
-    UINT16 short_val = dot(short_A, short_B);
-    uint int_val = dot(int_A, int_B);
-    UINT64 slong_val = dot(slong_A, slong_B);
-    Color.x = (float)int_val;
-    Color.y = (float)short_val;
-    Color.z = (float)slong_val;
-    return Color;
-  }
-
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }
-
 )EOSHADER";
 
-  std::string noResourcesPixel = R"EOSHADER(
+  std::string noResourcesPixel = shaderTypes + R"EOSHADER(
 
 float4 main(v2f IN) : SV_Target0
 {
@@ -1575,6 +1135,441 @@ float4 main(v2f IN) : SV_Target0
     col.y += IN.mat[1].y;
     col.z += IN.mat[1].z;
     return col;
+  }
+  if(IN.tri == 4)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    float floatB = IN.tri/100.0 + 1.7f;
+    float floatC = IN.tri/100.0 + 2.5f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    DOUBLE doubleB = (DOUBLE)floatB;
+    DOUBLE doubleC = (DOUBLE)floatC;
+    HALF halfA = (HALF)floatA;
+    HALF halfB = (HALF)1.0;
+    HALF halfC = (HALF)floatC;
+
+    HALF halfFma = mad(halfA, halfB, halfC);
+    float floatFma = mad(floatA, floatB, floatC);
+    DOUBLE doubleFma = mad(doubleA, doubleB, doubleC);
+    Color.x = floatFma * 1000.0;
+    Color.y = (float)halfFma * 1000.0;
+    Color.z = (float)doubleFma * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 5)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    float floatB = IN.tri/100.0 + 1.7f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    DOUBLE doubleB = (DOUBLE)floatB;
+    HALF halfA = (HALF)floatA;
+    HALF halfB = (HALF)floatB;
+
+    HALF half_val = min(halfA, halfB);
+    float float_val = min(floatA, floatB);
+    DOUBLE double_val = min(doubleA, doubleB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 6)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    float floatB = IN.tri/100.0 + 1.7f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    DOUBLE doubleB = (DOUBLE)floatB;
+    HALF halfA = (HALF)floatA;
+    HALF halfB = (HALF)floatB;
+
+    HALF half_val = max(halfA, halfB);
+    float float_val = max(floatA, floatB);
+    DOUBLE double_val = max(doubleA, doubleB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 7)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    HALF halfA = (HALF)floatA;
+
+    HALF half_val = abs(halfA);
+    float float_val = abs(floatA);
+    DOUBLE double_val = abs(doubleA);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 8)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 0.5f;
+    HALF halfA = (HALF)floatA;
+
+    HALF half_val = frac(halfA);
+    float float_val = frac(floatA);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 9)
+  {
+    float4 Color = float4(0,0,0,0);
+    float floatA = IN.tri/100.0 + 1.5f;
+    DOUBLE doubleA = (DOUBLE)floatA; 
+    HALF halfA = (HALF)floatA;
+
+    HALF half_val = saturate(halfA);
+    float float_val = saturate(floatA);
+    DOUBLE double_val = saturate(doubleA);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    Color.z = (float)double_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 10)
+  {
+    float4 Color = float4(0,0,0,0);
+    float2 floatA = float2(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f);
+    float2 floatB = float2(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f);
+    vector<HALF, 2> halfA = {IN.tri + 1.5f, IN.tri + 1.7f};
+    vector<HALF, 2> halfB = {IN.tri - 1.5f, IN.tri - 1.7f};
+
+    HALF half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 11)
+  {
+    float4 Color = float4(0,0,0,0);
+    float3 floatA = float3(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f);
+    float3 floatB = float3(IN.tri/100.0 - 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 - 2.7f);
+    vector<HALF, 3> halfA = {IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f};
+    vector<HALF, 3> halfB = {IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f};
+
+    HALF half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 12)
+  {
+    float4 Color = float4(0,0,0,0);
+    float4 floatA = float4(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f, IN.tri/100.0 + 3.7f);
+    float4 floatB = float4(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f, IN.tri/100.0 - 3.7f);
+    vector<HALF, 4> halfA = {IN.tri + 1.5f, IN.tri + 1.7f, IN.tri + 2.7f, IN.tri + 3.7f};
+    vector<HALF, 4> halfB = {IN.tri - 1.5f, IN.tri - 1.7f, IN.tri - 2.7f, IN.tri - 3.7f};
+
+    HALF half_val = dot(halfA, halfB);
+    float float_val = dot(floatA, floatB);
+    Color.x = float_val * 1000.0;
+    Color.y = (float)half_val * 1000.0;
+    return Color;
+  }
+  if(IN.tri == 13)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = min(short_A, short_B);
+    int int_val = min(int_A, int_B);
+    INT64 slong_val = min(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 14)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = max(short_A, short_B);
+    int int_val = max(int_A, int_B);
+    INT64 slong_val = max(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 15)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = short_A * short_B;
+    int int_val = int_A * int_B;
+    INT64 slong_val = slong_A * slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 16)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+
+    INT16 short_val = short_A / short_B;
+    int int_val = int_A / int_B;
+    INT64 slong_val = slong_A / slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 17)
+  {
+    float4 Color = float4(0,0,0,0);
+    INT32 int_A = IN.tri/100.0 + 1.5f;
+    INT32 int_B = IN.tri/100.0 + 1.7f;
+    INT32 int_C = IN.tri/100.0 + 2.7f;
+    INT64 slong_A = (INT64)int_A; 
+    INT64 slong_B = (INT64)int_B;
+    INT64 slong_C = (INT64)int_C;
+    INT16 short_A = (INT16)int_A;
+    INT16 short_B = (INT16)int_B;
+    INT16 short_C = (INT16)int_C;
+
+    INT16 short_val = mad(short_A, short_B, short_C);
+    int int_val = mad(int_A, int_B, int_C);
+    INT64 slong_val = mad(slong_A, slong_B, slong_C);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 18)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<INT32,2> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f};
+    vector<INT32,2> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f};
+    vector<INT64,2> slong_A = {(INT64)int_A.x, (INT64)int_A.y}; 
+    vector<INT64,2> slong_B = {(INT64)int_B.x, (INT64)int_B.y};
+    vector<INT16,2> short_A = {(INT16)int_A.x, (INT16)int_A.y};
+    vector<INT16,2> short_B = {(INT16)int_B.x, (INT16)int_B.y};
+
+    INT16 short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    INT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 19)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<INT32,3> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f};
+    vector<INT32,3> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f};
+    vector<INT64,3> slong_A = {(INT64)int_A.x, (INT64)int_A.y, (INT64)int_A.z};
+    vector<INT64,3> slong_B = {(INT64)int_B.x, (INT64)int_B.y, (INT64)int_B.z};
+    vector<INT16,3> short_A = {(INT16)int_A.x, (INT16)int_A.y, (INT16)int_A.z};
+    vector<INT16,3> short_B = {(INT16)int_B.x, (INT16)int_B.y, (INT16)int_B.z};
+
+    INT16 short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    INT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 20)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<INT32,4> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f, IN.tri + 3.7f};
+    vector<INT32,4> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f, IN.tri -3.3f};
+    vector<INT64,4> slong_A = {(INT64)int_A.x, (INT64)int_A.y, (INT64)int_A.z, (INT64)int_A.w};
+    vector<INT64,4> slong_B = {(INT64)int_B.x, (INT64)int_B.y, (INT64)int_B.z, (INT64)int_B.w};
+    vector<INT16,4> short_A = {(INT16)int_A.x, (INT16)int_A.y, (INT16)int_A.z, (INT16)int_A.w};
+    vector<INT16,4> short_B = {(INT16)int_B.x, (INT16)int_B.y, (INT16)int_B.z, (INT16)int_B.w};
+
+    INT16 short_val = dot(short_A, short_B);
+    int int_val = dot(int_A, int_B);
+    INT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 21)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = min(short_A, short_B);
+    uint int_val = min(int_A, int_B);
+    UINT64 slong_val = min(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 22)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = max(short_A, short_B);
+    uint int_val = max(int_A, int_B);
+    UINT64 slong_val = max(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 23)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = short_A * short_B;
+    uint int_val = int_A * int_B;
+    UINT64 slong_val = slong_A * slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 24)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+
+    UINT16 short_val = short_A / short_B;
+    uint int_val = int_A / int_B;
+    UINT64 slong_val = slong_A / slong_B;
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 25)
+  {
+    float4 Color = float4(0,0,0,0);
+    UINT32 int_A = IN.tri/100.0 + 1.5f;
+    UINT32 int_B = IN.tri/100.0 + 1.7f;
+    UINT32 int_C = IN.tri/100.0 + 2.7f;
+    UINT64 slong_A = (UINT64)int_A; 
+    UINT64 slong_B = (UINT64)int_B;
+    UINT64 slong_C = (UINT64)int_C;
+    UINT16 short_A = (UINT16)int_A;
+    UINT16 short_B = (UINT16)int_B;
+    UINT16 short_C = (UINT16)int_C;
+
+    UINT16 short_val = mad(short_A, short_B, short_C);
+    uint int_val = mad(int_A, int_B, int_C);
+    UINT64 slong_val = mad(slong_A, slong_B, slong_C);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 26)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<UINT32,2> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f};
+    vector<UINT32,2> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f};
+    vector<UINT64,2> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y}; 
+    vector<UINT64,2> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y};
+    vector<UINT16,2> short_A = {(UINT16)int_A.x, (UINT16)int_A.y};
+    vector<UINT16,2> short_B = {(UINT16)int_B.x, (UINT16)int_B.y};
+
+    UINT16 short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    UINT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 27)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<UINT32,3> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f};
+    vector<UINT32,3> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f};
+    vector<UINT64,3> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y, (UINT64)int_A.z};
+    vector<UINT64,3> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y, (UINT64)int_B.z};
+    vector<UINT16,3> short_A = {(UINT16)int_A.x, (UINT16)int_A.y, (UINT16)int_A.z};
+    vector<UINT16,3> short_B = {(UINT16)int_B.x, (UINT16)int_B.y, (UINT16)int_B.z};
+
+    UINT16 short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    UINT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
+  }
+  if(IN.tri == 28)
+  {
+    float4 Color = float4(0,0,0,0);
+    vector<UINT32,4> int_A = {IN.tri/100.0 + 1.5f, IN.tri - 1.5f, IN.tri - 2.5f, IN.tri + 3.7f};
+    vector<UINT32,4> int_B = {IN.tri/100.0 + 1.7f, IN.tri - 1.7f, IN.tri + 2.5f, IN.tri -3.3f};
+    vector<UINT64,4> slong_A = {(UINT64)int_A.x, (UINT64)int_A.y, (UINT64)int_A.z, (UINT64)int_A.w};
+    vector<UINT64,4> slong_B = {(UINT64)int_B.x, (UINT64)int_B.y, (UINT64)int_B.z, (UINT64)int_B.w};
+    vector<UINT16,4> short_A = {(UINT16)int_A.x, (UINT16)int_A.y, (UINT16)int_A.z, (UINT16)int_A.w};
+    vector<UINT16,4> short_B = {(UINT16)int_B.x, (UINT16)int_B.y, (UINT16)int_B.z, (UINT16)int_B.w};
+
+    UINT16 short_val = dot(short_A, short_B);
+    uint int_val = dot(int_A, int_B);
+    UINT64 slong_val = dot(slong_A, slong_B);
+    Color.x = (float)int_val;
+    Color.y = (float)short_val;
+    Color.z = (float)slong_val;
+    return Color;
   }
 
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
