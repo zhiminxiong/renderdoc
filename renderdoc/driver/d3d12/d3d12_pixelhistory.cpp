@@ -693,7 +693,7 @@ protected:
     }
 
     uint32_t baseMip = m_CallbackInfo.targetSubresource.mip;
-    bool copy3d = m_CallbackInfo.targetDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+    bool copy3d = srcDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D;
     uint32_t baseSlice = m_CallbackInfo.targetSubresource.slice;
     uint32_t arraySize = m_CallbackInfo.targetDesc.DepthOrArraySize;
     uint32_t depthIndex = 0;
