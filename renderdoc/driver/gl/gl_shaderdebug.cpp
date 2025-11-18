@@ -174,6 +174,38 @@ public:
     return length;
   }
 
+  virtual void ReadLocationValue(int32_t location, ShaderVariable &var) override
+  {
+    GLint prog = 0;
+    GL.glGetIntegerv(eGL_CURRENT_PROGRAM, &prog);
+
+    if(var.type == VarType::Float)
+    {
+      GL.glGetUniformfv(prog, location, var.value.f32v.data());
+    }
+    else if(var.type == VarType::UInt)
+    {
+      GL.glGetUniformuiv(prog, location, var.value.u32v.data());
+    }
+    else if(var.type == VarType::SInt)
+    {
+      GL.glGetUniformiv(prog, location, var.value.s32v.data());
+    }
+    else
+    {
+      RDCERR("Unexpected type of variable");
+    }
+
+    // If the uniform queried is a matrix, the values of the matrix are returned in column major order.
+    if(var.columns > 1)
+    {
+      ShaderVariable tmp = var;
+      for(uint8_t r = 0; r < var.rows; r++)
+        for(uint8_t c = 0; c < var.columns; c++)
+          copyComp(var, r * var.columns + c, tmp, c * var.rows + r);
+    }
+  }
+
   virtual void ReadBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                void *dst) override
   {

@@ -306,6 +306,11 @@ public:
     return length;
   }
 
+  virtual void ReadLocationValue(int32_t location, ShaderVariable &var) override
+  {
+    RDCERR("Invalid by-location read");
+  }
+
   virtual void ReadBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                void *dst) override
   {

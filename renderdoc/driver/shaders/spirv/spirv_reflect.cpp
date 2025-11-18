@@ -1379,6 +1379,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
 
       // new SSBOs are in the storage buffer class, previously they were in uniform with BufferBlock
       // decoration
+      const bool block = (decorations[varType->id].flags & Decorations::Block);
       const bool ssbo = (global.storage == StorageClass::StorageBuffer) ||
                         (decorations[varType->id].flags & Decorations::BufferBlock);
       const bool pushConst = (global.storage == StorageClass::PushConstant);
@@ -1546,7 +1547,8 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
       }
       else
       {
-        if(varType->type != DataType::StructType)
+        if(varType->type != DataType::StructType ||
+           (sourceAPI == GraphicsAPI::OpenGL && !block && !ssbo))
         {
           if(taskPayload)
           {
@@ -1563,14 +1565,15 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
           else
           {
             // global loose variable - add to $Globals block
-            RDCASSERT(varType->type == DataType::ScalarType || varType->type == DataType::VectorType ||
-                      varType->type == DataType::MatrixType || varType->type == DataType::ArrayType);
+            RDCASSERT(varType->type == DataType::ScalarType ||
+                      varType->type == DataType::VectorType || varType->type == DataType::MatrixType ||
+                      varType->type == DataType::ArrayType || varType->type == DataType::StructType);
             RDCASSERT(sourceAPI == GraphicsAPI::OpenGL);
 
             ShaderConstant constant;
 
             MakeConstantBlockVariable(constant, pointerTypes, effectiveStorage, *varType,
-                                      strings[global.id], decorations[global.id], specInfo);
+                                      strings[global.id], decorations[global.id], true, specInfo);
 
             if(arraySize > 1)
               constant.type.elements = arraySize;
@@ -1590,7 +1593,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
           taskPayloadBlock.bufferBacked = false;
 
           MakeConstantBlockVariables(effectiveStorage, *varType, 0, 0, taskPayloadBlock.variables,
-                                     pointerTypes, specInfo);
+                                     pointerTypes, false, specInfo);
 
           CalculateScalarLayout(0, taskPayloadBlock.variables);
         }
@@ -1624,12 +1627,16 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
             res.variableType.name = varType->name;
 
             MakeConstantBlockVariables(effectiveStorage, *varType, 0, 0, res.variableType.members,
-                                       pointerTypes, specInfo);
+                                       pointerTypes, false, specInfo);
 
             rwresources.push_back(sortedres(global.id, res));
           }
           else
           {
+            // except on OpenGL, a struct type should be either Storage/BufferBlock or Block
+            // decorated. The GL case is handled above
+            RDCASSERTMSG("Should be block-decorated", block);
+
             ConstantBlock cblock;
 
             cblock.name = strings[global.id];
@@ -1643,7 +1650,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
             cblock.bindArraySize = arraySize;
 
             MakeConstantBlockVariables(effectiveStorage, *varType, 0, 0, cblock.variables,
-                                       pointerTypes, specInfo);
+                                       pointerTypes, false, specInfo);
 
             if(!varType->children.empty())
               cblock.byteSize = CalculateMinimumByteSize(cblock.variables);
@@ -1678,7 +1685,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
 
       ShaderConstant spec;
       MakeConstantBlockVariable(spec, pointerTypes, rdcspv::StorageClass::PushConstant,
-                                dataTypes[c.type], name, decorations[c.id], specInfo);
+                                dataTypes[c.type], name, decorations[c.id], false, specInfo);
       spec.byteOffset = uint32_t(specblock.variables.size() * sizeof(uint64_t));
       spec.defaultValue = c.value.value.u64v[0];
       specblock.variables.push_back(spec);
@@ -1899,7 +1906,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
     {
       ShaderConstant dummy;
       MakeConstantBlockVariable(dummy, pointerTypes, dataTypes[id].pointerType.storage,
-                                dataTypes[id], rdcstr(), Decorations(), specInfo);
+                                dataTypes[id], rdcstr(), Decorations(), false, specInfo);
     }
 
     // continue if we generated some more
@@ -1912,7 +1919,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
     ShaderConstant dummy;
 
     MakeConstantBlockVariable(dummy, pointerTypes, dataTypes[it->first].pointerType.storage,
-                              dataTypes[it->first], rdcstr(), Decorations(), specInfo);
+                              dataTypes[it->first], rdcstr(), Decorations(), false, specInfo);
 
     if(it->second >= reflection.pointerTypes.size())
       reflection.pointerTypes.resize(it->second + 1);
@@ -1927,7 +1934,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
 void Reflector::MakeConstantBlockVariables(rdcspv::StorageClass storage, const DataType &structType,
                                            uint32_t arraySize, uint32_t arrayByteStride,
                                            rdcarray<ShaderConstant> &cblock,
-                                           SparseIdMap<uint16_t> &pointerTypes,
+                                           SparseIdMap<uint16_t> &pointerTypes, bool bareUniforms,
                                            const rdcarray<SpecConstant> &specInfo) const
 {
   // we get here for multi-dimensional arrays
@@ -1942,7 +1949,8 @@ void Reflector::MakeConstantBlockVariables(rdcspv::StorageClass storage, const D
     for(uint32_t i = 0; i < arraySize; i++)
     {
       MakeConstantBlockVariable(cblock[i], pointerTypes, storage, structType,
-                                StringFormat::Fmt("[%u]", i), decorations[structType.id], specInfo);
+                                StringFormat::Fmt("[%u]", i), decorations[structType.id],
+                                bareUniforms, specInfo);
 
       cblock[i].byteOffset = relativeOffset;
 
@@ -1963,7 +1971,7 @@ void Reflector::MakeConstantBlockVariables(rdcspv::StorageClass storage, const D
       name = StringFormat::Fmt("_child%zu", i);
     MakeConstantBlockVariable(cblock[i], pointerTypes, storage,
                               dataTypes[structType.children[i].type], name,
-                              structType.children[i].decorations, specInfo);
+                              structType.children[i].decorations, bareUniforms, specInfo);
   }
 
   uint32_t emptyStructSize = 4;
@@ -1997,6 +2005,10 @@ void Reflector::MakeConstantBlockVariables(rdcspv::StorageClass storage, const D
   {
     return;
   }
+
+  // don't enforce sizes on GL opaque uniforms
+  if(bareUniforms)
+    return;
 
   for(size_t i = 0; i < cblock.size(); i++)
   {
@@ -2074,6 +2086,7 @@ void Reflector::MakeConstantBlockVariable(ShaderConstant &outConst,
                                           SparseIdMap<uint16_t> &pointerTypes,
                                           rdcspv::StorageClass storage, const DataType &type,
                                           const rdcstr &name, const Decorations &varDecorations,
+                                          bool bareUniforms,
                                           const rdcarray<SpecConstant> &specInfo) const
 {
   outConst.name = name;
@@ -2164,7 +2177,7 @@ void Reflector::MakeConstantBlockVariable(ShaderConstant &outConst,
 
     MakeConstantBlockVariables(storage, *curType, outConst.type.elements,
                                outConst.type.arrayByteStride, outConst.type.members, pointerTypes,
-                               specInfo);
+                               bareUniforms, specInfo);
 
     if(curType->type == DataType::ArrayType)
     {

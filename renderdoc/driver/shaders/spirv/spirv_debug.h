@@ -114,6 +114,8 @@ public:
 
   virtual uint64_t GetBufferLength(const ShaderBindIndex &bind) = 0;
 
+  virtual void ReadLocationValue(int32_t location, ShaderVariable &var) = 0;
+
   virtual void ReadBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                void *dst) = 0;
   virtual void WriteBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
@@ -746,7 +748,8 @@ private:
 
   template <typename ShaderVarType, bool allocate>
   uint32_t WalkVariable(const Decorations &curDecorations, const DataType &type,
-                        uint64_t offsetOrLocation, ShaderVarType &var, const rdcstr &accessSuffix,
+                        uint64_t offsetOrLocation, bool locationUniform, ShaderVarType &var,
+                        const rdcstr &accessSuffix,
                         std::function<void(ShaderVarType &, const Decorations &, const DataType &,
                                            uint64_t, const rdcstr &)>
                             callback) const;

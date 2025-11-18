@@ -131,12 +131,12 @@ private:
   void MakeConstantBlockVariables(rdcspv::StorageClass storage, const DataType &structType,
                                   uint32_t arraySize, uint32_t arrayByteStride,
                                   rdcarray<ShaderConstant> &cblock,
-                                  SparseIdMap<uint16_t> &pointerTypes,
+                                  SparseIdMap<uint16_t> &pointerTypes, bool bareUniforms,
                                   const rdcarray<SpecConstant> &specInfo) const;
   void MakeConstantBlockVariable(ShaderConstant &outConst, SparseIdMap<uint16_t> &pointerTypes,
                                  rdcspv::StorageClass storage, const DataType &type,
                                  const rdcstr &name, const Decorations &varDecorations,
-                                 const rdcarray<SpecConstant> &specInfo) const;
+                                 bool bareUniforms, const rdcarray<SpecConstant> &specInfo) const;
   void AddSignatureParameter(const bool isInput, const ShaderStage stage, const Id id,
                              const Id structID, uint32_t &regIndex,
                              const SPIRVInterfaceAccess &parentPatch, const rdcstr &varName,

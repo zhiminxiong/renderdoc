@@ -1144,6 +1144,10 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
 
   rdcarray<PointerId> pointerIDs;
 
+  // tracking for any GL bare uniforms
+  uint32_t uniformsCBuffer = ~0U;
+  rdcarray<rdcpair<rdcspv::Id, size_t>> bareUniformPointers;
+
   // allocate storage for globals with opaque storage classes, and prepare to set up pointers to
   // them for the global variables themselves
   for(const Variable &v : globals)
@@ -1263,7 +1267,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
           workgroup[laneIndex].inputs.push_back(var);
 
           WalkVariable<ShaderVariable, true>(decorations[v.id], dataTypes[type.InnerType()], ~0U,
-                                             workgroup[laneIndex].inputs.back(), rdcstr(),
+                                             false, workgroup[laneIndex].inputs.back(), rdcstr(),
                                              fillInputCallback);
         }
 
@@ -1272,8 +1276,8 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
       }
       else
       {
-        WalkVariable<ShaderVariable, true>(decorations[v.id], dataTypes[type.InnerType()], ~0U, var,
-                                           rdcstr(), fillInputCallback);
+        WalkVariable<ShaderVariable, true>(decorations[v.id], dataTypes[type.InnerType()], ~0U,
+                                           false, var, rdcstr(), fillInputCallback);
 
         active.outputs.push_back(var);
         liveGlobals.push_back(v.id);
@@ -1451,14 +1455,14 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
               binding.arrayElement = a;
               var.members.push_back(ShaderVariable());
               var.members.back().name = StringFormat::Fmt("[%u]", a);
-              WalkVariable<ShaderVariable, true>(decorations[v.id], *innertype, 0U,
+              WalkVariable<ShaderVariable, true>(decorations[v.id], *innertype, 0U, false,
                                                  var.members.back(), rdcstr(), cbufferCallback);
             }
           }
           else
           {
-            WalkVariable<ShaderVariable, true>(decorations[v.id], *innertype, 0U, var, rdcstr(),
-                                               cbufferCallback);
+            WalkVariable<ShaderVariable, true>(decorations[v.id], *innertype, 0U, false, var,
+                                               rdcstr(), cbufferCallback);
           }
 
           sourceVar.type = VarType::ConstantBlock;
@@ -1482,7 +1486,8 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
       if(!patchData.usedIds.contains(v.id))
         continue;
 
-      // only images/samplers are allowed to be in UniformConstant
+      // only images/samplers are allowed to be in UniformConstant in Vulkan SPIR-V. In GL SPIR-V
+      // these can also be values, but we default to this and override below as needed
       ShaderVariable var;
       var.rows = 1;
       var.columns = 1;
@@ -1516,17 +1521,22 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
 
       DebugVariableType debugType = DebugVariableType::ReadOnlyResource;
 
-      uint32_t set = 0, bind = 0;
+      uint32_t set = 0, bind = 0, location = ~0U;
       if(decorations[v.id].flags & Decorations::HasDescriptorSet)
         set = decorations[v.id].set;
       if(decorations[v.id].flags & Decorations::HasBinding)
         bind = decorations[v.id].binding;
+      if(decorations[v.id].flags & Decorations::HasLocation)
+        location = decorations[v.id].location;
 
-      if(innertype->type == DataType::ArrayType)
+      // don't step into arrays when they're bare uniforms with locations
+      if(innertype->type == DataType::ArrayType && location == ~0U)
       {
         enablePointerFlags(var, PointerFlags::GlobalArrayBinding);
         innertype = &dataTypes[innertype->InnerType()];
       }
+
+      bool bareUniform = false;
 
       if(innertype->type == DataType::SamplerType)
       {
@@ -1602,20 +1612,75 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
         global.readOnlyResources.push_back(var);
         pointerIDs.push_back(GLOBAL_POINTER(v.id, readOnlyResources));
       }
+      else if(innertype->type == DataType::StructType || innertype->type == DataType::ArrayType ||
+              innertype->type == DataType::MatrixType || innertype->type == DataType::VectorType ||
+              innertype->type == DataType::ScalarType)
+      {
+        // plain variable
+        bareUniform = true;
+
+        // if we haven't already added a virtual uniforms cbuffer, do so now
+        if(uniformsCBuffer == ~0U)
+        {
+          ShaderVariable uniformsVar;
+          uniformsVar.rows = 1;
+          uniformsVar.columns = 1;
+          uniformsVar.type = VarType::ConstantBlock;
+
+          SourceVariableMapping sourceVar;
+          sourceVar.name = uniformsVar.name = "uniforms";
+          sourceVar.type = VarType::ConstantBlock;
+          sourceVar.rows = 1;
+          sourceVar.columns = 1;
+          sourceVar.offset = 0;
+          sourceVar.variables.push_back(
+              DebugVariableReference(DebugVariableType::Constant, uniformsVar.name));
+
+          uniformsCBuffer = global.constantBlocks.size();
+
+          global.constantBlocks.push_back(uniformsVar);
+          pointerIDs.push_back(GLOBAL_POINTER(v.id, constantBlocks));
+
+          ret->sourceVars.push_back(sourceVar);
+        }
+
+        rdcarray<ShaderVariable> &uniforms = global.constantBlocks[uniformsCBuffer].members;
+
+        // record that this variable id needs to be pointed to the n'th member of the virtual
+        // cbuffer, which we're about to add
+        bareUniformPointers.push_back({v.id, uniforms.size()});
+
+        var = ShaderVariable();
+        var.name = GetHumanName(v.id);
+
+        auto uniformCallback = [this](ShaderVariable &var, const Decorations &curDecorations,
+                                      const DataType &type, uint64_t location, const rdcstr &) {
+          if(var.members.empty())
+            this->apiWrapper->ReadLocationValue((uint32_t)location, var);
+        };
+
+        WalkVariable<ShaderVariable, true>(decorations[v.id], *innertype, ~0U, false, var, rdcstr(),
+                                           uniformCallback);
+
+        uniforms.push_back(var);
+      }
       else
       {
         RDCERR("Unhandled type of uniform: %u", innertype->type);
       }
 
-      SourceVariableMapping sourceVar;
-      sourceVar.name = sourceName;
-      sourceVar.type = var.type;
-      sourceVar.rows = 1;
-      sourceVar.columns = 1;
-      sourceVar.offset = 0;
-      sourceVar.variables.push_back(DebugVariableReference(debugType, var.name));
+      if(!bareUniform)
+      {
+        SourceVariableMapping sourceVar;
+        sourceVar.name = sourceName;
+        sourceVar.type = var.type;
+        sourceVar.rows = 1;
+        sourceVar.columns = 1;
+        sourceVar.offset = 0;
+        sourceVar.variables.push_back(DebugVariableReference(debugType, var.name));
 
-      ret->sourceVars.push_back(sourceVar);
+        ret->sourceVars.push_back(sourceVar);
+      }
     }
     else if(v.storage == StorageClass::Private || v.storage == StorageClass::Workgroup)
     {
@@ -1638,8 +1703,8 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
         memset(&var.value, 0xcc, sizeof(var.value));
       };
 
-      WalkVariable<ShaderVariable, true>(decorations[v.id], dataTypes[type.InnerType()], ~0U, var,
-                                         rdcstr(), uninitialisedCallback);
+      WalkVariable<ShaderVariable, true>(decorations[v.id], dataTypes[type.InnerType()], ~0U, false,
+                                         var, rdcstr(), uninitialisedCallback);
 
       if(v.initializer != Id())
         AssignValue(var, active.ids[v.initializer]);
@@ -1718,6 +1783,12 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
     // now that the globals are allocated and their storage won't move, we can take pointers to them
     for(const PointerId &p : pointerIDs)
       p.Set(*this, global, lane, isActiveLane);
+
+    for(const rdcpair<rdcspv::Id, size_t> &u : bareUniformPointers)
+    {
+      lane.ids[u.first] =
+          MakePointerVariable(u.first, &global.constantBlocks[uniformsCBuffer].members[u.second]);
+    }
 
     if(isActiveLane)
     {
@@ -3410,7 +3481,7 @@ DeviceOpResult Debugger::ReadFromPointer(const ShaderVariable &ptr, ShaderVariab
       }
     };
 
-    WalkVariable<ShaderVariable, true>(parentDecorations, dataTypes[typeId], byteOffset, ret,
+    WalkVariable<ShaderVariable, true>(parentDecorations, dataTypes[typeId], byteOffset, false, ret,
                                        rdcstr(), readCallback);
 
     ret.name = ptr.name;
@@ -3666,8 +3737,8 @@ DeviceOpResult Debugger::WriteThroughPointer(ShaderVariable &ptr, const ShaderVa
       }
     };
 
-    WalkVariable<const ShaderVariable, false>(parentDecorations, dataTypes[typeId], byteOffset, val,
-                                              rdcstr(), writeCallback);
+    WalkVariable<const ShaderVariable, false>(parentDecorations, dataTypes[typeId], byteOffset,
+                                              false, val, rdcstr(), writeCallback);
 
     return DeviceOpResult::Succeeded;
   }
@@ -3773,13 +3844,13 @@ void Debugger::AllocateVariable(Id id, Id typeId, ShaderVariable &outVar) const
   };
 
   WalkVariable<ShaderVariable, true>(Decorations(), dataTypes[dataTypes[typeId].InnerType()], ~0U,
-                                     outVar, rdcstr(), initCallback);
+                                     false, outVar, rdcstr(), initCallback);
 }
 
 template <typename ShaderVarType, bool allocate>
 uint32_t Debugger::WalkVariable(
     const Decorations &curDecorations, const DataType &type, uint64_t offsetOrLocation,
-    ShaderVarType &var, const rdcstr &accessSuffix,
+    bool locationUniform, ShaderVarType &var, const rdcstr &accessSuffix,
     std::function<void(ShaderVarType &, const Decorations &, const DataType &, uint64_t, const rdcstr &)>
         callback) const
 {
@@ -3792,7 +3863,8 @@ uint32_t Debugger::WalkVariable(
   // we're auto-assigning from there we shouldn't encounter another location decoration somewhere
   // further down the struct chain. This also prevents us from using the same location for every
   // element in an array, since we have the same set of decorations on the array as on the members
-  if((curDecorations.flags & Decorations::HasLocation) && offsetOrLocation == ~0U)
+  const bool hasLocation = (curDecorations.flags & Decorations::HasLocation) != 0 || locationUniform;
+  if(hasLocation && offsetOrLocation == ~0U)
     offsetOrLocation = curDecorations.location;
 
   uint32_t numLocations = 0;
@@ -3853,13 +3925,13 @@ uint32_t Debugger::WalkVariable(
 
         // if the struct is concrete, it must have an offset. Otherwise it's opaque and we're using
         // locations
-        if(childDecorations.flags & Decorations::HasOffset)
-          childOffsetOrLocation += childDecorations.offset;
-        else if(offsetOrLocation != ~0U)
+        if(hasLocation)
           childOffsetOrLocation += numLocations;
+        else if(childDecorations.flags & Decorations::HasOffset)
+          childOffsetOrLocation += childDecorations.offset;
 
         uint32_t childLocations = WalkVariable<ShaderVarType, allocate>(
-            childDecorations, dataTypes[type.children[i].type], childOffsetOrLocation,
+            childDecorations, dataTypes[type.children[i].type], childOffsetOrLocation, hasLocation,
             var.members[i], childAccess, callback);
 
         numLocations += childLocations;
@@ -3886,16 +3958,16 @@ uint32_t Debugger::WalkVariable(
 
         uint32_t childLocations = WalkVariable<ShaderVarType, allocate>(
             curDecorations, dataTypes[type.InnerType()], offsetOrLocation + childOffset,
-            var.members[i], childAccess, callback);
+            hasLocation, var.members[i], childAccess, callback);
 
         numLocations += childLocations;
 
         // as above - either the type is concrete and has an array stride, or else we're using
         // locations
-        if(typeDecorations.flags & Decorations::HasArrayStride)
-          childOffset += decorations[type.id].arrayStride;
-        else if(offsetOrLocation != ~0U)
+        if(hasLocation)
           childOffset = numLocations;
+        else if(typeDecorations.flags & Decorations::HasArrayStride)
+          childOffset += decorations[type.id].arrayStride;
       }
       break;
     }
