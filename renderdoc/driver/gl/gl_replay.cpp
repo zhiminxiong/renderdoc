@@ -819,7 +819,8 @@ rdcstr GLReplay::DisassembleShader(ResourceId pipeline, const ShaderReflection *
   ResourceId liveId = m_pDriver->GetResourceManager()->GetLiveID(refl->resourceId);
   const WrappedOpenGL::ShaderData &shaderDetails = m_pDriver->GetShader(liveId);
 
-  if(shaderDetails.sources.empty() && shaderDetails.spirvWords.empty())
+  if(shaderDetails.sources.empty() && shaderDetails.spirvWords.empty() &&
+     shaderDetails.convertedSpirvWords.empty())
     return "; Invalid Shader Specified";
 
   if(target == SPIRVDisassemblyTarget || target.empty())

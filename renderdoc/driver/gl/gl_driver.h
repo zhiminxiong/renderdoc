@@ -732,6 +732,13 @@ public:
     rdcarray<uint32_t> spirvWords;
     SPIRVPatchData patchData;
 
+    // used if the application uploaded GLSL but we were able to compile to SPIR-V
+    bool convertedSPIRV = false;
+    bool convertedAutomapped = false;
+    rdcarray<uint32_t> convertedSpirvWords;
+    SPIRVPatchData convertedPatchData;
+    ShaderReflection convertedRefl;
+
     // the parameters passed to glSpecializeShader
     rdcstr entryPoint;
     rdcarray<uint32_t> specIDs;

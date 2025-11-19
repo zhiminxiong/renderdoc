@@ -70,6 +70,15 @@ rdcstr rdcspv::Compile(const rdcspv::CompilationSettings &settings, const rdcarr
 
     glslang::TShader *shader = new glslang::TShader(lang);
 
+    shader->setAutoMapBindings(settings.autoMapBindings);
+    shader->setAutoMapLocations(settings.autoMapLocations);
+    // glslang internally allows up to 4095 for locations - this gives plenty space for I/O where
+    // only 128 components are allowed max
+    shader->setIOLocationBase(3900);
+    // don't set a limit for uniforms, as we don't know a reasonable value and can't make use of
+    // this information
+    // shader->setUniformLocationBase(0);
+
     shader->setStringsWithLengthsAndNames(strs, NULL, names, (int)sources.size());
 
     if(!settings.entryPoint.empty())
@@ -101,6 +110,9 @@ rdcstr rdcspv::Compile(const rdcspv::CompilationSettings &settings, const rdcarr
       program->addShader(shader);
 
       success = program->link(EShMsgDefault);
+
+      if(success && (settings.autoMapBindings || settings.autoMapLocations))
+        success = program->mapIO();
 
       if(!success)
       {

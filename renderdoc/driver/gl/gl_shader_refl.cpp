@@ -1253,7 +1253,9 @@ void MakeShaderReflection(GLenum shadType, GLuint sepProg, ShaderReflection &ref
   refl.debugInfo.compiler = KnownShaderTool::Unknown;
   refl.debugInfo.encoding = ShaderEncoding::GLSL;
   refl.debugInfo.debuggable = false;
-  refl.debugInfo.debugStatus = "Shader debugging not supported for GLSL shaders";
+  refl.debugInfo.debugStatus =
+      "Shader debugging not supported for legacy GLSL shaders.\n"
+      "Only modern GLSL compatible with SPIR-V compilation can be debugged.";
 
   if(shadType == eGL_COMPUTE_SHADER)
   {

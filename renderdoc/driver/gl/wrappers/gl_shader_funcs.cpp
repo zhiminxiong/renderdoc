@@ -282,18 +282,53 @@ void WrappedOpenGL::ShaderData::ProcessCompilation(WrappedOpenGL &drv, ResourceI
 
       if(reflected)
       {
-        rdcarray<uint32_t> spirvwords;
-
         rdcspv::CompilationSettings settings(rdcspv::InputLanguage::OpenGLGLSL,
                                              rdcspv::ShaderStage(ShaderIdx(type)));
 
         settings.gles = IsGLES;
+        settings.debugInfo = true;
 
-        rdcstr s = rdcspv::Compile(settings, sources, spirvwords);
-        if(!spirvwords.empty())
-          spirv.Parse(spirvwords);
+        rdcstr err = rdcspv::Compile(settings, sources, convertedSpirvWords);
+        if(!convertedSpirvWords.empty())
+        {
+          convertedSPIRV = true;
+          spirv.Parse(convertedSpirvWords);
+
+          spirv.MakeReflection(GraphicsAPI::OpenGL, ShaderStage(ShaderIdx(type)), "main", {},
+                               convertedRefl, convertedPatchData);
+        }
         else
-          disassembly = "Disassembly to SPIR-V failed:\n\n" + s;
+        {
+          // enable automapping and try again
+          settings.autoMapBindings = true;
+          settings.autoMapLocations = true;
+          err = rdcspv::Compile(settings, sources, convertedSpirvWords);
+
+          if(!convertedSpirvWords.empty())
+          {
+            convertedSPIRV = true;
+            convertedAutomapped = true;
+            spirv.Parse(convertedSpirvWords);
+
+            spirv.MakeReflection(GraphicsAPI::OpenGL, ShaderStage(ShaderIdx(type)), "main", {},
+                                 convertedRefl, convertedPatchData);
+          }
+          else
+          {
+            disassembly = "Disassembly to SPIR-V failed:\n\n" + err;
+          }
+        }
+
+        if(convertedSPIRV)
+        {
+          // we could assert here that convertedRefl looks like the real reflection
+          reflection->debugInfo.debuggable = convertedRefl.debugInfo.debuggable;
+          reflection->debugInfo.debugStatus = convertedRefl.debugInfo.debugStatus;
+          reflection->debugInfo.sourceDebugInformation =
+              convertedRefl.debugInfo.sourceDebugInformation;
+          if(reflection->debugInfo.sourceDebugInformation)
+            reflection->debugInfo.compileFlags.flags.push_back({"preferSourceDebug", "1"});
+        }
 
         reflection->resourceId = id;
 

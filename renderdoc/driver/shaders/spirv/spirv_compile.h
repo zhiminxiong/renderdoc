@@ -60,6 +60,8 @@ struct CompilationSettings
   InputLanguage lang = InputLanguage::Unknown;
   bool debugInfo = false;
   bool gles = false;
+  bool autoMapBindings = false;
+  bool autoMapLocations = false;
   rdcstr entryPoint;
 };
 

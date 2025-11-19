@@ -2033,8 +2033,12 @@ void SetInputs(out Inputs inputs) {}
     inputDecl += "struct Inputs {\n";
     inputFetch += "void SetInputs(out Inputs inputs) {\n";
 
-    const ShaderReflection *refl = shadDetails.GetReflection();
-    const SPIRVPatchData &patchData = shadDetails.patchData;
+    // use the converted SPIR-V compiled reflection as it's more likely to have accurate data -
+    // driver reflection can omit inputs even if they're declared and needed for matching
+    const ShaderReflection *refl =
+        shadDetails.convertedSPIRV ? &shadDetails.convertedRefl : shadDetails.GetReflection();
+    const SPIRVPatchData &patchData =
+        shadDetails.convertedSPIRV ? shadDetails.convertedPatchData : shadDetails.patchData;
 
     rdcarray<rdcpair<rdcstr, size_t>> blockVarsToDeclare;
 
@@ -2850,7 +2854,10 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   for(size_t i = 0; i < shadDetails.specIDs.size() && i < shadDetails.specValues.size(); i++)
     spec.push_back(SpecConstant(shadDetails.specIDs[i], shadDetails.specValues[i], 4));
 
-  const ShaderReflection *refl = shadDetails.GetReflection();
+  // use converted reflection unless we had native SPIR-V reflection because the input fetcher will
+  // use it as well and we might have extra inputs (that were stripped from the driver's GL reflection)
+  const ShaderReflection *refl =
+      shadDetails.convertedSPIRV ? &shadDetails.convertedRefl : shadDetails.GetReflection();
 
   if(!refl->debugInfo.debuggable)
   {
@@ -2865,7 +2872,10 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   SubgroupSupport subgroupSupport = SubgroupSupport::None;
   uint32_t numThreads = 4;
 
-  if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  const SPIRVPatchData &patchData =
+      shadDetails.convertedSPIRV ? shadDetails.convertedPatchData : shadDetails.patchData;
+
+  if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
   {
     uint32_t maxSubgroupSize = 1;
     CalculateSubgroupProperties(maxSubgroupSize, subgroupSupport);
@@ -2926,7 +2936,7 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   }
 
   uint32_t paramAlign, structStride;
-  rdctie(paramAlign, structStride) = GetAlignAndOutputSize(refl, shadDetails.patchData);
+  rdctie(paramAlign, structStride) = GetAlignAndOutputSize(refl, patchData);
 
   // struct size is ResultDataBase header plus Nx structStride for the number of threads
   uint32_t structSize = sizeof(rdcspv::ResultDataBase) + structStride * numThreads;
@@ -3112,7 +3122,8 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
   if(winner)
   {
     rdcspv::Debugger *debugger = new rdcspv::Debugger;
-    debugger->Parse(shadDetails.spirvWords);
+    debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
+                                               : shadDetails.spirvWords);
 
     // the per-thread data immediately follows the rdcspv::ResultDataBase header. Every piece of
     // data is uniformly aligned, either 16-byte by default or 32-byte if larger components exist.
@@ -3121,7 +3132,7 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
 
     numThreads = 4;
 
-    if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+    if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
     {
       RDCASSERTNOTEQUAL(winner->subgroupSize, 0);
       numThreads = RDCMAX(numThreads, winner->subgroupSize);
@@ -3135,7 +3146,7 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
     {
       byte *value = LaneData + t * structStride;
 
-      if(shadDetails.patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+      if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
       {
         rdcspv::SubgroupLaneData *subgroupData = (rdcspv::SubgroupLaneData *)value;
         apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Active] = subgroupData->isActive;
@@ -3232,8 +3243,8 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
         ShaderVariable(rdcstr(), numThreads, 0U, 0U, 0U);
 
     ret = debugger->BeginDebug(apiWrapper, ShaderStage::Pixel, entryPoint, spec,
-                               shadDetails.spirvInstructionLines, shadDetails.patchData,
-                               winner->laneIndex, numThreads, numThreads);
+                               shadDetails.spirvInstructionLines, patchData, winner->laneIndex,
+                               numThreads, numThreads);
     apiWrapper->ResetReplay();
   }
   else
