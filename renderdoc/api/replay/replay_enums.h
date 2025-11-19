@@ -4943,6 +4943,12 @@ displayed
 .. data:: SignedEnum
 
   For enums, the base type is a signed integer allowing signed values.
+
+.. data:: SingleElementArray
+
+  In some cases it can be possible to represent and need to distinguish a variable declared as
+  an array of size 1 from a scalar object. This flag indicates that even though elements == 1
+  normally means 'not an array', in this case it means an array of size 1.
 )");
 enum class ShaderVariableFlags : uint32_t
 {
@@ -4957,6 +4963,7 @@ enum class ShaderVariableFlags : uint32_t
   SNorm = 0x0080,
   Truncated = 0x0100,
   SignedEnum = 0x0200,
+  SingleElementArray = 0x0400,
 };
 
 BITMASK_OPERATORS(ShaderVariableFlags);

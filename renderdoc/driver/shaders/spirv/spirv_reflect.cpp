@@ -1367,6 +1367,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
 
       // if the outer type is an array, get the length and peel it off.
       uint32_t arraySize = 1;
+      bool singleArray = false;
       if(varType->type == DataType::ArrayType)
       {
         // runtime arrays have no length
@@ -1374,6 +1375,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
           arraySize = EvaluateConstant(varType->length, specInfo).value.u32v[0];
         else
           arraySize = ~0U;
+        singleArray = (arraySize == 1);
         varType = &dataTypes[varType->InnerType()];
       }
 
@@ -1578,7 +1580,10 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
             if(arraySize > 1)
               constant.type.elements = arraySize;
             else
-              constant.type.elements = 0;
+              constant.type.elements = 1;
+
+            if(singleArray)
+              constant.type.flags |= ShaderVariableFlags::SingleElementArray;
 
             constant.byteOffset = decorations[global.id].location;
 

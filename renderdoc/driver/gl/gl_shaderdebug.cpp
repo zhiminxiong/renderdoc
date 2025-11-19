@@ -51,10 +51,37 @@ RDOC_CONFIG(bool, OpenGL_Debug_ShaderDebugLogging, false,
 class GLAPIWrapper : public rdcspv::DebugAPIWrapper
 {
 public:
-  GLAPIWrapper(WrappedOpenGL *gl, ShaderStage stage, uint32_t eid, ResourceId shadId)
+  GLAPIWrapper(WrappedOpenGL *gl, ShaderStage stage, uint32_t eid, ResourceId shadId,
+               const ShaderReflection *autoMappedRefl)
       : m_EventID(eid), m_ShaderID(shadId), deviceThreadID(Threading::GetCurrentID())
   {
     m_pDriver = gl;
+
+    // if we were passed a reflection, we need to look up in the existing program by name all the
+    // uniform locations since they may not match what glslang assigned out
+    // this is only necessary for bare uniforms: resources like textures are referenced by their interface
+    // index (via the DescriptorAccess) not whatever binding they might have been given, and input
+    // variables are filled out without ever going to the real program via the input fetcher
+    if(autoMappedRefl)
+    {
+      GLint prog = 0;
+      GL.glGetIntegerv(eGL_CURRENT_PROGRAM, &prog);
+      for(const ConstantBlock &cblock : autoMappedRefl->constantBlocks)
+      {
+        // uniforms need in-depth handling of their own to query out all locations
+        if(!cblock.bufferBacked && cblock.name == "$Globals")
+        {
+          const rdcstr prefix;
+          for(const ShaderConstant &c : cblock.variables)
+          {
+            // only the base value has a location so we just set it here, then GetUniformMapping
+            // increments as it goes
+            int location = c.byteOffset;
+            GetUniformMapping(prog, location, prefix, c);
+          }
+        }
+      }
+    }
 
     // when we're first setting up, the state is pristine and no replay is needed
     m_ResourcesDirty = false;
@@ -178,6 +205,15 @@ public:
   {
     GLint prog = 0;
     GL.glGetIntegerv(eGL_CURRENT_PROGRAM, &prog);
+
+    if(!m_UniformLocationRemap.empty())
+      location = m_UniformLocationRemap[location];
+
+    if(location < 0)
+    {
+      var.value.u8v.clear();
+      return;
+    }
 
     if(var.type == VarType::Float)
     {
@@ -1400,6 +1436,8 @@ private:
   uint32_t m_EventID;
   ResourceId m_ShaderID;
 
+  std::map<int, int> m_UniformLocationRemap;
+
   rdcarray<DescriptorAccess> m_Access;
   rdcarray<Descriptor> m_Descriptors;
   rdcarray<SamplerDescriptor> m_SamplerDescriptors;
@@ -1430,6 +1468,49 @@ private:
 
   Threading::RWLock imageCacheLock;
   std::map<ShaderBindIndex, ImageData> imageCache;
+
+  void GetUniformMapping(GLint prog, int &location, const rdcstr &prefix, const ShaderConstant &c)
+  {
+    rdcstr name = prefix + c.name;
+
+    if(c.type.members.empty())
+    {
+      if(c.type.elements > 1 || (c.type.flags & ShaderVariableFlags::SingleElementArray))
+      {
+        for(uint32_t e = 0; e < c.type.elements; e++)
+        {
+          rdcstr elemName = StringFormat::Fmt("%s[%u]", name.c_str(), e);
+          GLint loc = GL.glGetUniformLocation(prog, elemName.c_str());
+
+          m_UniformLocationRemap[location] = loc;
+
+          location++;
+        }
+      }
+      else
+      {
+        GLint loc = GL.glGetUniformLocation(prog, name.c_str());
+
+        m_UniformLocationRemap[location] = loc;
+
+        location++;
+      }
+    }
+    else
+    {
+      rdcstr prefixName = name;
+      for(uint32_t e = 0; e < c.type.elements; e++)
+      {
+        prefixName = name;
+        if(c.type.elements > 1 || (c.type.flags & ShaderVariableFlags::SingleElementArray))
+          prefixName += StringFormat::Fmt("[%u]", e);
+        if(!c.type.members[0].name.empty() && c.type.members[0].name[0] != '[')
+          prefixName += ".";
+        for(const ShaderConstant &mem : c.type.members)
+          GetUniformMapping(prog, location, prefixName, mem);
+      }
+    }
+  }
 
   const Descriptor &GetDescriptor(const rdcstr &access, const ShaderBindIndex &index, bool &valid)
   {
@@ -2867,7 +2948,8 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
 
   shadDetails.Disassemble(entryPoint);
 
-  GLAPIWrapper *apiWrapper = new GLAPIWrapper(m_pDriver, ShaderStage::Pixel, eventId, pixel);
+  GLAPIWrapper *apiWrapper = new GLAPIWrapper(m_pDriver, ShaderStage::Pixel, eventId, pixel,
+                                              shadDetails.convertedAutomapped ? refl : NULL);
 
   SubgroupSupport subgroupSupport = SubgroupSupport::None;
   uint32_t numThreads = 4;

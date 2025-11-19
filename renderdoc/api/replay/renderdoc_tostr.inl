@@ -1209,6 +1209,7 @@ rdcstr DoStringise(const ShaderVariableFlags &el)
     STRINGISE_BITFIELD_CLASS_BIT(SNorm);
     STRINGISE_BITFIELD_CLASS_BIT(Truncated);
     STRINGISE_BITFIELD_CLASS_BIT(SignedEnum);
+    STRINGISE_BITFIELD_CLASS_BIT(SingleElementArray);
   }
   END_BITFIELD_STRINGISE();
 }
