@@ -2788,8 +2788,331 @@ uint32_t GetStorageBufferBinding(WrappedOpenGL *driver,
 ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint32_t instid,
                                         uint32_t idx, uint32_t view)
 {
-  GLNOTIMP("DebugVertex");
-  return new ShaderDebugTrace();
+  MakeCurrentReplayContext(&m_ReplayCtx);
+
+  GLRenderState rs;
+  rs.FetchState(m_pDriver);
+
+  rdcstr regionName =
+      StringFormat::Fmt("DebugVertex @ %u of (%u,%u,%u,%u)", eventId, vertid, instid, idx, view);
+
+  GLMarkerRegion region(regionName);
+
+  if(OpenGL_Debug_ShaderDebugLogging())
+    RDCLOG("%s", regionName.c_str());
+
+  const ActionDescription *action = m_pDriver->GetAction(eventId);
+
+  if(!(action->flags & ActionFlags::Drawcall))
+  {
+    RDCLOG("No drawcall selected");
+    return new ShaderDebugTrace();
+  }
+
+  uint32_t vertOffset = 0, instOffset = 0;
+  if(!(action->flags & ActionFlags::Indexed))
+    vertOffset = action->vertexOffset;
+
+  if(action->flags & ActionFlags::Instanced)
+    instOffset = action->instanceOffset;
+
+  // get ourselves in pristine state before this action (without any side effects it may have had)
+  m_pDriver->ReplayLog(0, eventId, eReplay_WithoutDraw);
+
+  uint32_t storageBufferBinding = ~0U;
+
+  GLuint prog = 0;
+  ResourceId vert;
+  if(rs.Program.name)
+  {
+    ResourceId id = m_pDriver->GetResourceManager()->GetResID(rs.Program);
+    const WrappedOpenGL::ProgramData &progDetails = m_pDriver->GetProgram(id);
+
+    prog = rs.Program.name;
+
+    vert = progDetails.stageShaders[(uint32_t)ShaderStage::Vertex];
+
+    ResourceId stagePrograms[NumShaderStages];
+    for(size_t i = 0; i < NumShaderStages; i++)
+      stagePrograms[i] = id;
+    storageBufferBinding = GetStorageBufferBinding(m_pDriver, stagePrograms,
+                                                   progDetails.stageShaders, ShaderStage::Vertex);
+  }
+  else if(rs.Pipeline.name)
+  {
+    ResourceId id = m_pDriver->GetResourceManager()->GetResID(rs.Pipeline);
+    const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
+
+    prog = m_pDriver->GetResourceManager()
+               ->GetCurrentResource(pipeDetails.stagePrograms[(uint32_t)ShaderStage::Vertex])
+               .name;
+
+    vert = pipeDetails.stageShaders[(uint32_t)ShaderStage::Vertex];
+
+    storageBufferBinding = GetStorageBufferBinding(m_pDriver, pipeDetails.stagePrograms,
+                                                   pipeDetails.stageShaders, ShaderStage::Vertex);
+  }
+
+  if(vert == ResourceId())
+  {
+    RDCLOG("No vertex shader bound at draw!");
+    return new ShaderDebugTrace();
+  }
+
+  if(storageBufferBinding == ~0U)
+  {
+    RDCLOG("No spare SSBO available in program");
+    return new ShaderDebugTrace();
+  }
+
+  WrappedOpenGL::ShaderData &shadDetails = m_pDriver->GetWriteableShader(vert);
+
+  rdcstr entryPoint = shadDetails.entryPoint;
+  rdcarray<SpecConstant> spec;
+  for(size_t i = 0; i < shadDetails.specIDs.size() && i < shadDetails.specValues.size(); i++)
+    spec.push_back(SpecConstant(shadDetails.specIDs[i], shadDetails.specValues[i], 4));
+
+  // use converted reflection unless we had native SPIR-V reflection because the input fetcher will
+  // use it as well and we might have extra inputs (that were stripped from the driver's GL reflection)
+  const ShaderReflection *refl =
+      shadDetails.convertedSPIRV ? &shadDetails.convertedRefl : shadDetails.GetReflection();
+
+  if(!refl->debugInfo.debuggable)
+  {
+    RDCLOG("Shader is not debuggable: %s", refl->debugInfo.debugStatus.c_str());
+    return new ShaderDebugTrace();
+  }
+
+  shadDetails.Disassemble(entryPoint);
+
+  GLAPIWrapper *apiWrapper = new GLAPIWrapper(m_pDriver, ShaderStage::Vertex, eventId, vert,
+                                              shadDetails.convertedAutomapped ? refl : NULL);
+
+  SubgroupSupport subgroupSupport = SubgroupSupport::None;
+  uint32_t numThreads = 1;
+
+  const SPIRVPatchData &patchData =
+      shadDetails.convertedSPIRV ? shadDetails.convertedPatchData : shadDetails.patchData;
+
+  if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  {
+    uint32_t maxSubgroupSize = 1;
+    CalculateSubgroupProperties(maxSubgroupSize, subgroupSupport);
+    numThreads = RDCMAX(numThreads, maxSubgroupSize);
+  }
+
+  apiWrapper->location_inputs.resize(numThreads);
+  apiWrapper->thread_builtins.resize(numThreads);
+  apiWrapper->thread_props.resize(numThreads);
+
+  apiWrapper->thread_props[0][(size_t)rdcspv::ThreadProperty::Active] = 1;
+
+  std::unordered_map<ShaderBuiltin, ShaderVariable> &global_builtins = apiWrapper->global_builtins;
+  global_builtins[ShaderBuiltin::BaseInstance] =
+      ShaderVariable(rdcstr(), action->instanceOffset, 0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::BaseVertex] = ShaderVariable(
+      rdcstr(), (action->flags & ActionFlags::Indexed) ? action->baseVertex : action->vertexOffset,
+      0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::DeviceIndex] = ShaderVariable(rdcstr(), 0U, 0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::DrawIndex] = ShaderVariable(rdcstr(), action->drawIndex, 0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::ViewportIndex] = ShaderVariable(rdcstr(), view, 0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::MultiViewIndex] = ShaderVariable(rdcstr(), view, 0U, 0U, 0U);
+
+  // use the input fetcher for all cases rather than implementing manual fetching.
+  InputFetcherConfig cfg;
+
+  if(action->flags & ActionFlags::Indexed)
+    cfg.vert = idx;
+  else
+    cfg.vert = vertid + vertOffset;
+  cfg.inst = instid;
+
+  uint32_t paramAlign, structStride;
+  rdctie(paramAlign, structStride) = GetAlignAndOutputSize(refl, patchData);
+
+  const uint32_t numHits = 10;    // we should only ever get one hit, but can get more with re-use.
+
+  // struct size is rdcspv::ResultDataBase header plus Nx structStride for the number of threads
+  uint32_t structSize = sizeof(rdcspv::ResultDataBase) + structStride * numThreads;
+
+  GLuint feedbackStorageSize = numHits * structSize + 1024;
+
+  if(OpenGL_Debug_ShaderDebugLogging())
+  {
+    RDCLOG("Output structure is %u sized, output buffer is %llu bytes", structStride,
+           feedbackStorageSize);
+  }
+
+  bytebuf data;
+  {
+    GLRenderState push;
+    push.FetchState(m_pDriver);
+
+    GLuint shaderFeedback;
+    GL.glGenBuffers(1, &shaderFeedback);
+    GL.glBindBuffer(eGL_SHADER_STORAGE_BUFFER, shaderFeedback);
+    GL.glNamedBufferDataEXT(shaderFeedback, feedbackStorageSize, NULL, eGL_DYNAMIC_DRAW);
+    byte *clear = (byte *)GL.glMapBufferRange(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize,
+                                              GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+    memset(clear, 0, feedbackStorageSize);
+    GL.glUnmapBuffer(eGL_SHADER_STORAGE_BUFFER);
+
+    GLuint inputFetcher = CreateInputFetcher(shadDetails, storageBufferBinding, cfg,
+                                             subgroupSupport, paramAlign, numThreads);
+
+    GLuint replacementProgram = GL.glCreateProgram();
+
+    // don't attach any other shaders since we don't declare outputs anyway and we don't need them
+    {
+      GL.glAttachShader(replacementProgram, inputFetcher);
+
+      // we do need to copy attributes for non-SPIR_V
+
+      if(shadDetails.spirvWords.empty())
+        CopyProgramAttribBindings(prog, replacementProgram, shadDetails.GetReflection());
+
+      GL.glLinkProgram(replacementProgram);
+
+      char buffer[1024] = {};
+      GLint status = 0;
+      GL.glGetProgramiv(replacementProgram, eGL_LINK_STATUS, &status);
+      if(status == 0)
+      {
+        GL.glGetProgramInfoLog(replacementProgram, 1024, NULL, buffer);
+        RDCERR("Link error: %s", buffer);
+      }
+
+      GL.glDetachShader(replacementProgram, inputFetcher);
+    }
+
+    GL.glUseProgram(replacementProgram);
+
+    if(shadDetails.spirvWords.empty())
+    {
+      GLuint ssboIdx =
+          GL.glGetProgramResourceIndex(replacementProgram, eGL_SHADER_STORAGE_BLOCK, "Output");
+      GL.glShaderStorageBlockBinding(replacementProgram, ssboIdx, storageBufferBinding);
+    }
+    GL.glBindBufferBase(eGL_SHADER_STORAGE_BUFFER, storageBufferBinding, shaderFeedback);
+
+    m_pDriver->ReplayLog(eventId, eventId, eReplay_OnlyDraw);
+
+    GL.glDeleteProgram(replacementProgram);
+    GL.glDeleteShader(inputFetcher);
+
+    data.resize(feedbackStorageSize);
+    GL.glGetBufferSubData(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize, data.data());
+
+    push.ApplyState(m_pDriver);
+  }
+
+  byte *base = data.data();
+  uint32_t hit_count = ((uint32_t *)base)[0];
+  // uint32_t total_count = ((uint32_t *)base)[1];
+
+  // there can be more than one hit here with vertex re-use, but we expect them to be identical so
+  // we use the first
+  (void)hit_count;
+  // RDCASSERTMSG("Should only get one hit for vertex shaders", hit_count == 1, hit_count);
+
+  base += sizeof(Vec4f);
+
+  rdcspv::ResultDataBase *winner = (rdcspv::ResultDataBase *)base;
+
+  if(winner->valid != validMagicNumber)
+  {
+    RDCWARN("Hit doesn't have valid magic number");
+
+    delete apiWrapper;
+
+    ShaderDebugTrace *ret = new ShaderDebugTrace;
+    ret->stage = ShaderStage::Vertex;
+
+    return ret;
+  }
+
+  rdcspv::Debugger *debugger = new rdcspv::Debugger;
+  debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
+                                             : shadDetails.spirvWords);
+
+  // the per-thread data immediately follows the rdcspv::ResultDataBase header. Every piece of
+  // data is uniformly aligned, either 16-byte by default or 32-byte if larger components exist.
+  // The output is in input signature order.
+  byte *LaneData = (byte *)(winner + 1);
+
+  numThreads = 1;
+
+  if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  {
+    RDCASSERTNOTEQUAL(winner->subgroupSize, 0);
+    numThreads = RDCMAX(numThreads, winner->subgroupSize);
+  }
+
+  apiWrapper->location_inputs.resize(numThreads);
+  apiWrapper->thread_builtins.resize(numThreads);
+  apiWrapper->thread_props.resize(numThreads);
+
+  for(uint32_t t = 0; t < numThreads; t++)
+  {
+    byte *value = LaneData + t * structStride;
+
+    if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+    {
+      rdcspv::SubgroupLaneData *subgroupData = (rdcspv::SubgroupLaneData *)value;
+      apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Active] = subgroupData->isActive;
+      apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::Elected] = subgroupData->elect;
+      apiWrapper->thread_props[t][(size_t)rdcspv::ThreadProperty::SubgroupId] = t;
+
+      value += sizeof(rdcspv::SubgroupLaneData);
+    }
+
+    // read VertexLaneData
+    {
+      rdcspv::VertexLaneData *vertData = (rdcspv::VertexLaneData *)value;
+
+      apiWrapper->thread_builtins[t][ShaderBuiltin::InstanceIndex] =
+          ShaderVariable("InstanceIndex"_lit, vertData->inst, 0U, 0U, 0U);
+      apiWrapper->thread_builtins[t][ShaderBuiltin::VertexIndex] =
+          ShaderVariable("VertexIndex"_lit, vertData->vert, 0U, 0U, 0U);
+    }
+    value += sizeof(rdcspv::VertexLaneData);
+
+    for(size_t i = 0; i < refl->inputSignature.size(); i++)
+    {
+      const SigParameter &param = refl->inputSignature[i];
+
+      bool builtin = true;
+      if(param.systemValue == ShaderBuiltin::Undefined)
+      {
+        builtin = false;
+        apiWrapper->location_inputs[t].resize(
+            RDCMAX((uint32_t)apiWrapper->location_inputs.size(), param.regIndex + 1));
+      }
+
+      ShaderVariable &var = builtin ? apiWrapper->thread_builtins[t][param.systemValue]
+                                    : apiWrapper->location_inputs[t][param.regIndex];
+
+      var.rows = 1;
+      var.columns = param.compCount & 0xff;
+      var.type = param.varType;
+
+      const uint32_t comp = Bits::CountTrailingZeroes(uint32_t(param.regChannelMask));
+      const uint32_t elemSize = VarTypeByteSize(param.varType);
+
+      const size_t sz = elemSize * param.compCount;
+
+      memcpy((var.value.u8v.data()) + elemSize * comp, value + i * paramAlign, sz);
+    }
+  }
+  apiWrapper->global_builtins[ShaderBuiltin::SubgroupSize] =
+      ShaderVariable(rdcstr(), numThreads, 0U, 0U, 0U);
+
+  ShaderDebugTrace *ret = debugger->BeginDebug(apiWrapper, ShaderStage::Vertex, entryPoint, spec,
+                                               shadDetails.spirvInstructionLines, patchData,
+                                               winner->laneIndex, numThreads, numThreads);
+  apiWrapper->ResetReplay();
+
+  return ret;
 }
 
 ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
