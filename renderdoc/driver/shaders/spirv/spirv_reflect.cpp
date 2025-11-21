@@ -1233,12 +1233,26 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
       if(name.empty())
       {
         if(decorations[global.id].flags & Decorations::HasBuiltIn)
+        {
           name = StringFormat::Fmt("_%s", ToStr(decorations[global.id].builtIn).c_str());
+        }
         else if(decorations[global.id].flags & Decorations::HasLocation)
+        {
           name = StringFormat::Fmt("_%s%u", isInput ? "input" : "output",
                                    decorations[global.id].location);
+        }
         else
+        {
           name = StringFormat::Fmt("_sig%u", global.id.value());
+
+          // on GL, detect and name gl_PerVertex as the builtin struct
+          if(sourceAPI == GraphicsAPI::OpenGL)
+          {
+            if(!baseType.children.empty() &&
+               baseType.children[0].decorations.flags & Decorations::HasBuiltIn)
+              name = "gl_PerVertex";
+          }
+        }
 
         for(const DecorationAndParamData &d : decorations[global.id].others)
         {

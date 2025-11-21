@@ -1165,17 +1165,36 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
       rdcstr rawName = var.name;
       rdcstr sourceName = GetHumanName(v.id);
 
+      const DataType &type = dataTypes[v.type];
+
+      // global variables should all be pointers into opaque storage
+      RDCASSERT(type.type == DataType::PointerType);
+
       // if we don't have a good human name, generate a better one using the interface information
       // we have
       if(sourceName == var.name)
       {
         if(decorations[v.id].flags & Decorations::HasBuiltIn)
+        {
           sourceName = StringFormat::Fmt("_%s", ToStr(decorations[v.id].builtIn).c_str());
+        }
         else if(decorations[v.id].flags & Decorations::HasLocation)
+        {
           sourceName =
               StringFormat::Fmt("_%s%u", isInput ? "input" : "output", decorations[v.id].location);
+        }
         else
+        {
           sourceName = StringFormat::Fmt("_sig%u", v.id.value());
+
+          // on GL, detect and name gl_PerVertex as the builtin struct
+          if(api->GetGraphicsAPI() == GraphicsAPI::OpenGL)
+          {
+            if(!dataTypes[type.InnerType()].children.empty() &&
+               dataTypes[type.InnerType()].children[0].decorations.flags & Decorations::HasBuiltIn)
+              sourceName = "gl_PerVertex";
+          }
+        }
 
         for(const DecorationAndParamData &d : decorations[v.id].others)
         {
@@ -1183,11 +1202,6 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
             sourceName += StringFormat::Fmt("_%u", d.component);
         }
       }
-
-      const DataType &type = dataTypes[v.type];
-
-      // global variables should all be pointers into opaque storage
-      RDCASSERT(type.type == DataType::PointerType);
 
       const rdcarray<rdcstr> &sigNames = isInput ? inputSigNames : outputSigNames;
 
