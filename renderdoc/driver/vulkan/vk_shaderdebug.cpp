@@ -290,6 +290,8 @@ public:
     m_pDriver->AddDebugMessage(cat, sev, src, desc);
   }
 
+  virtual GraphicsAPI GetGraphicsAPI() override { return GraphicsAPI::Vulkan; }
+
   virtual bool SimulateThreaded() override { return Vulkan_Debug_EnableShaderDebugMT(); }
 
   virtual ResourceId GetShaderID() override { return m_ShaderID; }

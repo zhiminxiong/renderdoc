@@ -1349,8 +1349,16 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
           var.type = VarType::ReadWriteResource;
 
           int32_t idx = patchData.rwInterface.indexOf(v.id);
-          RDCASSERT(idx >= 0);
-          var.SetBindIndex(ShaderBindIndex(DescriptorCategory::ReadWriteResource, idx, 0U));
+
+          // on GL we may have buffers which are dead-code eliminated but remain part of the simulated
+          // code. Because we base our interfaces off the GLSL reflected data it may not be present
+          if(idx >= 0)
+            var.SetBindIndex(ShaderBindIndex(DescriptorCategory::ReadWriteResource, idx, 0U));
+          else
+            var.SetBindIndex(ShaderBindIndex());
+
+          if(api->GetGraphicsAPI() == GraphicsAPI::Vulkan)
+            RDCASSERT(idx >= 0);
 
           enablePointerFlags(var, PointerFlags::SSBO);
 
@@ -1372,7 +1380,14 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
 
           binding.category = DescriptorCategory::ConstantBlock;
           binding.index = patchData.cblockInterface.indexOf(v.id);
-          RDCASSERT(binding.index != ~0U);
+
+          // on GL we may have buffers which are dead-code eliminated but remain part of the simulated
+          // code. Because we base our interfaces off the GLSL reflected data it may not be present
+          if(binding.index == ~0U)
+            binding = ShaderBindIndex();
+
+          if(api->GetGraphicsAPI() == GraphicsAPI::Vulkan)
+            RDCASSERT(binding.index != ~0U);
 
           auto cbufferCallback = [this, &binding](
                                      ShaderVariable &var, const Decorations &curDecorations,
@@ -1544,8 +1559,16 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
         debugType = DebugVariableType::Sampler;
 
         int32_t idx = patchData.samplerInterface.indexOf(v.id);
-        RDCASSERT(idx >= 0);
-        var.SetBindIndex(ShaderBindIndex(DescriptorCategory::Sampler, idx, 0U));
+
+        // on GL we may have samplers which are dead-code eliminated but remain part of the simulated
+        // code. Because we base our interfaces off the GLSL reflected data it may not be present
+        if(idx >= 0)
+          var.SetBindIndex(ShaderBindIndex(DescriptorCategory::Sampler, idx, 0U));
+        else
+          var.SetBindIndex(ShaderBindIndex());
+
+        if(api->GetGraphicsAPI() == GraphicsAPI::Vulkan)
+          RDCASSERT(idx >= 0);
 
         global.samplers.push_back(var);
         pointerIDs.push_back(GLOBAL_POINTER(v.id, samplers));
@@ -1588,8 +1611,16 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
           debugType = DebugVariableType::ReadWriteResource;
 
           int32_t idx = patchData.rwInterface.indexOf(v.id);
-          RDCASSERT(idx >= 0);
-          var.SetBindIndex(ShaderBindIndex(DescriptorCategory::ReadWriteResource, idx, 0U));
+
+          // on GL we may have textures which are dead-code eliminated but remain part of the simulated
+          // code. Because we base our interfaces off the GLSL reflected data it may not be present
+          if(idx >= 0)
+            var.SetBindIndex(ShaderBindIndex(DescriptorCategory::ReadWriteResource, idx, 0U));
+          else
+            var.SetBindIndex(ShaderBindIndex());
+
+          if(api->GetGraphicsAPI() == GraphicsAPI::Vulkan)
+            RDCASSERT(idx >= 0);
 
           global.readWriteResources.push_back(var);
           pointerIDs.push_back(GLOBAL_POINTER(v.id, readWriteResources));
@@ -1597,8 +1628,16 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
         else
         {
           int32_t idx = patchData.roInterface.indexOf(v.id);
-          RDCASSERT(idx >= 0);
-          var.SetBindIndex(ShaderBindIndex(DescriptorCategory::ReadOnlyResource, idx, 0U));
+
+          // on GL we may have textures which are dead-code eliminated but remain part of the simulated
+          // code. Because we base our interfaces off the GLSL reflected data it may not be present
+          if(idx >= 0)
+            var.SetBindIndex(ShaderBindIndex(DescriptorCategory::ReadOnlyResource, idx, 0U));
+          else
+            var.SetBindIndex(ShaderBindIndex());
+
+          if(api->GetGraphicsAPI() == GraphicsAPI::Vulkan)
+            RDCASSERT(idx >= 0);
 
           global.readOnlyResources.push_back(var);
           pointerIDs.push_back(GLOBAL_POINTER(v.id, readOnlyResources));

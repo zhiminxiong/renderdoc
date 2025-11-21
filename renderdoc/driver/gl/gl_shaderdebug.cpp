@@ -169,6 +169,7 @@ public:
     m_pDriver->AddDebugMessage(cat, sev, src, desc);
   }
 
+  virtual GraphicsAPI GetGraphicsAPI() override { return GraphicsAPI::OpenGL; }
   virtual bool SimulateThreaded() override { return false; }
 
   virtual ResourceId GetShaderID() override { return m_ShaderID; }
@@ -245,6 +246,13 @@ public:
   virtual void ReadBufferValue(const ShaderBindIndex &bind, uint64_t offset, uint64_t byteSize,
                                void *dst) override
   {
+    if(bind.category == DescriptorCategory::Unknown)
+    {
+      // invalid index, return no data
+      memset(dst, 0, (size_t)byteSize);
+      return;
+    }
+
     rdcspv::DeviceOpResult opResult;
     // BufferFunction guarantees the buffer cache readlock whilst the function is called
     bool succeeded = BufferFunction(

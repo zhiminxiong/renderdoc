@@ -2956,7 +2956,7 @@ QString ShaderViewer::stringRep(const ShaderVariable &var, uint32_t row)
     }
 
     if(bindIdx < 0)
-      return QString();
+      return ToQStr(ResourceId());
 
     const UsedDescriptor &res = resList[bindIdx];
 
@@ -5009,34 +5009,38 @@ RDTreeWidgetItem *ShaderViewer::makeSourceVariableNode(const SourceVariableMappi
         int32_t bindIdx = samplers.indexOf(bind);
 
         if(bindIdx < 0)
-          continue;
-
-        Descriptor desc = samplers[bindIdx].descriptor;
-        const ShaderSampler &samp = m_ShaderDetails->samplers[bind.index];
-
-        if(samp.bindArraySize == 1)
         {
-          value = samplerRep(samp, ~0U, desc.resource);
-        }
-        else if(samp.bindArraySize == ~0U)
-        {
-          typeName = lit("[unbounded]");
-          value = QString();
+          value = ToQStr(ResourceId());
         }
         else
         {
-          for(uint32_t a = 0; a < samp.bindArraySize; a++)
-            children.push_back(new RDTreeWidgetItem({
-                QFormatStr("%1[%2]").arg(localName).arg(a),
-                QString(),
-                typeName,
-                samplerRep(samp, a, desc.resource),
-            }));
+          Descriptor desc = samplers[bindIdx].descriptor;
+          const ShaderSampler &samp = m_ShaderDetails->samplers[bind.index];
 
-          childCount += samp.bindArraySize;
+          if(samp.bindArraySize == 1)
+          {
+            value = samplerRep(samp, ~0U, desc.resource);
+          }
+          else if(samp.bindArraySize == ~0U)
+          {
+            typeName = lit("[unbounded]");
+            value = QString();
+          }
+          else
+          {
+            for(uint32_t a = 0; a < samp.bindArraySize; a++)
+              children.push_back(new RDTreeWidgetItem({
+                  QFormatStr("%1[%2]").arg(localName).arg(a),
+                  QString(),
+                  typeName,
+                  samplerRep(samp, a, desc.resource),
+              }));
 
-          typeName = QFormatStr("[%1]").arg(samp.bindArraySize);
-          value = QString();
+            childCount += samp.bindArraySize;
+
+            typeName = QFormatStr("[%1]").arg(samp.bindArraySize);
+            value = QString();
+          }
         }
       }
       else if(r.type == DebugVariableType::ReadOnlyResource ||
@@ -5067,36 +5071,40 @@ RDTreeWidgetItem *ShaderViewer::makeSourceVariableNode(const SourceVariableMappi
             descriptors.push_back(a);
 
         if(descriptors.empty())
-          continue;
-
-        const ShaderResource &res = isReadOnlyResource
-                                        ? m_ShaderDetails->readOnlyResources[bind.index]
-                                        : m_ShaderDetails->readWriteResources[bind.index];
-
-        if(res.bindArraySize == 1)
         {
-          value = ToQStr(descriptors[0].descriptor.resource);
-        }
-        else if(res.bindArraySize == ~0U)
-        {
-          typeName = lit("[unbounded]");
-          value = QString();
+          value = ToQStr(ResourceId());
         }
         else
         {
-          uint32_t count = qMin(res.bindArraySize, (uint32_t)descriptors.size());
-          for(uint32_t a = 0; a < count; a++)
-            children.push_back(new RDTreeWidgetItem({
-                QFormatStr("%1[%2]").arg(localName).arg(a),
-                QString(),
-                typeName,
-                ToQStr(descriptors[a].descriptor.resource),
-            }));
+          const ShaderResource &res = isReadOnlyResource
+                                          ? m_ShaderDetails->readOnlyResources[bind.index]
+                                          : m_ShaderDetails->readWriteResources[bind.index];
 
-          childCount += res.bindArraySize;
+          if(res.bindArraySize == 1)
+          {
+            value = ToQStr(descriptors[0].descriptor.resource);
+          }
+          else if(res.bindArraySize == ~0U)
+          {
+            typeName = lit("[unbounded]");
+            value = QString();
+          }
+          else
+          {
+            uint32_t count = qMin(res.bindArraySize, (uint32_t)descriptors.size());
+            for(uint32_t a = 0; a < count; a++)
+              children.push_back(new RDTreeWidgetItem({
+                  QFormatStr("%1[%2]").arg(localName).arg(a),
+                  QString(),
+                  typeName,
+                  ToQStr(descriptors[a].descriptor.resource),
+              }));
 
-          typeName = QFormatStr("[%1]").arg(res.bindArraySize);
-          value = QString();
+            childCount += res.bindArraySize;
+
+            typeName = QFormatStr("[%1]").arg(res.bindArraySize);
+            value = QString();
+          }
         }
       }
       else
@@ -5255,7 +5263,7 @@ RDTreeWidgetItem *ShaderViewer::makeAccessedResourceNode(const ShaderVariable &v
       category = CategoryForDescriptorType(acc.type);
       bindIdx = m_ReadOnlyResources.indexOf(acc);
     }
-    if(category != DescriptorCategory::ReadOnlyResource)
+    if(category != DescriptorCategory::ReadOnlyResource && category != DescriptorCategory::Unknown)
       qCritical() << "Mismatch between variable type and descriptor category";
     if(bindIdx >= 0)
       resId = m_ReadOnlyResources[bindIdx].descriptor.resource;
@@ -5275,7 +5283,7 @@ RDTreeWidgetItem *ShaderViewer::makeAccessedResourceNode(const ShaderVariable &v
       category = CategoryForDescriptorType(acc.type);
       bindIdx = m_ReadWriteResources.indexOf(acc);
     }
-    if(category != DescriptorCategory::ReadWriteResource)
+    if(category != DescriptorCategory::ReadWriteResource && category != DescriptorCategory::Unknown)
       qCritical() << "Mismatch between variable type and descriptor category";
     if(bindIdx >= 0)
       resId = m_ReadWriteResources[bindIdx].descriptor.resource;
