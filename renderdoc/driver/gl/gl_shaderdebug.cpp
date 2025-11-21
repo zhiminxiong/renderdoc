@@ -2676,11 +2676,18 @@ void main()
 
 )EOSHADER";
 
-  if(shadDetails.spirvWords.empty())
-    return CreateShader(shadDetails.type, GenerateGLSLShader(source, shaderType, glslVersion));
+  if(!OpenGL_Debug_ShaderDebugDumpDirPath().empty())
+    FileIO::WriteAll(OpenGL_Debug_ShaderDebugDumpDirPath() + "/input_fetch_raw.glsl", source);
 
-  // when compiling to SPIR-V might as well use a modern version
-  return CreateSPIRVShader(shadDetails.type, GenerateGLSLShader(source, shaderType, 450));
+  source = GenerateGLSLShader(source, shaderType, glslVersion);
+
+  if(!OpenGL_Debug_ShaderDebugDumpDirPath().empty())
+    FileIO::WriteAll(OpenGL_Debug_ShaderDebugDumpDirPath() + "/input_fetch_pp.glsl", source);
+
+  if(shadDetails.spirvWords.empty())
+    return CreateShader(shadDetails.type, source);
+
+  return CreateSPIRVShader(shadDetails.type, source);
 }
 
 void CalculateSubgroupProperties(uint32_t &maxSubgroupSize, SubgroupSupport &subgroupSupport)
@@ -3030,6 +3037,11 @@ ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint3
 
     return ret;
   }
+
+  if(!OpenGL_Debug_ShaderDebugDumpDirPath().empty())
+    FileIO::WriteAll(
+        OpenGL_Debug_ShaderDebugDumpDirPath() + "/vertex_debug.spv",
+        shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords : shadDetails.spirvWords);
 
   rdcspv::Debugger *debugger = new rdcspv::Debugger;
   debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
@@ -3532,6 +3544,11 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
 
   ShaderDebugTrace *ret = NULL;
 
+  if(!OpenGL_Debug_ShaderDebugDumpDirPath().empty())
+    FileIO::WriteAll(
+        OpenGL_Debug_ShaderDebugDumpDirPath() + "/pixel_debug.spv",
+        shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords : shadDetails.spirvWords);
+
   if(winner)
   {
     rdcspv::Debugger *debugger = new rdcspv::Debugger;
@@ -3890,6 +3907,11 @@ ShaderDebugTrace *GLReplay::DebugThread(uint32_t eventId, const rdcfixedarray<ui
       return ret;
     }
 
+    if(!OpenGL_Debug_ShaderDebugDumpDirPath().empty())
+      FileIO::WriteAll(
+          OpenGL_Debug_ShaderDebugDumpDirPath() + "/compute_debug.spv",
+          shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords : shadDetails.spirvWords);
+
     rdcspv::Debugger *debugger = new rdcspv::Debugger;
     debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
                                                : shadDetails.spirvWords);
@@ -4115,6 +4137,11 @@ ShaderDebugTrace *GLReplay::DebugThread(uint32_t eventId, const rdcfixedarray<ui
           threadid[2] * threadDim[0] * threadDim[1] + threadid[1] * threadDim[0] + threadid[0], 0U,
           0U, 0U);
     }
+
+    if(!OpenGL_Debug_ShaderDebugDumpDirPath().empty())
+      FileIO::WriteAll(
+          OpenGL_Debug_ShaderDebugDumpDirPath() + "/compute_debug.spv",
+          shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords : shadDetails.spirvWords);
 
     rdcspv::Debugger *debugger = new rdcspv::Debugger;
     debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
