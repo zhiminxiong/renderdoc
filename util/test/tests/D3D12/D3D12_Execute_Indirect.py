@@ -42,7 +42,7 @@ class D3D12_Execute_Indirect(rdtest.TestCase):
                 raise rdtest.TestFailureException(
                     f"With event {action.eventId + drawNum} selected we should have one output target but there is {len(pipe.GetOutputTargets())}")
             self.check_pixel_history_succeeds()
-        rdtest.log.success("Fully used argument buffer with multiple draws replayed")
+        rdtest.log.success("Draw without Root Signature replayed correctly");
         
         from_eid = self.find_action("Multiple draws").eventId
         ei_eid = self.find_action("ExecuteIndirect", from_eid).eventId
