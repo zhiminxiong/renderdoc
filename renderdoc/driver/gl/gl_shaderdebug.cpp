@@ -3352,8 +3352,461 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
 ShaderDebugTrace *GLReplay::DebugThread(uint32_t eventId, const rdcfixedarray<uint32_t, 3> &groupid,
                                         const rdcfixedarray<uint32_t, 3> &threadid)
 {
-  GLNOTIMP("DebugThread");
-  return new ShaderDebugTrace();
+  rdcstr regionName =
+      StringFormat::Fmt("Debug Thread @ %u of (%u,%u,%u) (%u,%u,%u)", eventId, groupid[0],
+                        groupid[1], groupid[2], threadid[0], threadid[1], threadid[2]);
+
+  GLMarkerRegion region(regionName);
+
+  if(OpenGL_Debug_ShaderDebugLogging())
+    RDCLOG("%s", regionName.c_str());
+
+  const ActionDescription *action = m_pDriver->GetAction(eventId);
+
+  if(!(action->flags & ActionFlags::Dispatch))
+  {
+    RDCLOG("No dispatch selected");
+    return new ShaderDebugTrace();
+  }
+
+  MakeCurrentReplayContext(&m_ReplayCtx);
+
+  GLRenderState rs;
+  rs.FetchState(m_pDriver);
+
+  // get ourselves in pristine state before this dispatch (without any side effects it may have had)
+  m_pDriver->ReplayLog(0, eventId, eReplay_WithoutDraw);
+
+  ResourceId comp;
+  ResourceId pixel;
+  if(rs.Program.name)
+  {
+    ResourceId id = m_pDriver->GetResourceManager()->GetResID(rs.Program);
+    const WrappedOpenGL::ProgramData &progDetails = m_pDriver->GetProgram(id);
+
+    comp = progDetails.stageShaders[(uint32_t)ShaderStage::Compute];
+  }
+  else if(rs.Pipeline.name)
+  {
+    ResourceId id = m_pDriver->GetResourceManager()->GetResID(rs.Pipeline);
+    const WrappedOpenGL::PipelineData &pipeDetails = m_pDriver->GetPipeline(id);
+
+    comp = pipeDetails.stageShaders[(uint32_t)ShaderStage::Compute];
+  }
+
+  if(comp == ResourceId())
+  {
+    RDCLOG("No compute shader bound at dispatch!");
+    return new ShaderDebugTrace();
+  }
+
+  WrappedOpenGL::ShaderData &shadDetails = m_pDriver->GetWriteableShader(comp);
+
+  rdcstr entryPoint = shadDetails.entryPoint;
+  rdcarray<SpecConstant> spec;
+  for(size_t i = 0; i < shadDetails.specIDs.size() && i < shadDetails.specValues.size(); i++)
+    spec.push_back(SpecConstant(shadDetails.specIDs[i], shadDetails.specValues[i], 4));
+
+  // use converted reflection unless we had native SPIR-V reflection because the input fetcher will
+  // use it as well and we might have extra inputs (that were stripped from the driver's GL reflection)
+  const ShaderReflection *refl =
+      shadDetails.convertedSPIRV ? &shadDetails.convertedRefl : shadDetails.GetReflection();
+
+  if(!refl->debugInfo.debuggable)
+  {
+    RDCLOG("Shader is not debuggable: %s", refl->debugInfo.debugStatus.c_str());
+    return new ShaderDebugTrace();
+  }
+
+  shadDetails.Disassemble(entryPoint);
+
+  GLAPIWrapper *apiWrapper = new GLAPIWrapper(m_pDriver, ShaderStage::Compute, eventId, comp,
+                                              shadDetails.convertedAutomapped ? refl : NULL);
+
+  uint32_t threadDim[3];
+  threadDim[0] = refl->dispatchThreadsDimension[0];
+  threadDim[1] = refl->dispatchThreadsDimension[1];
+  threadDim[2] = refl->dispatchThreadsDimension[2];
+
+  SubgroupSupport subgroupSupport = SubgroupSupport::None;
+  uint32_t numThreads = 1;
+
+  const SPIRVPatchData &patchData =
+      shadDetails.convertedSPIRV ? shadDetails.convertedPatchData : shadDetails.patchData;
+
+  uint32_t maxSubgroupSize = 1;
+  if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  {
+    CalculateSubgroupProperties(maxSubgroupSize, subgroupSupport);
+    numThreads = RDCMAX(numThreads, maxSubgroupSize);
+  }
+
+  if(patchData.threadScope & rdcspv::ThreadScope::Workgroup)
+    numThreads = RDCMAX(numThreads, threadDim[0] * threadDim[1] * threadDim[2]);
+
+  apiWrapper->thread_builtins.resize(numThreads);
+  apiWrapper->thread_props.resize(numThreads);
+
+  std::unordered_map<ShaderBuiltin, ShaderVariable> &global_builtins = apiWrapper->global_builtins;
+  global_builtins[ShaderBuiltin::DispatchSize] =
+      ShaderVariable(rdcstr(), action->dispatchDimension[0], action->dispatchDimension[1],
+                     action->dispatchDimension[2], 0U);
+  global_builtins[ShaderBuiltin::GroupSize] =
+      ShaderVariable(rdcstr(), threadDim[0], threadDim[1], threadDim[2], 0U);
+  global_builtins[ShaderBuiltin::DeviceIndex] = ShaderVariable(rdcstr(), 0U, 0U, 0U, 0U);
+  global_builtins[ShaderBuiltin::GroupIndex] =
+      ShaderVariable(rdcstr(), groupid[0], groupid[1], groupid[2], 0U);
+
+  // if we need to fetch subgroup data, do that now
+  uint32_t laneIndex = 0;
+  if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+  {
+    InputFetcherConfig cfg;
+
+    cfg.threadid = threadid;
+    cfg.groupid = groupid;
+
+    uint32_t paramAlign, structStride;
+    rdctie(paramAlign, structStride) = GetAlignAndOutputSize(refl, patchData);
+
+    const uint32_t numHits = 4;    // we should only ever get one hit
+
+    // struct size is rdcspv::ResultDataBase header plus Nx structStride for the number of threads
+    uint32_t structSize = sizeof(rdcspv::ResultDataBase) + structStride * maxSubgroupSize;
+
+    GLuint feedbackStorageSize = numHits * structSize + 1024;
+
+    if(OpenGL_Debug_ShaderDebugLogging())
+    {
+      RDCLOG("Output structure is %u sized, output buffer is %llu bytes", structStride,
+             feedbackStorageSize);
+    }
+
+    bytebuf data;
+    {
+      GLRenderState push;
+      push.FetchState(m_pDriver);
+
+      GLuint shaderFeedback;
+      GL.glGenBuffers(1, &shaderFeedback);
+      GL.glBindBuffer(eGL_SHADER_STORAGE_BUFFER, shaderFeedback);
+      GL.glNamedBufferDataEXT(shaderFeedback, feedbackStorageSize, NULL, eGL_DYNAMIC_DRAW);
+      byte *clear = (byte *)GL.glMapBufferRange(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize,
+                                                GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+      memset(clear, 0, feedbackStorageSize);
+      GL.glUnmapBuffer(eGL_SHADER_STORAGE_BUFFER);
+
+      //  because there are no other stages to worry about we can pick whichever binding we want
+      const uint32_t storageBufferBinding = 0;
+      GLuint inputFetcher = CreateInputFetcher(shadDetails, storageBufferBinding, cfg,
+                                               subgroupSupport, paramAlign, numThreads);
+
+      GLuint replacementProgram = GL.glCreateProgram();
+
+      {
+        GL.glAttachShader(replacementProgram, inputFetcher);
+
+        GL.glLinkProgram(replacementProgram);
+
+        char buffer[1024] = {};
+        GLint status = 0;
+        GL.glGetProgramiv(replacementProgram, eGL_LINK_STATUS, &status);
+        if(status == 0)
+        {
+          GL.glGetProgramInfoLog(replacementProgram, 1024, NULL, buffer);
+          RDCERR("Link error: %s", buffer);
+        }
+
+        GL.glDetachShader(replacementProgram, inputFetcher);
+      }
+
+      GL.glUseProgram(replacementProgram);
+
+      if(shadDetails.spirvWords.empty())
+      {
+        GLuint ssboIdx =
+            GL.glGetProgramResourceIndex(replacementProgram, eGL_SHADER_STORAGE_BLOCK, "Output");
+        GL.glShaderStorageBlockBinding(replacementProgram, ssboIdx, storageBufferBinding);
+      }
+      GL.glBindBufferBase(eGL_SHADER_STORAGE_BUFFER, storageBufferBinding, shaderFeedback);
+
+      m_pDriver->ReplayLog(eventId, eventId, eReplay_OnlyDraw);
+
+      GL.glDeleteProgram(replacementProgram);
+      GL.glDeleteShader(inputFetcher);
+
+      data.resize(feedbackStorageSize);
+      GL.glGetBufferSubData(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize, data.data());
+
+      push.ApplyState(m_pDriver);
+    }
+
+    byte *base = data.data();
+    uint32_t hit_count = ((uint32_t *)base)[0];
+    // uint32_t total_count = ((uint32_t *)base)[1];
+
+    if(hit_count > maxHits)
+    {
+      RDCERR("%u hits, more than max overdraw levels allowed %u. Clamping", hit_count, maxHits);
+      hit_count = maxHits;
+    }
+
+    base += sizeof(Vec4f);
+
+    rdcspv::ResultDataBase *winner = (rdcspv::ResultDataBase *)base;
+
+    if(winner->valid != validMagicNumber)
+    {
+      RDCWARN("Hit doesn't have valid magic number");
+
+      delete apiWrapper;
+
+      ShaderDebugTrace *ret = new ShaderDebugTrace;
+      ret->stage = ShaderStage::Compute;
+
+      return ret;
+    }
+
+    rdcspv::Debugger *debugger = new rdcspv::Debugger;
+    debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
+                                               : shadDetails.spirvWords);
+
+    // the per-thread data immediately follows the rdcspv::ResultDataBase header. Every piece of
+    // data is uniformly aligned, either 16-byte by default or 32-byte if larger components exist.
+    // The output is in input signature order.
+    byte *LaneData = (byte *)(winner + 1);
+
+    numThreads = 4;
+    const uint32_t subgroupSize = winner->subgroupSize;
+
+    if(patchData.threadScope & rdcspv::ThreadScope::Subgroup)
+    {
+      RDCASSERTNOTEQUAL(subgroupSize, 0);
+      numThreads = RDCMAX(numThreads, subgroupSize);
+    }
+
+    if(patchData.threadScope & rdcspv::ThreadScope::Workgroup)
+    {
+      numThreads = RDCMAX(numThreads, threadDim[0] * threadDim[1] * threadDim[2]);
+    }
+
+    apiWrapper->global_builtins[ShaderBuiltin::NumSubgroups] =
+        ShaderVariable(rdcstr(), winner->numSubgroups, 0U, 0U, 0U);
+
+    apiWrapper->location_inputs.resize(numThreads);
+    apiWrapper->thread_builtins.resize(numThreads);
+    apiWrapper->thread_props.resize(numThreads);
+
+    laneIndex = ~0U;
+
+    for(uint32_t t = 0; t < subgroupSize; t++)
+    {
+      byte *value = LaneData + t * structStride;
+
+      rdcspv::SubgroupLaneData *subgroupData = (rdcspv::SubgroupLaneData *)value;
+      value += sizeof(rdcspv::SubgroupLaneData);
+
+      rdcspv::ComputeLaneData *compData = (rdcspv::ComputeLaneData *)value;
+      value += sizeof(rdcspv::ComputeLaneData);
+
+      // should we try to verify that the GPU assigned subgroups as we expect? this assumes tightly wrapped subgroups
+      uint32_t lane = t;
+
+      if(patchData.threadScope & rdcspv::ThreadScope::Workgroup)
+      {
+        lane = compData->threadid[2] * threadDim[0] * threadDim[1] +
+               compData->threadid[1] * threadDim[0] + compData->threadid[0];
+      }
+
+      if(rdcfixedarray<uint32_t, 3>(compData->threadid) == threadid && subgroupData->isActive)
+        laneIndex = lane;
+
+      apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::Active] = subgroupData->isActive;
+      apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::Elected] = subgroupData->elect;
+      apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::SubgroupId] = t;
+
+      apiWrapper->thread_builtins[lane][ShaderBuiltin::DispatchThreadIndex] =
+          ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + compData->threadid[0],
+                         groupid[1] * threadDim[1] + compData->threadid[1],
+                         groupid[2] * threadDim[2] + compData->threadid[2], 0U);
+      apiWrapper->thread_builtins[lane][ShaderBuiltin::GroupThreadIndex] = ShaderVariable(
+          rdcstr(), compData->threadid[0], compData->threadid[1], compData->threadid[2], 0U);
+      apiWrapper->thread_builtins[lane][ShaderBuiltin::GroupFlatIndex] =
+          ShaderVariable(rdcstr(),
+                         compData->threadid[2] * threadDim[0] * threadDim[1] +
+                             compData->threadid[1] * threadDim[0] + compData->threadid[0],
+                         0U, 0U, 0U);
+      apiWrapper->thread_builtins[lane][ShaderBuiltin::IndexInSubgroup] =
+          ShaderVariable(rdcstr(), t, 0U, 0U, 0U);
+      apiWrapper->thread_builtins[lane][ShaderBuiltin::SubgroupIndexInWorkgroup] =
+          ShaderVariable(rdcstr(), compData->subIdxInGroup, 0U, 0U, 0U);
+    }
+
+    if(laneIndex == ~0U)
+    {
+      RDCERR("Didn't find desired lane in subgroup data");
+      laneIndex = 0;
+    }
+
+    // if we're simulating the whole workgroup we need to fill in the thread IDs of other threads
+    if(patchData.threadScope & rdcspv::ThreadScope::Workgroup)
+    {
+      uint32_t i = 0;
+      for(uint32_t tz = 0; tz < threadDim[2]; tz++)
+      {
+        for(uint32_t ty = 0; ty < threadDim[1]; ty++)
+        {
+          for(uint32_t tx = 0; tx < threadDim[0]; tx++)
+          {
+            std::unordered_map<ShaderBuiltin, ShaderVariable> &thread_builtins =
+                apiWrapper->thread_builtins[i];
+
+            thread_builtins[ShaderBuiltin::GroupThreadIndex] =
+                ShaderVariable(rdcstr(), tx, ty, tz, 0U);
+            thread_builtins[ShaderBuiltin::GroupFlatIndex] = ShaderVariable(
+                rdcstr(), tz * threadDim[0] * threadDim[1] + ty * threadDim[0] + tx, 0U, 0U, 0U);
+
+            if(apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::Active])
+            {
+              // assert that this is the thread we expect it to be
+              RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::DispatchThreadIndex].value.u32v[0],
+                             groupid[0] * threadDim[0] + tx);
+              RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::DispatchThreadIndex].value.u32v[1],
+                             groupid[1] * threadDim[1] + ty);
+              RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::DispatchThreadIndex].value.u32v[2],
+                             groupid[2] * threadDim[2] + tz);
+
+              RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::IndexInSubgroup].value.u32v[0],
+                             i % subgroupSize);
+              RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::SubgroupIndexInWorkgroup].value.u32v[0],
+                             i / subgroupSize);
+            }
+            else
+            {
+              thread_builtins[ShaderBuiltin::DispatchThreadIndex] =
+                  ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + tx,
+                                 groupid[1] * threadDim[1] + ty, groupid[2] * threadDim[2] + tz, 0U);
+              // tightly wrap subgroups, this is likely not how the GPU actually assigns them
+              thread_builtins[ShaderBuiltin::IndexInSubgroup] =
+                  ShaderVariable(rdcstr(), i % subgroupSize, 0U, 0U, 0U);
+              thread_builtins[ShaderBuiltin::SubgroupIndexInWorkgroup] =
+                  ShaderVariable(rdcstr(), i / subgroupSize, 0U, 0U, 0U);
+              apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::Active] = 1;
+              apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::SubgroupId] =
+                  i % subgroupSize;
+            }
+
+            i++;
+          }
+        }
+      }
+    }
+
+    // Add inactive padding lanes to round up to the subgroup size
+    const uint32_t numPaddingThreads = AlignUp(numThreads, subgroupSize) - numThreads;
+    if(numPaddingThreads > 0)
+    {
+      uint32_t newNumThreads = numThreads + numPaddingThreads;
+      apiWrapper->thread_props.resize(newNumThreads);
+      apiWrapper->thread_builtins.resize(newNumThreads);
+      for(uint32_t i = numThreads; i < newNumThreads; ++i)
+      {
+        std::unordered_map<ShaderBuiltin, ShaderVariable> &thread_builtins =
+            apiWrapper->thread_builtins[i];
+
+        thread_builtins[ShaderBuiltin::DispatchThreadIndex] =
+            ShaderVariable(rdcstr(), -1, -1, -1, -1);
+        thread_builtins[ShaderBuiltin::GroupThreadIndex] = ShaderVariable(rdcstr(), -1, -1, -1, -1);
+        thread_builtins[ShaderBuiltin::GroupFlatIndex] = ShaderVariable(rdcstr(), -1, -1, -1, -1);
+        thread_builtins[ShaderBuiltin::IndexInSubgroup] =
+            ShaderVariable(rdcstr(), i % subgroupSize, 0U, 0U, 0U);
+        thread_builtins[ShaderBuiltin::SubgroupIndexInWorkgroup] =
+            ShaderVariable(rdcstr(), i / subgroupSize, 0U, 0U, 0U);
+        apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::Active] = 0;
+        apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::SubgroupId] = i % subgroupSize;
+      }
+      numThreads = newNumThreads;
+    }
+    apiWrapper->global_builtins[ShaderBuiltin::SubgroupSize] =
+        ShaderVariable(rdcstr(), subgroupSize, 0U, 0U, 0U);
+
+    ShaderDebugTrace *ret = debugger->BeginDebug(apiWrapper, ShaderStage::Compute, entryPoint, spec,
+                                                 shadDetails.spirvInstructionLines, patchData,
+                                                 laneIndex, numThreads, subgroupSize);
+    apiWrapper->ResetReplay();
+
+    return ret;
+  }
+  else
+  {
+    // if we have more than one thread here, that means we need to simulate the whole workgroup.
+    // we assume the layout of this is irrelevant and don't attempt to read it back from the GPU
+    // like we do with subgroups. We lay things out in plain linear order, along X and then Y and
+    // then Z, with groups iterated together.
+    if(numThreads > 1)
+    {
+      uint32_t i = 0;
+      for(uint32_t tz = 0; tz < threadDim[2]; tz++)
+      {
+        for(uint32_t ty = 0; ty < threadDim[1]; ty++)
+        {
+          for(uint32_t tx = 0; tx < threadDim[0]; tx++)
+          {
+            std::unordered_map<ShaderBuiltin, ShaderVariable> &thread_builtins =
+                apiWrapper->thread_builtins[i];
+            thread_builtins[ShaderBuiltin::DispatchThreadIndex] =
+                ShaderVariable(rdcstr(), groupid[0] * threadDim[0] + tx,
+                               groupid[1] * threadDim[1] + ty, groupid[2] * threadDim[2] + tz, 0U);
+            thread_builtins[ShaderBuiltin::GroupThreadIndex] =
+                ShaderVariable(rdcstr(), tx, ty, tz, 0U);
+            thread_builtins[ShaderBuiltin::GroupFlatIndex] = ShaderVariable(
+                rdcstr(), tz * threadDim[0] * threadDim[1] + ty * threadDim[0] + tx, 0U, 0U, 0U);
+            apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::Active] = 1;
+
+            if(rdcfixedarray<uint32_t, 3>({tx, ty, tz}) == threadid)
+            {
+              laneIndex = i;
+            }
+
+            i++;
+          }
+        }
+      }
+    }
+    else
+    {
+      // simple single-thread case
+      apiWrapper->thread_props[0][(size_t)rdcspv::ThreadProperty::Active] = 1;
+      apiWrapper->thread_props[0][(size_t)rdcspv::ThreadProperty::SubgroupId] = 0;
+
+      std::unordered_map<ShaderBuiltin, ShaderVariable> &thread_builtins =
+          apiWrapper->thread_builtins[0];
+
+      thread_builtins[ShaderBuiltin::DispatchThreadIndex] = ShaderVariable(
+          rdcstr(), groupid[0] * threadDim[0] + threadid[0],
+          groupid[1] * threadDim[1] + threadid[1], groupid[2] * threadDim[2] + threadid[2], 0U);
+      thread_builtins[ShaderBuiltin::GroupThreadIndex] =
+          ShaderVariable(rdcstr(), threadid[0], threadid[1], threadid[2], 0U);
+      thread_builtins[ShaderBuiltin::GroupFlatIndex] = ShaderVariable(
+          rdcstr(),
+          threadid[2] * threadDim[0] * threadDim[1] + threadid[1] * threadDim[0] + threadid[0], 0U,
+          0U, 0U);
+    }
+
+    rdcspv::Debugger *debugger = new rdcspv::Debugger;
+    debugger->Parse(shadDetails.convertedSPIRV ? shadDetails.convertedSpirvWords
+                                               : shadDetails.spirvWords);
+
+    apiWrapper->global_builtins[ShaderBuiltin::SubgroupSize] =
+        ShaderVariable(rdcstr(), 1U, 0U, 0U, 0U);
+
+    ShaderDebugTrace *ret = debugger->BeginDebug(apiWrapper, ShaderStage::Compute, entryPoint, spec,
+                                                 shadDetails.spirvInstructionLines, patchData,
+                                                 laneIndex, numThreads, 1);
+    apiWrapper->ResetReplay();
+
+    return ret;
+  }
 }
 
 ShaderDebugTrace *GLReplay::DebugMeshThread(uint32_t eventId,
