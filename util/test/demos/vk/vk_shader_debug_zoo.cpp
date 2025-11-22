@@ -1649,6 +1649,15 @@ void main()
       }
       break;
     }
+    case 186:
+    {
+      float x = textureProj(sampler2DShadow(depthImage, shadowSampler), vec4(inpos, 0.1f, 0.5f));
+      float y = textureProj(sampler2DShadow(depthImage, shadowSampler), vec4(inpos, 0.3f, 0.5f));
+      float z = textureProj(sampler2DShadow(depthImage, shadowSampler), vec4(inpos, 0.7f, 0.5f));
+      float w = textureProj(sampler2DShadow(depthImage, shadowSampler), vec4(inpos, 0.9f, 0.5f));
+      Color = vec4(x, y, z, w);
+      break;
+    }
     default: break;
   }
 }
