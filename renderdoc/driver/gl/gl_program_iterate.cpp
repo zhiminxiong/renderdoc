@@ -1204,9 +1204,13 @@ bool CopyProgramAttribBindings(GLuint progsrc, GLuint progdst, const ShaderRefle
     if(sig.systemValue != ShaderBuiltin::Undefined)
       continue;
 
-    GLint idx = GL.glGetAttribLocation(progsrc, sig.varName.c_str());
+    rdcstr name = sig.varName;
+    if(name.endsWith(":col0"))
+      name.resize(name.size() - 5);
+
+    GLint idx = GL.glGetAttribLocation(progsrc, name.c_str());
     if(idx >= 0)
-      GL.glBindAttribLocation(progdst, (GLuint)idx, sig.varName.c_str());
+      GL.glBindAttribLocation(progdst, (GLuint)idx, name.c_str());
   }
 
   return !refl->inputSignature.empty();
