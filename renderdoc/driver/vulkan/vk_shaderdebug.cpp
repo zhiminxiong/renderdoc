@@ -1262,6 +1262,13 @@ public:
             uniformParams.ddy[i] = floatComp(ddyCalc, i);
           }
         }
+        if((opcode == rdcspv::Op::ImageSampleProjDrefExplicitLod) ||
+           (opcode == rdcspv::Op::ImageSampleProjDrefImplicitLod))
+        {
+          RDCASSERT(useCompare);
+          float q = floatComp(uv, coords);
+          uniformParams.compare /= q;
+        }
 
         break;
       }
