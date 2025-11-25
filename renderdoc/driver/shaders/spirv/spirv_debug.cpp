@@ -433,12 +433,14 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     // it's a no-op change
     int ptrIdx = pointers.indexOf(pointer);
 
+    bool aliasChangeAdded = false;
     if(ptrIdx >= 0)
     {
       if(pointer != ptrid)
       {
         pendingDebugState.changes.push_back(changes[ptrIdx]);
         changes.erase(ptrIdx);
+        aliasChangeAdded = true;
       }
     }
 
@@ -454,12 +456,50 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     opResult = debugger.GetPointerValue(ids[ptrid], basechange.after);
     SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
 
+    bool includeBaseChange = false;
+
+    // Generate a change for the base pointer if it is live in this scope
+    if(!includeBaseChange && live.contains(ptrid))
+      includeBaseChange = true;
+
+    // Generate a change for the base pointer if it is not live in any outer scopes
+    if(!includeBaseChange)
+    {
+      bool foundIt = false;
+      for(size_t i = 0; i < callstack.size() - 1; ++i)
+      {
+        foundIt = callstack[i]->live.contains(ptrid);
+        if(foundIt)
+          break;
+      }
+      if(!foundIt)
+      {
+        includeBaseChange = true;
+        baseWasLive = false;
+      }
+    }
+
+    // This should not happen
+    if(!includeBaseChange && !aliasChangeAdded)
+    {
+      RDCWARN("Base pointer is not live and no aliased pointer detected, adding base change");
+      includeBaseChange = true;
+    }
+
+    // there should always be a change writing direct to the base pointer
+    if(!includeBaseChange && (pointer == ptrid))
+    {
+      RDCWARN("Base pointer is not live and writing direct to pointer, adding base change");
+      includeBaseChange = true;
+    }
+
     // if this is the first local write, mark this variable as becoming alive here, instead of at
     // its declaration or if the variable wasn't live
     if(firstLocalWrite || !baseWasLive)
       basechange.before = {};
 
-    pendingDebugState.changes.push_back(basechange);
+    if(includeBaseChange)
+      pendingDebugState.changes.push_back(basechange);
 
     if(ptrIdx == -1)
       pointers.push_back(pointer);
