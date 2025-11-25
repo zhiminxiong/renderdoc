@@ -499,7 +499,10 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
       basechange.before = {};
 
     if(includeBaseChange)
+    {
       pendingDebugState.changes.push_back(basechange);
+      SetLive(ptrid);
+    }
 
     if(ptrIdx == -1)
       pointers.push_back(pointer);
