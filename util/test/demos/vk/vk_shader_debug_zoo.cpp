@@ -296,7 +296,19 @@ layout(location = 0, index = 0) out vec4 Color;
 )EOSHADER" + v2f +
                             R"EOSHADER(
 
-vec4 varscope_test(int coord, vec2 inpos_param, vec2 inpos_incr_param)
+vec2 inner_func(in vec2 modified)
+{
+  modified.x += modified.y * 2.0f;
+  vec2 ret = modified;
+  return ret;
+}
+
+struct ScopeTest
+{
+  vec2 modified;
+};
+
+vec4 varscope_test(int coord, vec2 inpos_param, vec2 inpos_incr_param, in ScopeTest scopeTest)
 {
   float never_in_scope;
 
@@ -327,6 +339,9 @@ vec4 varscope_test(int coord, vec2 inpos_param, vec2 inpos_incr_param)
   {
     ret = vec4(1.0, 1.0, 1.0, 0.0);
   }
+
+  ret.xy += inner_func(scopeTest.modified);
+  ret.zw += inner_func(scopeTest.modified);
 
   ret.w += long_scope;
 
@@ -360,6 +375,8 @@ void main()
   int flatLocalCoord = localCoord.x + localCoord.y * 4;
 
   int flatGlobalCoord = int(gl_FragCoord.x) + int(gl_FragCoord.y) * 1024;
+  ScopeTest scopeTest;
+  scopeTest.modified = inposIncreased;
 
   Color = vec4(0,0,0,0);
   switch(test)
@@ -1564,7 +1581,7 @@ void main()
     case 175:
     {
       // this isn't really intended as a true test but more a convenience for manual testing.
-      Color = varscope_test(flatLocalCoord, inpos, inposIncreased);
+      Color = varscope_test(flatLocalCoord, inpos, inposIncreased, scopeTest);
       break;
     }
     case 176:
