@@ -433,6 +433,7 @@ struct ThreadState
 private:
   void EnterFunction(const rdcarray<Id> &arguments);
   void SetDst(Id id, const ShaderVariable &val);
+  bool SetLive(Id id);
   void ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray<Id> &newLive);
   void JumpToLabel(Id target);
   bool ReferencePointer(Id id);

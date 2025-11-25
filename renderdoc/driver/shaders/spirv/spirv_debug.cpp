@@ -387,6 +387,10 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     if(opResult == DeviceOpResult::NeedsDevice)
       return DeviceOpResult::NeedsDevice;
 
+    // Mark the pointer as being live
+    bool wasLive = SetLive(pointer);
+    bool baseWasLive = (pointer == ptrid) ? wasLive : true;
+
     rdcarray<ShaderVariableChange> changes;
     rdcarray<Id> &pointers = pointersForId[ptrid];
 
@@ -451,8 +455,8 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
     SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
 
     // if this is the first local write, mark this variable as becoming alive here, instead of at
-    // its declaration
-    if(firstLocalWrite)
+    // its declaration or if the variable wasn't live
+    if(firstLocalWrite || !baseWasLive)
       basechange.before = {};
 
     pendingDebugState.changes.push_back(basechange);
@@ -487,6 +491,19 @@ void ThreadState::DebugBreak()
 {
   if(hasDebugState)
     pendingDebugState.flags |= ShaderEvents::DebugBreak;
+}
+
+bool ThreadState::SetLive(Id id)
+{
+  bool wasLive = false;
+  if(hasDebugState)
+  {
+    auto it = std::lower_bound(live.begin(), live.end(), id);
+    wasLive = (it != live.end() && *it == id);
+    if(!wasLive)
+      live.insert(it - live.begin(), id);
+  }
+  return wasLive;
 }
 
 void ThreadState::SetDst(Id id, const ShaderVariable &val)
@@ -525,14 +542,7 @@ void ThreadState::SetDst(Id id, const ShaderVariable &val)
 
   lastWrite[id] = hasDebugState ? stepIndex : nextInstruction;
 
-  bool wasLive = false;
-  if(hasDebugState)
-  {
-    auto it = std::lower_bound(live.begin(), live.end(), id);
-    wasLive = (it != live.end() && *it == id);
-    if(!wasLive)
-      live.insert(it - live.begin(), id);
-  }
+  bool wasLive = SetLive(id);
 
   if(val.type == VarType::GPUPointer && !debugger.IsPhysicalPointer(val))
   {
