@@ -1052,6 +1052,10 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   subgroupSize = threadsInSubgroup;
   stage = shaderStage;
   apiWrapper = api;
+  ShaderFeatures shaderFeatures = ShaderFeatures::None;
+  if((stage == ShaderStage::Fragment) ||
+     ((stage == ShaderStage::Compute) && patchData.derivativeMode != ComputeDerivativeMode::None))
+    shaderFeatures |= ShaderFeatures::Derivatives;
 
   queuedDeviceThreadSteps.resize(threadsInWorkgroup);
   queuedGpuMathOps.resize(threadsInWorkgroup);
@@ -1060,7 +1064,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
   queuedJobs.resize(threadsInWorkgroup);
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
-    workgroup.push_back(ThreadState(*this, global, stage));
+    workgroup.push_back(ThreadState(*this, global, stage, shaderFeatures));
     queuedDeviceThreadSteps[i] = false;
     queuedGpuMathOps[i] = false;
     queuedGpuSampleGatherOps[i] = false;

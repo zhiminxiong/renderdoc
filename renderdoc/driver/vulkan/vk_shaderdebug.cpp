@@ -6490,6 +6490,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
 
   uint32_t numThreads = 1;
 
+  bool hasQuadScope = (shadRefl.patchData.threadScope & rdcspv::ThreadScope::Quad) ? true : false;
   bool hasQuadDerivatives =
       (shadRefl.patchData.derivativeMode != rdcspv::ComputeDerivativeMode::None);
   bool hasSubgroupScoope =
@@ -6497,7 +6498,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
   bool hasWorkgroupScope =
       (shadRefl.patchData.threadScope & rdcspv::ThreadScope::Workgroup) ? true : false;
 
-  if(hasQuadDerivatives)
+  if(hasQuadDerivatives || hasQuadScope)
     numThreads = RDCMAX(numThreads, 4U);
   if(hasSubgroupScoope)
     numThreads = RDCMAX(numThreads, maxSubgroupSize);
@@ -6535,7 +6536,19 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
     quadH = quadHeights[quadDerivMode];
     countQuadX = threadDim[0] / quadW;
     countQuadY = threadDim[1] / quadH;
+    hasQuadScope = true;
+  }
+  else if(hasQuadScope)
+  {
+    // Choose linear layout
+    quadW = 4;
+    quadH = 1;
+    countQuadX = threadDim[0] / quadW;
+    countQuadY = threadDim[1] / quadH;
+  }
 
+  if(hasQuadScope)
+  {
     RDCASSERTEQUAL(threadDim[0], countQuadX * quadW);
     RDCASSERTEQUAL(threadDim[1], countQuadY * quadH);
   }
@@ -6695,7 +6708,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
     RDCASSERTNOTEQUAL(subgroupSize, 0);
     numThreads = RDCMAX(numThreads, subgroupSize);
 
-    if(hasQuadDerivatives)
+    if(hasQuadScope)
       RDCASSERT(numThreads >= 4);
 
     if(hasWorkgroupScope)
@@ -6724,7 +6737,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
 
       uint32_t quadId = ~0U;
       uint32_t quadLaneIndex = ~0U;
-      if(hasQuadDerivatives)
+      if(hasQuadScope)
       {
         uint32_t quadX = (compData->threadid[0] / quadW);
         uint32_t quadY = (compData->threadid[1] / quadH);
@@ -6739,9 +6752,9 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
 
       if(hasWorkgroupScope)
       {
-        // When quad derivatives are enabled, use the quad derivative layout
-        if(hasQuadDerivatives)
+        if(hasQuadScope)
         {
+          // quad scope, derive the lane from the quad layout
           lane = quadId * 4 + quadLaneIndex;
         }
         else
@@ -6795,9 +6808,9 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
             uint32_t quadLaneIndex = ~0U;
 
             uint32_t lane = ~0U;
-            if(hasQuadDerivatives)
+            if(hasQuadScope)
             {
-              // When quad derivatives are enabled, use the quad derivative layout
+              // quad scope, derive the lane from the quad layout
               uint32_t quadX = (tx / quadW);
               uint32_t quadY = (ty / quadH);
               uint32_t quadZ = tz;
@@ -6833,7 +6846,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
               RDCASSERTEQUAL(thread_builtins[ShaderBuiltin::SubgroupIndexInWorkgroup].value.u32v[0],
                              lane / subgroupSize);
 
-              if(hasQuadDerivatives)
+              if(hasQuadScope)
               {
                 RDCASSERTEQUAL(
                     apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadLane],
@@ -6856,7 +6869,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
               apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::SubgroupId] =
                   lane % subgroupSize;
 
-              if(hasQuadDerivatives)
+              if(hasQuadScope)
               {
                 apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadLane] =
                     quadLaneIndex;
@@ -6931,7 +6944,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
                 rdcstr(), tz * threadDim[0] * threadDim[1] + ty * threadDim[0] + tx, 0U, 0U, 0U);
             apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::Active] = 1;
 
-            if(hasQuadDerivatives)
+            if(hasQuadScope)
             {
               uint32_t quadX = (tx / quadW);
               uint32_t quadY = (ty / quadH);
@@ -6954,7 +6967,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
         }
       }
     }
-    else if(hasQuadDerivatives)
+    else if(hasQuadScope)
     {
       // need to simulate the whole quad, do not readback from the GPU like we do with subgroups
       // the quad is guaranteed to be in the same subgroup
@@ -6978,17 +6991,14 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
             rdcstr(), tz * threadDim[0] * threadDim[1] + ty * threadDim[0] + tx, 0U, 0U, 0U);
         apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::Active] = 1;
 
-        if(hasQuadDerivatives)
-        {
-          uint32_t quadX = (tx / quadW);
-          uint32_t quadY = (ty / quadH);
-          uint32_t quadId =
-              quadIdOffset + quadX + (quadY * countQuadX) + (quadZ * countQuadY * countQuadX);
-          uint32_t quadLaneIndex = (tx % quadW) + (ty % quadH) * 2;
+        uint32_t quadX = (tx / quadW);
+        uint32_t quadY = (ty / quadH);
+        uint32_t quadId =
+            quadIdOffset + quadX + (quadY * countQuadX) + (quadZ * countQuadY * countQuadX);
+        uint32_t quadLaneIndex = (tx % quadW) + (ty % quadH) * 2;
 
-          apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::QuadLane] = quadLaneIndex;
-          apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::QuadId] = quadId;
-        }
+        apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::QuadLane] = quadLaneIndex;
+        apiWrapper->thread_props[i][(size_t)rdcspv::ThreadProperty::QuadId] = quadId;
 
         if(rdcfixedarray<uint32_t, 3>({tx, ty, tz}) == threadid)
           laneIndex = i;

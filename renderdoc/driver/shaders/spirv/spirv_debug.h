@@ -244,11 +244,20 @@ struct GpuSampleGatherOperation
   ShaderVariable *result = NULL;
 };
 
+enum class ShaderFeatures : uint32_t
+{
+  None = 0,
+  Derivatives = 1 << 0,
+};
+
+BITMASK_OPERATORS(ShaderFeatures);
+
 class Debugger;
 
 struct ThreadState
 {
-  ThreadState(Debugger &debug, const GlobalState &globalState, ShaderStage stage);
+  ThreadState(Debugger &debug, const GlobalState &globalState, ShaderStage stage,
+              ShaderFeatures shaderFeatures);
   ~ThreadState();
 
   void EnterEntryPoint(bool useDebugState);
@@ -454,6 +463,7 @@ private:
     AtomicStore(&atomic_pendingResultStatus, (int32_t)status);
   }
 
+  ShaderFeatures features;
   DerivType defaultDeriveType;
   ShaderDebugState pendingDebugState;
   bool hasDebugState = false;

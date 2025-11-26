@@ -174,8 +174,9 @@ static ShaderVariable MakeIdentity(const rdcspv::DataType &type, float val, bool
 
 namespace rdcspv
 {
-ThreadState::ThreadState(Debugger &debug, const GlobalState &globalState, ShaderStage stage)
-    : debugger(debug), global(globalState)
+ThreadState::ThreadState(Debugger &debug, const GlobalState &globalState, ShaderStage stage,
+                         ShaderFeatures shaderFeatures)
+    : debugger(debug), global(globalState), features(shaderFeatures)
 {
   // Default to Coarse, choose Fine for compute shaders
   defaultDeriveType = DerivType::Coarse;
@@ -678,6 +679,14 @@ ShaderVariable ThreadState::CalcDeriv(ThreadState::DerivDir dir, ThreadState::De
                              MessageSource::RuntimeWarning,
                              StringFormat::Fmt("Derivative calculation within non-quad on input %s",
                                                debugger.GetHumanName(val).c_str()));
+    return ShaderVariable("", 0.0f, 0.0f, 0.0f, 0.0f);
+  }
+  if(!(features & ShaderFeatures::Derivatives))
+  {
+    debugger.AddDebugMessage(
+        MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+        StringFormat::Fmt("Derivative calculation within shader without support for derivatives %s",
+                          debugger.GetHumanName(val).c_str()));
     return ShaderVariable("", 0.0f, 0.0f, 0.0f, 0.0f);
   }
 
