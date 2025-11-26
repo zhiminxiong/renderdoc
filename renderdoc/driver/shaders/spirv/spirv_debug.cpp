@@ -393,7 +393,7 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
 
     // Mark the pointer as being live
     bool wasLive = SetLive(pointer);
-    bool baseWasLive = (pointer == ptrid) ? wasLive : true;
+    bool baseWasLive = (pointer == ptrid) ? wasLive : live.contains(ptrid);
 
     rdcarray<ShaderVariableChange> changes;
     rdcarray<Id> &pointers = pointersForId[ptrid];
@@ -497,13 +497,16 @@ DeviceOpResult ThreadState::WritePointerValue(Id pointer, const ShaderVariable &
       includeBaseChange = true;
     }
 
-    // if this is the first local write, mark this variable as becoming alive here, instead of at
-    // its declaration or if the variable wasn't live
-    if(firstLocalWrite || !baseWasLive)
-      basechange.before = {};
-
     if(includeBaseChange)
     {
+      // mark this variable as becoming alive here,
+      // if this is the first local write (instead of at its declaration)
+      if(firstLocalWrite)
+        basechange.before = {};
+
+      if(!baseWasLive)
+        basechange.before = {};
+
       pendingDebugState.changes.push_back(basechange);
       SetLive(ptrid);
     }
@@ -634,6 +637,8 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
   {
     if(liveGlobals.contains(id))
       continue;
+    if(newLive.contains(id))
+      continue;
 
     DeviceOpResult opResult = debugger.GetPointerValue(ids[id], val);
     SPIRV_DEBUG_RDCASSERTEQUAL(opResult, DeviceOpResult::Succeeded);
@@ -651,6 +656,8 @@ void ThreadState::ProcessScopeChange(const rdcarray<Id> &oldLive, const rdcarray
   for(const Id &id : newLive)
   {
     if(liveGlobals.contains(id))
+      continue;
+    if(oldLive.contains(id))
       continue;
 
     DeviceOpResult opResult = debugger.GetPointerValue(ids[id], val);

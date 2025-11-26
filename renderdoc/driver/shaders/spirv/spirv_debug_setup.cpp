@@ -4477,6 +4477,18 @@ void Debugger::RegisterOp(Iter it)
       m_DebugInfo.valid = true;
     }
   }
+  else if((opdata.op == Op::AccessChain) || (opdata.op == Op::InBoundsAccessChain))
+  {
+    OpAccessChain chain(it);
+    // Base pointers never retire
+    idLiveRange[chain.base].second = ~0U;
+  }
+  else if((opdata.op == Op::PtrAccessChain) || (opdata.op == Op::InBoundsPtrAccessChain))
+  {
+    OpPtrAccessChain chain(it);
+    // Base pointers never retire
+    idLiveRange[chain.base].second = ~0U;
+  }
 
   if(opdata.op == Op::Source)
   {
