@@ -540,7 +540,6 @@ void Processor::RegisterOp(Iter it)
        decoded.capability == Capability::GroupNonUniformShuffle ||
        decoded.capability == Capability::GroupNonUniformShuffleRelative ||
        decoded.capability == Capability::GroupNonUniformClustered ||
-       decoded.capability == Capability::GroupNonUniformQuad ||
        decoded.capability == Capability::GroupNonUniformRotateKHR ||
        decoded.capability == Capability::GroupUniformArithmeticKHR ||
        decoded.capability == Capability::SubgroupBallotKHR ||
