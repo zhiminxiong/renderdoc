@@ -283,6 +283,7 @@
     <ClCompile Include="gl\gl_resource_lifetimes.cpp" />
     <ClCompile Include="gl\gl_runtime_bind_prog_to_pipe.cpp" />
     <ClCompile Include="gl\gl_separable_geometry_shader.cpp" />
+    <ClCompile Include="gl\gl_shader_debug_zoo.cpp" />
     <ClCompile Include="gl\gl_shader_editing.cpp" />
     <ClCompile Include="gl\gl_shader_isa.cpp" />
     <ClCompile Include="gl\gl_simple_triangle.cpp" />

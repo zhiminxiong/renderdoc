@@ -28,6 +28,7 @@
 
 #include "3rdparty/glad/glad.h"
 
+#include <functional>
 #include <vector>
 
 struct OpenGLGraphicsTest : public GraphicsTest
@@ -44,7 +45,8 @@ struct OpenGLGraphicsTest : public GraphicsTest
 
   void PostInit();
 
-  GLuint MakeProgram(std::string vertSrc, std::string fragSrc, std::string geomSrc = "");
+  GLuint MakeProgram(std::string vertSrc, std::string fragSrc, std::string geomSrc = "",
+                     std::function<void(GLuint)> prelink = {});
   GLuint MakeProgram(std::string compSrc);
   GLuint MakeProgram();
   GLuint MakePipelineProgram(GLenum type, std::string src);

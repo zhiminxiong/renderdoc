@@ -143,7 +143,8 @@ void OpenGLGraphicsTest::Shutdown()
   delete mainWindow;
 }
 
-GLuint OpenGLGraphicsTest::MakeProgram(std::string vertSrc, std::string fragSrc, std::string geomSrc)
+GLuint OpenGLGraphicsTest::MakeProgram(std::string vertSrc, std::string fragSrc,
+                                       std::string geomSrc, std::function<void(GLuint)> prelink)
 {
   GLuint vs = vertSrc.empty() ? 0 : glCreateShader(GL_VERTEX_SHADER);
   GLuint fs = fragSrc.empty() ? 0 : glCreateShader(GL_FRAGMENT_SHADER);
@@ -231,6 +232,9 @@ GLuint OpenGLGraphicsTest::MakeProgram(std::string vertSrc, std::string fragSrc,
 
   if(!vs || !fs)
     glProgramParameteri(program, GL_PROGRAM_SEPARABLE, GL_TRUE);
+
+  if(prelink)
+    prelink(program);
 
   glLinkProgram(program);
 
