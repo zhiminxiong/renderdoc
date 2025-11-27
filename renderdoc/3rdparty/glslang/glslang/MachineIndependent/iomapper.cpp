@@ -866,8 +866,8 @@ private:
 TDefaultIoResolverBase::TDefaultIoResolverBase(const TIntermediate& intermediate)
     : referenceIntermediate(intermediate)
     , nextUniformLocation(intermediate.getUniformLocationBase())
-    , nextInputLocation(0)
-    , nextOutputLocation(0)
+    , nextInputLocation(intermediate.getIOLocationBase())
+    , nextOutputLocation(intermediate.getIOLocationBase())
 {
     memset(stageMask, false, sizeof(bool) * (EShLangCount + 1));
     memset(stageIntermediates, 0, sizeof(TIntermediate*) * (EShLangCount));

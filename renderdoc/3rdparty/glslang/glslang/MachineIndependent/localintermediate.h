@@ -358,6 +358,7 @@ public:
         spirvRequirement(nullptr),
         spirvExecutionMode(nullptr),
         uniformLocationBase(0),
+        ioLocationBase(0),
         quadDerivMode(false), reqFullQuadsMode(false)
     {
         localSize[0] = 1;
@@ -975,6 +976,9 @@ public:
 
     void setUniformLocationBase(int base) { uniformLocationBase = base; }
     int getUniformLocationBase() const { return uniformLocationBase; }
+    
+    void setIOLocationBase(int base) { ioLocationBase = base; }
+    int getIOLocationBase() const { return ioLocationBase; }
 
     void setNeedsLegalization() { needToLegalize = true; }
     bool needsLegalization() const { return needToLegalize; }
@@ -1263,6 +1267,7 @@ protected:
     std::map<TString, AstRefType> bindlessImageModeCaller;
     std::unordered_map<std::string, int> uniformLocationOverrides;
     int uniformLocationBase;
+    int ioLocationBase;
     bool quadDerivMode;
     bool reqFullQuadsMode;
     TNumericFeatures numericFeatures;

@@ -1859,6 +1859,10 @@ void TShader::setUniformLocationBase(int base)
 {
     intermediate->setUniformLocationBase(base);
 }
+void TShader::setIOLocationBase(int base)
+{
+    intermediate->setIOLocationBase(base);
+}
 void TShader::setNoStorageFormat(bool useUnknownFormat) { intermediate->setNoStorageFormat(useUnknownFormat); }
 void TShader::setResourceSetBinding(const std::vector<std::string>& base)   { intermediate->setResourceSetBinding(base); }
 void TShader::setTextureSamplerTransformMode(EShTextureSamplerTransformMode mode) { intermediate->setTextureSamplerTransformMode(mode); }

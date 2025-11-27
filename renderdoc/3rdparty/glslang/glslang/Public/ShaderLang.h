@@ -494,6 +494,7 @@ public:
     GLSLANG_EXPORT void setAutoMapLocations(bool map);
     GLSLANG_EXPORT void addUniformLocationOverride(const char* name, int loc);
     GLSLANG_EXPORT void setUniformLocationBase(int base);
+    GLSLANG_EXPORT void setIOLocationBase(int base);
     GLSLANG_EXPORT void setInvertY(bool invert);
     GLSLANG_EXPORT void setDxPositionW(bool dxPosW);
     GLSLANG_EXPORT void setEnhancedMsgs();
