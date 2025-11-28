@@ -1882,19 +1882,92 @@ float ConvertLinearToSRGB(float linear)
   return 1.055f * powf(linear, 1.0f / 2.4f) - 0.055f;
 }
 
-void CombineUsageEvents(ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
+static const ActionDescription *GetParentMarker(ICaptureContext &ctx, uint32_t eventId)
+{
+  const ActionDescription *parent = ctx.GetAction(eventId);
+  if(!parent)
+  {
+    rdcarray<const ActionDescription *> actions;
+    // Search the actions to find which action contains this eventId
+    for(const ActionDescription &action : ctx.CurRootActions())
+      actions.push_back(&action);
+
+    while(!parent && !actions.empty())
+    {
+      const ActionDescription *action = actions.back();
+      for(const APIEvent &event : action->events)
+      {
+        if(event.eventId == eventId)
+        {
+          parent = action;
+          break;
+        }
+      }
+      actions.pop_back();
+      if(action->eventId < eventId)
+      {
+        for(const ActionDescription &child : action->children)
+          actions.push_back(&child);
+      }
+    }
+  }
+  while(parent != NULL && (parent->flags != ActionFlags::PushMarker))
+    parent = parent->parent;
+
+  return parent;
+}
+
+QString GetParentMarkerName(ICaptureContext &ctx, uint32_t eventId)
+{
+  const ActionDescription *parent = GetParentMarker(ctx, eventId);
+  return parent ? QString(parent->customName) : QString();
+}
+
+QString GetParentMarkerPath(ICaptureContext &ctx, uint32_t eventId, bool &hasParent)
+{
+  const ActionDescription *parent = GetParentMarker(ctx, eventId);
+
+  QString markerPath;
+  while(parent)
+  {
+    if(parent->flags & ActionFlags::PushMarker)
+    {
+      QString prevPath = markerPath;
+      markerPath = parent->customName;
+      if(!prevPath.isEmpty())
+      {
+        markerPath += lit(" -> ");
+        markerPath += prevPath;
+        hasParent = true;
+      }
+    }
+    parent = parent->parent;
+  }
+  return markerPath;
+}
+
+uint32_t GetParentMarkerEventId(ICaptureContext &ctx, uint32_t eventId)
+{
+  const ActionDescription *parent = GetParentMarker(ctx, eventId);
+  return parent ? parent->eventId : 0;
+}
+
+void CombineUsageEvents(ICaptureContext &ctx, const rdcarray<EventUsage> &usage, bool splitByMarker,
                         std::function<void(uint32_t startEID, uint32_t endEID, ResourceUsage use)> callback)
 {
   uint32_t start = 0;
   uint32_t end = 0;
   ResourceUsage us = ResourceUsage::IndexBuffer;
 
+  uint32_t parentEID = 0;
   for(const EventUsage &u : usage)
   {
     if(start == 0)
     {
       start = end = u.eventId;
       us = u.usage;
+
+      parentEID = GetParentMarkerEventId(ctx, u.eventId);
     }
 
     if(u.usage == us && u.eventId == end)
@@ -1904,9 +1977,12 @@ void CombineUsageEvents(ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
 
     bool distinct = false;
 
+    const uint32_t newParentEID = GetParentMarkerEventId(ctx, u.eventId);
+
     // if the usage is different from the last, add a new entry,
     // or if the previous action link is broken.
-    if(u.usage != us || action == NULL || action->previous == 0)
+    if(u.usage != us || action == NULL || action->previous == 0 ||
+       (splitByMarker && (parentEID != newParentEID)))
     {
       distinct = true;
     }
@@ -1920,6 +1996,16 @@ void CombineUsageEvents(ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
 
       while(prev != NULL && prev->eventId > end)
       {
+        if(splitByMarker)
+        {
+          const uint32_t prevParentEID = GetParentMarkerEventId(ctx, prev->eventId);
+          if(parentEID != prevParentEID)
+          {
+            distinct = true;
+            break;
+          }
+        }
+
         if(!(prev->flags & (ActionFlags::Dispatch | ActionFlags::MeshDispatch |
                             ActionFlags::Drawcall | ActionFlags::CmdList)))
         {
@@ -1947,6 +2033,7 @@ void CombineUsageEvents(ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
       {
         start = end = u.eventId;
         us = u.usage;
+        parentEID = newParentEID;
       }
     }
 

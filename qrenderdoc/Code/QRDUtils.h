@@ -271,8 +271,11 @@ QString GetComponentString(byte mask);
 QIcon MakeSwatchIcon(QWidget *parentWidget, QColor swatchColor);
 float ConvertLinearToSRGB(float linear);
 void CombineUsageEvents(
-    ICaptureContext &ctx, const rdcarray<EventUsage> &usage,
+    ICaptureContext &ctx, const rdcarray<EventUsage> &usage, bool splitByMarker,
     std::function<void(uint32_t startEID, uint32_t endEID, ResourceUsage use)> callback);
+uint32_t GetParentMarkerEventId(ICaptureContext &ctx, uint32_t eventId);
+QString GetParentMarkerName(ICaptureContext &ctx, uint32_t eventId);
+QString GetParentMarkerPath(ICaptureContext &ctx, uint32_t eventId, bool &hasParent);
 
 // Calculate primitive count based on topology and vertex/index count
 uint32_t CalculatePrimitiveCount(Topology topology, uint32_t vertexOrIndexCount, uint32_t instanceCount = 1);

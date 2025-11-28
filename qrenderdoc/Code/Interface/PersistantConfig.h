@@ -662,7 +662,17 @@ DECLARE_REFLECTION_STRUCT(BugReport);
   CONFIG_SETTING(public, QVariantList, rdcarray<rdcstr>, AlwaysLoad_Extensions)                    \
                                                                                                    \
   DOCUMENT("");                                                                                    \
-  CONFIG_SETTING(private, QVariantList, rdcarray<RemoteHost>, RemoteHostList)
+  CONFIG_SETTING(private, QVariantList, rdcarray<RemoteHost>, RemoteHostList)                      \
+                                                                                                   \
+  DOCUMENT("");                                                                                    \
+  DOCUMENT(                                                                                        \
+      "``False`` if :class:`ResourceUsage` should combine resource usage across marker "           \
+      "boundaries.\n"                                                                              \
+      "\n:"                                                                                        \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
+  CONFIG_SETTING_VAL(public, bool, bool, ResourceUsage_SplitByMarker, false)
 
 DOCUMENT(R"(The formatting mode used when displaying fields marked as Offsets or Sizes.
 

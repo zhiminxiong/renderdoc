@@ -103,10 +103,12 @@ public slots:
 
   // manual slots
   void resource_doubleClicked(const QModelIndex &index);
+  void resourceUsage_contextMenu(const QPoint &pos);
 
 private slots:
   void on_viewContents_clicked();
   void on_resourceUsage_doubleClicked(const QModelIndex &index);
+  void on_resourceUsage_SplitByMarker_toggled();
 
 protected:
   void enterEvent(QEvent *event) override;
@@ -127,4 +129,5 @@ private:
   ResourceSorterModel *m_FilterModel;
   StructuredDataItemModel *m_ChunksModel;
   RichTextViewDelegate *m_delegate;
+  bool m_SplitByMarker = false;
 };
