@@ -1276,8 +1276,11 @@ SRVInfo D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
       }
     }
 
-    RDCERR("Couldn't find root signature parameter corresponding to SRV %u in space %u",
-           slot.shaderRegister, slot.registerSpace);
+    m_Device->AddDebugMessage(
+        MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+        StringFormat::Fmt(
+            "Couldn't find root signature parameter corresponding to SRV %u in space %u",
+            slot.shaderRegister, slot.registerSpace));
     {
       SCOPED_WRITELOCK(m_SRVsLock);
       m_SRVInfos[slot] = srvData;
@@ -1285,8 +1288,10 @@ SRVInfo D3D12APIWrapper::FetchSRV(const BindingSlot &slot)
     return srvData;
   }
 
-  RDCERR("No root signature bound, couldn't identify SRV %u in space %u", slot.shaderRegister,
-         slot.registerSpace);
+  m_Device->AddDebugMessage(
+      MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+      StringFormat::Fmt("No root signature bound, couldn't identify SRV %u in space %u",
+                        slot.shaderRegister, slot.registerSpace));
   {
     SCOPED_WRITELOCK(m_SRVsLock);
     m_SRVInfos[slot] = srvData;
@@ -1379,13 +1384,17 @@ UAVInfo D3D12APIWrapper::FetchUAV(const D3D12Descriptor *resDescriptor, const Bi
             if(counterData.size() == 4)
               uavData.hiddenCounter = *((uint32_t *)counterData.data());
             else
-              RDCERR("Couldn't read UAV counter data for UAV in slot %u space %u",
-                     slot.shaderRegister, slot.registerSpace);
+              m_Device->AddDebugMessage(
+                  MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+                  StringFormat::Fmt("Couldn't read UAV counter data for UAV in slot %u space %u",
+                                    slot.shaderRegister, slot.registerSpace));
           }
           else
           {
-            RDCERR("NULL counter resource for UAV in slot %u space %u", slot.shaderRegister,
-                   slot.registerSpace);
+            m_Device->AddDebugMessage(
+                MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+                StringFormat::Fmt("NULL counter resource for UAV in slot %u space %u",
+                                  slot.shaderRegister, slot.registerSpace));
           }
         }
       }
@@ -1563,8 +1572,11 @@ UAVInfo D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
       }
     }
 
-    RDCERR("Couldn't find root signature parameter corresponding to UAV %u in space %u",
-           slot.shaderRegister, slot.registerSpace);
+    m_Device->AddDebugMessage(
+        MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+        StringFormat::Fmt(
+            "Couldn't find root signature parameter corresponding to UAV %u in space %u",
+            slot.shaderRegister, slot.registerSpace));
     {
       SCOPED_WRITELOCK(m_UAVsLock);
       m_UAVInfos[slot] = uavData;
@@ -1572,8 +1584,10 @@ UAVInfo D3D12APIWrapper::FetchUAV(const BindingSlot &slot)
     return uavData;
   }
 
-  RDCERR("No root signature bound, couldn't identify UAV %u in space %u", slot.shaderRegister,
-         slot.registerSpace);
+  m_Device->AddDebugMessage(
+      MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+      StringFormat::Fmt("No root signature bound, couldn't identify UAV %u in space %u",
+                        slot.shaderRegister, slot.registerSpace));
   {
     SCOPED_WRITELOCK(m_UAVsLock);
     m_UAVInfos[slot] = uavData;
@@ -1990,7 +2004,10 @@ ResourceReferenceInfo D3D12APIWrapper::FetchResourceReferenceInfo(const DXDebug:
       }
       else
       {
-        RDCERR("Unknown SRV resource at Descriptor Index %u", descriptorIndex);
+        m_Device->AddDebugMessage(
+            MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+            StringFormat::Fmt("Internal error: Uknown %s resource at Descriptor Index %u",
+                              ToStr(resRefInfo.resClass).c_str(), descriptorIndex));
         return ResourceReferenceInfo();
       }
 
@@ -2031,7 +2048,10 @@ ResourceReferenceInfo D3D12APIWrapper::FetchResourceReferenceInfo(const DXDebug:
       break;
     }
     default:
-      RDCERR("Unhandled Descriptor Type %s", ToStr(desc.GetType()).c_str());
+      m_Device->AddDebugMessage(MessageCategory::Execution, MessageSeverity::High,
+                                MessageSource::RuntimeWarning,
+                                StringFormat::Fmt("Internal error: Unhandled Descriptor Type %s",
+                                                  ToStr(desc.GetType()).c_str()));
       return ResourceReferenceInfo();
   }
   return resRefInfo;
@@ -2104,7 +2124,9 @@ ShaderDirectAccess D3D12APIWrapper::FetchShaderDirectAccess(DescriptorType type,
       }
     }
   }
-  RDCERR("Failed to find descriptor %u %u", (uint32_t)heapType, descriptorIndex);
+  m_Device->AddDebugMessage(
+      MessageCategory::Execution, MessageSeverity::High, MessageSource::RuntimeWarning,
+      StringFormat::Fmt("Failed to find descriptor %u %u", (uint32_t)heapType, descriptorIndex));
   return ShaderDirectAccess();
 }
 };
