@@ -5229,8 +5229,16 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
       ShaderVariable sourceData;
       if(srcVal.type == VarType::Struct)
       {
-        sourceData = srcVal.members[idx];
-        idx = 0;
+        if(idx < srcVal.members.size())
+        {
+          sourceData = srcVal.members[idx];
+          idx = 0;
+        }
+        else
+        {
+          RDCERR("Invalid struct variable Id %u idx %u Members %d", src, idx, srcVal.members.count());
+          break;
+        }
       }
       else
       {
