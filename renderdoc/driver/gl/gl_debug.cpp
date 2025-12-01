@@ -1416,7 +1416,7 @@ GLuint GLReplay::MakeShaderDebugSampleProg(const SamplingProgramConfig &config)
     {
       glslVersion = 450;
       defines += "#extension GL_ARB_sparse_texture_clamp : require\n";
-      defines += "#define USE_MINLOD 1\n";
+      defines += "#define ENABLE_MINLOD 1\n";
     }
 
     if(HasExt[ARB_gpu_shader5] && HasExt[ARB_texture_gather])
@@ -1428,6 +1428,22 @@ GLuint GLReplay::MakeShaderDebugSampleProg(const SamplingProgramConfig &config)
     else if(HasExt[ARB_texture_gather])
     {
       defines += "#extension GL_ARB_texture_gather : require\n";
+      defines += "#define GATHER_SUPPORT 1\n";
+    }
+    else
+    {
+      defines += "#define GATHER_SUPPORT 0\n";
+    }
+  }
+  else
+  {
+    defines += "#define ENABLE_MINLOD 0\n";
+    if(HasExt[ARB_gpu_shader5] && HasExt[ARB_texture_gather])
+    {
+      defines += "#define GATHER_SUPPORT 2\n";
+    }
+    else if(HasExt[ARB_texture_gather])
+    {
       defines += "#define GATHER_SUPPORT 1\n";
     }
     else

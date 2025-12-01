@@ -24,6 +24,10 @@
 
 #define DEBUGSAMPLE_UBO
 
+#ifdef OPENGL_ES
+precision highp float;
+#endif
+
 #include "glsl_ubos.h"
 
 #if UINT_TEX
@@ -31,16 +35,18 @@
 #define RESULT uvec4
 #define FLOAT_CONV(x) floatBitsToUint(x)
 
-uniform usampler1D tex1D;
-uniform usampler2D tex2D;
-uniform usampler3D tex3D;
-uniform usampler1DArray tex1DArray;
-uniform usampler2DArray tex2DArray;
-uniform usampler2DRect tex2DRect;
-uniform usamplerBuffer texBuffer;
+uniform PRECISION usampler2D tex2D;
+uniform PRECISION usampler3D tex3D;
+uniform PRECISION usampler2DArray tex2DArray;
+uniform PRECISION usamplerBuffer texBuffer;
 #ifdef TEXSAMPLE_MULTISAMPLE
-uniform usampler2DMS tex2DMS;
-uniform usampler2DMSArray tex2DMSArray;
+uniform PRECISION usampler2DMS tex2DMS;
+uniform PRECISION usampler2DMSArray tex2DMSArray;
+#endif
+#ifdef OPENGL_CORE
+uniform PRECISION usampler1D tex1D;
+uniform PRECISION usampler1DArray tex1DArray;
+uniform PRECISION usampler2DRect tex2DRect;
 #endif
 
 #elif SINT_TEX
@@ -48,16 +54,18 @@ uniform usampler2DMSArray tex2DMSArray;
 #define RESULT ivec4
 #define FLOAT_CONV(x) floatBitsToInt(x)
 
-uniform isampler1D tex1D;
-uniform isampler2D tex2D;
-uniform isampler3D tex3D;
-uniform isampler1DArray tex1DArray;
-uniform isampler2DArray tex2DArray;
-uniform isampler2DRect tex2DRect;
-uniform isamplerBuffer texBuffer;
+uniform PRECISION isampler2D tex2D;
+uniform PRECISION isampler3D tex3D;
+uniform PRECISION isampler2DArray tex2DArray;
+uniform PRECISION isamplerBuffer texBuffer;
 #ifdef TEXSAMPLE_MULTISAMPLE
-uniform isampler2DMS tex2DMS;
-uniform isampler2DMSArray tex2DMSArray;
+uniform PRECISION isampler2DMS tex2DMS;
+uniform PRECISION isampler2DMSArray tex2DMSArray;
+#endif
+#ifdef OPENGL_CORE
+uniform PRECISION isampler1D tex1D;
+uniform PRECISION isampler1DArray tex1DArray;
+uniform PRECISION isampler2DRect tex2DRect;
 #endif
 
 #else
@@ -65,31 +73,35 @@ uniform isampler2DMSArray tex2DMSArray;
 #define RESULT vec4
 #define FLOAT_CONV(x) x
 
-uniform sampler1D tex1D;
-uniform sampler2D tex2D;
-uniform sampler3D tex3D;
-uniform samplerCube texCube;
-uniform sampler1DArray tex1DArray;
-uniform sampler2DArray tex2DArray;
+uniform PRECISION sampler2D tex2D;
+uniform PRECISION sampler3D tex3D;
+uniform PRECISION samplerCube texCube;
+uniform PRECISION sampler2DArray tex2DArray;
 #ifdef TEXSAMPLE_CUBE_ARRAY
-uniform samplerCubeArray texCubeArray;
+uniform PRECISION samplerCubeArray texCubeArray;
 #endif
-uniform sampler2DRect tex2DRect;
-uniform samplerBuffer texBuffer;
+uniform PRECISION samplerBuffer texBuffer;
 #ifdef TEXSAMPLE_MULTISAMPLE
-uniform sampler2DMS tex2DMS;
-uniform sampler2DMSArray tex2DMSArray;
+uniform PRECISION sampler2DMS tex2DMS;
+uniform PRECISION sampler2DMSArray tex2DMSArray;
+#endif
+#ifdef OPENGL_CORE
+uniform PRECISION sampler1D tex1D;
+uniform PRECISION sampler1DArray tex1DArray;
+uniform PRECISION sampler2DRect tex2DRect;
 #endif
 
-uniform sampler1DShadow tex1DShadow;
-uniform sampler2DShadow tex2DShadow;
-uniform samplerCubeShadow texCubeShadow;
-uniform sampler1DArrayShadow tex1DArrayShadow;
-uniform sampler2DArrayShadow tex2DArrayShadow;
+uniform PRECISION sampler2DShadow tex2DShadow;
+uniform PRECISION samplerCubeShadow texCubeShadow;
+uniform PRECISION sampler2DArrayShadow tex2DArrayShadow;
 #ifdef TEXSAMPLE_CUBE_ARRAY
-uniform samplerCubeArrayShadow texCubeArrayShadow;
+uniform PRECISION samplerCubeArrayShadow texCubeArrayShadow;
 #endif
-uniform sampler2DRectShadow tex2DRectShadow;
+#ifdef OPENGL_CORE
+uniform PRECISION sampler1DShadow tex1DShadow;
+uniform PRECISION sampler1DArrayShadow tex1DArrayShadow;
+uniform PRECISION sampler2DRectShadow tex2DRectShadow;
+#endif
 
 #endif
 
@@ -113,7 +125,11 @@ const ivec3 fetch_offset = ivec3(0, 0, 0);
 
 RESULT DoFetch1D()
 {
+#ifdef OPENGL_CORE
   return texelFetchOffset(tex1D, debugsample.texel_uvw.x, debugsample.texel_lod, fetch_offset.x);
+#else
+  return RESULT(0, 0, 0, 0);
+#endif
 }
 
 RESULT DoFetch2D()
@@ -134,8 +150,12 @@ RESULT DoFetchCube()
 
 RESULT DoFetch1DArray()
 {
+#ifdef OPENGL_CORE
   return texelFetchOffset(tex1DArray, debugsample.texel_uvw.xy, debugsample.texel_lod,
                           fetch_offset.x);
+#else
+  return RESULT(0, 0, 0, 0);
+#endif
 }
 
 RESULT DoFetch2DArray()
@@ -152,7 +172,11 @@ RESULT DoFetchCubeArray()
 
 RESULT DoFetch2DRect()
 {
+#ifdef OPENGL_CORE
   return texelFetchOffset(tex2DRect, debugsample.texel_uvw.xy, fetch_offset.xy);
+#else
+  return RESULT(0, 0, 0, 0);
+#endif
 }
 
 RESULT DoFetchBuffer()
@@ -178,6 +202,7 @@ RESULT DoFetch2DMSArray()
 ///////////////////////////////////
 // OpImageQueryLod
 
+#ifdef OPENGL_CORE
 RESULT DoQueryLod1D()
 {
   return RESULT(FLOAT_CONV(textureQueryLod(tex1D, input_uvwa.x)), 0, 0);
@@ -224,13 +249,16 @@ RESULT DoQueryLodCubeArray()
 #endif
 }
 #endif
+#endif
 
 ///////////////////////////////////
 // OpImageSampleExplicitLod (ImplicitLod is upgraded to this)
 
 RESULT DoSample1D()
 {
-#if ENABLE_MINLOD && USE_GRAD
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif ENABLE_MINLOD && USE_GRAD
   return textureGradOffsetClampARB(tex1D, debugsample.uvwa.x, debugsample.ddx_uvw.x,
                                    debugsample.ddy_uvw.x, fetch_offset.x, debugsample.minlod);
 #elif USE_GRAD
@@ -290,7 +318,9 @@ RESULT DoSampleCube()
 
 RESULT DoSample1DArray()
 {
-#if ENABLE_MINLOD && USE_GRAD
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif ENABLE_MINLOD && USE_GRAD
   return textureGradOffsetClampARB(tex1DArray, debugsample.uvwa.xy, debugsample.ddx_uvw.x,
                                    debugsample.ddy_uvw.x, fetch_offset.x, debugsample.minlod);
 #elif USE_GRAD
@@ -340,8 +370,12 @@ RESULT DoSampleCubeArray()
 
 RESULT DoSample2DRect()
 {
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#else
   // fairly degenerate, no lod or grad in use. minlod is illegal
   return textureOffset(tex2DRect, debugsample.uvwa.xy, fetch_offset.xy);
+#endif
 }
 
 ///////////////////////////////////
@@ -351,7 +385,9 @@ RESULT DoSampleDref1D()
 {
 #if FLOAT_TEX
 
-#if ENABLE_MINLOD && USE_GRAD
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif ENABLE_MINLOD && USE_GRAD
   return vec4(textureGradOffsetClampARB(
                   tex1DShadow, vec3(debugsample.uvwa.x, 0, debugsample.compare),
                   debugsample.ddx_uvw.x, debugsample.ddy_uvw.x, fetch_offset.x, debugsample.minlod),
@@ -429,7 +465,9 @@ RESULT DoSampleDref1DArray()
 {
 #if FLOAT_TEX
 
-#if ENABLE_MINLOD && USE_GRAD
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif ENABLE_MINLOD && USE_GRAD
   return vec4(textureGradOffsetClampARB(
                   tex1DArrayShadow, vec3(debugsample.uvwa.xy, debugsample.compare),
                   debugsample.ddx_uvw.x, debugsample.ddy_uvw.x, fetch_offset.x, debugsample.minlod),
@@ -503,7 +541,9 @@ RESULT DoSampleDrefCubeArray()
 
 RESULT DoSampleDref2DRect()
 {
-#if FLOAT_TEX
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif FLOAT_TEX
   // fairly degenerate, no lod or grad in use. minlod is illegal
   return vec4(textureOffset(tex2DRectShadow, vec3(debugsample.uvwa.xy, debugsample.compare),
                             fetch_offset.xy),
@@ -590,7 +630,9 @@ RESULT DoGatherCubeArray()
 
 RESULT DoGather2DRect()
 {
-#if GATHER_SUPPORT == 0
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif GATHER_SUPPORT == 0
   // no gather support at all
   return RESULT(0, 0, 0, 0);
 #elif GATHER_SUPPORT == 1
@@ -692,7 +734,9 @@ RESULT DoGatherDrefCubeArray()
 
 RESULT DoGatherDref2DRect()
 {
-#if !FLOAT_TEX
+#ifdef OPENGL_ES
+  return RESULT(0, 0, 0, 0);
+#elif !FLOAT_TEX
   // shadow samplers only for FLOAT_TEX
   return RESULT(0, 0, 0, 0);
 #elif GATHER_SUPPORT == 0

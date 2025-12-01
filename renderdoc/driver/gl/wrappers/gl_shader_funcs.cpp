@@ -332,6 +332,34 @@ void WrappedOpenGL::ShaderData::ProcessCompilation(WrappedOpenGL &drv, ResourceI
           if(reflection->debugInfo.sourceDebugInformation)
             reflection->debugInfo.compileFlags.flags.push_back({"preferSourceDebug", "1"});
 
+          if(HasExt[ARB_shader_storage_buffer_object])
+          {
+            if(type == eGL_VERTEX_SHADER)
+            {
+              GLint numSSBOs = 0;
+              GL.glGetIntegerv(eGL_MAX_VERTEX_SHADER_STORAGE_BLOCKS, &numSSBOs);
+
+              if(numSSBOs == 0)
+              {
+                reflection->debugInfo.debuggable = false;
+                reflection->debugInfo.debugStatus =
+                    "Vertex shader debugging not supported on this driver.";
+              }
+            }
+            else if(type == eGL_FRAGMENT_SHADER)
+            {
+              GLint numSSBOs = 0;
+              GL.glGetIntegerv(eGL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &numSSBOs);
+
+              if(numSSBOs == 0)
+              {
+                reflection->debugInfo.debuggable = false;
+                reflection->debugInfo.debugStatus =
+                    "Fragment shader debugging not supported on this driver.";
+              }
+            }
+          }
+
           // we must ensure the converted reflection & patch data matches the real reflection so
           // that ShaderBindIndex references are consistent. We could do a manual remapping during
           // debug to the right index, but ShaderBindIndex's are also baked into variable results.

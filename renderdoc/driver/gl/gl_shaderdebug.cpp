@@ -1336,7 +1336,7 @@ public:
     }
 
     // push the operation afterwards
-    GL.glUniform1ui(GL.glGetUniformLocation(mathProg, "op"), (uint32_t)op);
+    GL.glUniform1i(GL.glGetUniformLocation(mathProg, "op"), (int32_t)op);
 
     GL.glDispatchCompute(1, 1, 1);
 
@@ -2005,12 +2005,12 @@ static GLuint CreateInputFetcher(const WrappedOpenGL::ShaderData &shadDetails,
     source += "#define USE_SPIRV 1\n";
 
   source += StringFormat::Fmt(
-      "#define VALID_MAGIC %u\n"
+      "#define VALID_MAGIC %uu\n"
       "#define STAGE_VS %u\n"
       "#define STAGE_PS %u\n"
       "#define STAGE_CS %u\n"
       "#define STAGE %u\n"
-      "#define MAXHIT %u\n"
+      "#define MAXHIT %uu\n"
       "#define STORAGE_BINDING %u\n"
       "#define NUMLANES %u\n"
       "#define USEPRIM %u\n"
@@ -2069,16 +2069,25 @@ static GLuint CreateInputFetcher(const WrappedOpenGL::ShaderData &shadDetails,
   }
 
   source += R"EOSHADER(
-#extension GL_ARB_shader_storage_buffer_object : require
+
+#ifdef OPENGL_ES
+precision highp float;
+#endif
+
+#ifdef OPENGL_CORE
+  #extension GL_ARB_shader_storage_buffer_object : require
+#endif
 
 #if PROPER_DERIVS
   #extension GL_ARB_derivative_control : require
 #endif
 
+#ifdef OPENGL_CORE
 #if HELPER && !USE_SPIRV
   // required for gl_HelperInvocation, but don't enable with glslang due to a bug -
   // we compile at a high enough core version to satisfy the requirement that way
   #extension GL_ARB_ES3_1_compatibility : require
+#endif
 #endif
 
 #if SUBGROUP_BASIC
@@ -2098,8 +2107,8 @@ static GLuint CreateInputFetcher(const WrappedOpenGL::ShaderData &shadDetails,
 #endif
 
 // bool signature elements get reflected as ints, make macros for their access to cast to int
-#define gl_FrontFacing (gl_FrontFacing ? 1 : 0)
-#define gl_HelperInvocation (gl_HelperInvocation ? 1 : 0)
+#define gl_FrontFacing (gl_FrontFacing ? 1u : 0u)
+#define gl_HelperInvocation (gl_HelperInvocation ? 1u : 0u)
 
 )EOSHADER";
 
@@ -2303,8 +2312,8 @@ void SetInputs(out Inputs inputs) {}
 #if STAGE == STAGE_VS
 struct VSLaneData
 {
-  uint inst;
-  uint vert;
+  int inst;
+  int vert;
   uint view;
   uint pad;
 };
@@ -2359,8 +2368,8 @@ struct ResultData
 {
   vec4 pos;
 
-  uint prim;
-  uint rd_sample;
+  int prim;
+  int rd_sample;
   uint view;
   uint valid;
 
@@ -2382,7 +2391,7 @@ struct ResultData
   LaneData laneData[NUMLANES];
 };
 
-#if USE_SPIRV
+#if USE_SPIRV || defined(OPENGL_ES)
 layout(binding = STORAGE_BINDING)
 #endif
 layout(std140) buffer Output
@@ -2430,13 +2439,13 @@ layout(std140) buffer Output
 void main()
 {
   vec4 debug_pixelPos = vec4(0,0,0,0);
-  uint primitive = 0;
-  uint rd_sample = 0;
-  uint isFrontFace = 0;
+  int primitive = 0;
+  int rd_sample = 0;
+  uint isFrontFace = 0u;
 
 #if STAGE == STAGE_VS
-  uint vert = gl_VertexID;
-  uint inst = gl_InstanceID;
+  int vert = gl_VertexID;
+  int inst = gl_InstanceID;
 #elif STAGE == STAGE_PS
   debug_pixelPos = gl_FragCoord;
 
@@ -2454,27 +2463,27 @@ void main()
 
 #if STAGE == STAGE_VS
   VSLaneData vs;
-  vs.pad = 0;
+  vs.pad = 0u;
 #elif STAGE == STAGE_PS
   PSLaneData ps;
-  ps.pad = 0;
+  ps.pad = 0u;
 #else
   CSLaneData cs;
 #endif
 
 #if SUBGROUP_BASIC
   SubgroupLaneData sub;
-  sub.elect = subgroupElect() ? 1 : 0;
-  sub.rd_active = 1;
+  sub.elect = subgroupElect() ? 1u : 0u;
+  sub.rd_active = 1u;
 #endif
 
-  uint isHelper = 0;
-  uint quadLaneIndex = 0;
-  uint quadId = 0;
-  uint laneIndex = 0;
-  uvec4 globalBallot = uvec4(0,0,0,0);
-  uvec4 electBallot = uvec4(0,0,0,0);
-  uvec4 helperBallot = uvec4(0,0,0,0);
+  uint isHelper = 0u;
+  uint quadLaneIndex = 0u;
+  uint quadId = 0u;
+  uint laneIndex = 0u;
+  uvec4 globalBallot = uvec4(0u,0u,0u,0u);
+  uvec4 electBallot = uvec4(0u,0u,0u,0u);
+  uvec4 helperBallot = uvec4(0u,0u,0u,0u);
   float derivValid = 1.0f;
 
   quadLaneIndex = (2u * (uint(debug_pixelPos.y) & 1u)) + (uint(debug_pixelPos.x) & 1u);
@@ -2515,7 +2524,7 @@ void main()
 
   // quadId is a single value that's unique for this quad and uniform across the quad. Degenerate
   // for the simple quad case
-  quadId = 1000+quadSwizzleHelper(laneIndex, quadLaneIndex, 0u);
+  quadId = 1000u+quadSwizzleHelper(laneIndex, quadLaneIndex, 0u);
 
   LaneData helper0data;
   LaneData helper1data;
@@ -2545,7 +2554,7 @@ void main()
     for(size_t i = 0; i < floatInputs.size(); i++)
     {
       source += StringFormat::Fmt(
-          "    helper%udata.inputs.%s = quadSwizzleHelper(%s, quadLaneIndex, %u);\n", q,
+          "    helper%udata.inputs.%s = quadSwizzleHelper(%s, quadLaneIndex, %uu);\n", q,
           floatInputs[i].first.c_str(), floatInputs[i].second.c_str(), q);
     }
     if(!nonfloatInputs.empty())
@@ -2554,7 +2563,7 @@ void main()
       for(size_t i = 0; i < nonfloatInputs.size(); i++)
       {
         source += StringFormat::Fmt(
-            "    helper%udata.inputs.%s = quadSwizzleHelper(%s, quadLaneIndex, %u);\n", q,
+            "    helper%udata.inputs.%s = quadSwizzleHelper(%s, quadLaneIndex, %uu);\n", q,
             nonfloatInputs[i].first.c_str(), nonfloatInputs[i].second.c_str(), q);
       }
       source += "#else\n";
@@ -2595,7 +2604,7 @@ void main()
 
   if(activeSubgroup)
   {
-    if(isHelper == 0)
+    if(isHelper == 0u)
     {
       uint idx = MAXHIT;
 #if SUBGROUP_BALLOT
@@ -2624,8 +2633,8 @@ void main()
           outbuffer.hits[idx].subgroupSize = gl_SubgroupSize;
           outbuffer.hits[idx].numSubgroups = gl_NumSubgroups;
 #else
-          outbuffer.hits[idx].subgroupSize = 0;
-          outbuffer.hits[idx].numSubgroups = 0;
+          outbuffer.hits[idx].subgroupSize = 0u;
+          outbuffer.hits[idx].numSubgroups = 0u;
 #endif
           outbuffer.hits[idx].globalBallot = globalBallot;
           outbuffer.hits[idx].electBallot = electBallot;
@@ -2969,7 +2978,23 @@ ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint3
 
     GLuint replacementProgram = GL.glCreateProgram();
 
-    // don't attach any other shaders since we don't declare outputs anyway and we don't need them
+    GLuint fragShader = 0;
+
+    // on GLES we must have a pixel shader, it's not optional.
+    if(IsGLES)
+    {
+      ShaderType shaderType;
+      int glslVersion;
+      int glslBaseVer;
+      int glslCSVer;
+      GetGLSLVersions(shaderType, glslVersion, glslBaseVer, glslCSVer);
+
+      rdcstr source =
+          GenerateGLSLShader(GetEmbeddedResource(glsl_fixedcol_frag), shaderType, glslVersion);
+      fragShader = CreateShader(eGL_FRAGMENT_SHADER, source);
+      GL.glAttachShader(replacementProgram, fragShader);
+    }
+
     {
       GL.glAttachShader(replacementProgram, inputFetcher);
 
@@ -2994,7 +3019,7 @@ ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint3
 
     GL.glUseProgram(replacementProgram);
 
-    if(shadDetails.spirvWords.empty())
+    if(shadDetails.spirvWords.empty() && !IsGLES)
     {
       GLuint ssboIdx =
           GL.glGetProgramResourceIndex(replacementProgram, eGL_SHADER_STORAGE_BLOCK, "Output");
@@ -3006,6 +3031,8 @@ ShaderDebugTrace *GLReplay::DebugVertex(uint32_t eventId, uint32_t vertid, uint3
 
     GL.glDeleteProgram(replacementProgram);
     GL.glDeleteShader(inputFetcher);
+    if(fragShader)
+      GL.glDeleteShader(fragShader);
 
     data.resize(feedbackStorageSize);
     GL.glGetBufferSubData(eGL_SHADER_STORAGE_BUFFER, 0, feedbackStorageSize, data.data());
@@ -3406,7 +3433,7 @@ ShaderDebugTrace *GLReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_t y,
 
     GL.glUseProgram(replacementProgram);
 
-    if(inputShader)
+    if(inputShader && !IsGLES)
     {
       GLuint ssboIdx =
           GL.glGetProgramResourceIndex(replacementProgram, eGL_SHADER_STORAGE_BLOCK, "Output");
@@ -3862,7 +3889,7 @@ ShaderDebugTrace *GLReplay::DebugThread(uint32_t eventId, const rdcfixedarray<ui
 
       GL.glUseProgram(replacementProgram);
 
-      if(shadDetails.spirvWords.empty())
+      if(shadDetails.spirvWords.empty() && !IsGLES)
       {
         GLuint ssboIdx =
             GL.glGetProgramResourceIndex(replacementProgram, eGL_SHADER_STORAGE_BLOCK, "Output");

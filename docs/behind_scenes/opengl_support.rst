@@ -49,6 +49,8 @@ Android
 
 OpenGL ES capture and replay on Android is natively supported. For more information on how to capture with Android see :doc:`../how/how_android_capture`.
 
+On many drivers debugging vertex shaders will not be possible due to lack of driver feature support.
+
 OS X
 ----
 
