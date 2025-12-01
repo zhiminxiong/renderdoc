@@ -44,9 +44,6 @@
 RDOC_CONFIG(bool, OpenGL_HardwareCounters, true,
             "Enable support for IHV-specific hardware counters on OpenGL.");
 
-RDOC_CONFIG(bool, OpenGL_ShaderDebugging, false,
-            "BETA: Enable experimental shader debugging support.");
-
 static const char *SPIRVDisassemblyTarget = "SPIR-V (RenderDoc)";
 
 GLReplay::GLReplay(WrappedOpenGL *d)
@@ -226,8 +223,7 @@ APIProperties GLReplay::GetAPIProperties()
   ret.vendor = m_DriverInfo.vendor;
   ret.pixelHistory = true;
   // we require storage buffers and compute shaders
-  ret.shaderDebugging = OpenGL_ShaderDebugging() && HasExt[ARB_shader_storage_buffer_object] &&
-                        HasExt[ARB_compute_shader];
+  ret.shaderDebugging = HasExt[ARB_shader_storage_buffer_object] && HasExt[ARB_compute_shader];
 
   return ret;
 }
