@@ -38,6 +38,16 @@ RDOC_CONFIG(rdcstr, OpenGL_Debug_ShaderDebugDumpDirPath, "",
 RDOC_CONFIG(bool, OpenGL_Debug_ShaderDebugLogging, false,
             "Output verbose debug logging messages when debugging shaders.");
 
+// needed for old linux compilers
+namespace std
+{
+template <>
+struct hash<ShaderBuiltin>
+{
+  std::size_t operator()(const ShaderBuiltin &e) const { return size_t(e); }
+};
+}
+
 #define OPENGL 1
 #include "data/glsl/glsl_ubos_cpp.h"
 
