@@ -200,6 +200,66 @@ RESULT DoFetch2DMSArray()
 #endif
 
 ///////////////////////////////////
+// OpImageSampleImplicitLodBias (used with bias on GLES due to inability to bias in samplers)
+
+RESULT DoSampleBias2D()
+{
+  return textureOffset(tex2D, input_uvwa.xy, fetch_offset.xy, debugsample.gles_bias);
+}
+
+RESULT DoSampleBias3D()
+{
+  return textureOffset(tex3D, input_uvwa.xyz, fetch_offset.xyz, debugsample.gles_bias);
+}
+
+RESULT DoSampleBiasCube()
+{
+#if FLOAT_TEX
+
+  // no offsets for cubes
+  return texture(texCube, input_uvwa.xyz, debugsample.gles_bias);
+
+#else
+  // cubes are only handled on float type
+  return RESULT(0, 0, 0, 0);
+#endif
+}
+
+RESULT DoSampleBias2DArray()
+{
+  return textureOffset(tex2DArray, input_uvwa.xyz, fetch_offset.xy, debugsample.gles_bias);
+}
+
+#ifdef TEXSAMPLE_CUBE_ARRAY
+RESULT DoSampleBiasCubeArray()
+{
+#if FLOAT_TEX
+
+  // no offsets for cubes
+  return texture(texCubeArray, input_uvwa.xyzw, debugsample.gles_bias);
+
+#else
+  // cubes are only handled on float type
+  return RESULT(0, 0, 0, 0);
+#endif
+}
+#endif
+
+RESULT DoSampleDrefBias2D()
+{
+#if FLOAT_TEX
+
+  return vec4(textureOffset(tex2DShadow, vec3(input_uvwa.xy, debugsample.compare), fetch_offset.xy,
+                            debugsample.gles_bias),
+              0, 0, 0);
+
+#else
+  // shadow samplers only for FLOAT_TEX
+  return RESULT(0, 0, 0, 0);
+#endif
+}
+
+///////////////////////////////////
 // OpImageQueryLod
 
 #ifdef OPENGL_CORE

@@ -240,6 +240,7 @@ BINDING(0) uniform DebugSampleUBO
   float compare;
   float lod;
   float minlod;
+  float gles_bias;
 }
 INST_NAME(debugsample);
 

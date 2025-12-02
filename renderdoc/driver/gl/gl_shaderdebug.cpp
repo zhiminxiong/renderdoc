@@ -842,18 +842,27 @@ public:
         // explicit lod operations. So we instead push the bias into the sampler itself, which is
         // entirely equivalent.
 
-        lodBiasRestore = true;
-        if(sampler.name)
+        // can't do this on GLES, so we have to use implicit lod path
+        if(IsGLES)
         {
-          GL.glGetSamplerParameterfv(sampler.name, eGL_TEXTURE_LOD_BIAS, &lodBiasRestoreValue);
-          GL.glSamplerParameterf(sampler.name, eGL_TEXTURE_LOD_BIAS, lodBiasRestoreValue + bias);
+          uniformParams.gles_bias = bias;
+          config.manualBias = true;
         }
         else
         {
-          GL.glGetTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS,
-                                        &lodBiasRestoreValue);
-          float val = lodBiasRestoreValue + bias;
-          GL.glTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS, &val);
+          lodBiasRestore = true;
+          if(sampler.name)
+          {
+            GL.glGetSamplerParameterfv(sampler.name, eGL_TEXTURE_LOD_BIAS, &lodBiasRestoreValue);
+            GL.glSamplerParameterf(sampler.name, eGL_TEXTURE_LOD_BIAS, lodBiasRestoreValue + bias);
+          }
+          else
+          {
+            GL.glGetTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS,
+                                          &lodBiasRestoreValue);
+            float val = lodBiasRestoreValue + bias;
+            GL.glTextureParameterfvEXT(texture.name, texDetails.curType, eGL_TEXTURE_LOD_BIAS, &val);
+          }
         }
       }
     }

@@ -218,6 +218,7 @@ layout(binding = 0, std430) buffer ssbo_test
 
 layout(binding = 0) uniform sampler2D tex2d_test;
 layout(binding = 1) uniform samplerBuffer texBuf_test;
+layout(binding = 2) uniform sampler2D bias_test;
 
 layout(location = 1) in vec4 v2fColor;
 layout(location = 2) in vec2 v2fUV;
@@ -238,6 +239,7 @@ void main()
   col += dFdx(v2fUV).xyxy;
   col += texture(tex2d_test, v2fUV);
   col += texelFetch(texBuf_test, int(v2fUV.x*10));
+  col += texture(bias_test, v2fUV, -0.8f);
   outColor = col;
 }
 
@@ -564,6 +566,32 @@ void main()
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rgba8.width, rgba8.height, GL_RGBA, GL_UNSIGNED_BYTE,
                     rgba8.data.data());
 
+    int dim = 128, x = 0;
+    GLuint bias_tex = MakeTexture();
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, bias_tex);
+    glTexStorage2D(GL_TEXTURE_2D, 8, GL_RGBA8, dim, dim);
+    std::vector<uint32_t> mipdata;
+
+    uint32_t bias_col[10] = {
+        0xffff0000, 0xff00ff00, 0xff0000ff, 0xffff00ff,
+        0xffffff00, 0xff00ffff, 0xff000000, 0xffffffff,
+    };
+    while(dim > 0)
+    {
+      mipdata.resize(dim * dim);
+      for(uint32_t &p : mipdata)
+        p = bias_col[x];
+
+      glTexSubImage2D(GL_TEXTURE_2D, x, 0, 0, dim, dim, GL_RGBA, GL_UNSIGNED_BYTE, mipdata.data());
+      dim >>= 1;
+      x++;
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
     // render offscreen to make picked values accurate
     GLuint fbo = MakeFBO();
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -571,6 +599,7 @@ void main()
     // Color render texture
     GLuint colattach = MakeTexture();
 
+    glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, colattach);
     glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, screenWidth, screenHeight);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colattach, 0);

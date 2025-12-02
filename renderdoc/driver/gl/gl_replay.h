@@ -156,6 +156,7 @@ struct SamplingProgramConfig
   uint32_t gatherChannel = 0;
   bool useGatherOffs = false;
   bool useGrad = false;
+  bool manualBias = false;
   rdcfixedarray<int32_t, 8> gatherOffsets = {};
   Vec3i fetchOffset;
 
@@ -168,6 +169,7 @@ struct SamplingProgramConfig
     hash = ((hash << 5) + hash) + gatherChannel;
     hash = ((hash << 5) + hash) + useGatherOffs;
     hash = ((hash << 5) + hash) + useGrad;
+    hash = ((hash << 5) + hash) + manualBias;
     hash = ((hash << 5) + hash) + fetchOffset.x;
     hash = ((hash << 5) + hash) + fetchOffset.y;
     hash = ((hash << 5) + hash) + fetchOffset.z;

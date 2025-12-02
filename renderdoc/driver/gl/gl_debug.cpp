@@ -1399,7 +1399,38 @@ GLuint GLReplay::MakeShaderDebugSampleProg(const SamplingProgramConfig &config)
     case SamplingProgramConfig::Tex2DMS: dim = "2DMS"; break;
     case SamplingProgramConfig::Tex2DMSArray: dim = "2DMSArray"; break;
   }
-  defines += StringFormat::Fmt("#define OPERATION %s%s\n", operation.c_str(), dim.c_str());
+
+  rdcstr manualBias = config.manualBias ? "Bias" : "";
+
+  if(config.manualBias)
+  {
+    if(config.op == SamplingProgramConfig::Sample)
+    {
+      switch(config.dim)
+      {
+        case SamplingProgramConfig::Tex2D:
+        case SamplingProgramConfig::Tex3D:
+        case SamplingProgramConfig::TexCube:
+        case SamplingProgramConfig::Tex2DArray:
+        case SamplingProgramConfig::TexCubeArray:
+          // these are fine
+          break;
+        default: RDCERR("Unsupported dimension %u with manual bias on sample", config.dim);
+      }
+    }
+    else if(config.op == SamplingProgramConfig::SampleDref)
+    {
+      RDCASSERT(config.dim == SamplingProgramConfig::Tex2D, (uint32_t)config.dim);
+    }
+    else
+    {
+      RDCERR("Unsupported operation with manual bias");
+    }
+  }
+
+  defines += StringFormat::Fmt("#define OPERATION %s%s%s\n", operation.c_str(), manualBias.c_str(),
+                               dim.c_str());
+
   defines += StringFormat::Fmt("#define USE_GRAD %u\n", config.useGrad);
 
   ShaderType shaderType;
