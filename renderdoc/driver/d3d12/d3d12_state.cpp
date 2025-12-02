@@ -110,16 +110,12 @@ void D3D12RenderState::ResolvePendingIndirectState(WrappedID3D12Device *device)
           if(comSig->sig.graphics)
           {
             graphics.sigelems.resize_for_index(arg.Constant.RootParameterIndex);
-            graphics.sigelems[arg.Constant.RootParameterIndex].constants.resize_for_index(
-                arg.Constant.Num32BitValuesToSet + arg.Constant.DestOffsetIn32BitValues);
             graphics.sigelems[arg.Constant.RootParameterIndex].SetConstants(
                 arg.Constant.Num32BitValuesToSet, data32, arg.Constant.DestOffsetIn32BitValues);
           }
           else
           {
             compute.sigelems.resize_for_index(arg.Constant.RootParameterIndex);
-            compute.sigelems[arg.Constant.RootParameterIndex].constants.resize_for_index(
-                arg.Constant.Num32BitValuesToSet + arg.Constant.DestOffsetIn32BitValues);
             compute.sigelems[arg.Constant.RootParameterIndex].SetConstants(
                 arg.Constant.Num32BitValuesToSet, data32, arg.Constant.DestOffsetIn32BitValues);
           }

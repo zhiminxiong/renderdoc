@@ -3952,16 +3952,12 @@ void WrappedID3D12GraphicsCommandList::FinaliseExecuteIndirectEvents(BakedCmdLis
 
             if(arg.Constant.RootParameterIndex < state.graphics.sigelems.size())
             {
-              state.graphics.sigelems[arg.Constant.RootParameterIndex].constants.resize_for_index(
-                  arg.Constant.Num32BitValuesToSet + arg.Constant.DestOffsetIn32BitValues);
               state.graphics.sigelems[arg.Constant.RootParameterIndex].SetConstants(
                   arg.Constant.Num32BitValuesToSet, data32, arg.Constant.DestOffsetIn32BitValues);
             }
 
             if(arg.Constant.RootParameterIndex < state.compute.sigelems.size())
             {
-              state.compute.sigelems[arg.Constant.RootParameterIndex].constants.resize_for_index(
-                  arg.Constant.Num32BitValuesToSet + arg.Constant.DestOffsetIn32BitValues);
               state.compute.sigelems[arg.Constant.RootParameterIndex].SetConstants(
                   arg.Constant.Num32BitValuesToSet, data32, arg.Constant.DestOffsetIn32BitValues);
             }
