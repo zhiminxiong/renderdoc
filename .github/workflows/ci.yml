@@ -26,31 +26,39 @@ jobs:
     - name: Check commit messages (PR)
       if: ${{ github.event_name == 'pull_request' }}
       run: |
-        git log --oneline | grep -v 7a064ae | head -n 100 > commits
+        git log --oneline > a
+        grep -v 7a064ae a > b
+        head -n 100 b > c
+        tail -n +2 c > commits
         echo "Checking last 100 commits:"
         cat commits
+        cut -d ' ' -f2- commits > commit_msgs
         echo ==================
-        if cat commits | tail -n +2 | cut -d ' ' -f2- | grep -q '.\{73\}'; then
+        if grep -q '.\{73\}' commit_msgs; then
           (echo -n "::error::";
            echo "Some commit message summary lines are too long. See CONTRIBUTING.md for more information.";
            echo "Invalid commits:";
            echo;
-           cat commits | tail -n +2 | cut -d ' ' -f2- | grep '.\{73\}';) | tr '\n' '\001' | sed -e 's#\x01#%0A#g';
+           grep '.\{73\}' commit_msgs;) | tr '\n' '\001' | sed -e 's#\x01#%0A#g';
           exit 1;
         fi
     - name: Check commit messages (Push)
       if: ${{ github.event_name == 'push' }}
       run: |
-        git log --oneline | grep -v 7a064ae | head -n 100 > commits
+        git log --oneline > a
+        grep -v 7a064ae a > b
+        head -n 100 b > c
+        cp c commits
         echo "Checking last 100 commits:"
         cat commits
+        cut -d ' ' -f2- commits > commit_msgs
         echo ==================
-        if cat commits | cut -d ' ' -f2- | grep -q '.\{73\}'; then
+        if grep -q '.\{73\}' commit_msgs; then
           (echo -n "::error::";
            echo "Some commit message summary lines are too long. See CONTRIBUTING.md for more information.";
            echo "Invalid commits:";
            echo;
-           cat commits | cut -d ' ' -f2- | grep '.\{73\}';) | tr '\n' '\001' | sed -e 's#\x01#%0A#g';
+           grep -q '.\{73\}' commit_msgs;) | tr '\n' '\001' | sed -e 's#\x01#%0A#g';
           exit 1;
         fi
   clang-format:
