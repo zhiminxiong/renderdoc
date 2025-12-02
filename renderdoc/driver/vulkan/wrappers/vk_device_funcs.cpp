@@ -39,6 +39,9 @@ RDOC_CONFIG(
     "This behaviour can be disabled with this flag, which lets it through both during capture and "
     "on replay.");
 
+RDOC_CONFIG(bool, Vulkan_Debug_EnableGPUVA, false,
+            "Enable GPU Validation when enabling Vulkan validation.");
+
 // intercept and overwrite the application info if present. We must use the same appinfo on
 // capture and replay, and the safer default is not to replay as if we were the original app but
 // with a slightly different workload. So instead we trample what the app reported and put in our
@@ -387,9 +390,8 @@ RDResult WrappedVulkan::Initialise(VkInitParams &params, uint64_t sectionVersion
   featuresEXT.disabledValidationFeatureCount = ARRAY_COUNT(disableFeatures);
   featuresEXT.pDisabledValidationFeatures = disableFeatures;
 
-// enable this to get GPU-based validation, where available, whenever we enable API validation
-#if 0
-  if(m_ReplayOptions.apiValidation)
+  // enable this to get GPU-based validation, where available, whenever we enable API validation
+  if(m_ReplayOptions.apiValidation && Vulkan_Debug_EnableGPUVA())
   {
     VkValidationFeatureEnableEXT enableFeatures[] = {
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
@@ -397,7 +399,6 @@ RDResult WrappedVulkan::Initialise(VkInitParams &params, uint64_t sectionVersion
     featuresEXT.enabledValidationFeatureCount = ARRAY_COUNT(enableFeatures);
     featuresEXT.pEnabledValidationFeatures = enableFeatures;
   }
-#endif
 
   VkValidationFlagsEXT flagsEXT = {VK_STRUCTURE_TYPE_VALIDATION_FLAGS_EXT};
   VkValidationCheckEXT disableChecks[] = {VK_VALIDATION_CHECK_SHADERS_EXT};
