@@ -43,6 +43,7 @@
 #include "Widgets/Extended/RDLabel.h"
 #include "Widgets/Extended/RDSplitter.h"
 #include "Windows/Dialogs/AxisMappingDialog.h"
+#include "Windows/Dialogs/CameraControlsDialog.h"
 #include "ui_BufferViewer.h"
 
 struct FixedVarTag
