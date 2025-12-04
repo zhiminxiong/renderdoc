@@ -28,6 +28,7 @@
 #include <QMutex>
 #include "Code/Interface/QRDInterface.h"
 #include "Code/QRDUtils.h"
+#include "Windows/Dialogs/ProjectionGuessDialog.h"
 
 namespace Ui
 {
@@ -146,10 +147,13 @@ private slots:
   void on_axisMappingButton_clicked();
   void on_setFormat_toggled(bool checked);
   void on_resetMeshFilterButton_clicked();
+  void on_camParameters_clicked();
+  void on_guessButton_clicked();
 
   // manual slots
   void render_mouseMove(QMouseEvent *e);
   void render_clicked(QMouseEvent *e);
+  void render_unclicked(QMouseEvent *e);
 
   void render_mouseWheel(QWheelEvent *e);
   void render_keyPress(QKeyEvent *e);
@@ -158,7 +162,6 @@ private slots:
 
   void data_selected(const QItemSelection &selected, const QItemSelection &deselected);
   void data_scrolled(int scroll);
-  void camGuess_changed(double value);
 
   void processFormat(const QString &format);
 
@@ -182,6 +185,7 @@ private:
 
   void configureDrawRange();
 
+  void UI_UpdateGuessParameters();
   void RT_UpdateAndDisplay(IReplayController *r);
 
   QPushButton *MakePreviousPageButton();
@@ -252,6 +256,8 @@ private:
   CameraWrapper *m_CurrentCamera = NULL;
   ArcballWrapper *m_Arcball = NULL;
   FlycamWrapper *m_Flycam = NULL;
+
+  ProjectionGuessParameters m_ProjGuess;
 
   bool m_MeshView;
 
@@ -362,7 +368,7 @@ private:
   void UI_ConfigureMeshPipeFormats();
 
   void UpdateCurrentMeshConfig();
-  void EnableCameraGuessControls();
+  void UpdateStageDataControls();
 
   void CalcColumnWidth(int maxNumRows = 1);
   void ApplyRowAndColumnDims(int numColumns, RDTableView *view, int dataColWidth);

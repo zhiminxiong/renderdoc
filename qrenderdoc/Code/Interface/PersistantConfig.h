@@ -343,6 +343,22 @@ DECLARE_REFLECTION_STRUCT(BugReport);
   CONFIG_SETTING_VAL(public, int, int, MeshViewer_SpeedModifier, -1)                               \
                                                                                                    \
   DOCUMENT(                                                                                        \
+      "The near plane used in the mesh viewers display."                                           \
+      "\n"                                                                                         \
+      "Defaults to ``0.1``."                                                                       \
+      ""                                                                                           \
+      ":type: float");                                                                             \
+  CONFIG_SETTING_VAL(public, float, float, MeshViewer_CameraNear, 0.1f)                            \
+                                                                                                   \
+  DOCUMENT(                                                                                        \
+      "The far plane used in the mesh viewers display."                                            \
+      "\n"                                                                                         \
+      "Defaults to ``100000.0``."                                                                  \
+      ""                                                                                           \
+      ":type: float");                                                                             \
+  CONFIG_SETTING_VAL(public, float, float, MeshViewer_CameraFar, 100000.0f)                        \
+                                                                                                   \
+  DOCUMENT(                                                                                        \
       "List of the directories containing custom shader files for the Texture Viewer.\n"           \
       "\n:"                                                                                        \
       "type: List[str]");                                                                          \

@@ -2577,10 +2577,6 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   ui->instance->setFont(Formatter::PreferredFont());
   ui->viewIndex->setFont(Formatter::PreferredFont());
   ui->camSpeed->setFont(Formatter::PreferredFont());
-  ui->fovGuess->setFont(Formatter::PreferredFont());
-  ui->aspectGuess->setFont(Formatter::PreferredFont());
-  ui->nearGuess->setFont(Formatter::PreferredFont());
-  ui->farGuess->setFont(Formatter::PreferredFont());
 
   if(meshview)
     SetupMeshView();
@@ -2707,8 +2703,6 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   ui->visualisation->adjustSize();
   ui->visualisation->setCurrentIndex(0);
 
-  ui->matrixType->addItems({tr("Perspective"), tr("Orthographic")});
-
   ui->axisMappingCombo->addItems({tr("Y-up, left handed"), tr("Y-up, right handed"),
                                   tr("Z-up, left handed"), tr("Z-up, right handed"), tr("Custom...")});
   ui->axisMappingCombo->setCurrentIndex(0);
@@ -2717,8 +2711,6 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   ui->wireframeRender->setEnabled(false);
 
   ui->setFormat->setVisible(false);
-
-  ui->fovGuess->setValue(90.0);
 
   ui->controlType->setCurrentIndex(0);
   on_controlType_currentIndexChanged(0);
@@ -2751,17 +2743,6 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
                    &BufferViewer::data_scrolled);
   QObject::connect(ui->out2Table->verticalScrollBar(), &QScrollBar::valueChanged, this,
                    &BufferViewer::data_scrolled);
-
-  QObject::connect(ui->fovGuess, OverloadedSlot<double>::of(&QDoubleSpinBox::valueChanged), this,
-                   &BufferViewer::camGuess_changed);
-  QObject::connect(ui->aspectGuess, OverloadedSlot<double>::of(&QDoubleSpinBox::valueChanged), this,
-                   &BufferViewer::camGuess_changed);
-  QObject::connect(ui->nearGuess, OverloadedSlot<double>::of(&QDoubleSpinBox::valueChanged), this,
-                   &BufferViewer::camGuess_changed);
-  QObject::connect(ui->farGuess, OverloadedSlot<double>::of(&QDoubleSpinBox::valueChanged), this,
-                   &BufferViewer::camGuess_changed);
-  QObject::connect(ui->matrixType, OverloadedSlot<int>::of(&QComboBox::currentIndexChanged),
-                   [this](int) { camGuess_changed(0.0); });
 
   {
     QMenu *extensionsMenu = new QMenu(this);
@@ -2965,7 +2946,7 @@ void BufferViewer::SetupMeshView()
 
   ui->resourceDetails->setVisible(false);
   ui->formatSpecifier->setVisible(false);
-  ui->cameraControlsGroup->setVisible(false);
+  ui->configurationGroup->setVisible(false);
 
   ui->minBoundsLabel->setText(lit("---"));
   ui->maxBoundsLabel->setText(lit("---"));
@@ -3502,12 +3483,12 @@ void BufferViewer::OnEventChanged(uint32_t eventId)
     float vpWidth = qAbs(vp.width);
     float vpHeight = qAbs(vp.height);
 
-    m_Config.fov = ui->fovGuess->value();
+    m_Config.fov = m_ProjGuess.fov;
     m_Config.aspect = (vpWidth > 0.0f && vpHeight > 0.0f) ? (vpWidth / vpHeight) : 1.0f;
     m_Config.highlightVert = 0;
 
-    if(ui->aspectGuess->value() > 0.0)
-      m_Config.aspect = ui->aspectGuess->value();
+    if(m_ProjGuess.aspect > 0.0)
+      m_Config.aspect = m_ProjGuess.aspect;
   }
   else
   {
@@ -3906,7 +3887,7 @@ void BufferViewer::OnEventChanged(uint32_t eventId)
         m_ModelOut2->setSecondaryColumn(-1, m_Config.visualisationMode == Visualisation::Secondary,
                                         false);
 
-      EnableCameraGuessControls();
+      UpdateStageDataControls();
 
       populateBBox(bufdata);
 
@@ -5083,7 +5064,7 @@ void BufferViewer::UpdateCurrentMeshConfig()
     default: break;
   }
 
-  camGuess_changed(0.0);
+  UI_UpdateGuessParameters();
 
   m_Config.showBBox = false;
 
@@ -6047,11 +6028,16 @@ void BufferViewer::data_scrolled(int scrollvalue)
   SyncViews(view, false, true);
 }
 
-void BufferViewer::camGuess_changed(double value)
+void BufferViewer::UI_UpdateGuessParameters()
 {
-  m_Config.ortho = (ui->matrixType->currentIndex() == 1);
+  m_Arcball->camera()->SetNearFar(m_Ctx.Config().MeshViewer_CameraNear,
+                                  m_Ctx.Config().MeshViewer_CameraFar);
+  m_Flycam->camera()->SetNearFar(m_Ctx.Config().MeshViewer_CameraNear,
+                                 m_Ctx.Config().MeshViewer_CameraFar);
 
-  m_Config.fov = ui->fovGuess->value();
+  m_Config.ortho = m_ProjGuess.orthographic;
+
+  m_Config.fov = m_ProjGuess.fov;
 
   m_Config.aspect = 1.0f;
 
@@ -6063,8 +6049,8 @@ void BufferViewer::camGuess_changed(double value)
 
   m_Config.aspect = (vpWidth > 0.0f && vpHeight > 0.0f) ? (vpWidth / vpHeight) : 1.0f;
 
-  if(ui->aspectGuess->value() > 0.0)
-    m_Config.aspect = ui->aspectGuess->value();
+  if(m_ProjGuess.aspect > 0.0)
+    m_Config.aspect = m_ProjGuess.aspect;
 
   // use estimates from post vs data (calculated from vertex position data) if the user
   // hasn't overridden the values
@@ -6092,8 +6078,8 @@ void BufferViewer::camGuess_changed(double value)
     m_Config.position.flipY = m_Out2Data.flipY;
   }
 
-  if(ui->nearGuess->value() > 0.0)
-    m_Config.position.nearPlane = ui->nearGuess->value();
+  if(m_ProjGuess.nearPlane > 0.0)
+    m_Config.position.nearPlane = m_ProjGuess.nearPlane;
 
   m_Config.position.farPlane = 100.0f;
 
@@ -6106,10 +6092,10 @@ void BufferViewer::camGuess_changed(double value)
   else if(m_CurStage == MeshDataStage::MeshOut)
     m_Config.position.farPlane = m_Out2Data.farPlane;
 
-  if(ui->farGuess->value() > 0.0)
-    m_Config.position.farPlane = ui->farGuess->value();
+  if(m_ProjGuess.farPlane > 0.0)
+    m_Config.position.farPlane = m_ProjGuess.farPlane;
 
-  EnableCameraGuessControls();
+  UpdateStageDataControls();
 
   INVOKE_MEMFN(RT_UpdateAndDisplay);
 }
@@ -6181,6 +6167,27 @@ bool BufferViewer::showAxisMappingDialog()
 void BufferViewer::on_axisMappingButton_clicked()
 {
   showAxisMappingDialog();
+}
+
+void BufferViewer::on_camParameters_clicked()
+{
+  CameraControlsDialog dialog(m_Ctx, this);
+  RDDialog::show(&dialog);
+
+  if(dialog.result() == QDialog::Accepted)
+    UI_UpdateGuessParameters();
+}
+
+void BufferViewer::on_guessButton_clicked()
+{
+  ProjectionGuessDialog dialog(m_Ctx, m_ProjGuess, this);
+  RDDialog::show(&dialog);
+
+  if(dialog.result() == QDialog::Accepted)
+  {
+    m_ProjGuess = dialog.getParameters();
+    UI_UpdateGuessParameters();
+  }
 }
 
 void BufferViewer::on_setFormat_toggled(bool checked)
@@ -7119,15 +7126,69 @@ void BufferViewer::UpdateHighlightVerts()
   m_Config.highlightVert = selected[0].row();
 }
 
-void BufferViewer::EnableCameraGuessControls()
+void BufferViewer::UpdateStageDataControls()
 {
-  ui->matrixType->setEnabled(isCurrentRasterOut());
-  ui->aspectGuess->setEnabled(isCurrentRasterOut());
-  ui->nearGuess->setEnabled(isCurrentRasterOut());
-  ui->farGuess->setEnabled(isCurrentRasterOut());
+  if(isCurrentRasterOut())
+  {
+    ui->guessLabel->setVisible(true);
+    ui->guessDetails1->setVisible(true);
+    ui->guessDetails2->setVisible(true);
+    ui->guessButton->setVisible(true);
 
-  // FOV is only available in perspective mode
-  ui->fovGuess->setEnabled(isCurrentRasterOut() && ui->matrixType->currentIndex() == 0);
+    QString aspectStr = tr("Auto");
+    if(m_ProjGuess.aspect > 0)
+      aspectStr = Formatter::Format(m_ProjGuess.aspect);
+
+    if(m_ProjGuess.orthographic)
+      ui->guessDetails1->setText(tr("Orthographic Projection"));
+    else
+      ui->guessDetails1->setText(
+          tr("Perspective Projection, FOV %1").arg(Formatter::Format(m_ProjGuess.fov)));
+
+    if(m_ProjGuess.farPlane == FLT_MAX)
+    {
+      if(m_ProjGuess.nearPlane > 0)
+        ui->guessDetails2->setText(tr("Aspect Ratio %1, Reverse Z Near %2")
+                                       .arg(aspectStr)
+                                       .arg(Formatter::Format(m_ProjGuess.nearPlane)));
+      else
+        ui->guessDetails2->setText(tr("Aspect Ratio %1, Reverse Z Near Automatic").arg(aspectStr));
+    }
+    else
+    {
+      if(m_ProjGuess.nearPlane > 0 && m_ProjGuess.farPlane > 0)
+        ui->guessDetails2->setText(tr("Aspect Ratio %1, Near-Far %2 - %3")
+                                       .arg(aspectStr)
+                                       .arg(Formatter::Format(m_ProjGuess.nearPlane))
+                                       .arg(Formatter::Format(m_ProjGuess.farPlane)));
+      else if(m_ProjGuess.nearPlane > 0)
+        ui->guessDetails2->setText(tr("Aspect Ratio %1, Near %2 Far Auto")
+                                       .arg(aspectStr)
+                                       .arg(Formatter::Format(m_ProjGuess.nearPlane)));
+      else if(m_ProjGuess.farPlane > 0)
+        ui->guessDetails2->setText(tr("Aspect Ratio %1, Near Auto Far %2")
+                                       .arg(aspectStr)
+                                       .arg(Formatter::Format(m_ProjGuess.farPlane)));
+      else
+        ui->guessDetails2->setText(tr("Aspect Ratio %1, Near-Far Automatic").arg(aspectStr));
+    }
+
+    ui->axisMappingLabel->setVisible(false);
+    ui->axisMappingCombo->setVisible(false);
+    ui->axisMappingButton->setVisible(false);
+  }
+  else
+  {
+    ui->guessLabel->setVisible(false);
+    ui->guessDetails1->setVisible(false);
+    ui->guessDetails2->setVisible(false);
+    ui->guessButton->setVisible(false);
+
+    ui->axisMappingLabel->setVisible(true);
+    ui->axisMappingCombo->setVisible(true);
+    ui->axisMappingButton->setVisible(true);
+    ui->axisMappingButton->setEnabled(ui->axisMappingCombo->currentIndex() == 4);
+  }
 }
 
 void BufferViewer::on_outputTabs_currentChanged(int index)
@@ -7147,10 +7208,7 @@ void BufferViewer::on_outputTabs_currentChanged(int index)
   on_resetCamera_clicked();
   ui->autofitCamera->setEnabled(!isCurrentRasterOut());
 
-  EnableCameraGuessControls();
-  ui->axisMappingCombo->setEnabled(!isCurrentRasterOut());
-  ui->axisMappingButton->setEnabled(!isCurrentRasterOut() &&
-                                    ui->axisMappingCombo->currentIndex() == 4);
+  UpdateStageDataControls();
 
   UpdateCurrentMeshConfig();
 
@@ -7159,7 +7217,7 @@ void BufferViewer::on_outputTabs_currentChanged(int index)
 
 void BufferViewer::on_toggleControls_toggled(bool checked)
 {
-  ui->cameraControlsGroup->setVisible(checked);
+  ui->configurationGroup->setVisible(checked);
 
   // temporarily set minimum bounds to the longest float we could format, to ensure the minimum size
   // we calculate below is as big as needs to be (sigh...). This is necessary because Qt doesn't
@@ -7182,7 +7240,7 @@ void BufferViewer::on_toggleControls_toggled(bool checked)
 
   UI_UpdateBoundingBoxLabels();
 
-  EnableCameraGuessControls();
+  UpdateStageDataControls();
 }
 
 void BufferViewer::on_syncViews_toggled(bool checked)

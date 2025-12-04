@@ -771,6 +771,18 @@
     <ClCompile Include="Widgets\ComputeDebugSelector.cpp">
       <Filter>Widgets</Filter>
     </ClCompile>
+    <ClCompile Include="$(IntDir)generated\moc_ProjectionGuessDialog.cpp">
+      <Filter>Generated Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(IntDir)generated\moc_CameraControlsDialog.cpp">
+      <Filter>Generated Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Windows\Dialogs\CameraControlsDialog.cpp">
+      <Filter>Windows\Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="Windows\Dialogs\ProjectionGuessDialog.cpp">
+      <Filter>Windows\Dialogs</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="3rdparty\flowlayout\FlowLayout.h">
@@ -1150,6 +1162,12 @@
     </ClInclude>
     <ClInclude Include="3rdparty\catch\official\catch.hpp">
       <Filter>3rdparty\catch</Filter>
+    </ClInclude>
+    <ClInclude Include="$(IntDir)generated\ui_ProjectionGuessDialog.h">
+      <Filter>Generated Files</Filter>
+    </ClInclude>
+    <ClInclude Include="$(IntDir)generated\ui_CameraControlsDialog.h">
+      <Filter>Generated Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -1573,6 +1591,18 @@
     </CustomBuild>
     <CustomBuild Include="Widgets\ComputeDebugSelector.ui">
       <Filter>Widgets</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Windows\Dialogs\CameraControlsDialog.h">
+      <Filter>Windows\Dialogs</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Windows\Dialogs\CameraControlsDialog.ui">
+      <Filter>Windows\Dialogs</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Windows\Dialogs\ProjectionGuessDialog.h">
+      <Filter>Windows\Dialogs</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Windows\Dialogs\ProjectionGuessDialog.ui">
+      <Filter>Windows\Dialogs</Filter>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
