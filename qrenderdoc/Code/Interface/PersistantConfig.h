@@ -325,6 +325,24 @@ DECLARE_REFLECTION_STRUCT(BugReport);
   CONFIG_SETTING_VAL(public, bool, bool, TextureViewer_PerTexYFlip, false)                         \
                                                                                                    \
   DOCUMENT(                                                                                        \
+      "List of Qt keycodes for mesh viewer key bindings. Can be empty if no keys are configured "  \
+      "which will revert to default behaviour of physical WASD (independent of local keyboard "    \
+      "layout)."                                                                                   \
+      "\n"                                                                                         \
+      "Defaults to an empty list."                                                                 \
+      ""                                                                                           \
+      ":type: List[int]");                                                                         \
+  CONFIG_SETTING(public, QVariantList, rdcarray<uint32_t>, MeshViewer_KeySettings)                 \
+                                                                                                   \
+  DOCUMENT(                                                                                        \
+      "The Qt modifier code for the mesh viewer 'speed' modifier."                                 \
+      "\n"                                                                                         \
+      "Defaults to ``-1`` which means Shift."                                                      \
+      ""                                                                                           \
+      ":type: int");                                                                               \
+  CONFIG_SETTING_VAL(public, int, int, MeshViewer_SpeedModifier, -1)                               \
+                                                                                                   \
+  DOCUMENT(                                                                                        \
       "List of the directories containing custom shader files for the Texture Viewer.\n"           \
       "\n:"                                                                                        \
       "type: List[str]");                                                                          \

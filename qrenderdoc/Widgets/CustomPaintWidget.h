@@ -45,6 +45,7 @@ public:
   bool IsRendering() const { return m_Rendering; }
 protected:
   void mousePressEvent(QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
   void mouseDoubleClickEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *e) override;
   void wheelEvent(QWheelEvent *e) override;
@@ -82,6 +83,7 @@ public:
   void SetBackCol(QColor col) { m_BackCol = col; }
 signals:
   void clicked(QMouseEvent *e);
+  void unclicked(QMouseEvent *e);
   void doubleClicked(QMouseEvent *e);
   void mouseMove(QMouseEvent *e);
   void resize(QResizeEvent *e);

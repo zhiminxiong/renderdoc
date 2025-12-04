@@ -135,13 +135,11 @@ enum
 class CameraWrapper
 {
 public:
+  CameraWrapper(ICaptureContext &ctx) : m_Ctx(ctx) {}
   virtual ~CameraWrapper() {}
   virtual bool Update(QRect winSize) = 0;
   virtual ICamera *camera() = 0;
 
-  virtual void MouseWheel(QWheelEvent *e) = 0;
-
-  virtual void MouseClick(QMouseEvent *e) { m_DragStartPos = e->pos(); }
   virtual void MouseMove(QMouseEvent *e)
   {
     if(e->buttons() & Qt::LeftButton)
@@ -154,58 +152,110 @@ public:
     }
   }
 
-  enum class KeyPressDirection
-  {
-    None,
-    Left,
-    Right,
-    Forward,
-    Back,
-    Up,
-    Down,
-  };
-
   KeyPressDirection GetDirection(QKeyEvent *e)
   {
-    // if we have a native scancode, we expect to be able to match it. If we don't then don't get
-    // any false positives by checking the virtual key
-    if(e->nativeScanCode() > 1)
+    // if no settings are bound, use default bindings. This should be empty, but we also do this
+    // path if it's invalid and not the size we expect
+    if(m_Ctx.Config().MeshViewer_KeySettings.size() < (size_t)KeyPressDirection::NumSettings)
     {
-      switch(e->nativeScanCode())
+      // if we have a native scancode, we expect to be able to match it. If we don't then don't get
+      // any false positives by checking the virtual key
+      if(e->nativeScanCode() > 1)
       {
-        case NativeScanCode::Key_A: return KeyPressDirection::Left;
-        case NativeScanCode::Key_D: return KeyPressDirection::Right;
-        case NativeScanCode::Key_W: return KeyPressDirection::Forward;
-        case NativeScanCode::Key_S: return KeyPressDirection::Back;
-        case NativeScanCode::Key_R: return KeyPressDirection::Up;
-        case NativeScanCode::Key_F: return KeyPressDirection::Down;
+        switch(e->nativeScanCode())
+        {
+          case NativeScanCode::Key_A: return KeyPressDirection::Left;
+          case NativeScanCode::Key_D: return KeyPressDirection::Right;
+          case NativeScanCode::Key_W: return KeyPressDirection::Forward;
+          case NativeScanCode::Key_S: return KeyPressDirection::Back;
+          case NativeScanCode::Key_R: return KeyPressDirection::Up;
+          case NativeScanCode::Key_F: return KeyPressDirection::Down;
+          default: break;
+        }
+      }
+      else
+      {
+        switch(e->nativeVirtualKey())
+        {
+          case NativeVirtualKey::Key_A: return KeyPressDirection::Left;
+          case NativeVirtualKey::Key_D: return KeyPressDirection::Right;
+          case NativeVirtualKey::Key_W: return KeyPressDirection::Forward;
+          case NativeVirtualKey::Key_S: return KeyPressDirection::Back;
+          case NativeVirtualKey::Key_R: return KeyPressDirection::Up;
+          case NativeVirtualKey::Key_F: return KeyPressDirection::Down;
+          default: break;
+        }
+      }
+
+      // handle arrow keys, we can do this safely with Qt::Key
+      switch(e->key())
+      {
+        case Qt::Key_Left: return KeyPressDirection::Left;
+        case Qt::Key_Right: return KeyPressDirection::Right;
+        case Qt::Key_Up: return KeyPressDirection::Forward;
+        case Qt::Key_Down: return KeyPressDirection::Back;
+        case Qt::Key_PageUp: return KeyPressDirection::Up;
+        case Qt::Key_PageDown: return KeyPressDirection::Down;
         default: break;
       }
     }
     else
     {
-      switch(e->nativeVirtualKey())
+      for(int i = 0; i < (int)KeyPressDirection::Count; i++)
       {
-        case NativeVirtualKey::Key_A: return KeyPressDirection::Left;
-        case NativeVirtualKey::Key_D: return KeyPressDirection::Right;
-        case NativeVirtualKey::Key_W: return KeyPressDirection::Forward;
-        case NativeVirtualKey::Key_S: return KeyPressDirection::Back;
-        case NativeVirtualKey::Key_R: return KeyPressDirection::Up;
-        case NativeVirtualKey::Key_F: return KeyPressDirection::Down;
-        default: break;
+        KeyPressDirection dir = KeyPressDirection(i);
+        Qt::Key primary =
+            getKeySetting(m_Ctx.Config().MeshViewer_KeySettings[keySettingIdx(dir, true)]);
+        Qt::Key secondary =
+            getKeySetting(m_Ctx.Config().MeshViewer_KeySettings[keySettingIdx(dir, false)]);
+
+        if(e->key() == primary || e->key() == secondary)
+          return dir;
       }
     }
 
-    // handle arrow keys, we can do this safely with Qt::Key
-    switch(e->key())
+    return KeyPressDirection::None;
+  }
+
+  KeyPressDirection GetDirection(QMouseEvent *e)
+  {
+    if(m_Ctx.Config().MeshViewer_KeySettings.size() >= (size_t)KeyPressDirection::NumSettings)
     {
-      case Qt::Key_Left: return KeyPressDirection::Left;
-      case Qt::Key_Right: return KeyPressDirection::Right;
-      case Qt::Key_Up: return KeyPressDirection::Forward;
-      case Qt::Key_Down: return KeyPressDirection::Back;
-      case Qt::Key_PageUp: return KeyPressDirection::Up;
-      case Qt::Key_PageDown: return KeyPressDirection::Down;
-      default: break;
+      for(int i = 0; i < (int)KeyPressDirection::Count; i++)
+      {
+        KeyPressDirection dir = KeyPressDirection(i);
+        Qt::MouseButton primary =
+            getMouseButtonSetting(m_Ctx.Config().MeshViewer_KeySettings[keySettingIdx(dir, true)]);
+        Qt::MouseButton secondary =
+            getMouseButtonSetting(m_Ctx.Config().MeshViewer_KeySettings[keySettingIdx(dir, false)]);
+
+        if(e->button() == primary || e->button() == secondary)
+          return dir;
+      }
+    }
+
+    return KeyPressDirection::None;
+  }
+
+  KeyPressDirection GetDirection(QWheelEvent *e)
+  {
+    if(m_Ctx.Config().MeshViewer_KeySettings.size() >= (size_t)KeyPressDirection::NumSettings)
+    {
+      QPoint angleDelta = e->angleDelta();
+      angleDelta.setX(qMin(1, qMax(-1, angleDelta.x())));
+      angleDelta.setY(qMin(1, qMax(-1, angleDelta.y())));
+
+      for(int i = 0; i < (int)KeyPressDirection::Count; i++)
+      {
+        KeyPressDirection dir = KeyPressDirection(i);
+        QPoint primary =
+            getMouseWheelSetting(m_Ctx.Config().MeshViewer_KeySettings[keySettingIdx(dir, true)]);
+        QPoint secondary =
+            getMouseWheelSetting(m_Ctx.Config().MeshViewer_KeySettings[keySettingIdx(dir, false)]);
+
+        if(angleDelta == primary || angleDelta == secondary)
+          return dir;
+      }
     }
 
     return KeyPressDirection::None;
@@ -217,12 +267,16 @@ public:
 
     if(dir == KeyPressDirection::Left || dir == KeyPressDirection::Right)
       setMove(Direction::Horiz, 0);
-    if(dir == KeyPressDirection::Forward || dir == KeyPressDirection::Back)
+    else if(dir == KeyPressDirection::Forward || dir == KeyPressDirection::Back)
       setMove(Direction::Fwd, 0);
-    if(dir == KeyPressDirection::Up || dir == KeyPressDirection::Down)
+    else if(dir == KeyPressDirection::Up || dir == KeyPressDirection::Down)
       setMove(Direction::Vert, 0);
 
-    if(e->modifiers() & Qt::ShiftModifier)
+    Qt::KeyboardModifier speedMod = Qt::ShiftModifier;
+    if(m_Ctx.Config().MeshViewer_SpeedModifier > 0)
+      speedMod = Qt::KeyboardModifier(m_Ctx.Config().MeshViewer_SpeedModifier);
+
+    if(speedMod != Qt::NoModifier && (e->modifiers() & speedMod))
       m_CurrentSpeed = 3.0f;
     else
       m_CurrentSpeed = 1.0f;
@@ -234,7 +288,7 @@ public:
 
     switch(dir)
     {
-      case KeyPressDirection::None: break;
+      default: break;
       case KeyPressDirection::Left: setMove(Direction::Horiz, -1); break;
       case KeyPressDirection::Right: setMove(Direction::Horiz, 1); break;
       case KeyPressDirection::Forward: setMove(Direction::Fwd, 1); break;
@@ -243,11 +297,46 @@ public:
       case KeyPressDirection::Down: setMove(Direction::Vert, -1); break;
     }
 
-    if(e->modifiers() & Qt::ShiftModifier)
+    Qt::KeyboardModifier speedMod = Qt::ShiftModifier;
+    if(m_Ctx.Config().MeshViewer_SpeedModifier > 0)
+      speedMod = Qt::KeyboardModifier(m_Ctx.Config().MeshViewer_SpeedModifier);
+
+    if(speedMod != Qt::NoModifier && (e->modifiers() & speedMod))
       m_CurrentSpeed = 3.0f;
     else
       m_CurrentSpeed = 1.0f;
   }
+
+  virtual void MouseClick(QMouseEvent *e)
+  {
+    m_DragStartPos = e->pos();
+    KeyPressDirection dir = GetDirection(e);
+
+    switch(dir)
+    {
+      default: break;
+      case KeyPressDirection::Left: setMove(Direction::Horiz, -1); break;
+      case KeyPressDirection::Right: setMove(Direction::Horiz, 1); break;
+      case KeyPressDirection::Forward: setMove(Direction::Fwd, 1); break;
+      case KeyPressDirection::Back: setMove(Direction::Fwd, -1); break;
+      case KeyPressDirection::Up: setMove(Direction::Vert, 1); break;
+      case KeyPressDirection::Down: setMove(Direction::Vert, -1); break;
+    }
+  }
+
+  virtual void MouseUnclick(QMouseEvent *e)
+  {
+    KeyPressDirection dir = GetDirection(e);
+
+    if(dir == KeyPressDirection::Left || dir == KeyPressDirection::Right)
+      setMove(Direction::Horiz, 0);
+    else if(dir == KeyPressDirection::Forward || dir == KeyPressDirection::Back)
+      setMove(Direction::Fwd, 0);
+    else if(dir == KeyPressDirection::Up || dir == KeyPressDirection::Down)
+      setMove(Direction::Vert, 0);
+  }
+
+  virtual void MouseWheel(QWheelEvent *e) {}
 
   float SpeedMultiplier = 0.05f;
 
@@ -263,6 +352,8 @@ protected:
   int move(Direction dir) { return m_CurrentMove[(int)dir]; }
   float currentSpeed() { return m_CurrentSpeed * SpeedMultiplier; }
   QPoint dragStartPos() { return m_DragStartPos; }
+
+  ICaptureContext &m_Ctx;
 private:
   float m_CurrentSpeed = 1.0f;
   int m_CurrentMove[(int)Direction::Num] = {0, 0, 0};
@@ -274,7 +365,10 @@ private:
 class ArcballWrapper : public CameraWrapper
 {
 public:
-  ArcballWrapper() { m_Cam = RENDERDOC_InitCamera(CameraType::Arcball); }
+  ArcballWrapper(ICaptureContext &ctx) : CameraWrapper(ctx)
+  {
+    m_Cam = RENDERDOC_InitCamera(CameraType::Arcball);
+  }
   virtual ~ArcballWrapper() { m_Cam->Shutdown(); }
   ICamera *camera() override { return m_Cam; }
   void Reset(FloatVector pos, float dist)
@@ -299,6 +393,8 @@ public:
 
   void MouseWheel(QWheelEvent *e) override
   {
+    CameraWrapper::MouseWheel(e);
+
     float mod = (1.0f - e->delta() / 2500.0f);
 
     SetDistance(qMax(1e-6f, m_Distance * mod));
@@ -376,7 +472,10 @@ private:
 class FlycamWrapper : public CameraWrapper
 {
 public:
-  FlycamWrapper() { m_Cam = RENDERDOC_InitCamera(CameraType::FPSLook); }
+  FlycamWrapper(ICaptureContext &ctx) : CameraWrapper(ctx)
+  {
+    m_Cam = RENDERDOC_InitCamera(CameraType::FPSLook);
+  }
   virtual ~FlycamWrapper() { m_Cam->Shutdown(); }
   ICamera *camera() override { return m_Cam; }
   void Reset(FloatVector pos)
@@ -431,7 +530,49 @@ public:
     return false;
   }
 
-  void MouseWheel(QWheelEvent *e) override {}
+  virtual void MouseWheel(QWheelEvent *e) override
+  {
+    CameraWrapper::MouseWheel(e);
+
+    KeyPressDirection dir = GetDirection(e);
+
+    FloatVector fwd = m_Cam->GetForward();
+    FloatVector right = m_Cam->GetRight();
+
+    float speed = currentSpeed();
+
+    if(dir == KeyPressDirection::Left || dir == KeyPressDirection::Right)
+    {
+      int horizMove = dir == KeyPressDirection::Left ? -1 : 1;
+      m_Position.x += right.x * speed * (float)horizMove;
+      m_Position.y += right.y * speed * (float)horizMove;
+      m_Position.z += right.z * speed * (float)horizMove;
+    }
+    else if(dir == KeyPressDirection::Up || dir == KeyPressDirection::Down)
+    {
+      // this makes less intuitive sense, instead go 'absolute' up
+      // m_Position.x += up.x * speed * (float)vertMove;
+      // m_Position.y += up.y * speed * (float)vertMove;
+      // m_Position.z += up.z * speed * (float)vertMove;
+
+      int vertMove = dir == KeyPressDirection::Up ? -1 : 1;
+      m_Position.y += speed * (float)vertMove;
+    }
+    else if(dir == KeyPressDirection::Forward || dir == KeyPressDirection::Back)
+    {
+      int fwdMove = dir == KeyPressDirection::Back ? -1 : 1;
+      m_Position.x += fwd.x * speed * (float)fwdMove;
+      m_Position.y += fwd.y * speed * (float)fwdMove;
+      m_Position.z += fwd.z * speed * (float)fwdMove;
+    }
+    else
+    {
+      return;
+    }
+
+    m_Cam->SetPosition(m_Position.x, m_Position.y, m_Position.z);
+  }
+
   void MouseMove(QMouseEvent *e) override
   {
     if(dragStartPos().x() > 0 && e->buttons() == Qt::LeftButton)
@@ -2410,8 +2551,8 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
 
   ui->formatSpecifier->setContext(&m_Ctx);
 
-  m_Flycam = new FlycamWrapper();
-  m_Arcball = new ArcballWrapper();
+  m_Flycam = new FlycamWrapper(m_Ctx);
+  m_Arcball = new ArcballWrapper(m_Ctx);
   m_CurrentCamera = m_Arcball;
 
   m_Output = NULL;
@@ -2636,6 +2777,7 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
 
   QObject::connect(ui->render, &CustomPaintWidget::mouseMove, this, &BufferViewer::render_mouseMove);
   QObject::connect(ui->render, &CustomPaintWidget::clicked, this, &BufferViewer::render_clicked);
+  QObject::connect(ui->render, &CustomPaintWidget::unclicked, this, &BufferViewer::render_unclicked);
   QObject::connect(ui->render, &CustomPaintWidget::keyPress, this, &BufferViewer::render_keyPress);
   QObject::connect(ui->render, &CustomPaintWidget::keyRelease, this,
                    &BufferViewer::render_keyRelease);
@@ -5034,6 +5176,17 @@ void BufferViewer::render_clicked(QMouseEvent *e)
     m_CurrentCamera->MouseClick(e);
 
   ui->render->setFocus();
+
+  INVOKE_MEMFN(RT_UpdateAndDisplay);
+}
+
+void BufferViewer::render_unclicked(QMouseEvent *e)
+{
+  if(!m_Ctx.IsCaptureLoaded())
+    return;
+
+  if(m_CurrentCamera)
+    m_CurrentCamera->MouseUnclick(e);
 
   INVOKE_MEMFN(RT_UpdateAndDisplay);
 }

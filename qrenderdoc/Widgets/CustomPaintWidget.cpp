@@ -200,6 +200,11 @@ void CustomPaintWidgetInternal::mousePressEvent(QMouseEvent *e)
   emit m_Custom.clicked(e);
 }
 
+void CustomPaintWidgetInternal::mouseReleaseEvent(QMouseEvent *e)
+{
+  emit m_Custom.unclicked(e);
+}
+
 void CustomPaintWidgetInternal::mouseDoubleClickEvent(QMouseEvent *event)
 {
   emit m_Custom.doubleClicked(event);

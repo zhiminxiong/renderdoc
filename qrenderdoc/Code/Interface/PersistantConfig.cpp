@@ -99,6 +99,12 @@ rdcstr convertFromVariant(const QVariant &val)
   return val.toString();
 }
 
+template <>
+uint32_t convertFromVariant(const QVariant &val)
+{
+  return val.toUInt();
+}
+
 template <typename listType>
 listType convertFromVariant(const QVariantList &val)
 {
