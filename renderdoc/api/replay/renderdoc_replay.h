@@ -1731,6 +1731,15 @@ struct ICamera
   DOCUMENT("Closes the camera handle.");
   virtual void Shutdown() = 0;
 
+  DOCUMENT(R"(Sets the near and far plane for the camera's display.
+
+The default value is ``0.1 - 100000.0`` if these are not set explicitly.
+
+:param float n: The near plane.
+:param float f: The far plane.
+)");
+  virtual void SetNearFar(float n, float f) = 0;
+
   DOCUMENT(R"(Sets the position for the camera, either arcball or FPS.
 
 For arcball cameras, this sets the lookat position at the centre of the arcball.

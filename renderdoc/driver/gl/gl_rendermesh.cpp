@@ -56,8 +56,11 @@ void GLReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &secondar
   GLMarkerRegion renderMesh(
       StringFormat::Fmt("RenderMesh with %zu secondary draws", secondaryDraws.size()));
 
+  float nearPlane = cfg.cam ? ((Camera *)cfg.cam)->GetNear() : 0.1f;
+  float farPlane = cfg.cam ? ((Camera *)cfg.cam)->GetFar() : 100000.0f;
+
   Matrix4f projMat =
-      Matrix4f::Perspective(90.0f, 0.1f, 100000.0f, DebugData.outWidth / DebugData.outHeight);
+      Matrix4f::Perspective(90.0f, nearPlane, farPlane, DebugData.outWidth / DebugData.outHeight);
 
   Matrix4f camMat = cfg.cam ? ((Camera *)cfg.cam)->GetMatrix() : Matrix4f::Identity();
 

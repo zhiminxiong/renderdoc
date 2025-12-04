@@ -1225,7 +1225,10 @@ uint32_t VulkanReplay::PickVertex(uint32_t eventId, int32_t width, int32_t heigh
 
   VkMarkerRegion::Begin(StringFormat::Fmt("VulkanReplay::PickVertex(%u, %u)", x, y));
 
-  Matrix4f projMat = Matrix4f::Perspective(90.0f, 0.1f, 100000.0f, float(width) / float(height));
+  float nearPlane = cfg.cam ? ((Camera *)cfg.cam)->GetNear() : 0.1f;
+  float farPlane = cfg.cam ? ((Camera *)cfg.cam)->GetFar() : 100000.0f;
+
+  Matrix4f projMat = Matrix4f::Perspective(90.0f, nearPlane, farPlane, float(width) / float(height));
 
   Matrix4f camMat = cfg.cam ? ((Camera *)cfg.cam)->GetMatrix() : Matrix4f::Identity();
   Matrix4f pickMVP = projMat.Mul(camMat);
