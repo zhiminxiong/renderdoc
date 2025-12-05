@@ -235,7 +235,7 @@ VKMeshDisplayPipelines VulkanDebugManager::CacheMeshDisplayPipelines(VkPipelineL
       VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
       NULL,
       0,
-      false,
+      true,
       false,
       VK_POLYGON_MODE_FILL,
       VK_CULL_MODE_NONE,
@@ -411,6 +411,7 @@ VKMeshDisplayPipelines VulkanDebugManager::CacheMeshDisplayPipelines(VkPipelineL
   CHECK_VKR(m_pDriver, vkr);
 
   ds.depthTestEnable = true;
+  rs.depthClampEnable = false;
 
   vkr = vt->CreateGraphicsPipelines(Unwrap(m_Device), VK_NULL_HANDLE, 1, &pipeInfo, NULL,
                                     &cache.pipes[VKMeshDisplayPipelines::ePipe_SolidDepth]);

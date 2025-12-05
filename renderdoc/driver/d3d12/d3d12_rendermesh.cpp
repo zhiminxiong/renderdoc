@@ -204,6 +204,7 @@ MeshDisplayPipelines D3D12DebugManager::CacheMeshDisplayPipelines(const MeshForm
   RDCASSERTEQUAL(hr, S_OK);
 
   pipeDesc.DepthStencilState.DepthEnable = TRUE;
+  pipeDesc.RasterizerState.DepthClipEnable = TRUE;
   pipeDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
   pipeDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 

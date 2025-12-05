@@ -98,6 +98,8 @@ void GLReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &secondar
   }
 
   drv.glDisable(eGL_CULL_FACE);
+  if(HasExt[ARB_depth_clamp])
+    drv.glEnable(eGL_DEPTH_CLAMP);
 
   if(cfg.position.unproject)
   {
@@ -355,6 +357,8 @@ void GLReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &secondar
   if(cfg.visualisationMode != Visualisation::NoSolid && topo != eGL_PATCHES)
   {
     drv.glDepthFunc(eGL_LESS);
+    if(HasExt[ARB_depth_clamp])
+      drv.glDisable(eGL_DEPTH_CLAMP);
 
     GLuint solidProg = prog;
 
@@ -427,6 +431,9 @@ void GLReplay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &secondar
     drv.glDisableVertexAttribArray(1);
 
     drv.glUseProgram(prog);
+
+    if(HasExt[ARB_depth_clamp])
+      drv.glEnable(eGL_DEPTH_CLAMP);
   }
 
   drv.glDepthFunc(eGL_ALWAYS);

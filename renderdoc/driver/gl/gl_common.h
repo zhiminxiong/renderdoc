@@ -729,6 +729,7 @@ extern bool IsGLES;
   /* super-set.                                              */  \
   EXT_TO_CHECK(32, 31, ARB_texture_multisample_no_array)         \
   EXT_TO_CHECK(32, 32, ARB_texture_multisample)                  \
+  EXT_TO_CHECK(32, 99, ARB_depth_clamp)                          \
   EXT_TO_CHECK(33, 30, ARB_explicit_attrib_location)             \
   EXT_TO_CHECK(33, 30, ARB_sampler_objects)                      \
   EXT_TO_CHECK(33, 30, ARB_texture_swizzle)                      \
@@ -826,6 +827,7 @@ extern bool IsGLES;
   EXT_COMP_CHECK(ARB_base_instance, EXT_base_instance)                                      \
   EXT_COMP_CHECK(ARB_copy_image, EXT_copy_image)                                            \
   EXT_COMP_CHECK(ARB_copy_image, OES_copy_image)                                            \
+  EXT_COMP_CHECK(ARB_depth_clamp, EXT_depth_clamp)                                          \
   EXT_COMP_CHECK(ARB_draw_buffers_blend, EXT_draw_buffers_indexed)                          \
   EXT_COMP_CHECK(ARB_draw_buffers_blend, OES_draw_buffers_indexed)                          \
   EXT_COMP_CHECK(ARB_geometry_shader4, EXT_geometry_shader)                                 \

@@ -286,7 +286,7 @@ void D3D11Replay::RenderMesh(uint32_t eventId, const rdcarray<MeshFormat> &secon
     if(cfg.visualisationMode != Visualisation::NoSolid &&
        cfg.position.topology < Topology::PatchList_1CPs)
     {
-      m_pImmediateContext->RSSetState(m_General.RasterState);
+      m_pImmediateContext->RSSetState(m_General.RasterClipState);
 
       m_pImmediateContext->IASetPrimitiveTopology(topo);
 

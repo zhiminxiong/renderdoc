@@ -415,6 +415,7 @@ private:
     void Release();
 
     ID3D11RasterizerState *RasterState = NULL;
+    ID3D11RasterizerState *RasterClipState = NULL;
     ID3D11RasterizerState *RasterScissorState = NULL;
 
     ID3D11VertexShader *FullscreenVS = NULL;
