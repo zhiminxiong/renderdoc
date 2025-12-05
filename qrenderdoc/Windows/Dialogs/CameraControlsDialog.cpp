@@ -237,7 +237,12 @@ bool CameraControlsDialog::eventFilter(QObject *watched, QEvent *event)
   {
     QKeyEvent *key = (QKeyEvent *)event;
 
-    if(key->key() != 0)
+    if(key->key() != 0 && key->key() != Qt::Key_unknown && key->key() != Qt::Key_Alt &&
+       key->key() != Qt::Key_AltGr && key->key() != Qt::Key_Control && key->key() != Qt::Key_Meta &&
+       key->key() != Qt::Key_Shift && key->key() != Qt::Key_CapsLock &&
+       key->key() != Qt::Key_NumLock && key->key() != Qt::Key_ScrollLock &&
+       key->key() != Qt::Key_Kana_Lock && key->key() != Qt::Key_Kana_Shift &&
+       key->key() != Qt::Key_Eisu_Shift && key->key() != Qt::Key_Eisu_toggle)
     {
       m_Keybind = makeKeySetting((Qt::Key)key->key());
       m_KeybindDialog->accept();
