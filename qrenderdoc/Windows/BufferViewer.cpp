@@ -7588,7 +7588,7 @@ void BufferViewer::on_autofitCamera_clicked()
       mid = transformedMid;
     }
 
-    mid.z -= len;
+    mid.z -= len * 0.7f;
 
     m_Flycam->Reset(mid);
   }
