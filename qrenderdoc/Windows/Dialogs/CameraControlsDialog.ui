@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>686</width>
-    <height>356</height>
+    <width>654</width>
+    <height>288</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -100,27 +100,6 @@
       <property name="bottomMargin">
        <number>3</number>
       </property>
-      <item>
-       <widget class="QLabel" name="label_10">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="text">
-         <string>If any keys are set then only those will be active.
-
-If all keys are unbound then a default keymapping will be used - with WASD keys (ignoring local keyboard layout) for movement and R+F for vertical movement.</string>
-        </property>
-        <property name="textFormat">
-         <enum>Qt::PlainText</enum>
-        </property>
-        <property name="wordWrap">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
       <item>
        <layout class="QGridLayout" name="gridLayout_5">
         <item row="3" column="0">

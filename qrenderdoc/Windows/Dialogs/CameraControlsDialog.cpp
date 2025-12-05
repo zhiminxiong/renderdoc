@@ -38,14 +38,7 @@ CameraControlsDialog::CameraControlsDialog(ICaptureContext &Ctx, QWidget *parent
   ui->nearPlane->setValue(m_Ctx.Config().MeshViewer_CameraNear);
   ui->farPlane->setValue(m_Ctx.Config().MeshViewer_CameraFar);
 
-  if(m_Ctx.Config().MeshViewer_KeySettings.size() < (size_t)KeyPressDirection::NumSettings)
-  {
-    m_Keys.clear();
-  }
-  else
-  {
-    m_Keys = m_Ctx.Config().MeshViewer_KeySettings;
-  }
+  m_Keys = m_Ctx.Config().MeshViewer_KeySettings;
 
   updateDisplayLabels();
 
@@ -80,7 +73,7 @@ CameraControlsDialog::CameraControlsDialog(ICaptureContext &Ctx, QWidget *parent
     QObject::connect(buttons, &QDialogButtonBox::rejected, m_KeybindDialog, &QDialog::reject);
 
     QLabel *instructions = new QLabel(m_KeybindDialog);
-    instructions->setText(tr("Press key or mouse button, or escape to clear binding."));
+    instructions->setText(tr("Press key or mouse button, or escape to unbind."));
     instructions->setWordWrap(true);
 
     QVBoxLayout *layout = new QVBoxLayout(m_KeybindDialog);
@@ -96,19 +89,8 @@ CameraControlsDialog::CameraControlsDialog(ICaptureContext &Ctx, QWidget *parent
 
 void CameraControlsDialog::applyUpdatedControls()
 {
-  bool someSet = false;
-
   m_Ctx.Config().MeshViewer_CameraNear = (float)ui->nearPlane->value();
   m_Ctx.Config().MeshViewer_CameraFar = (float)ui->farPlane->value();
-
-  for(size_t i = 0; i < m_Keys.size() && i < (size_t)KeyPressDirection::NumSettings; i++)
-  {
-    if(m_Keys[i])
-    {
-      someSet = true;
-      break;
-    }
-  }
 
   switch(ui->speedMod->currentIndex())
   {
@@ -117,9 +99,6 @@ void CameraControlsDialog::applyUpdatedControls()
     case 2: m_Ctx.Config().MeshViewer_SpeedModifier = Qt::ControlModifier; break;
     default: m_Ctx.Config().MeshViewer_SpeedModifier = Qt::NoModifier; break;
   }
-
-  if(!someSet)
-    m_Keys.clear();
 
   m_Ctx.Config().MeshViewer_KeySettings = m_Keys;
 
@@ -130,6 +109,7 @@ void CameraControlsDialog::applyUpdatedControls()
 void CameraControlsDialog::on_resetAll_clicked()
 {
   m_Keys.clear();
+  m_Keys.resize((size_t)KeyPressDirection::NumSettings);
 
   updateDisplayLabels();
 }
@@ -287,17 +267,6 @@ QString CameraControlsDialog::wheelName(QPoint angleDelta)
 
 void CameraControlsDialog::updateDisplayLabels()
 {
-  bool someSet = false;
-
-  for(size_t i = 0; i < m_Keys.size() && i < (size_t)KeyPressDirection::NumSettings; i++)
-  {
-    if(m_Keys[i])
-    {
-      someSet = true;
-      break;
-    }
-  }
-
   QLineEdit *labels[(size_t)KeyPressDirection::NumSettings] = {
       // KeyPressDirection::Forward,
       ui->forwardDisplay,
@@ -319,40 +288,36 @@ void CameraControlsDialog::updateDisplayLabels()
       ui->downDisplay_2,
   };
 
-  if(someSet)
+  for(size_t i = 0; i < (size_t)KeyPressDirection::Count; i++)
   {
-    for(size_t i = 0; i < (size_t)KeyPressDirection::NumSettings; i++)
+    for(size_t j = 0; j < 2; j++)
     {
-      if(m_Keys[i] == 0)
+      size_t idx = i * 2 + j;
+
+      if(idx >= m_Keys.size() || m_Keys[idx] == 0)
       {
-        labels[i]->setText(tr("Unbound"));
+        labels[idx]->setText(
+            tr("Default - %1")
+                .arg(QKeySequence(getDefaultKey(KeyPressDirection(i), j == 0)).toString()));
       }
       else
       {
         QString displayString;
-        if(getKeySetting(m_Keys[i]) != Qt::Key_unknown)
+        if(getKeySetting(m_Keys[idx]) != Qt::Key_unknown)
         {
-          displayString = QKeySequence(getKeySetting(m_Keys[i])).toString();
+          displayString = QKeySequence(getKeySetting(m_Keys[idx])).toString();
         }
-        else if(getMouseButtonSetting(m_Keys[i]) != Qt::MaxMouseButton)
+        else if(getMouseButtonSetting(m_Keys[idx]) != Qt::MaxMouseButton)
         {
-          displayString = buttonName(getMouseButtonSetting(m_Keys[i]));
+          displayString = buttonName(getMouseButtonSetting(m_Keys[idx]));
         }
-        else if(getMouseWheelSetting(m_Keys[i]) != QPoint())
+        else if(getMouseWheelSetting(m_Keys[idx]) != QPoint())
         {
-          displayString = wheelName(getMouseWheelSetting(m_Keys[i]));
+          displayString = wheelName(getMouseWheelSetting(m_Keys[idx]));
         }
 
-        labels[i]->setText(displayString);
+        labels[idx]->setText(displayString);
       }
-    }
-  }
-  else
-  {
-    for(size_t i = 0; i < (size_t)KeyPressDirection::Count; i++)
-    {
-      labels[i * 2 + 0]->setText(tr("Default"));
-      labels[i * 2 + 1]->setText(QString());
     }
   }
 }
@@ -360,4 +325,229 @@ void CameraControlsDialog::updateDisplayLabels()
 CameraControlsDialog::~CameraControlsDialog()
 {
   delete ui;
+}
+
+namespace NativeScanCode
+{
+enum
+{
+#if defined(Q_OS_WIN32)
+  Key_A = 30,
+  Key_S = 31,
+  Key_D = 32,
+  Key_F = 33,
+  Key_W = 17,
+  Key_R = 19,
+#elif defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
+  Key_A = 30 + 8,
+  Key_S = 31 + 8,
+  Key_D = 32 + 8,
+  Key_F = 33 + 8,
+  Key_W = 17 + 8,
+  Key_R = 19 + 8,
+#elif defined(Q_OS_MACOS)
+  // scan codes not supported on OS X
+  Key_A = 0xDEADBEF1,
+  Key_S = 0xDEADBEF2,
+  Key_D = 0xDEADBEF3,
+  Key_F = 0xDEADBEF4,
+  Key_W = 0xDEADBEF5,
+  Key_R = 0xDEADBEF6,
+#else
+#error "Unknown platform! Define NativeScanCode"
+#endif
+};
+};    // namespace NativeScanCode
+
+// default to wasd, this will not work with other keyboard layouts but is the only fallback we have
+static Qt::Key defaultPrimaryKeys[(size_t)KeyPressDirection::Count] = {
+    Qt::Key_W, Qt::Key_S, Qt::Key_A, Qt::Key_D, Qt::Key_R, Qt::Key_F,
+};
+// the default secondaries are fortunately fixed keys
+static const Qt::Key defaultSecondaryKeys[(size_t)KeyPressDirection::Count] = {
+    Qt::Key_Up, Qt::Key_Down, Qt::Key_Left, Qt::Key_Right, Qt::Key_PageUp, Qt::Key_PageDown,
+};
+static bool primaryKeysFilled = false;
+
+#if defined(Q_OS_WIN32)
+#define NOMINMAX
+#include <windows.h>
+
+void FetchDefaultPrimaryKeys()
+{
+  if(primaryKeysFilled)
+    return;
+
+  primaryKeysFilled = true;
+
+  static int scans[(size_t)KeyPressDirection::Count] = {
+      NativeScanCode::Key_W, NativeScanCode::Key_S, NativeScanCode::Key_A,
+      NativeScanCode::Key_D, NativeScanCode::Key_R, NativeScanCode::Key_F,
+  };
+
+  byte state[256] = {};
+  for(size_t i = 0; i < (size_t)KeyPressDirection::Count; i++)
+  {
+    uint vk = MapVirtualKeyW(scans[i], MAPVK_VSC_TO_VK);
+
+    wchar_t buf[8] = {};
+    int res = ToUnicode(vk, scans[i], state, buf, 7, 0);
+
+    if(res == 0)
+    {
+      qCritical() << "couldn't get key for" << i;
+    }
+    else
+    {
+      defaultPrimaryKeys[i] = Qt::Key(QChar(buf[0]).toUpper().unicode());
+    }
+  }
+}
+
+#elif defined(Q_OS_LINUX)
+
+#include <dlfcn.h>
+#include <QX11Info>
+
+// predeclare enough of xkbcommon, so we don't have a new build time dependency on it. Qt will load it for us
+extern "C" {
+struct xkb_state;
+struct xkb_context;
+struct xkb_keymap;
+typedef uint32_t xkb_keysym_t;
+typedef uint32_t xkb_keycode_t;
+enum xkb_context_flags
+{
+  XKB_CONTEXT_NO_DEFAULT_INCLUDES = 1,
+};
+enum xkb_keymap_compile_flags
+{
+  XKB_KEYMAP_COMPILE_NO_FLAGS = 0,
+};
+
+xkb_context *xkb_context_new(xkb_context_flags flags);
+int32_t xkb_x11_get_core_keyboard_device_id(xcb_connection_t *connection);
+xkb_keymap *xkb_x11_keymap_new_from_device(xkb_context *context, xcb_connection_t *connection,
+                                           int32_t device_id, xkb_keymap_compile_flags flags);
+xkb_state *xkb_x11_state_new_from_device(xkb_keymap *keymap, xcb_connection_t *connection,
+                                         int32_t device_id);
+xkb_keysym_t xkb_state_key_get_one_sym(xkb_state *state, xkb_keycode_t key);
+int xkb_keysym_to_utf8(xkb_keysym_t keysym, char *buffer, size_t size);
+void xkb_state_unref(xkb_state *state);
+void xkb_context_unref(xkb_context *context);
+void xkb_keymap_unref(xkb_keymap *keymap);
+
+using PFN_xkb_context_new = decltype(&xkb_context_new);
+using PFN_xkb_x11_get_core_keyboard_device_id = decltype(&xkb_x11_get_core_keyboard_device_id);
+using PFN_xkb_x11_keymap_new_from_device = decltype(&xkb_x11_keymap_new_from_device);
+using PFN_xkb_x11_state_new_from_device = decltype(&xkb_x11_state_new_from_device);
+using PFN_xkb_state_key_get_one_sym = decltype(&xkb_state_key_get_one_sym);
+using PFN_xkb_keysym_to_utf8 = decltype(&xkb_keysym_to_utf8);
+using PFN_xkb_state_unref = decltype(&xkb_state_unref);
+using PFN_xkb_context_unref = decltype(&xkb_context_unref);
+using PFN_xkb_keymap_unref = decltype(&xkb_keymap_unref);
+};
+
+void *findXKBSym(const char *name)
+{
+  static void *searchLibs[] = {
+      RTLD_DEFAULT,
+      dlopen("libxkbcommon.so", RTLD_NOW | RTLD_LOCAL),
+      dlopen("libxkbcommon-x11.so", RTLD_NOW | RTLD_LOCAL),
+      dlopen("libxkbcommon-x11.so.0", RTLD_NOW | RTLD_LOCAL),
+  };
+
+  for(void *lib : searchLibs)
+  {
+    void *ret = dlsym(lib, name);
+    if(ret)
+      return ret;
+  }
+
+  return NULL;
+}
+
+void FetchDefaultPrimaryKeys()
+{
+  if(primaryKeysFilled)
+    return;
+
+  primaryKeysFilled = true;
+
+  PFN_xkb_context_new dyn_xkb_context_new = (PFN_xkb_context_new)findXKBSym("xkb_context_new");
+  PFN_xkb_x11_get_core_keyboard_device_id dyn_xkb_x11_get_core_keyboard_device_id =
+      (PFN_xkb_x11_get_core_keyboard_device_id)findXKBSym("xkb_x11_get_core_keyboard_device_id");
+  PFN_xkb_x11_keymap_new_from_device dyn_xkb_x11_keymap_new_from_device =
+      (PFN_xkb_x11_keymap_new_from_device)findXKBSym("xkb_x11_keymap_new_from_device");
+  PFN_xkb_x11_state_new_from_device dyn_xkb_x11_state_new_from_device =
+      (PFN_xkb_x11_state_new_from_device)findXKBSym("xkb_x11_state_new_from_device");
+  PFN_xkb_state_key_get_one_sym dyn_xkb_state_key_get_one_sym =
+      (PFN_xkb_state_key_get_one_sym)findXKBSym("xkb_state_key_get_one_sym");
+  PFN_xkb_keysym_to_utf8 dyn_xkb_keysym_to_utf8 =
+      (PFN_xkb_keysym_to_utf8)findXKBSym("xkb_keysym_to_utf8");
+  PFN_xkb_state_unref dyn_xkb_state_unref = (PFN_xkb_state_unref)findXKBSym("xkb_state_unref");
+  PFN_xkb_context_unref dyn_xkb_context_unref =
+      (PFN_xkb_context_unref)findXKBSym("xkb_context_unref");
+  PFN_xkb_keymap_unref dyn_xkb_keymap_unref = (PFN_xkb_keymap_unref)findXKBSym("xkb_keymap_unref");
+
+  // if both general and xcb symbols loaded, we're good to go
+  if(dyn_xkb_context_new && dyn_xkb_x11_keymap_new_from_device)
+  {
+    xcb_connection_t *connection = QX11Info::connection();
+    xkb_context *context = dyn_xkb_context_new(XKB_CONTEXT_NO_DEFAULT_INCLUDES);
+    int core_device_id = dyn_xkb_x11_get_core_keyboard_device_id(connection);
+    xkb_keymap *keymap = dyn_xkb_x11_keymap_new_from_device(context, connection, core_device_id,
+                                                            XKB_KEYMAP_COMPILE_NO_FLAGS);
+    xkb_state *state = dyn_xkb_x11_state_new_from_device(keymap, connection, core_device_id);
+
+    static int scans[(size_t)KeyPressDirection::Count] = {
+        NativeScanCode::Key_W, NativeScanCode::Key_S, NativeScanCode::Key_A,
+        NativeScanCode::Key_D, NativeScanCode::Key_R, NativeScanCode::Key_F,
+    };
+
+    for(size_t i = 0; i < (size_t)KeyPressDirection::Count; i++)
+    {
+      xkb_keysym_t sym = dyn_xkb_state_key_get_one_sym(state, scans[i]);
+
+      char buf[32] = {};
+      int len = dyn_xkb_keysym_to_utf8(sym, buf, 31);
+
+      if(len == 0)
+      {
+        qCritical() << "couldn't get key for" << i;
+      }
+      else
+      {
+        defaultPrimaryKeys[i] = Qt::Key(QString::fromUtf8(buf).unicode()->toUpper().unicode());
+      }
+    }
+
+    dyn_xkb_state_unref(state);
+    dyn_xkb_keymap_unref(keymap);
+    dyn_xkb_context_unref(context);
+  }
+}
+
+#else
+
+void FetchDefaultPrimaryKeys()
+{
+  if(primaryKeysFilled)
+    return;
+
+  primaryKeysFilled = true;
+
+  qCritical() << "Unsupported platform to fetch default primary keys";
+}
+
+#endif
+
+Qt::Key getDefaultKey(KeyPressDirection dir, bool primary)
+{
+  FetchDefaultPrimaryKeys();
+
+  if(primary)
+    return defaultPrimaryKeys[(size_t)dir];
+
+  return defaultSecondaryKeys[(size_t)dir];
 }

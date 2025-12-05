@@ -50,6 +50,8 @@ constexpr int keySettingIdx(KeyPressDirection dir, bool primary)
   return int(dir) * 2 + (primary ? 0 : 1);
 }
 
+Qt::Key getDefaultKey(KeyPressDirection dir, bool primary);
+
 constexpr Qt::Key getKeySetting(uint32_t k)
 {
   return k != 0 && k < 0x10000000U ? Qt::Key(k) : Qt::Key_unknown;
