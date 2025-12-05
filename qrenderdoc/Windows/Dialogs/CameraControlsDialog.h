@@ -98,6 +98,11 @@ inline uint32_t makeMouseWheelSetting(QPoint angleDelta)
   return 0;
 }
 
+constexpr uint32_t makeUnboundSetting()
+{
+  return 0x40000000U;
+}
+
 struct ICaptureContext;
 class QDialog;
 
@@ -123,6 +128,7 @@ private:
 
   bool eventFilter(QObject *watched, QEvent *event) override;
 
+  QString nameForSetting(uint32_t k);
   QString buttonName(Qt::MouseButton button);
   QString wheelName(QPoint angleDelta);
   void updateDisplayLabels();

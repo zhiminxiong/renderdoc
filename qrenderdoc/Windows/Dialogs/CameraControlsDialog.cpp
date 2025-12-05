@@ -167,11 +167,65 @@ void CameraControlsDialog::setKey()
   }
   else if(getKeySetting(m_Keybind) == Qt::Key_Escape)
   {
-    m_Keys[keyIdx] = 0;
+    m_Keys[keyIdx] = makeUnboundSetting();
   }
   else
   {
-    m_Keys[keyIdx] = m_Keybind;
+    bool update = true;
+
+    // check for duplicates
+    for(size_t i = 0; i < m_Keys.size(); i++)
+    {
+      const KeyPressDirection dir = KeyPressDirection(i / 2);
+      const bool isPrimary = (i % 2) == 0;
+
+      bool isDefault = false;
+      uint32_t k = m_Keys[i];
+      if(k == 0)
+      {
+        k = getDefaultKey(dir, isPrimary);
+        isDefault = true;
+      }
+
+      if(k == m_Keybind && keyIdx != (int)i)
+      {
+        QString idxName;
+        switch(dir)
+        {
+          case KeyPressDirection::Left: idxName = tr("Left"); break;
+          case KeyPressDirection::Right: idxName = tr("Right"); break;
+          case KeyPressDirection::Forward: idxName = tr("Forward"); break;
+          case KeyPressDirection::Back: idxName = tr("Back"); break;
+          case KeyPressDirection::Up: idxName = tr("Up"); break;
+          case KeyPressDirection::Down: idxName = tr("Down"); break;
+          default: idxName = lit("???"); break;
+        }
+
+        if(isPrimary)
+          idxName += tr(" - Primary");
+        else
+          idxName += tr(" - Secondary");
+
+        if(isDefault)
+          idxName += tr(" (Default bind)");
+
+        QMessageBox::StandardButton ret =
+            RDDialog::question(this, tr("Conflicting keybind"),
+                               tr("%1 is already bound to %2. Continue and unbind old key?")
+                                   .arg(nameForSetting(m_Keybind))
+                                   .arg(idxName));
+
+        if(ret == QMessageBox::No)
+          update = false;
+        else if(ret == QMessageBox::Yes)
+          m_Keys[i] = makeUnboundSetting();
+
+        break;
+      }
+    }
+
+    if(update)
+      m_Keys[keyIdx] = m_Keybind;
   }
 
   updateDisplayLabels();
@@ -265,6 +319,18 @@ QString CameraControlsDialog::wheelName(QPoint angleDelta)
   return tr("Unknown wheel");
 }
 
+QString CameraControlsDialog::nameForSetting(uint32_t k)
+{
+  if(getKeySetting(k) != Qt::Key_unknown)
+    return QKeySequence(getKeySetting(k)).toString();
+  else if(getMouseButtonSetting(k) != Qt::MaxMouseButton)
+    return buttonName(getMouseButtonSetting(k));
+  else if(getMouseWheelSetting(k) != QPoint())
+    return wheelName(getMouseWheelSetting(k));
+
+  return tr("Unbound");
+}
+
 void CameraControlsDialog::updateDisplayLabels()
 {
   QLineEdit *labels[(size_t)KeyPressDirection::NumSettings] = {
@@ -298,25 +364,11 @@ void CameraControlsDialog::updateDisplayLabels()
       {
         labels[idx]->setText(
             tr("Default - %1")
-                .arg(QKeySequence(getDefaultKey(KeyPressDirection(i), j == 0)).toString()));
+                .arg(nameForSetting(makeKeySetting(getDefaultKey(KeyPressDirection(i), j == 0)))));
       }
       else
       {
-        QString displayString;
-        if(getKeySetting(m_Keys[idx]) != Qt::Key_unknown)
-        {
-          displayString = QKeySequence(getKeySetting(m_Keys[idx])).toString();
-        }
-        else if(getMouseButtonSetting(m_Keys[idx]) != Qt::MaxMouseButton)
-        {
-          displayString = buttonName(getMouseButtonSetting(m_Keys[idx]));
-        }
-        else if(getMouseWheelSetting(m_Keys[idx]) != QPoint())
-        {
-          displayString = wheelName(getMouseWheelSetting(m_Keys[idx]));
-        }
-
-        labels[idx]->setText(displayString);
+        labels[idx]->setText(nameForSetting(m_Keys[idx]));
       }
     }
   }
