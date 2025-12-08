@@ -4035,7 +4035,7 @@ void BufferViewer::populateBBox(PopulateBufferData *bufdata)
 
     bbox->input[0] = bufdata->inConfig;
     bbox->input[1] = bufdata->out1Config;
-    bbox->input[2] = bufdata->out1Config;
+    bbox->input[2] = bufdata->out2Config;
 
     QPointer<BufferViewer> me(this);
 
