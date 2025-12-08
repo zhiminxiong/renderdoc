@@ -139,9 +139,10 @@ void WrappedVulkan::ExecuteIndirectReadback(VkCommandBuffer commandBuffer,
                                             const VkIndirectRecordData &indirectcopy)
 {
   ObjDisp(commandBuffer)
-      ->CmdPipelineBarrier(Unwrap(commandBuffer), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, NULL, 1,
-                           &indirectcopy.paramsBarrier, 0, NULL);
+      ->CmdPipelineBarrier(Unwrap(commandBuffer),
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0,
+                           NULL, 1, &indirectcopy.paramsBarrier, 0, NULL);
 
   ObjDisp(commandBuffer)
       ->CmdCopyBuffer(Unwrap(commandBuffer), Unwrap(indirectcopy.paramsCopy.src),
@@ -150,9 +151,10 @@ void WrappedVulkan::ExecuteIndirectReadback(VkCommandBuffer commandBuffer,
   if(indirectcopy.countCopy.src != VK_NULL_HANDLE)
   {
     ObjDisp(commandBuffer)
-        ->CmdPipelineBarrier(Unwrap(commandBuffer), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, NULL, 1,
-                             &indirectcopy.countBarrier, 0, NULL);
+        ->CmdPipelineBarrier(Unwrap(commandBuffer),
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0,
+                             NULL, 1, &indirectcopy.countBarrier, 0, NULL);
 
     ObjDisp(commandBuffer)
         ->CmdCopyBuffer(Unwrap(commandBuffer), Unwrap(indirectcopy.countCopy.src),

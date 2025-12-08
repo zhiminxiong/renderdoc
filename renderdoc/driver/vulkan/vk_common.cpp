@@ -673,31 +673,34 @@ VkShaderStageFlags ShaderMaskFromIndex(size_t index)
 void DoPipelineBarrier(VkCommandBuffer cmd, size_t count, const VkImageMemoryBarrier *barriers)
 {
   RDCASSERT(cmd != VK_NULL_HANDLE);
-  ObjDisp(cmd)->CmdPipelineBarrier(Unwrap(cmd), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
-                                   NULL,                          // global memory barriers
-                                   0, NULL,                       // buffer memory barriers
-                                   (uint32_t)count, barriers);    // image memory barriers
+  ObjDisp(cmd)->CmdPipelineBarrier(
+      Unwrap(cmd), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0,
+      NULL,                          // global memory barriers
+      0, NULL,                       // buffer memory barriers
+      (uint32_t)count, barriers);    // image memory barriers
 }
 
 void DoPipelineBarrier(VkCommandBuffer cmd, size_t count, const VkBufferMemoryBarrier *barriers)
 {
   RDCASSERT(cmd != VK_NULL_HANDLE);
-  ObjDisp(cmd)->CmdPipelineBarrier(Unwrap(cmd), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
-                                   NULL,                         // global memory barriers
-                                   (uint32_t)count, barriers,    // buffer memory barriers
-                                   0, NULL);                     // image memory barriers
+  ObjDisp(cmd)->CmdPipelineBarrier(
+      Unwrap(cmd), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0,
+      NULL,                         // global memory barriers
+      (uint32_t)count, barriers,    // buffer memory barriers
+      0, NULL);                     // image memory barriers
 }
 
 void DoPipelineBarrier(VkCommandBuffer cmd, size_t count, const VkMemoryBarrier *barriers)
 {
   RDCASSERT(cmd != VK_NULL_HANDLE);
-  ObjDisp(cmd)->CmdPipelineBarrier(Unwrap(cmd), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, (uint32_t)count,
-                                   barriers,    // global memory barriers
-                                   0, NULL,     // buffer memory barriers
-                                   0, NULL);    // image memory barriers
+  ObjDisp(cmd)->CmdPipelineBarrier(
+      Unwrap(cmd), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, (uint32_t)count,
+      barriers,    // global memory barriers
+      0, NULL,     // buffer memory barriers
+      0, NULL);    // image memory barriers
 }
 
 VkDescriptorType MakeVkDescriptorType(DescriptorType type, bool inputAttachment)
