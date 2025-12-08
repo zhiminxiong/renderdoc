@@ -21,28 +21,40 @@ You can reset the camera to its default location with the reset button |arrow_un
 
 You can also auto-fit the camera to the mesh for the VS Input mesh. The auto-fit button |wand| will fit the camera to the axis-aligned bounding box of the mesh.
 
-To be able to view the post-transform mesh in view-space, RenderDoc attempts to guess the projection matrix and unprojects the output data.
-
-By default the projection matrix is guessed as a standard perspective matrix. Using the post-projection w and z values and the aspect ratio of the output targets a reasonable approximation can be estimated. The FOV must be specified though - the default is 90 but this can be refined by opening the options.
-
 .. |cog| image:: ../imgs/icons/cog.png
 
-Opening the options |cog| you can specify the FOV used in the projection matrix. If you used an orthographic matrix instead you can specify this - although this requires manual tuning of the matrix parameters.
+Opening the options |cog| you can configure various things about the mesh viewer's display.
 
 .. figure:: ../imgs/Screenshots/BufferOptions.png
 
-	Options: The options pop-out of the buffer viewer.
+	Options: The options pop-out of the buffer viewer, depending on if the current stage is an intermediate or rasterizer output stage.
+
+For intermediate or input vertex data you can select the axis configuration, by default Y-up and left-handed. Common options are presented directly, or you can select a custom mapping to configure a different convention.
+
+For data output to the rasterizer RenderDoc attempts to guess the projection matrix and unprojects the output data to display it in view space.
+
+You can configure the projection matrix that your vertex pipeline uses. By default estimates are made from the generated output data to give a best-guess unprojection, but this can be inaccurate especially regarding near and far planes. The FOV can not be determined so this defaults to 90 and can be customised from there.
+
+This also allows you to select an orthographic projection, which can not be guessed from the vertex data.
+
+.. figure:: ../imgs/Screenshots/ProjectionGuess.png
+
+	Options: The projection matrix configuration.
 
 Also available in the options is a simple speed multiplier for the Flycam controls, to fine-tune how fast it moves to the dimensions of the mesh.
 
 Flycam controls
 ---------------
 
-The flycam controls available use the mouse to navigate and 'look', and the keyboard to 'move'. Holding down the left mouse button will rotate the camera's direction around the camera's current position.
+The flycam controls available use the mouse and keyboard to look and move around the model or world space. Holding down the left mouse button will rotate the camera's direction around the camera's current position.
 
-The arrow keys will move forward, back, left and right, according to the current direction of the camera. The traditional FPS 'WASD' controls will also function, relative to an english keyboard. E.g. on an AZERTY keyboard this will be 'ZQSD' instead.
+The default controls allow the arrow keys will move forward, back, left and right, according to the current direction of the camera, as well as page up and page down to move vertically 'up' and 'down' along the vertical axis. You can also use traditional FPS 'WASD' controls will also function, though these use the physical buttons. E.g. on an AZERTY keyboard this will be 'ZQSD' instead. 'R' and 'F' are also default bound to move vertically.
 
-Page up and Page down will move vertically 'up' and 'down' relative to the camera. This is also available on the main keyboard with 'R' and 'F' (again relative to an english keyboard).
+These controls can be customised by clicking the 'Camera Settings & Controls' button, which allows configuring primary and secondary keys (initially showing the default bindings on your current keyboard layout) as well as letting you specify the near and far planes of the display - which is useful for very small ranged vertex data.
+
+.. figure:: ../imgs/Screenshots/MeshControls.png
+
+	Options: The customisable controls of the mesh viewer flycam.
 
 Mesh Preview
 ------------
