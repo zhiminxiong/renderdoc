@@ -177,19 +177,15 @@ void VulkanRenderState::BeginRenderPassAndApplyState(WrappedVulkan *vk, VkComman
 {
   if(dynamicRendering.active)
   {
-    // for action callbacks that want to stop the renderpass, do something, then start it with
-    // original state, we need to preserve the suspending flag instead of removing it. For other
-    // uses, we remove both flags as we're just doing a manual start/stop and we're not in a
-    // suspended pass
+    // this is left in case for future refactors - for action callbacks that want to stop the
+    // renderpass, do something, then start it with original state, we need to preserve the
+    // suspending flag instead of removing it. For other uses, we remove both flags as we're just
+    // doing a manual start/stop and we're not in a suspended pass.
+    // Since we do not replay suspend/resume and instead let it defer to load/store, this is not needed
+    (void)obeySuspending;
+
     VkRenderingFlags flags = dynamicRendering.flags;
-    if(obeySuspending)
-    {
-      flags &= ~VK_RENDERING_RESUMING_BIT;
-    }
-    else
-    {
-      flags &= ~(VK_RENDERING_RESUMING_BIT | VK_RENDERING_SUSPENDING_BIT);
-    }
+    flags &= ~(VK_RENDERING_RESUMING_BIT | VK_RENDERING_SUSPENDING_BIT);
 
     RenderingInfoStructs structs;
     setupRenderingInfo(dynamicRendering, &structs, flags, renderArea);
@@ -325,18 +321,10 @@ void VulkanRenderState::EndRenderPass(VkCommandBuffer cmd)
 
 void VulkanRenderState::FinishSuspendedRenderPass(VkCommandBuffer cmd)
 {
-  if(dynamicRendering.active && dynamicRendering.suspended)
-  {
-    // still resume the existing pass, but don't suspend again after that
-    const VkRenderingFlags flags = dynamicRendering.flags & ~VK_RENDERING_SUSPENDING_BIT;
-
-    RenderingInfoStructs structs;
-    setupRenderingInfo(dynamicRendering, &structs, flags, renderArea);
-
-    // do nothing, just resume and then end without suspending
-    ObjDisp(cmd)->CmdBeginRendering(Unwrap(cmd), &structs.info);
-    ObjDisp(cmd)->CmdEndRendering(Unwrap(cmd));
-  }
+  // this is left in case for future refactors - this would resume then fully finish a suspended
+  // renderpass. Typically for an action callback that wants to properly stop a renderpass to do
+  // other work.
+  // Since we do not replay suspend/resume and instead let it defer to load/store, this is not needed.
 }
 
 void VulkanRenderState::EndTransformFeedback(WrappedVulkan *vk, VkCommandBuffer cmd)

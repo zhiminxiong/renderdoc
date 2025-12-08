@@ -773,6 +773,7 @@ private:
     rdcarray<CommandBufferNode *> childCmdNodes;
     CommandBufferNode *rootNode = NULL;
     bool renderPassActive = false;
+    bool renderPassSuspended = false;
 
     void DeleteChildren()
     {
@@ -963,7 +964,7 @@ private:
   CommandBufferNode *GetCommandBufferPartialSubmission(ResourceId cmdId);
 
   // determines whether a render pass is active for any node within the partial stack.
-  bool IsPartialRenderPassActive();
+  bool IsPartialRenderPassActiveUnsuspended();
 
   // determines whether we should track the open/close state of a renderpass.
   bool ShouldUpdateRenderpassActive(ResourceId cmdId, bool dynamicRendering = false);

@@ -1933,102 +1933,8 @@ bool WrappedVulkan::Serialise_vkEndCommandBuffer(SerialiserType &ser, VkCommandB
             // the only way dynamic rendering can be active in a partial command buffer is
             // if it's suspended, as the matching vkCmdEndRendering will be replayed before
             // vkEndCommandBuffer even if outside of rerecord range.
-            // We need to resume and then end without suspending.
-            bool suspended = (renderstate.dynamicRendering.flags & VK_RENDERING_SUSPENDING_BIT) != 0;
-            if(suspended)
-            {
-              VkRenderingInfo info = {};
-              info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-
-              // resume but don't suspend - end for real
-              info.flags = renderstate.dynamicRendering.flags &
-                           ~(VK_RENDERING_RESUMING_BIT | VK_RENDERING_SUSPENDING_BIT);
-              info.flags |= VK_RENDERING_RESUMING_BIT;
-
-              info.layerCount = renderstate.dynamicRendering.layerCount;
-              info.renderArea = renderstate.renderArea;
-              info.viewMask = renderstate.dynamicRendering.viewMask;
-
-              info.pDepthAttachment = &renderstate.dynamicRendering.depth;
-              if(renderstate.dynamicRendering.depth.imageLayout == VK_IMAGE_LAYOUT_UNDEFINED)
-                info.pDepthAttachment = NULL;
-              info.pStencilAttachment = &renderstate.dynamicRendering.stencil;
-              if(renderstate.dynamicRendering.stencil.imageLayout == VK_IMAGE_LAYOUT_UNDEFINED)
-                info.pStencilAttachment = NULL;
-
-              info.colorAttachmentCount = (uint32_t)renderstate.dynamicRendering.color.size();
-              info.pColorAttachments = renderstate.dynamicRendering.color.data();
-
-              VkRenderingFragmentDensityMapAttachmentInfoEXT fragmentDensity = {
-                  VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_DENSITY_MAP_ATTACHMENT_INFO_EXT,
-                  NULL,
-                  renderstate.dynamicRendering.fragmentDensityView,
-                  renderstate.dynamicRendering.fragmentDensityLayout,
-              };
-
-              if(renderstate.dynamicRendering.fragmentDensityView != VK_NULL_HANDLE)
-              {
-                fragmentDensity.pNext = info.pNext;
-                info.pNext = &fragmentDensity;
-              }
-
-              VkRenderingFragmentShadingRateAttachmentInfoKHR shadingRate = {
-                  VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR,
-                  NULL,
-                  renderstate.dynamicRendering.shadingRateView,
-                  renderstate.dynamicRendering.shadingRateLayout,
-                  renderstate.dynamicRendering.shadingRateTexelSize,
-              };
-
-              if(renderstate.dynamicRendering.shadingRateView != VK_NULL_HANDLE)
-              {
-                shadingRate.pNext = info.pNext;
-                info.pNext = &shadingRate;
-              }
-
-              VkMultisampledRenderToSingleSampledInfoEXT tileOnlyMSAA = {
-                  VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT,
-                  NULL,
-                  renderstate.dynamicRendering.tileOnlyMSAAEnable,
-                  renderstate.dynamicRendering.tileOnlyMSAASampleCount,
-              };
-
-              if(renderstate.dynamicRendering.tileOnlyMSAAEnable)
-              {
-                tileOnlyMSAA.pNext = info.pNext;
-                info.pNext = &tileOnlyMSAA;
-              }
-
-              byte *tempMem = GetTempMemory(GetNextPatchSize(&info));
-              VkRenderingInfo *unwrappedInfo = UnwrapStructAndChain(m_State, tempMem, &info);
-
-              // do the same load/store patching as normal here too
-              if(m_ReplayOptions.optimisation != ReplayOptimisationLevel::Fastest)
-              {
-                for(uint32_t i = 0; i < unwrappedInfo->colorAttachmentCount + 2; i++)
-                {
-                  VkRenderingAttachmentInfo *att =
-                      (VkRenderingAttachmentInfo *)unwrappedInfo->pColorAttachments + i;
-
-                  if(i == unwrappedInfo->colorAttachmentCount)
-                    att = (VkRenderingAttachmentInfo *)unwrappedInfo->pDepthAttachment;
-                  else if(i == unwrappedInfo->colorAttachmentCount + 1)
-                    att = (VkRenderingAttachmentInfo *)unwrappedInfo->pStencilAttachment;
-
-                  if(!att)
-                    continue;
-
-                  if(att->storeOp != VK_ATTACHMENT_STORE_OP_NONE)
-                    att->storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-                  if(att->loadOp == VK_ATTACHMENT_LOAD_OP_DONT_CARE)
-                    att->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-                }
-              }
-
-              ObjDisp(commandBuffer)->CmdBeginRendering(Unwrap(commandBuffer), unwrappedInfo);
-              ObjDisp(commandBuffer)->CmdEndRendering(Unwrap(commandBuffer));
-            }
+            // Since we do not replay suspend/resume currently there is nothing to do here, but if
+            // we did then we'd need to resume and immediately finish (without suspending) the renderpass.
           }
           else
           {
@@ -7687,6 +7593,9 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
     byte *tempMem = GetTempMemory(GetNextPatchSize(&RenderingInfo));
     VkRenderingInfo *unwrappedInfo = UnwrapStructAndChain(m_State, tempMem, &RenderingInfo);
 
+    // do not replay with suspend/resume, explicitly load and store everything.
+    unwrappedInfo->flags &= ~(VK_RENDERING_SUSPENDING_BIT | VK_RENDERING_RESUMING_BIT);
+
     if(IsActiveReplaying(m_State))
     {
       if(InRerecordRange(m_LastCmdBufferID))
@@ -7698,6 +7607,7 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
         {
           GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassActive =
               m_BakedCmdBufferInfo[m_LastCmdBufferID].renderPassOpen = true;
+          GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassSuspended = false;
         }
         m_BakedCmdBufferInfo[m_LastCmdBufferID].activeSubpass = 0;
 
@@ -7843,7 +7753,9 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
         // do the same load/store op patching that we do for regular renderpass creates to enable
         // introspection. It doesn't matter that we don't do this before during load because the
         // effects of that are never user-visible.
-        if(m_ReplayOptions.optimisation != ReplayOptimisationLevel::Fastest)
+        // we must do this when resuming/suspending to ensure we promote to load/store
+        if(m_ReplayOptions.optimisation != ReplayOptimisationLevel::Fastest ||
+           (RenderingInfo.flags & (VK_RENDERING_SUSPENDING_BIT | VK_RENDERING_RESUMING_BIT)))
         {
           if(Vulkan_Hack_DisableRPNormalisation())
           {
@@ -7873,6 +7785,10 @@ bool WrappedVulkan::Serialise_vkCmdBeginRendering(SerialiserType &ser, VkCommand
                 att->storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
               if(att->loadOp == VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                att->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+              // if this is supposed to be resuming, don't apply any clears!
+              if(RenderingInfo.flags & VK_RENDERING_RESUMING_BIT)
                 att->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
             }
           }
@@ -8116,10 +8032,12 @@ bool WrappedVulkan::Serialise_vkCmdEndRendering(SerialiserType &ser, VkCommandBu
         {
           m_BakedCmdBufferInfo[m_LastCmdBufferID].renderPassOpen = false;
 
-          // if this rendering is just being suspended, the pass is still active
-          if(!suspending && IsCommandBufferPartial(m_LastCmdBufferID))
+          if(IsCommandBufferPartial(m_LastCmdBufferID))
           {
-            GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassActive = false;
+            // if this rendering is just being suspended, the pass is still active
+            if(!suspending)
+              GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassActive = false;
+            GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassSuspended = suspending;
           }
         }
 
@@ -8386,10 +8304,12 @@ bool WrappedVulkan::Serialise_vkCmdEndRendering2EXT(SerialiserType &ser,
         {
           m_BakedCmdBufferInfo[m_LastCmdBufferID].renderPassOpen = false;
 
-          // if this rendering is just being suspended, the pass is still active
-          if(!suspending && IsCommandBufferPartial(m_LastCmdBufferID))
+          if(IsCommandBufferPartial(m_LastCmdBufferID))
           {
-            GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassActive = false;
+            // if this rendering is just being suspended, the pass is still active
+            if(!suspending)
+              GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassActive = false;
+            GetCommandBufferPartialSubmission(m_LastCmdBufferID)->renderPassSuspended = suspending;
           }
         }
 

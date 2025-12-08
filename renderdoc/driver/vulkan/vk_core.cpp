@@ -4993,7 +4993,7 @@ void WrappedVulkan::ReplayLog(uint32_t startEventID, uint32_t endEventID, Replay
       m_RenderState.subpassContents = VK_SUBPASS_CONTENTS_INLINE;
       m_RenderState.dynamicRendering.flags &= ~VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
 
-      bool rpActive = IsPartialRenderPassActive();
+      bool rpActive = IsPartialRenderPassActiveUnsuspended();
 
       if(rpActive)
       {
@@ -5089,7 +5089,7 @@ void WrappedVulkan::ReplayLog(uint32_t startEventID, uint32_t endEventID, Replay
       // even if it wasn't before (if the above event was a CmdBeginRenderPass).
       // If we began our own custom single-action loadrp, and it was ended by a CmdEndRenderPass,
       // we need to reverse the virtual transitions we did above, as it won't happen otherwise
-      if(IsPartialRenderPassActive())
+      if(IsPartialRenderPassActiveUnsuspended())
         m_RenderState.EndRenderPass(cmd);
 
       // we might have replayed a CmdBeginRenderPass or CmdEndRenderPass,
@@ -5685,11 +5685,11 @@ ResourceId WrappedVulkan::GetASFromAddr(VkDeviceAddress addr)
   return m_ASLookupByAddr[addr];
 }
 
-bool WrappedVulkan::IsPartialRenderPassActive()
+bool WrappedVulkan::IsPartialRenderPassActiveUnsuspended()
 {
   for(const CommandBufferNode &cmdNode : m_Partial.partialStack)
   {
-    if(cmdNode.renderPassActive)
+    if(cmdNode.renderPassActive && !cmdNode.renderPassSuspended)
       return true;
   }
 

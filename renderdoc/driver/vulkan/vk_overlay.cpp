@@ -996,7 +996,7 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
   const VulkanCreationInfo::Pipeline &pipeInfo =
       m_pDriver->m_CreationInfo.m_Pipeline[state.graphics.pipeline];
 
-  bool rpActive = m_pDriver->IsPartialRenderPassActive();
+  bool rpActive = m_pDriver->IsPartialRenderPassActiveUnsuspended();
 
   if((mainDraw && !(mainDraw->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall))) ||
      !rpActive)
