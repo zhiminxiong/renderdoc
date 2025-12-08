@@ -5702,7 +5702,7 @@ bool BufferViewer::isCurrentRasterOut()
         return true;
       else if(m_Ctx.CurPipelineState().GetShader(ShaderStage::Tess_Eval) == ResourceId() &&
               m_Ctx.CurPipelineState().GetShader(ShaderStage::Geometry) == ResourceId() &&
-              m_CurStage != MeshDataStage::VSOut)
+              m_CurStage == MeshDataStage::VSOut)
         return true;
     }
   }
