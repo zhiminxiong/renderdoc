@@ -2464,7 +2464,6 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   m_Config.exploderScale = 1.0f;
 
   ui->outputTabs->setCurrentIndex(0);
-  m_CurStage = MeshDataStage::VSIn;
 
   ui->inTable->setFont(Formatter::FixedFont());
   ui->out1Table->setFont(Formatter::FixedFont());
@@ -2479,9 +2478,15 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   ui->camSpeed->setFont(Formatter::PreferredFont());
 
   if(meshview)
+  {
+    m_CurStage = MeshDataStage::TaskOut;
     SetupMeshView();
+  }
   else
+  {
+    m_CurStage = MeshDataStage::VSIn;
     SetupRawView();
+  }
 
   m_ExportMenu = new QMenu(this);
   m_ExportCSV = new QAction(this);
@@ -7097,7 +7102,7 @@ void BufferViewer::on_outputTabs_currentChanged(int index)
   ui->outputTabs->widget(index)->layout()->addWidget(ui->renderContainer);
 
   if(index == 0)
-    m_CurStage = MeshDataStage::VSIn;
+    m_CurStage = isMeshDraw() ? MeshDataStage::TaskOut : MeshDataStage::VSIn;
   else if(index == 1)
     m_CurStage = isMeshDraw() ? MeshDataStage::MeshOut : MeshDataStage::VSOut;
   else if(index == 2)
