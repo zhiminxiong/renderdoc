@@ -100,6 +100,12 @@ public:
 
   virtual rdcarray<rdcstr> GetResolve(const rdcarray<uint64_t> &callstack);
 
+  virtual ResultDetails EmbedDependenciesIntoCapture();
+  virtual ResultDetails RemoveDependenciesFromCapture();
+  virtual bool HasEmbeddedDependencies();
+  virtual bool HasPendingDependencies();
+  virtual rdcarray<rdcstr> GetPendingDependenciesNicknames();
+
 protected:
   Network::Socket *m_Socket;
   WriteSerialiser *writer;

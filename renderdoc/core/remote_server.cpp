@@ -87,6 +87,11 @@ enum RemoteServerPacket
   eRemoteServer_WriteSection,
   eRemoteServer_GetAvailableGPUs,
   eRemoteServer_RemoteServerCount,
+  eRemoteServer_EmbedDependenciesIntoCapture,
+  eRemoteServer_RemoveDependenciesFromCapture,
+  eRemoteServer_HasEmbeddedDependencies,
+  eRemoteServer_HasPendingDependencies,
+  eRemoteServer_GetPendingDependenciesNicknames,
 };
 
 DECLARE_REFLECTION_ENUM(RemoteServerPacket);
@@ -131,6 +136,14 @@ rdcstr DoStringise(const RemoteServerPacket &el)
     STRINGISE_ENUM_NAMED(eRemoteServer_WriteSection, "WriteSection");
     STRINGISE_ENUM_NAMED(eRemoteServer_GetAvailableGPUs, "GetAvailableGPUs");
     STRINGISE_ENUM_NAMED(eRemoteServer_RemoteServerCount, "RemoteServerCount");
+    STRINGISE_ENUM_NAMED(eRemoteServer_EmbedDependenciesIntoCapture,
+                         "EmbedDependenciesIntoCapture");
+    STRINGISE_ENUM_NAMED(eRemoteServer_RemoveDependenciesFromCapture,
+                         "RemoveDependenciesFromCapture");
+    STRINGISE_ENUM_NAMED(eRemoteServer_HasEmbeddedDependencies, "HasEmbeddedDependencies");
+    STRINGISE_ENUM_NAMED(eRemoteServer_HasPendingDependencies, "HasPendingDependencies");
+    STRINGISE_ENUM_NAMED(eRemoteServer_GetPendingDependenciesNicknames,
+                         "GetPendingDependenciesNicknames");
   }
   END_ENUM_STRINGISE();
 }
@@ -537,6 +550,18 @@ static void ActiveRemoteClientThread(ClientThread *threadData,
             }
           });
 
+          // This has to be before the driver is created for the capture
+          RenderDoc::Inst().ClearTrackedFiles();
+          if(rdc->SectionIndex(SectionType::EmbeddedExternalFiles) >= 0)
+          {
+            ResultDetails ret = RenderDoc::Inst().ReadExternalFiles(rdc);
+            if(!ret.OK())
+            {
+              RDCERR("ReadExternalFiles failed Code:'%s' Message:'%s'", ToStr(ret.code).c_str(),
+                     ret.Message().c_str());
+            }
+          }
+
           // if we have a replay driver, try to create it so we can display a local preview e.g.
           if(RenderDoc::Inst().HasReplayDriver(rdc->GetDriver()))
           {
@@ -895,6 +920,108 @@ static void ActiveRemoteClientThread(ClientThread *threadData,
         SCOPED_SERIALISE_CHUNK(eRemoteServer_ExecuteAndInject);
         SERIALISE_ELEMENT(res);
         SERIALISE_ELEMENT(ident);
+      }
+    }
+    else if(type == eRemoteServer_EmbedDependenciesIntoCapture)
+    {
+      reader.EndChunk();
+
+      RDResult result;
+      if(rdc)
+      {
+        result = RenderDoc::Inst().EmbedExternalFiles(rdc);
+      }
+      else
+      {
+        SET_ERROR_RESULT(result, ResultCode::InternalError,
+                         "Attempt to embed external dependency files with no capture open");
+      }
+
+      {
+        WRITE_DATA_SCOPE();
+        SCOPED_SERIALISE_CHUNK(eRemoteServer_EmbedDependenciesIntoCapture);
+        SERIALISE_ELEMENT(result);
+      }
+    }
+    else if(type == eRemoteServer_RemoveDependenciesFromCapture)
+    {
+      reader.EndChunk();
+
+      RDResult result;
+      if(rdc)
+      {
+        result = RenderDoc::Inst().RemoveExternalFiles(rdc);
+      }
+      else
+      {
+        SET_ERROR_RESULT(result, ResultCode::InternalError,
+                         "Attempt to remove external files with no capture open");
+      }
+
+      {
+        WRITE_DATA_SCOPE();
+        SCOPED_SERIALISE_CHUNK(eRemoteServer_RemoveDependenciesFromCapture);
+        SERIALISE_ELEMENT(result);
+      }
+    }
+    else if(type == eRemoteServer_HasEmbeddedDependencies)
+    {
+      reader.EndChunk();
+
+      bool res = false;
+      if(rdc)
+      {
+        res = RenderDoc::Inst().HasEmbeddedFiles(rdc);
+      }
+      else
+      {
+        RDCWARN("Attempt to check for embedded files with no capture open");
+      }
+
+      {
+        WRITE_DATA_SCOPE();
+        SCOPED_SERIALISE_CHUNK(eRemoteServer_HasEmbeddedDependencies);
+        SERIALISE_ELEMENT(res);
+      }
+    }
+    else if(type == eRemoteServer_HasPendingDependencies)
+    {
+      reader.EndChunk();
+
+      bool res = false;
+      if(rdc)
+      {
+        res = RenderDoc::Inst().HasTrackedFileData();
+      }
+      else
+      {
+        RDCWARN("Attempt to check for externally referenced files with no capture open");
+      }
+
+      {
+        WRITE_DATA_SCOPE();
+        SCOPED_SERIALISE_CHUNK(eRemoteServer_HasPendingDependencies);
+        SERIALISE_ELEMENT(res);
+      }
+    }
+    else if(type == eRemoteServer_GetPendingDependenciesNicknames)
+    {
+      reader.EndChunk();
+
+      rdcarray<rdcstr> res;
+      if(rdc)
+      {
+        res = RenderDoc::Inst().GetTrackedFileNicknames();
+      }
+      else
+      {
+        RDCWARN("Attempt to get nickanmes of externally referenced files with no capture open");
+      }
+
+      {
+        WRITE_DATA_SCOPE();
+        SCOPED_SERIALISE_CHUNK(eRemoteServer_GetPendingDependenciesNicknames);
+        SERIALISE_ELEMENT(res);
       }
     }
     else if((int)type >= eReplayProxy_First && proxy)
@@ -1990,7 +2117,7 @@ ResultDetails RemoteServer::WriteSection(const SectionProperties &props, const b
     }
     else
     {
-      RDCERR("Unexpected response to has write section request");
+      RDCERR("Unexpected response to write section request");
     }
 
     ser.EndChunk();
@@ -2108,4 +2235,163 @@ rdcarray<rdcstr> RemoteServer::GetResolve(const rdcarray<uint64_t> &callstack)
   }
 
   return StackFrames;
+}
+
+ResultDetails RemoteServer::EmbedDependenciesIntoCapture()
+{
+  RDResult ret;
+
+  if(!Connected())
+  {
+    ret.code = ResultCode::RemoteServerConnectionLost;
+    return ret;
+  }
+
+  {
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(eRemoteServer_EmbedDependenciesIntoCapture);
+  }
+
+  {
+    READ_DATA_SCOPE();
+    RemoteServerPacket type = ser.ReadChunk<RemoteServerPacket>();
+
+    if(type == eRemoteServer_EmbedDependenciesIntoCapture)
+    {
+      SERIALISE_ELEMENT(ret);
+    }
+    else
+    {
+      RDCERR("Unexpected response to embed dependencies into capture request");
+    }
+
+    ser.EndChunk();
+  }
+
+  return ret;
+}
+
+ResultDetails RemoteServer::RemoveDependenciesFromCapture()
+{
+  RDResult ret;
+  if(!Connected())
+  {
+    ret.code = ResultCode::RemoteServerConnectionLost;
+    return ret;
+  }
+
+  {
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(eRemoteServer_RemoveDependenciesFromCapture);
+  }
+
+  {
+    READ_DATA_SCOPE();
+    RemoteServerPacket type = ser.ReadChunk<RemoteServerPacket>();
+
+    if(type == eRemoteServer_RemoveDependenciesFromCapture)
+    {
+      SERIALISE_ELEMENT(ret);
+    }
+    else
+    {
+      RDCERR("Unexpected response to remove dependencies from capture request");
+    }
+
+    ser.EndChunk();
+  }
+
+  return ret;
+}
+
+bool RemoteServer::HasEmbeddedDependencies()
+{
+  bool ret = false;
+  if(!Connected())
+  {
+    return false;
+  }
+
+  {
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(eRemoteServer_HasEmbeddedDependencies);
+  }
+
+  {
+    READ_DATA_SCOPE();
+    RemoteServerPacket type = ser.ReadChunk<RemoteServerPacket>();
+
+    if(type == eRemoteServer_HasEmbeddedDependencies)
+    {
+      SERIALISE_ELEMENT(ret);
+    }
+    else
+    {
+      RDCERR("Unexpected response to has embedded dependencies request");
+    }
+
+    ser.EndChunk();
+  }
+  return ret;
+}
+
+bool RemoteServer::HasPendingDependencies()
+{
+  bool ret = false;
+  if(!Connected())
+  {
+    return false;
+  }
+
+  {
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(eRemoteServer_HasPendingDependencies);
+  }
+
+  {
+    READ_DATA_SCOPE();
+    RemoteServerPacket type = ser.ReadChunk<RemoteServerPacket>();
+
+    if(type == eRemoteServer_HasPendingDependencies)
+    {
+      SERIALISE_ELEMENT(ret);
+    }
+    else
+    {
+      RDCERR("Unexpected response to has pending dependencies request");
+    }
+
+    ser.EndChunk();
+  }
+  return ret;
+}
+
+rdcarray<rdcstr> RemoteServer::GetPendingDependenciesNicknames()
+{
+  rdcarray<rdcstr> ret;
+  if(!Connected())
+  {
+    return ret;
+  }
+  {
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(eRemoteServer_GetPendingDependenciesNicknames);
+  }
+
+  {
+    READ_DATA_SCOPE();
+    RemoteServerPacket type = ser.ReadChunk<RemoteServerPacket>();
+
+    if(type == eRemoteServer_GetPendingDependenciesNicknames)
+    {
+      SERIALISE_ELEMENT(ret);
+    }
+    else
+    {
+      RDCERR("Unexpected response to get nicknmes of externally referenced files");
+    }
+
+    ser.EndChunk();
+  }
+  return ret;
 }

@@ -1343,6 +1343,63 @@ Must only be called after :meth:`InitResolver` has returned ``True``.
 )");
   virtual rdcstr DriverName() = 0;
 
+  DOCUMENT(R"(Stores the dependent file data into the capture i.e. shader debug files.
+
+This reads the contents of the dependent files and stores their file contents into the capture.
+This can help the capture to be more portable by embedding all externally referenced dependent files.
+Use :meth:`RemoveDependenciesFromCapture` to remove the embedded file data.
+
+.. warning::
+  Will remove all the existing embedded file data from the capture.
+  Will directly modify the capture file on disk.
+
+.. note::
+  This will increase the size of the capture file.
+  Externally referenced files which can't be found on disk are skipped.
+
+:return: The result of the operation.
+:rtype: ResultDetails
+)");
+  virtual ResultDetails EmbedDependenciesIntoCapture() = 0;
+
+  DOCUMENT(R"(Removes the dependent files storage from the capture i.e. shader debug files.
+
+The files will be still be considered to be referenced by the capture and could be re-embedded 
+by calling :meth:`EmbedDependenciesIntoCapture`.
+
+.. warning::
+  Will directly modify the capture file on disk.
+
+:return: The result of the operation.
+:rtype: ResultDetails
+)");
+  virtual ResultDetails RemoveDependenciesFromCapture() = 0;
+
+  DOCUMENT(R"(Are there any depdendent files embedded in the capture i.e. shader debug files.
+
+:return: ``True`` if the capture has embedded dependent files, or ``False`` if the capture does not any embedded dependent files.
+:rtype: bool
+)");
+  virtual bool HasEmbeddedDependencies() = 0;
+
+  DOCUMENT(R"(Does the capture have references to dependecies i.e. shader debug files.
+
+:return: ``True`` if the capture has references to dependent files, or ``False`` if the capture does not contain references to dependent files.
+:rtype: bool
+)");
+  virtual bool HasPendingDependencies() = 0;
+
+  DOCUMENT(R"(Retrieve a list of the nicknames of the externally referenced dependent files being referenced 
+by the capture i.e. shader debug files.
+
+.. note::
+  The nicknames can be arbitary and do not have to be a filename or a file path.
+
+:return: A list of the nicknames used to reference dependencies.
+:rtype: List[str]
+)");
+  virtual rdcarray<rdcstr> GetPendingDependenciesNicknames() = 0;
+
 protected:
   ICaptureAccess() = default;
   ~ICaptureAccess() = default;

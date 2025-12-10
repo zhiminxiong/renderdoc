@@ -1972,6 +1972,7 @@ void ReplayController::Shutdown()
     m_pDevice->Shutdown();
   m_pDevice = NULL;
 
+  RenderDoc::Inst().ClearTrackedFiles();
   delete this;
 }
 
