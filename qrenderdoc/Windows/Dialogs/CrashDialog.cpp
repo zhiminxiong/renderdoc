@@ -70,6 +70,7 @@ CrashDialog::CrashDialog(PersistantConfig &cfg, QVariantMap crashReportJSON, QWi
 
   QFileInfo capInfo(m_CaptureFilename);
 
+  bool hasEmbeddedFiles = false;
   if(replayCrash && capInfo.exists())
   {
     // if we have a previous capture, fill out the capture group
@@ -98,6 +99,7 @@ CrashDialog::CrashDialog(PersistantConfig &cfg, QVariantMap crashReportJSON, QWi
 
         m_Thumbnail = new Thumbnail(cap->GetThumbnail(FileType::JPG, 0));
       }
+      hasEmbeddedFiles = cap->HasEmbeddedDependencies();
     }
 
     cap->Shutdown();
@@ -158,6 +160,11 @@ CrashDialog::CrashDialog(PersistantConfig &cfg, QVariantMap crashReportJSON, QWi
            "can get better!</p>")
             .arg(QUrl::fromLocalFile(m_ReportPath).toString());
   }
+
+  if(!m_CaptureFilename.isEmpty() && hasEmbeddedFiles)
+    text +=
+        tr("<p>Warning: The capture file contains embedded dependency files i.e. shader debug "
+           "files.</p>");
 
   if(m_Config.CheckUpdate_UpdateAvailable)
   {
