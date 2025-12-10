@@ -51,6 +51,8 @@
     </property>
     <addaction name="action_Resolve_Symbols"/>
     <addaction name="action_Recompress_Capture"/>
+    <addaction name="action_EmbedExternalFiles"/>
+    <addaction name="action_RemoveExternalFiles"/>
     <addaction name="separator"/>
     <addaction name="action_Start_Replay_Loop"/>
     <addaction name="action_Create_RGP_Profile"/>
@@ -448,6 +450,16 @@
   <action name="action_Recompress_Capture">
    <property name="text">
     <string>Re&amp;compress Capture</string>
+   </property>
+  </action>
+  <action name="action_EmbedExternalFiles">
+   <property name="text">
+    <string>Embed external files into Capture</string>
+   </property>
+  </action>
+  <action name="action_RemoveExternalFiles">
+   <property name="text">
+    <string>Remove external files from Capture</string>
    </property>
   </action>
   <action name="action_Clear_Reported_Bugs">

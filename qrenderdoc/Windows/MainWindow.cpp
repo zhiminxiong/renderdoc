@@ -131,6 +131,8 @@ MainWindow::MainWindow(ICaptureContext &ctx) : QMainWindow(NULL), ui(new Ui::Mai
 
   setAcceptDrops(true);
 
+  QObject::connect(ui->menu_Tools, &QMenu::aboutToShow, this, &MainWindow::updateToolsMenuOptions);
+
   QObject::connect(ui->action_Load_Default_Layout, &QAction::triggered, this,
                    &MainWindow::loadLayout_triggered);
   QObject::connect(ui->action_Load_Layout_1, &QAction::triggered, this,
@@ -445,6 +447,8 @@ MainWindow::MainWindow(ICaptureContext &ctx) : QMainWindow(NULL), ui(new Ui::Mai
   ui->action_Resolve_Symbols->setText(tr("Resolve Symbols"));
 
   ui->action_Recompress_Capture->setEnabled(false);
+  ui->action_EmbedExternalFiles->setEnabled(false);
+  ui->action_RemoveExternalFiles->setEnabled(false);
 
 #if defined(Q_OS_WIN32)
 #define SELF_HOST_NAME "rdocself.dll"
@@ -675,6 +679,8 @@ void MainWindow::captureModified()
   // enabled if this capture was a temporary one
   if(m_Ctx.IsCaptureLoaded())
     ui->action_Save_Capture_Inplace->setEnabled(true);
+
+  updateToolsMenuOptions();
 }
 
 void MainWindow::LoadFromFilename(const QString &filename, bool temporary)
@@ -2238,6 +2244,8 @@ void MainWindow::OnCaptureLoaded()
   bool is_image = driver == lit("Image");
   ui->action_Recompress_Capture->setEnabled(!is_image);
 
+  updateToolsMenuOptions();
+
   ui->action_Start_Replay_Loop->setEnabled(true);
   ui->action_Open_RGP_Profile->setEnabled(
       m_Ctx.Replay().GetCaptureAccess()->FindSectionByType(SectionType::AMDRGPProfile) >= 0);
@@ -2286,6 +2294,8 @@ void MainWindow::OnCaptureClosed()
   ui->action_Resolve_Symbols->setText(tr("Resolve Symbols"));
 
   ui->action_Recompress_Capture->setEnabled(false);
+  ui->action_EmbedExternalFiles->setEnabled(false);
+  ui->action_RemoveExternalFiles->setEnabled(false);
 
   SetTitle();
 
@@ -2636,6 +2646,16 @@ void MainWindow::on_action_Resolve_Symbols_triggered()
 void MainWindow::on_action_Recompress_Capture_triggered()
 {
   m_Ctx.RecompressCapture();
+}
+
+void MainWindow::on_action_EmbedExternalFiles_triggered()
+{
+  m_Ctx.EmbedDependentFiles();
+}
+
+void MainWindow::on_action_RemoveExternalFiles_triggered()
+{
+  m_Ctx.RemoveDependentFiles();
 }
 
 void MainWindow::on_action_Start_Replay_Loop_triggered()
@@ -2993,6 +3013,21 @@ void MainWindow::saveLayout_triggered()
 void MainWindow::loadLayout_triggered()
 {
   LoadSaveLayout(qobject_cast<QAction *>(QObject::sender()), false);
+}
+
+void MainWindow::updateToolsMenuOptions()
+{
+  bool hasEmbeddedDependencies = false;
+  bool hasPendingDependencies = false;
+
+  if(m_Ctx.Replay().GetCaptureAccess())
+  {
+    hasEmbeddedDependencies = m_Ctx.Replay().GetCaptureAccess()->HasEmbeddedDependencies();
+    hasPendingDependencies = m_Ctx.Replay().GetCaptureAccess()->HasPendingDependencies();
+  }
+
+  ui->action_EmbedExternalFiles->setEnabled(!hasEmbeddedDependencies && hasPendingDependencies);
+  ui->action_RemoveExternalFiles->setEnabled(hasEmbeddedDependencies);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
