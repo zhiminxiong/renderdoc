@@ -58,6 +58,7 @@ ReplayController::ReplayController()
 
 ReplayController::~ReplayController()
 {
+  RenderDoc::Inst().UnregisterMemoryRegion(this);
   CHECK_REPLAY_THREAD();
 }
 
