@@ -2424,6 +2424,36 @@ If no bookmark exists, this function will do nothing.
 )");
   virtual void RemoveBookmark(uint32_t eventId) = 0;
 
+  DOCUMENT(R"(Stores the dependent file data into the capture i.e. shader debug files.
+
+This reads the contents of the dependent files and stores their file contents into the capture.
+This can help the capture to be more portable by embedding all externally referenced dependent files.
+Use :meth:`RemoveDependentFiles` to remove the embedded file data.
+
+.. warning::
+  Will remove all the existing embedded file data from the capture.
+  Will directly modify the capture file on disk.
+
+.. note::
+  This will increase the size of the capture file.
+  Externally referenced files which can't be found on disk are skipped.
+  For remote replay the modifications are performed on the remote machine and copied back to the local host.
+)");
+  virtual void EmbedDependentFiles() = 0;
+
+  DOCUMENT(R"(Removes the dependent files storage from the capture i.e. shader debug files.
+
+The files will be still be considered to be referenced by the capture and could be re-embedded 
+by calling :meth:`EmbedDependentFiles`.
+
+.. warning::
+  Will directly modify the capture file on disk.
+
+.. note::
+  For remote replay the modifications are performed on the remote machine and copied back to the local host.
+)");
+  virtual void RemoveDependentFiles() = 0;
+
   DOCUMENT(R"(Registers a delayed callback to be called after a certain number of milliseconds
 on the UI thread.
 

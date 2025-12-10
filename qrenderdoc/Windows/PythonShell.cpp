@@ -647,6 +647,14 @@ struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
   {
     InvokeVoidFunction(&ICaptureContext::RemoveBookmark, EID);
   }
+  virtual void EmbedDependentFiles() override
+  {
+    InvokeVoidFunction(&ICaptureContext::EmbedDependentFiles);
+  }
+  virtual void RemoveDependentFiles() override
+  {
+    InvokeVoidFunction(&ICaptureContext::RemoveDependentFiles);
+  }
   virtual void DelayedCallback(uint32_t milliseconds, std::function<void()> callback) override
   {
     InvokeVoidFunction(&ICaptureContext::DelayedCallback, milliseconds, callback);

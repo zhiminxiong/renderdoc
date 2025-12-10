@@ -204,6 +204,8 @@ public:
   rdcarray<EventBookmark> GetBookmarks() override { return m_Bookmarks; }
   void SetBookmark(const EventBookmark &mark) override;
   void RemoveBookmark(uint32_t EID) override;
+  void EmbedDependentFiles() override;
+  void RemoveDependentFiles() override;
 
   void DelayedCallback(uint32_t milliseconds, std::function<void()> callback) override;
 
@@ -312,6 +314,7 @@ private:
   bool m_CaptureLoaded = false, m_LoadInProgress = false, m_CaptureLocal = false,
        m_CaptureTemporary = false;
   QString m_CaptureFile;
+  QString m_RemoteFile;
   CaptureModifications m_CaptureMods = CaptureModifications::NoModifications;
 
   rdcarray<DebugMessage> m_DebugMessages;

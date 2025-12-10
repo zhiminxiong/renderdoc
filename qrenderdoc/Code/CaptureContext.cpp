@@ -945,6 +945,7 @@ void CaptureContext::LoadCaptureThreaded(const QString &captureFile, const Repla
                                          const QString &origFilename, bool temporary, bool local)
 {
   m_CaptureFile = origFilename;
+  m_RemoteFile = captureFile;
 
   m_CaptureLocal = local;
 
@@ -1427,6 +1428,7 @@ void CaptureContext::CloseCapture()
   m_CaptureTemporary = false;
 
   m_CaptureFile = QString();
+  m_RemoteFile = QString();
 
   m_APIProps = APIProperties();
   m_FrameInfo = FrameDescription();
@@ -2860,4 +2862,64 @@ void CaptureContext::AddDockWindow(QWidget *newWindow, DockReference ref, QWidge
   ToolWindowManager::AreaReference areaRef((ToolWindowManager::AreaReferenceType)ref,
                                            manager->areaOf(refWindow), percentage);
   manager->addToolWindow(newWindow, areaRef);
+}
+
+void CaptureContext::EmbedDependentFiles()
+{
+  if(!m_Replay.GetCaptureAccess())
+    return;
+
+  // Always operate on the capture access (local or remote)
+  m_Replay.GetCaptureAccess()->EmbedDependenciesIntoCapture();
+
+  // Local replay
+  if(m_Replay.GetCaptureFile())
+    return;
+
+  // Remote capture : no local capture file
+  if(IsCaptureTemporary())
+    return;
+
+  // Local capture file being replayed remotely : copy back from the remote
+  if(IsCaptureLocal())
+  {
+    Replay().CopyCaptureFromRemote(m_RemoteFile, m_CaptureFile, m_MainWindow);
+
+    if(!QFile::exists(m_CaptureFile))
+    {
+      RDDialog::critical(m_MainWindow, tr("Failed to save capture"),
+                         tr("Capture couldn't be copied from remote."));
+      return;
+    }
+  }
+}
+
+void CaptureContext::RemoveDependentFiles()
+{
+  if(!m_Replay.GetCaptureAccess())
+    return;
+
+  // Always operate on the capture access (local or remote)
+  m_Replay.GetCaptureAccess()->RemoveDependenciesFromCapture();
+
+  // Local replay
+  if(m_Replay.GetCaptureFile())
+    return;
+
+  // Remote capture : no local capture file
+  if(IsCaptureTemporary())
+    return;
+
+  // Local capture file being replayed remotely : copy back from the remote
+  if(IsCaptureLocal())
+  {
+    Replay().CopyCaptureFromRemote(m_RemoteFile, m_CaptureFile, m_MainWindow);
+
+    if(!QFile::exists(m_CaptureFile))
+    {
+      RDDialog::critical(m_MainWindow, tr("Failed to save capture"),
+                         tr("Capture couldn't be copied from remote."));
+      return;
+    }
+  }
 }
