@@ -1128,6 +1128,7 @@ rdcstr DoStringise(const SectionType &el)
     STRINGISE_ENUM_CLASS_NAMED(EditedShaders, "renderdoc/ui/edits");
     STRINGISE_ENUM_CLASS_NAMED(D3D12Core, "renderdoc/internal/d3d12core");
     STRINGISE_ENUM_CLASS_NAMED(D3D12SDKLayers, "renderdoc/internal/d3d12sdklayers");
+    STRINGISE_ENUM_CLASS_NAMED(EmbeddedExternalFiles, "renderdoc/internal/embeddedexternalfiles");
   }
   END_ENUM_STRINGISE();
 }
