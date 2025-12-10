@@ -125,7 +125,10 @@ struct DebugFile
   void ReadAndProcess(bool lz4, const rdcfixedarray<uint32_t, 4> &desiredHash)
   {
     FileIO::ReadAll(path, contents);
-
+    Process(lz4, desiredHash);
+  }
+  void Process(bool lz4, const rdcfixedarray<uint32_t, 4> &desiredHash)
+  {
     if(lz4)
     {
       bytebuf decompressed;
@@ -1517,6 +1520,7 @@ void DXBCContainer::TryFetchSeparateDebugInfo(bytebuf &byteCode, const rdcstr &d
 
       DebugFile found;
 
+      rdcstr nickname = originalPath;
       // keep searching until we've exhausted all possible path options, or we've found a file that
       // opens and (optionally if we have it matches the hash we're looking for)
       rdcstr tempPath = originalPath;
@@ -1609,11 +1613,23 @@ void DXBCContainer::TryFetchSeparateDebugInfo(bytebuf &byteCode, const rdcstr &d
         }
       }
 
+      // Try to retrieve debug file from the externally referenced files in the capture
+      if(found.empty())
+      {
+        if(RenderDoc::Inst().GetTrackedFileData(nickname, found.contents))
+        {
+          found.path = nickname;
+          found.Process(lz4, desiredHash);
+        }
+      }
+
       if(found.empty())
       {
         RDCDEBUG("Couldn't find pdb for %s", originalPath.c_str());
         return;
       }
+
+      RenderDoc::Inst().AddTrackedFileReference(nickname, found.path);
 
       if(found.pdb)
       {

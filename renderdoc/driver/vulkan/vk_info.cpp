@@ -2762,6 +2762,7 @@ void VulkanCreationInfo::ShaderModule::Reinit()
 
   size_t numSearchPaths = searchPaths.size();
 
+  rdcstr foundFname = originalPath;
   rdcstr foundPath;
 
   // keep searching until we've exhausted all possible path options, or we've found a file that
@@ -2804,19 +2805,26 @@ void VulkanCreationInfo::ShaderModule::Reinit()
     }
   }
 
+  // Try to retrieve debug file from the externally referenced files in the capture
+  bytebuf debugBytecode;
   if(originalShaderFile == NULL)
-    return;
-
-  FileIO::fseek64(originalShaderFile, 0L, SEEK_END);
-  uint64_t originalShaderSize = FileIO::ftell64(originalShaderFile);
-  FileIO::fseek64(originalShaderFile, 0, SEEK_SET);
-
   {
-    bytebuf debugBytecode;
+    if(!RenderDoc::Inst().GetTrackedFileData(foundFname, debugBytecode))
+      return;
+  }
+  else
+  {
+    FileIO::fseek64(originalShaderFile, 0L, SEEK_END);
+    uint64_t originalShaderSize = FileIO::ftell64(originalShaderFile);
+    FileIO::fseek64(originalShaderFile, 0, SEEK_SET);
 
     debugBytecode.resize((size_t)originalShaderSize);
     FileIO::fread(&debugBytecode[0], sizeof(byte), (size_t)originalShaderSize, originalShaderFile);
+    FileIO::fclose(originalShaderFile);
+    originalShaderFile = NULL;
+  }
 
+  {
     if(lz4)
     {
       rdcarray<byte> decompressed;
@@ -2858,10 +2866,9 @@ void VulkanCreationInfo::ShaderModule::Reinit()
     if(!reflTest.GetSPIRV().empty())
     {
       spirv = reflTest;
+      RenderDoc::Inst().AddTrackedFileReference(foundFname, foundPath);
     }
   }
-
-  FileIO::fclose(originalShaderFile);
 }
 
 void VulkanCreationInfo::ShaderModuleReflection::Init(VulkanResourceManager *resourceMan,
