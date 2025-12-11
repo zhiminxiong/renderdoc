@@ -696,7 +696,7 @@ ShaderVariable ThreadState::CalcDeriv(ThreadState::DerivDir dir, ThreadState::De
   RDCASSERT(quadNeighbours[3] < workgroup.size(), quadNeighbours[3], workgroup.size());
 
   const bool xdirection = (dir == DDX);
-  if(type == Coarse)
+  if(type == DerivType::Coarse)
   {
     // coarse derivatives are identical across the quad, based on the top-left.
     a = &workgroup[quadNeighbours[0]];
@@ -1210,9 +1210,9 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
 
       DerivType type = defaultDeriveType;
       if(opdata.op == Op::DPdxFine || opdata.op == Op::DPdyFine)
-        type = Fine;
+        type = DerivType::Fine;
       if(opdata.op == Op::DPdxCoarse || opdata.op == Op::DPdyCoarse)
-        type = Coarse;
+        type = DerivType::Coarse;
 
       SetDst(deriv.result, CalcDeriv(dir, type, workgroup, deriv.p));
 
@@ -1225,9 +1225,9 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
       // these all share a format
       OpFwidth deriv(it);
 
-      DerivType type = Coarse;
+      DerivType type = DerivType::Coarse;
       if(opdata.op == Op::FwidthFine)
-        type = Fine;
+        type = DerivType::Fine;
 
       ShaderVariable var = CalcDeriv(DDX, type, workgroup, deriv.p);
       ShaderVariable ddy = CalcDeriv(DDY, type, workgroup, deriv.p);
@@ -3920,8 +3920,8 @@ void ThreadState::StepNext(bool useDebugState, const uint32_t steps,
       if(derivId != Id())
       {
         // calculate DDX/DDY in coarse fashion
-        ddxCalc = CalcDeriv(DDX, Coarse, workgroup, derivId);
-        ddyCalc = CalcDeriv(DDY, Coarse, workgroup, derivId);
+        ddxCalc = CalcDeriv(DDX, DerivType::Coarse, workgroup, derivId);
+        ddyCalc = CalcDeriv(DDY, DerivType::Coarse, workgroup, derivId);
       }
 
       // if we have a dynamically combined image sampler, split it up here

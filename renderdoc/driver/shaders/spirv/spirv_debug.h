@@ -330,7 +330,7 @@ struct ThreadState
     DDX,
     DDY
   };
-  enum DerivType
+  enum class DerivType
   {
     Coarse,
     Fine
