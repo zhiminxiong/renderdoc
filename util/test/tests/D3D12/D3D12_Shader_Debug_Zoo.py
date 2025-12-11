@@ -5,6 +5,102 @@ import struct
 class D3D12_Shader_Debug_Zoo(rdtest.TestCase):
     demos_test_name = 'D3D12_Shader_Debug_Zoo'
 
+    def check_compute_derivative_tests(self):
+        failed = False
+        thread_checks = [
+            (0,0,0),
+            (1,1,0),
+            (2,2,0),
+            (3,3,0),
+            (4,2,0),
+            (5,1,0),
+            (6,0,0),
+            (7,1,0),
+        ]
+        compute_dims = [a for a in self.find_action(
+            "Compute Derivative Tests").children if 'x' in a.customName]
+        for comp_dim in compute_dims:
+            section = f"Compute tests with {comp_dim.customName}"
+            rdtest.log.begin_section(section)
+
+            compute_tests = [
+                a for a in comp_dim.children if a.flags & rd.ActionFlags.Dispatch]
+
+            for test, action in enumerate(compute_tests):
+                failed = False
+                self.controller.SetFrameEvent(action.eventId, False)
+                pipe = self.controller.GetPipelineState()
+                csrefl = pipe.GetShaderReflection(rd.ShaderStage.Compute)
+                if not csrefl.debugInfo.debuggable:
+                    rdtest.log.print(f"Compute shader is undebuggable at {action.eventId} for {test}.")
+                    failed = True
+                    continue
+
+                rw = pipe.GetReadWriteResources(rd.ShaderStage.Compute)
+                if len(rw) != 1:
+                    rdtest.log.error("Unexpected number of RW resources")
+                    self.controller.FreeTrace(trace)
+                    failed = True
+                    continue
+
+                groupid = (1, 0, 0)
+                dim = csrefl.dispatchThreadsDimension
+
+                # Debug the shader
+                for threadid in thread_checks:
+                    tid = ( min(threadid[0], dim[0]-1), min(threadid[1], dim[1]-1), min(threadid[2], dim[2]-1))
+                    # each test writes up to 16k data, one vec4 per thread * up to 1024 threads
+                    bufdata = self.controller.GetBufferData(
+                        rw[0].descriptor.resource, test*16*1024, 16*1024)
+                    try:
+                        expectedValue = struct.unpack_from(
+                            "4f", bufdata, 16*tid[1]*dim[0] + 16*tid[0])
+                    except Exception as ex:
+                        rdtest.log.error(f"Exception Test {test} failed {ex}")
+                        failed = True
+                        continue
+
+                    # Debug the shader
+                    trace: rd.ShaderDebugTrace = self.controller.DebugThread(groupid, tid)
+                    cycles, variables = self.process_trace(trace)
+                    # Check for non-zero cycles
+                    if cycles == 0:
+                        rdtest.log.success(f"Test {test} Group:{groupid} Thread:{tid} : Shader debug cycle count was zero")
+                        self.controller.FreeTrace(trace)
+                        failed = True
+                        continue
+
+                    # Find the source variable 'testResult' at the highest instruction index
+                    name = 'testResult'
+                    debugged = None
+                    countInst = len(trace.instInfo)
+                    for inst in range(countInst):
+                        sourceVars = trace.instInfo[countInst-1-inst].sourceVars
+                        try:
+                            dataVars = [v for v in sourceVars if v.name == name]
+                            if len(dataVars) == 0:
+                                continue
+                            debugged = self.evaluate_source_var(dataVars[0], variables)
+                        except KeyError as ex:
+                            continue
+                        except rdtest.TestFailureException as ex:
+                            continue
+                        break
+                    if debugged is None:
+                        raise rdtest.TestFailureException(f"Couldn't find source variable {name} at {test}")
+                    debuggedValue = list(debugged.value.f32v[0:4])
+
+                    if not rdtest.value_compare(expectedValue, debuggedValue, eps=5.0E-06):
+                        rdtest.log.error(f"Test {test} Group:{groupid} Thread:{tid} EID:{action.eventId} failed {name} debugger {debuggedValue} doesn't match expected {expectedValue}")
+                        self.controller.FreeTrace(trace)
+                        failed = True
+                        continue
+
+                    rdtest.log.success(f"Test {test} Group:{groupid} Thread:{tid} as expected")
+
+            rdtest.log.end_section(section)
+        return failed
+
     def check_capture(self):
         if not self.controller.GetAPIProperties().shaderDebugging:
             rdtest.log.success("Shader debugging not enabled, skipping test")
@@ -291,6 +387,9 @@ class D3D12_Shader_Debug_Zoo(rdtest.TestCase):
 
                 rdtest.log.success(f"Test {test} Group:{groupid} Thread:{threadid} as expected")
             rdtest.log.end_section(section)
+
+        if self.check_compute_derivative_tests():
+            failed = True
 
         if failed:
             raise rdtest.TestFailureException("Some tests were not as expected")

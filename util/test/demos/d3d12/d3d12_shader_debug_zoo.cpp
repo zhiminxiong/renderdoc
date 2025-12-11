@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  ******************************************************************************/
 
+#include "3rdparty/fmt/core.h"
 #include "d3d12_test.h"
 
 RD_TEST(D3D12_Shader_Debug_Zoo, D3D12GraphicsTest)
@@ -1721,6 +1722,138 @@ void main(int3 inTestIndex : SV_GroupID)
 
 )EOSHADER";
 
+  std::string computeShaderDerivs = shaderTypes + R"EOSHADER(
+
+// error X3556: integer divides may be much slower, try using uints if possible.
+// we want to do this on purpose
+#pragma warning( disable : 3556 )
+
+cbuffer rootconsts : register(b0)
+{
+  uint root_test;
+};
+
+RWStructuredBuffer<float4> outbuf : register(u0);
+Texture2D<float4> smiley : register(t5);
+SamplerState linearclamp : register(s0);
+SamplerComparisonState linearcompare : register(s1);
+
+static uint3 tid;
+static uint3 gid;
+static uint flatId;
+
+void SetOutput(float4 val)
+{
+  outbuf[root_test * 1024 + flatId] = val;
+}
+
+void Init(float4 val)
+{
+  flatId = tid.z * GROUP_SIZE_X * GROUP_SIZE_Y + tid.y * GROUP_SIZE_X + tid.x;
+  SetOutput(val);
+}
+
+#define IsTest(x) (root_test == x)
+
+#if WORKGROUP_SUPPORT
+groupshared uint3 gsmUint3[1024];
+#endif // #if WORKGROUP_SUPPORT
+
+[numthreads(GROUP_SIZE_X, GROUP_SIZE_Y, 1)]
+void main(uint3 inDTID : SV_DispatchThreadID, uint3 inGID : SV_GroupThreadID, uint3 inGroup : SV_GroupID)
+{
+  float4 testResult = float4(0,0,0,0);
+  tid = inDTID;
+  gid = inGID;
+  Init(testResult);
+  uint id = flatId;
+  uint ZERO = id / 10000;
+  uint ONE = ZERO + 1;
+  float2 inpos;
+  inpos.xy = gid.xy / 8.0;
+
+#if WORKGROUP_SUPPORT
+  gsmUint3[flatId].xyz = tid;
+#endif // #if WORKGROUP_SUPPORT
+#if SUBGROUP_SUPPORT
+  uint subgroupId = WaveGetLaneIndex();
+  id += subgroupId;
+  testResult.w = id * ZERO;
+#endif // #if SUBGROUP_SUPPORT
+
+  if(IsTest(0))
+  {
+    float4 test0;
+    test0.x = ddx(0.5f);
+    test0.y = ddy(0.5f);
+    test0.z = ddx_fine(0.5f);
+    test0.w = ddy_fine(0.5f);
+    testResult = test0;
+  }
+  if(IsTest(1))
+  {
+    float3 test1 = ddx(gid*gid);
+    testResult.xyz = test1;
+  }
+  if(IsTest(2))
+  {
+    float3 test2 = ddy(gid*gid);
+    testResult.xyz = test2;
+  }
+  if(IsTest(3))
+  {
+    float3 test3 = ddx_fine(gid*gid);
+    testResult.xyz = test3;
+  }
+  if(IsTest(4))
+  {
+    float3 test4 = ddy_fine(gid*gid);
+    testResult.xyz = test4;
+  }
+  if(IsTest(5))
+  {
+    float3 test5 = ddx_coarse(gid*gid);
+    testResult.xyz = test5;
+  }
+  if(IsTest(6))
+  {
+    float3 test6 = ddy_coarse(gid*gid);
+    testResult.xyz = test6;
+  }
+  if(IsTest(7))
+  {
+    float2 test7;
+    test7.x = smiley.CalculateLevelOfDetail(linearclamp, inpos);
+    test7.y = smiley.CalculateLevelOfDetailUnclamped(linearclamp, inpos);
+    testResult.xy = test7;
+  }
+  if(IsTest(8))
+  {
+    float2 uv = ONE * float2(0.55f, 0.48f);
+    float4 test8 = smiley.Sample(linearclamp, uv);
+    testResult = test8;
+  }
+  if(IsTest(9))
+  {
+    float2 uv = ONE * float2(0.75f, 0.68f);
+    float4 test9 = smiley.SampleBias(linearclamp, uv, 4.0);
+    testResult = test9;
+  }
+  if(IsTest(10))
+  {
+    float2 uv = ONE * float2(0.25f, 0.38f);
+    float4 test10;
+    test10.x = smiley.SampleCmp(linearcompare, uv, 0.1);
+    test10.y = smiley.SampleCmp(linearcompare, uv, 0.3);
+    test10.z = smiley.SampleCmp(linearcompare, uv, 0.5);
+    test10.w = smiley.SampleCmp(linearcompare, uv, 0.7);
+    testResult = test10;
+  }
+
+  SetOutput(testResult);
+}
+
+)EOSHADER";
   int main()
   {
     // initialise, create window, create device, etc
@@ -1771,6 +1904,10 @@ void main(int3 inTestIndex : SV_GroupID)
     lastTest = computeMain.rfind("testIndex == ");
     lastTest += sizeof("testIndex == ") - 1;
     const uint32_t numComputeTests = atoi(computeMain.c_str() + lastTest) + 1;
+
+    lastTest = computeShaderDerivs.rfind("IsTest(");
+    lastTest += sizeof("IsTest(") - 1;
+    const uint32_t numComputeDerivsTests = atoi(computeShaderDerivs.c_str() + lastTest) + 1;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
     inputLayout.reserve(4);
@@ -2510,9 +2647,103 @@ void main(int3 inTestIndex : SV_GroupID)
       computePSOs[2] = MakePSO().RootSig(sigCompute).CS(csblob);
     }
 
+    D3D12_STATIC_SAMPLER_DESC samplers[] = {staticSamp, staticSamp};
+    samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    samplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    samplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    samplers[1].ShaderRegister = 1;
+
+    ID3D12RootSignaturePtr sigComputeDerivs = MakeSig(
+        {
+            constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0, 1),
+            uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0),
+            tableParam(D3D12_SHADER_VISIBILITY_ALL, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 0, 8, 0),
+        },
+        D3D12_ROOT_SIGNATURE_FLAG_NONE, 2, samplers);
+
+    struct
+    {
+      int x, y;
+    } csDimens[] = {
+        {8, 4},
+        {32, 1},
+    };
+    ID3D12PipelineStatePtr computeDerivsPSOs[8] = {NULL, NULL};
+    std::string computeDerivsNames[8];
+    uint32_t countComputeDerivsPSOs = 0;
+    std::string localDefines;
+    if(supportSM66)
+    {
+      for(size_t i = 0; i < ARRAY_COUNT(csDimens); ++i)
+      {
+        std::map<std::string, std::string> macros;
+        macros["GROUP_SIZE_X"] = fmt::format("{}", csDimens[i].x);
+        macros["GROUP_SIZE_Y"] = fmt::format("{}", csDimens[i].y);
+        macros["GROUP_SIZE_Z"] = "1";
+        macros["WORKGROUP_SUPPORT"] = "0";
+        macros["SUBGROUP_SUPPORT"] = "0";
+
+        localDefines = "#define SM_6_6 1\n";
+        for(const auto &it : macros)
+          localDefines += fmt::format("#define {} {}\n", it.first, it.second);
+
+        compute = shaderDefines + localDefines + computeShaderDerivs;
+        csblob = Compile(compute, "main", "cs_6_6");
+        computeDerivsNames[countComputeDerivsPSOs] = fmt::format(
+            "{}x{}x{}", macros["GROUP_SIZE_X"], macros["GROUP_SIZE_Y"], macros["GROUP_SIZE_Z"]);
+        computeDerivsPSOs[countComputeDerivsPSOs] = MakePSO().RootSig(sigComputeDerivs).CS(csblob);
+        ++countComputeDerivsPSOs;
+
+        // with workgroup
+        macros["WORKGROUP_SUPPORT"] = "1";
+        localDefines = "#define SM_6_6 1\n";
+        for(const auto &it : macros)
+          localDefines += fmt::format("#define {} {}\n", it.first, it.second);
+
+        compute = shaderDefines + localDefines + computeShaderDerivs;
+        csblob = Compile(compute, "main", "cs_6_6");
+        computeDerivsNames[countComputeDerivsPSOs] =
+            fmt::format("{}x{}x{} : Workgroup", macros["GROUP_SIZE_X"], macros["GROUP_SIZE_Y"],
+                        macros["GROUP_SIZE_Z"]);
+        computeDerivsPSOs[countComputeDerivsPSOs] = MakePSO().RootSig(sigComputeDerivs).CS(csblob);
+        ++countComputeDerivsPSOs;
+
+        // with subgroup
+        macros["SUBGROUP_SUPPORT"] = "1";
+        macros["WORKGROUP_SUPPORT"] = "0";
+        localDefines = "#define SM_6_6 1\n";
+        for(const auto &it : macros)
+          localDefines += fmt::format("#define {} {}\n", it.first, it.second);
+
+        compute = shaderDefines + localDefines + computeShaderDerivs;
+        csblob = Compile(compute, "main", "cs_6_6");
+        computeDerivsNames[countComputeDerivsPSOs] =
+            fmt::format("{}x{}x{} : Subgroup", macros["GROUP_SIZE_X"], macros["GROUP_SIZE_Y"],
+                        macros["GROUP_SIZE_Z"]);
+        computeDerivsPSOs[countComputeDerivsPSOs] = MakePSO().RootSig(sigComputeDerivs).CS(csblob);
+        ++countComputeDerivsPSOs;
+
+        // with subgroup+workgroup
+        macros["SUBGROUP_SUPPORT"] = "1";
+        macros["WORKGROUP_SUPPORT"] = "1";
+        localDefines = "#define SM_6_6 1\n";
+        for(const auto &it : macros)
+          localDefines += fmt::format("#define {} {}\n", it.first, it.second);
+
+        compute = shaderDefines + localDefines + computeShaderDerivs;
+        csblob = Compile(compute, "main", "cs_6_6");
+        computeDerivsNames[countComputeDerivsPSOs] =
+            fmt::format("{}x{}x{} : Subgroup + Workgroup", macros["GROUP_SIZE_X"],
+                        macros["GROUP_SIZE_Y"], macros["GROUP_SIZE_Z"]);
+        computeDerivsPSOs[countComputeDerivsPSOs] = MakePSO().RootSig(sigComputeDerivs).CS(csblob);
+        ++countComputeDerivsPSOs;
+      }
+    }
+    const uint32_t numCompTests = std::max(numComputeTests, numComputeDerivsTests);
+
     const uint32_t uavSize = 1024;
     ID3D12ResourcePtr bufIn = MakeBuffer().Size(uavSize).UAV();
-    ID3D12ResourcePtr bufOut = MakeBuffer().Size(uavSize).UAV();
+    ID3D12ResourcePtr bufOut = MakeBuffer().Size(sizeof(Vec4f) * 1024 * numCompTests).UAV();
     bufIn->SetName(L"bufIn");
     bufOut->SetName(L"bufOut");
 
@@ -2740,6 +2971,29 @@ void main(int3 inTestIndex : SV_GroupID)
         cmd->SetPipelineState(computePSOs[i]);
         setMarker(cmd, computeSMs[i]);
         cmd->Dispatch(numComputeTests, 2, 1);
+      }
+      popMarker(cmd);
+
+      pushMarker(cmd, "Compute Derivative Tests");
+      for(size_t p = 0; p < countComputeDerivsPSOs; p++)
+      {
+        cmd->SetDescriptorHeaps(1, &m_CBVUAVSRV.GetInterfacePtr());
+
+        cmd->ClearUnorderedAccessViewUint(bufOutGPU, bufOutClearCPU, bufOut, bufOutInitData, 1,
+                                          &uavClearRect);
+
+        cmd->SetComputeRootSignature(sigComputeDerivs);
+        cmd->SetComputeRootUnorderedAccessView(1, bufOutVA);
+        cmd->SetComputeRootDescriptorTable(2, m_CBVUAVSRV->GetGPUDescriptorHandleForHeapStart());
+
+        cmd->SetPipelineState(computeDerivsPSOs[p]);
+        pushMarker(cmd, computeDerivsNames[p]);
+        for(uint32_t t = 0; t < numComputeDerivsTests; t++)
+        {
+          cmd->SetComputeRoot32BitConstant(0, t, 0);
+          cmd->Dispatch(2, 1, 1);
+        }
+        popMarker(cmd);
       }
       popMarker(cmd);
 
