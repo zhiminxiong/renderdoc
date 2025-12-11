@@ -5889,23 +5889,36 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
   // shader without being emitted from the geometry shader. For now, check if this semantic
   // will succeed in a new pixel shader with the rest of the pipe unchanged
   bool usePrimitiveID = false;
-  ResourceId gsId = state.graphics.shaderObject ? state.shaderObjects[3] : pipe.shaders[3].module;
-  if(gsId != ResourceId())
+
+  ShaderStage prevStage = ShaderStage::Geometry;
+
+  ResourceId prevId = state.graphics.shaderObject ? state.shaderObjects[(size_t)prevStage]
+                                                  : pipe.shaders[(size_t)prevStage].module;
+
+  if(prevId == ResourceId())
   {
-    const VulkanCreationInfo::ShaderEntry &gsEntry =
-        state.graphics.shaderObject ? c.m_ShaderObject[state.shaderObjects[3]].shad : pipe.shaders[3];
-    VulkanCreationInfo::ShaderModuleReflection &gsRefl =
-        c.m_ShaderModule[gsEntry.module].GetReflection(ShaderStage::Geometry, gsEntry.entryPoint,
-                                                       state.graphics.pipeline);
+    prevStage = ShaderStage::Mesh;
+    prevId = state.graphics.shaderObject ? state.shaderObjects[(size_t)prevStage]
+                                         : pipe.shaders[(size_t)prevStage].module;
+  }
+
+  if(prevId != ResourceId())
+  {
+    const VulkanCreationInfo::ShaderEntry &prevEntry =
+        state.graphics.shaderObject ? c.m_ShaderObject[state.shaderObjects[(size_t)prevStage]].shad
+                                    : pipe.shaders[(size_t)prevStage];
+    VulkanCreationInfo::ShaderModuleReflection &prevRefl =
+        c.m_ShaderModule[prevEntry.module].GetReflection(prevStage, prevEntry.entryPoint,
+                                                         state.graphics.pipeline);
 
     // check to see if the shader outputs a primitive ID
-    for(const SigParameter &e : gsRefl.refl->outputSignature)
+    for(const SigParameter &e : prevRefl.refl->outputSignature)
     {
       if(e.systemValue == ShaderBuiltin::PrimitiveIndex)
       {
         if(Vulkan_Debug_ShaderDebugLogging())
         {
-          RDCLOG("Geometry shader exports primitive ID, can use");
+          RDCLOG("Geometry/mesh shader exports primitive ID, can use");
         }
 
         usePrimitiveID = true;
@@ -5916,7 +5929,7 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
     if(Vulkan_Debug_ShaderDebugLogging())
     {
       if(!usePrimitiveID)
-        RDCLOG("Geometry shader doesn't export primitive ID, can't use");
+        RDCLOG("Geometry/mesh shader doesn't export primitive ID, can't use");
     }
   }
   else
