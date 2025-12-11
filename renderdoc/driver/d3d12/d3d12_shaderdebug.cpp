@@ -3970,6 +3970,13 @@ ShaderDebugTrace *D3D12Replay::DebugThread(uint32_t eventId,
     }
     else if(hasQuadScope)
     {
+      workgroupProperties.resize(numThreads);
+      threadsBuiltins.resize(numThreads);
+
+      // SV_GroupID
+      globalBuiltins[ShaderBuiltin::GroupIndex] =
+          ShaderVariable(rdcstr(), groupid[0], groupid[1], groupid[2], 0U);
+
       // need to simulate the whole quad, do not readback from the GPU like we do with subgroups
       // the quad is guaranteed to be in the same subgroup
       // We lay things out in linear or quad order
