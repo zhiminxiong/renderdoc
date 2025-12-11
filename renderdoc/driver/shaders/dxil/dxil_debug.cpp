@@ -10032,6 +10032,11 @@ void Debugger::InitialiseWorkgroup()
       lane.SetQuadLaneIndex(workgroupProperties[i][ThreadProperty::QuadLane]);
       lane.SetQuadId(workgroupProperties[i][ThreadProperty::QuadId]);
     }
+    if(m_Stage == ShaderStage::Compute)
+    {
+      lane.SetQuadLaneIndex(workgroupProperties[i][ThreadProperty::QuadLane]);
+      lane.SetQuadId(workgroupProperties[i][ThreadProperty::QuadId]);
+    }
 
     lane.SetDead(workgroupProperties[i][ThreadProperty::Active] == 0);
     lane.SetSubgroupIdx(workgroupProperties[i][ThreadProperty::SubgroupIdx]);

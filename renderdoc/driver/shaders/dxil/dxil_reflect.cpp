@@ -1860,15 +1860,6 @@ rdcstr Program::GetDebugStatus()
             RDCASSERT(dxOpCode < DXOp::NumOpCodes, dxOpCode, DXOp::NumOpCodes);
             switch(dxOpCode)
             {
-              case DXOp::QuadReadLaneAt:
-              case DXOp::QuadOp:
-                // Only supported on pixel shaders
-                if(m_Type != DXBC::ShaderType::Pixel)
-                  return StringFormat::Fmt(
-                      "Only supported when debugging pixel shaders dx.op call `%s` %s",
-                      callFunc->name.c_str(), ToStr(dxOpCode).c_str());
-                continue;
-
               // Implement when required
               case DXOp::CBufferLoad:
                 // loads single value from byte offset in constant buffer, 8-byte alignment on the offset
