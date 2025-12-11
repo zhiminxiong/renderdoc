@@ -6658,11 +6658,11 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
     RDCASSERTNOTEQUAL(subgroupSize, 0);
     numThreads = RDCMAX(numThreads, subgroupSize);
 
-    if(hasQuadScope)
-      RDCASSERT(numThreads >= 4);
-
     if(hasWorkgroupScope)
       numThreads = RDCMAX(numThreads, threadDim[0] * threadDim[1] * threadDim[2]);
+
+    if(hasQuadScope)
+      RDCASSERT(numThreads >= 4);
 
     apiWrapper->global_builtins[ShaderBuiltin::NumSubgroups] =
         ShaderVariable(rdcstr(), winner->numSubgroups, 0U, 0U, 0U);
