@@ -1153,6 +1153,9 @@ void Program::Parse(const DXBC::Reflection *reflection)
     {
       if(f->name == "dx.op.barrier")
         m_Threadscope |= DXBC::ThreadScope::Workgroup;
+      if(f->name.beginsWith("dx.op.quadReadLaneAt.") || f->name.beginsWith("dx.op.quadOp.") ||
+         f->name.beginsWith("dx.op.quadVote."))
+        m_Threadscope |= DXBC::ThreadScope::Quad;
     }
   }
 
