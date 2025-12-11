@@ -1151,11 +1151,47 @@ void Program::Parse(const DXBC::Reflection *reflection)
 
     for(Function *f : m_Functions)
     {
+      if(f->family != FunctionFamily::DXOp)
+        continue;
       if(f->name == "dx.op.barrier")
         m_Threadscope |= DXBC::ThreadScope::Workgroup;
       if(f->name.beginsWith("dx.op.quadReadLaneAt.") || f->name.beginsWith("dx.op.quadOp.") ||
          f->name.beginsWith("dx.op.quadVote."))
         m_Threadscope |= DXBC::ThreadScope::Quad;
+    }
+    // Compute shaders using derivatives require quad scope
+    // DXOp::DerivCoarseX
+    // DXOp::DerivCoarseY
+    // DXOp::DerivFineX
+    // DXOp::DerivFineY
+    // DXOp::CalculateLOD
+    // DXOp::Sample
+    // DXOp::SampleBias
+    // DXOp::SampleCmp
+    for(Function *f : m_Functions)
+    {
+      if(f->external)
+        continue;
+      for(size_t funcIdx = 0; funcIdx < f->instructions.size(); funcIdx++)
+      {
+        const Instruction *inst = f->instructions[funcIdx];
+        if(inst->op != Operation::Call)
+          continue;
+        const Function *callFunc = inst->getFuncCall();
+        if(callFunc->family != FunctionFamily::DXOp)
+          continue;
+
+        DXOp dxOpCode = DXOp::NumOpCodes;
+        RDCASSERT(getival<DXOp>(inst->args[0], dxOpCode));
+        RDCASSERT(dxOpCode < DXOp::NumOpCodes, dxOpCode, DXOp::NumOpCodes);
+        if((dxOpCode == DXOp::DerivCoarseX) || (dxOpCode == DXOp::DerivCoarseY) ||
+           (dxOpCode == DXOp::DerivFineX) || (dxOpCode == DXOp::DerivFineY) ||
+           (dxOpCode == DXOp::CalculateLOD) || (dxOpCode == DXOp::Sample) ||
+           (dxOpCode == DXOp::SampleBias) || (dxOpCode == DXOp::SampleCmp))
+        {
+          m_Threadscope |= DXBC::ThreadScope::Quad;
+        }
+      }
     }
   }
 

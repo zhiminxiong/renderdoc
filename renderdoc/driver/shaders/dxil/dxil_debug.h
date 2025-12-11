@@ -435,10 +435,18 @@ struct GpuSampleGatherOperation
   ShaderVariable *result = NULL;
 };
 
+enum class ShaderFeatures : uint32_t
+{
+  None = 0,
+  Derivatives = 1 << 0,
+};
+
+BITMASK_OPERATORS(ShaderFeatures);
+
 struct ThreadState
 {
   ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
-              uint32_t laneIndex, uint32_t numThreads);
+              uint32_t laneIndex, uint32_t numThreads, ShaderFeatures shaderFeatures);
   ~ThreadState();
 
   void EnterEntryPoint(const DXIL::Function *function, bool hasDebugState);
@@ -718,6 +726,8 @@ private:
   DXBC::ShaderType m_ShaderType;
 
   rdcarray<bool> m_ActiveMask;
+
+  ShaderFeatures m_Features;
 
   ShaderDebugState m_PendingDebugState;
   ShaderVariable m_PendingResultData;

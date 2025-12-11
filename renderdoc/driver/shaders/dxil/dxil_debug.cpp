@@ -1523,12 +1523,13 @@ void MemoryTracking::ConvertGlobalAllocToLocal(Id allocId)
 
 // Must be called from the replay manager thread (the debugger thread)
 ThreadState::ThreadState(Debugger &debugger, const GlobalState &globalState, uint32_t maxSSAId,
-                         uint32_t laneIndex, uint32_t numThreads)
+                         uint32_t laneIndex, uint32_t numThreads, ShaderFeatures shaderFeatures)
     : m_Debugger(debugger),
       m_GlobalState(globalState),
       m_Program(debugger.GetProgram()),
       m_MaxSSAId(maxSSAId),
-      m_WorkgroupIndex(laneIndex)
+      m_WorkgroupIndex(laneIndex),
+      m_Features(shaderFeatures)
 {
   THREADSTATE_CHECK_DEBUGGER_THREAD();
   m_ShaderType = m_Program.GetShaderType();
@@ -3099,9 +3100,12 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
           case DXOp::DerivFineX:
           case DXOp::DerivFineY:
           {
-            if(m_ShaderType != DXBC::ShaderType::Pixel || workgroup.size() < 4)
+            if(!(m_Features & ShaderFeatures::Derivatives) || (workgroup.size() < 4) ||
+               m_QuadNeighbours.contains(~0U))
             {
-              RDCERR("Undefined results using derivative instruction outside of a pixel shader.");
+              RDCERR(
+                  "Undefined results using derivative instruction in shader without support for "
+                  "derivatives");
             }
             else
             {
@@ -6880,12 +6884,16 @@ bool ThreadState::PerformGPUResourceOp(const rdcarray<ThreadState> &workgroup, O
 
   ShaderVariable ddx;
   ShaderVariable ddy;
-  // Sample, SampleBias, CalculateLOD need DDX, DDY
-  if((dxOpCode == DXOp::Sample) || (dxOpCode == DXOp::SampleBias) || (dxOpCode == DXOp::CalculateLOD))
+  // Sample, SampleBias, SampleCmp, CalculateLOD need DDX, DDY
+  if((dxOpCode == DXOp::Sample) || (dxOpCode == DXOp::SampleBias) ||
+     (dxOpCode == DXOp::SampleCmp) || (dxOpCode == DXOp::CalculateLOD))
   {
-    if(m_ShaderType != DXBC::ShaderType::Pixel || m_QuadNeighbours.contains(~0U))
+    if(!(m_Features & ShaderFeatures::Derivatives) || (workgroup.size() < 4) ||
+       m_QuadNeighbours.contains(~0U))
     {
-      RDCERR("Undefined results using derivative instruction outside of a pixel shader.");
+      RDCERR(
+          "Undefined results using derivative instruction in shader without support for "
+          "derivatives");
     }
     else
     {
@@ -9129,6 +9137,13 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
   ShaderDebugTrace *ret = new ShaderDebugTrace;
   ret->stage = shaderStage;
 
+  ShaderFeatures shaderFeatures = ShaderFeatures::None;
+  bool isSM66Plus = (m_Program->GetMajorVersion() > 6) ||
+                    ((m_Program->GetMajorVersion() == 6) && (m_Program->GetMinorVersion() >= 6));
+
+  if((shaderStage == ShaderStage::Fragment) || ((shaderStage == ShaderStage::Compute) && isSM66Plus))
+    shaderFeatures |= ShaderFeatures::Derivatives;
+
   // Get the global state from the API wrapper
   m_GlobalState.builtins = apiWrapper->GetBuiltins();
   m_GlobalState.subgroupSize = apiWrapper->GetSubgroupSize();
@@ -9137,7 +9152,8 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *apiWrapper, uint32_t eve
 
   for(uint32_t i = 0; i < threadsInWorkgroup; i++)
   {
-    m_Workgroup.push_back(ThreadState(*this, m_GlobalState, maxSSAId, i, threadsInWorkgroup));
+    m_Workgroup.push_back(
+        ThreadState(*this, m_GlobalState, maxSSAId, i, threadsInWorkgroup, shaderFeatures));
     m_QueuedDeviceThreadSteps[i] = false;
     m_QueuedGpuMathOps[i] = false;
     m_QueuedGpuSampleGatherOps[i] = false;
