@@ -826,6 +826,15 @@ float4 main(v2f IN) : SV_Target0
   {
     return float4(col1z, col2w, 1.0, 2.0);
   }
+  if(IN.tri == 99)
+  {
+    float4 Color = float4(0,0,0,1);
+    float2 uv = IN.pos.xy / float2(2.0, 2.0);
+    uv.y += 0.187;
+    Color.x = smiley.CalculateLevelOfDetail(linearclamp, uv);
+    Color.y = smiley.CalculateLevelOfDetailUnclamped(linearclamp, uv);
+    return Color;
+  }
 
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }

@@ -1084,6 +1084,15 @@ float4 main(v2f IN) : SV_Target0
     }
     return Color;
   }
+  if(IN.tri == 109)
+  {
+    float4 Color = float4(0,0,0,1);
+    float2 uv = IN.s.xy / float2(2.0, 2.0);
+    uv.y += 0.187;
+    Color.x = smiley.CalculateLevelOfDetail(linearclamp, uv);
+    Color.y = smiley.CalculateLevelOfDetailUnclamped(linearclamp, uv);
+    return Color;
+  }
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }
 )EOSHADER";
