@@ -4181,7 +4181,8 @@ void ThreadState::StepNext(ShaderDebugState *state, DebugAPIWrapper *apiWrapper,
                                            op.str.c_str(), lookupResult))
       {
         // should be a better way of doing this
-        if(destOperand.comps[1] == 0xff)
+        // LOD result is already in result.x
+        if((destOperand.comps[1] == 0xff) && (op.operation != OPCODE_LOD))
           lookupResult.value.s32v[0] = lookupResult.value.s32v[destOperand.comps[0]];
 
         SetDst(state, destOperand, op, lookupResult);
