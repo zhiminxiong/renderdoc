@@ -3579,7 +3579,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->bookmarkStrip->hide();
 
   m_BookmarkStripLayout = new FlowLayout(ui->bookmarkStrip, 0, 3, 3);
-  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);    // µ×ÏÂ 8px ¼ä¸ô
+  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);
   m_BookmarkSpacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
   ui->bookmarkStrip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -5431,7 +5431,7 @@ void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
   if(idx.isValid())
   {
     EventBookmark mark(GetSelectedEID(idx));
-    mark.color = color; // 1=Red, 2=Green, 3=Blue£¨ÄãÏîÄ¿µÄcolorº¬Òå£©
+    mark.color = color; // 1=Red, 2=Green, 3=Blue
     m_Ctx.SetBookmark(mark);
   }
 }
