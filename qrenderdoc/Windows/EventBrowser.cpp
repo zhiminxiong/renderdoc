@@ -5738,6 +5738,13 @@ void EventBrowser::repopulateBookmarks()
       m_BookmarkStripLayout->addWidget(but);
       m_BookmarkStripLayout->addItem(m_BookmarkSpacer);
     }
+    else
+    {
+      // Update existing button's text and color
+      QRClickToolButton *but = m_BookmarkButtons[mark.eventId];
+      but->setText(GetBookmarkDisplayText(mark));
+      updateBookmarkButtonColor(but, mark.color);
+    }
   }
 
   // remove any bookmark markers we shouldn't have
