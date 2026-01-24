@@ -456,6 +456,24 @@ struct EventItemModel : public QAbstractItemModel
     }
   }
 
+  void SetFlatMode(bool flat)
+  {
+    if(m_FlatMode != flat)
+    {
+      emit beginResetModel();
+      m_FlatMode = flat;
+      
+      if(m_FlatMode)
+      {
+        BuildFlatDrawcallList();
+      }
+      
+      emit endResetModel();
+    }
+  }
+
+  bool IsFlatMode() const { return m_FlatMode; }
+
   void UpdateDurationColumn()
   {
     m_TimeUnit = m_Ctx.Config().EventBrowser_TimeUnit;
@@ -702,6 +720,17 @@ struct EventItemModel : public QAbstractItemModel
     if(!m_Ctx.IsCaptureLoaded())
       return QModelIndex();
 
+    // In flat mode, return direct indices to drawcalls
+    if(m_FlatMode)
+    {
+      if(!parent.isValid() && row >= 0 && row < m_FlatDrawcalls.count())
+      {
+        return createIndex(row, column, (quintptr)m_FlatDrawcalls[row]);
+      }
+      return QModelIndex();
+    }
+
+    // Hierarchical mode (original logic)
     // create fake root if the parent is invalid
     if(!parent.isValid())
       return createIndex(0, column, TagRoot);
@@ -734,7 +763,15 @@ struct EventItemModel : public QAbstractItemModel
 
   QModelIndex parent(const QModelIndex &index) const override
   {
-    if(!m_Ctx.IsCaptureLoaded() || !index.isValid() || index.internalId() == TagRoot)
+    if(!m_Ctx.IsCaptureLoaded() || !index.isValid())
+      return QModelIndex();
+
+    // In flat mode, all items are at root level (no parent)
+    if(m_FlatMode)
+      return QModelIndex();
+
+    // Hierarchical mode (original logic)
+    if(index.internalId() == TagRoot)
       return QModelIndex();
 
     // Capture Start's parent is the root
@@ -762,6 +799,17 @@ struct EventItemModel : public QAbstractItemModel
     if(!m_Ctx.IsCaptureLoaded())
       return 0;
 
+    // In flat mode, only show drawcalls at root level
+    if(m_FlatMode)
+    {
+      if(!parent.isValid())
+        return m_FlatDrawcalls.count();
+      
+      // No children in flat mode
+      return 0;
+    }
+
+    // Hierarchical mode (original logic)
     // only one root
     if(!parent.isValid())
       return 1;
@@ -1050,6 +1098,10 @@ private:
   bool m_ShowAllParameters = false;
   bool m_UseCustomActionNames = true;
 
+  // flat view mode support
+  bool m_FlatMode = false;
+  rdcarray<uint32_t> m_FlatDrawcalls;  // cached list of all drawcall EIDs for flat mode
+
   // a cache of EID -> row in parent for looking up indices for arbitrary EIDs.
   rdcarray<rdcpair<uint32_t, int>> m_RowInParentCache;
 
@@ -1070,6 +1122,24 @@ private:
 
       // now recurse
       AccumulateFindResults(idx);
+    }
+  }
+
+  void BuildFlatDrawcallList()
+  {
+    m_FlatDrawcalls.clear();
+    
+    if(!m_Ctx.IsCaptureLoaded())
+      return;
+    
+    // Collect all drawcalls (actions with Drawcall flag)
+    for(size_t i = 0; i < m_Actions.size(); i++)
+    {
+      const ActionDescription *action = m_Actions[i];
+      if(action && action->eventId == i && (action->flags & ActionFlags::Drawcall))
+      {
+        m_FlatDrawcalls.push_back((uint32_t)i);
+      }
     }
   }
 
@@ -3658,6 +3728,10 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   QObject::connect(ui->events->header(), &QHeaderView::customContextMenuRequested, this,
                    &EventBrowser::events_contextMenu);
 
+  // Connect view mode combo box
+  QObject::connect(ui->viewMode, OverloadedSlot<int>::of(&QComboBox::currentIndexChanged), this,
+                   &EventBrowser::on_viewMode_currentIndexChanged);
+
   {
     QMenu *extensionsMenu = new QMenu(this);
 
@@ -5186,6 +5260,36 @@ void EventBrowser::on_colSelect_clicked()
   for(int i = 0; i < ui->events->model()->columnCount(); i++)
     headers << ui->events->model()->headerData(i, Qt::Horizontal).toString();
   UpdateVisibleColumns(tr("Select Event Browser Columns"), COL_COUNT, ui->events->header(), headers);
+}
+
+void EventBrowser::on_viewMode_currentIndexChanged(int index)
+{
+  if(!m_Model)
+    return;
+  
+  ExpansionKeyGen keygen = [](QModelIndex idx, uint) { return idx.data(ROLE_SELECTED_EID).toUInt(); };
+  
+  // Save current expansion state before switching modes
+  if(index == 1)  // Switching to Flat mode
+  {
+    ui->events->saveExpansion(m_EventsExpansion, keygen);
+  }
+  
+  // 0 = Hierarchical, 1 = Flat
+  m_Model->SetFlatMode(index == 1);
+  
+  // Restore expansion state when switching back to hierarchical
+  if(index == 0)
+  {
+    ui->events->applyExpansion(m_EventsExpansion, keygen);
+  }
+  
+  // Try to keep the same event selected
+  uint32_t currentEID = m_Ctx.CurSelectedEvent();
+  if(currentEID > 0)
+  {
+    SelectEvent(currentEID);
+  }
 }
 
 QString EventBrowser::GetExportString(int indent, bool firstchild, const QModelIndex &idx)
