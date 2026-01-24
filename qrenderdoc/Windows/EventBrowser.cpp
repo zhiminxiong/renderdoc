@@ -3840,7 +3840,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->bookmarkStrip->hide();
 
   m_BookmarkStripLayout = new FlowLayout(ui->bookmarkStrip, 0, 3, 3);
-  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);    // 底下 8px 间隔
+  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);
   m_BookmarkSpacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
   ui->bookmarkStrip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -5684,7 +5684,7 @@ void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
   if(idx.isValid())
   {
     EventBookmark mark(GetSelectedEID(idx));
-    mark.color = color; // 1=Red, 2=Green, 3=Blue（你项目的color含义）
+    mark.color = color; // 1=Red, 2=Green, 3=Blue
     m_Ctx.SetBookmark(mark);
   }
 }
