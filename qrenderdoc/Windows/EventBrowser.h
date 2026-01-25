@@ -171,6 +171,7 @@ private slots:
   void on_exportActions_clicked();
   void on_colSelect_clicked();
   void on_viewMode_currentIndexChanged(int index);
+  void on_events_header_sectionClicked(int logicalIndex);
 
   // manual slots
   void findHighlight_timeout();

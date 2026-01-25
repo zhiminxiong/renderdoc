@@ -1172,7 +1172,34 @@ private:
       }
     }
   }
-
+public:
+  void SortByDuration(bool ascending)
+  {
+    if(!m_FlatMode || m_FlatDrawcalls.empty())
+      return;
+    
+    emit beginResetModel();
+    
+    // Sort the flat drawcall list by duration
+    std::sort(m_FlatDrawcalls.begin(), m_FlatDrawcalls.end(), 
+              [this, ascending](uint32_t a, uint32_t b) {
+                double timeA = (a < m_Times.size()) ? m_Times[a] : -1.0;
+                double timeB = (b < m_Times.size()) ? m_Times[b] : -1.0;
+                
+                // Handle invalid times (put them at the end)
+                if(timeA < 0.0 && timeB < 0.0) return a < b;  // Keep EID order for invalid times
+                if(timeA < 0.0) return false;  // Invalid times go to the end
+                if(timeB < 0.0) return true;
+                
+                if(ascending)
+                  return timeA < timeB;
+                else
+                  return timeA > timeB;
+              });
+    
+    emit endResetModel();
+  }
+private:
   void RefreshIcon(QModelIndex idx)
   {
     emit dataChanged(idx.sibling(idx.row(), 0), idx.sibling(idx.row(), COL_COUNT - 1),
@@ -3675,6 +3702,9 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   QObject::connect(ui->events, &RDTreeView::keyPress, this, &EventBrowser::events_keyPress);
   QObject::connect(ui->events->selectionModel(), &QItemSelectionModel::currentChanged, this,
                    &EventBrowser::events_currentChanged);
+  ui->events->header()->setSectionsClickable(true);
+  QObject::connect(ui->events->header(), &QHeaderView::sectionClicked, this,
+                   &EventBrowser::on_events_header_sectionClicked);
   ui->find->setChecked(false);
   ui->bookmarkStrip->hide();
 
@@ -5339,6 +5369,59 @@ void EventBrowser::on_viewMode_currentIndexChanged(int index)
   
   // Try to keep the same event selected
   uint32_t currentEID = m_Ctx.CurSelectedEvent();
+  if(currentEID > 0)
+  {
+    SelectEvent(currentEID);
+  }
+}
+
+void EventBrowser::on_events_header_sectionClicked(int logicalIndex)
+{
+  // Only handle sorting in Flat mode
+  if(!m_Model || !m_Model->IsFlatMode())
+    return;
+  
+  // Only handle EID and Duration columns
+  if(logicalIndex != COL_EID && logicalIndex != COL_DURATION)
+    return;
+  
+  // Save current selection
+  uint32_t currentEID = m_Ctx.CurSelectedEvent();
+
+  // Save current column widths before mode switch
+  int columnWidths[COL_COUNT];
+  for(int i = 0; i < COL_COUNT; i++)
+  {
+    columnWidths[i] = ui->events->header()->sectionSize(i);
+  }
+  
+  if(logicalIndex == COL_EID)
+  {
+    // Restore original EID order (no sorting)
+    m_Model->SetFlatMode(false);
+    m_Model->SetFlatMode(true);
+    
+    // Force EID column to stay at first position
+    ui->events->header()->moveSection(ui->events->header()->visualIndex(COL_EID), 0);
+  }
+  else if(logicalIndex == COL_DURATION)
+  {
+    // Toggle between ascending and descending sort
+    static bool ascending = true;
+    m_Model->SortByDuration(ascending);
+    ascending = !ascending;
+    
+    // Force EID column to stay at first position
+    ui->events->header()->moveSection(ui->events->header()->visualIndex(COL_EID), 0);
+  }
+
+  // Restore column widths after mode switch
+  for(int i = 0; i < COL_COUNT; i++)
+  {
+    ui->events->header()->resizeSection(i, columnWidths[i]);
+  }
+  
+  // Restore selection after sorting
   if(currentEID > 0)
   {
     SelectEvent(currentEID);
