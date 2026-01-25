@@ -1194,7 +1194,7 @@ private:
     else if(m_TimeUnit == TimeUnit::Nanoseconds)
       secs *= 1000000000.0;
 
-    return Formatter::Format(secs);
+    return QString::number(secs, 'f', 3);
   }
 
   void CalculateTotalDuration(ActionTreeNode &node)
