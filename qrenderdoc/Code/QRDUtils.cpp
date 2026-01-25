@@ -851,10 +851,7 @@ void RichResourceTextPaint(const QWidget *owner, QPainter *painter, QRect rect, 
   // vertical align to the centre, if there's spare room.
   int diff = rect.height() - linkedText->doc.size().height();
 
-  if(diff > 0)
-    painter->translate(1, diff / 2);
-  else
-    painter->translate(1, 0);
+  painter->translate(1, diff / 2);
 
   QAbstractTextDocumentLayout::PaintContext docCtx;
   docCtx.palette = palette;
