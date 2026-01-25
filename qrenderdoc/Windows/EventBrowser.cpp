@@ -3761,6 +3761,13 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   // Connect view mode combo box
   QObject::connect(ui->viewMode, OverloadedSlot<int>::of(&QComboBox::currentIndexChanged), this,
                    &EventBrowser::on_viewMode_currentIndexChanged);
+  
+  // Enable hover effect for the dropdown list
+  QListView *viewModeView = qobject_cast<QListView *>(ui->viewMode->view());
+  if(viewModeView)
+  {
+    viewModeView->setMouseTracking(true);
+  }
 
   {
     QMenu *extensionsMenu = new QMenu(this);
