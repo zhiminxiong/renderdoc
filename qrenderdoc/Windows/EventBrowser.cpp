@@ -5312,8 +5312,21 @@ void EventBrowser::on_viewMode_currentIndexChanged(int index)
     ui->events->saveExpansion(m_EventsExpansion, keygen);
   }
   
+  // Save current column widths before mode switch
+  int columnWidths[COL_COUNT];
+  for(int i = 0; i < COL_COUNT; i++)
+  {
+    columnWidths[i] = ui->events->header()->sectionSize(i);
+  }
+  
   // 0 = Hierarchical, 1 = Flat
   m_Model->SetFlatMode(index == 1);
+  
+  // Restore column widths after mode switch
+  for(int i = 0; i < COL_COUNT; i++)
+  {
+    ui->events->header()->resizeSection(i, columnWidths[i]);
+  }
   
   // Force EID column to always be first after mode switch
   ui->events->header()->moveSection(ui->events->header()->visualIndex(COL_EID), 0);
