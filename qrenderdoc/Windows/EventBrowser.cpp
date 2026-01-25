@@ -603,6 +603,18 @@ struct EventItemModel : public QAbstractItemModel
     if(eid >= m_Actions.size())
       return QModelIndex();
 
+    // In flat mode, search in the flat drawcalls list
+    if(m_FlatMode)
+    {
+      for(int i = 0; i < m_FlatDrawcalls.count(); i++)
+      {
+        if(m_FlatDrawcalls[i] == eid)
+          return createIndex(i, 0, (quintptr)eid);
+      }
+      // EID not found in flat list (might not be a drawcall)
+      return QModelIndex();
+    }
+
     const ActionDescription *action = m_Actions[eid];
     if(action)
     {
@@ -861,20 +873,38 @@ struct EventItemModel : public QAbstractItemModel
 
     if(role == Qt::DecorationRole)
     {
-      if(index == m_CurrentEID)
-        return Icons::flag_green();
-      else if(m_BookmarkIndices.contains(index))
+      // Only show icons in the Name column
+      if(index.column() == COL_NAME)
       {
-        uint32_t eid = index.internalId();
-        for(const EventBookmark &bookmark : m_Bookmarks)
+        if(index == m_CurrentEID)
+          return Icons::flag_green();
+        else if(m_BookmarkIndices.contains(index))
         {
-          if(bookmark.eventId == eid)
-            return GetBookmarkIcon(bookmark.color);
+          uint32_t eid = index.internalId();
+          for(const EventBookmark &bookmark : m_Bookmarks)
+          {
+            if(bookmark.eventId == eid)
+              return GetBookmarkIcon(bookmark.color);
+          }
+          return Icons::asterisk_orange();
         }
-        return Icons::asterisk_orange();
+        else
+        {
+          // In flat mode, m_BookmarkIndices might not be updated, so check bookmarks directly by EID
+          uint32_t eid = index.internalId();
+          if(eid != TagRoot && eid != TagCaptureStart)
+          {
+            for(const EventBookmark &bookmark : m_Bookmarks)
+            {
+              if(bookmark.eventId == eid)
+                return GetBookmarkIcon(bookmark.color);
+            }
+          }
+          
+          if(m_FindResults.contains(index))
+            return Icons::find();
+        }
       }
-      else if(m_FindResults.contains(index))
-        return Icons::find();
       return QVariant();
     }
 
