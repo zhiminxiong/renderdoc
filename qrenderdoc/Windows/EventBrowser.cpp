@@ -5605,6 +5605,9 @@ void EventBrowser::on_viewMode_currentIndexChanged(int index)
   // 0 = Hierarchical, 1 = Flat
   m_Model->SetFlatMode(index == 1);
   
+  // Force EID column to always be first after mode switch
+  ui->events->header()->moveSection(ui->events->header()->visualIndex(COL_EID), 0);
+  
   // Restore expansion state when switching back to hierarchical
   if(index == 0)
   {
