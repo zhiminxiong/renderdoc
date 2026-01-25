@@ -1162,11 +1162,12 @@ private:
     if(!m_Ctx.IsCaptureLoaded())
       return;
     
-    // Collect all drawcalls (actions with Drawcall flag)
+    // Collect all drawcalls, clears, and presents (actions with Drawcall, Clear, or Present flags)
     for(size_t i = 0; i < m_Actions.size(); i++)
     {
       const ActionDescription *action = m_Actions[i];
-      if(action && action->eventId == i && (action->flags & ActionFlags::Drawcall))
+      if(action && action->eventId == i && 
+         (action->flags & (ActionFlags::Drawcall | ActionFlags::Clear | ActionFlags::Present)))
       {
         m_FlatDrawcalls.push_back((uint32_t)i);
       }
