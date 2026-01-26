@@ -414,11 +414,33 @@ struct EventItemModel : public QAbstractItemModel
     if(!fakeMarkers.empty())
       CalculateTotalDuration(m_Nodes[0]);
 
+    // Calculate total duration for percentage display (only in flat mode)
+    m_TotalDuration = 0.0;
+    if(m_FlatMode)
+    {
+      // Only sum up drawcall, clear, and present events
+      for(size_t i = 0; i < m_Actions.size(); i++)
+      {
+        const ActionDescription *action = m_Actions[i];
+        if(action && action->eventId == i && 
+           (action->flags & (ActionFlags::Drawcall | ActionFlags::Clear | ActionFlags::Present)))
+        {
+          if(i < m_Times.size() && m_Times[i] > 0.0 && !qIsNaN(m_Times[i]) && !qIsInf(m_Times[i]))
+          {
+            m_TotalDuration += m_Times[i];
+          }
+        }
+      }
+    }
+
     // Qt's item model kind of sucks and doesn't have a good way to say "all data in this column has
     // changed" let alone "all data has changed". dataChanged() is limited to only a group of model
     // indices under a single parent. Instead we just force the view itself to refresh here.
     m_View->viewport()->update();
+
   }
+
+
 
   bool ShowParameterNames() { return m_ShowParameterNames; }
   void SetShowParameterNames(bool show)
@@ -1075,8 +1097,11 @@ private:
 
   rdcarray<double> m_Times;
   TimeUnit m_TimeUnit = TimeUnit::Count;
+  double m_TotalDuration = 0.0;
+
 
   QModelIndex m_CurrentEID;
+
   rdcarray<EventBookmark> m_Bookmarks;
   rdcarray<QModelIndex> m_BookmarkIndices;
   QString m_FindString;
@@ -1217,6 +1242,14 @@ private:
     if(secs < 0.0)
       return QVariant();
 
+    // Calculate percentage (only in flat mode)
+    QString percentStr;
+    if(m_FlatMode && m_TotalDuration > 0.0 && secs >= 0.0)
+    {
+      double percentage = (secs / m_TotalDuration) * 100.0;
+      percentStr = QString::number(percentage, 'f', 1) + lit("% ");
+    }
+
     if(m_TimeUnit == TimeUnit::Milliseconds)
       secs *= 1000.0;
     else if(m_TimeUnit == TimeUnit::Microseconds)
@@ -1224,7 +1257,8 @@ private:
     else if(m_TimeUnit == TimeUnit::Nanoseconds)
       secs *= 1000000000.0;
 
-    return QString::number(secs, 'f', 3);
+    return percentStr + QString::number(secs, 'f', 3);
+
   }
 
   void CalculateTotalDuration(ActionTreeNode &node)
