@@ -1213,14 +1213,15 @@ private:
     if(secs < 0.0)
       return QVariant();
 
-    // Calculate percentage (only in flat mode)
+    // Calculate percentage BEFORE unit conversion (only in flat mode)
     QString percentStr;
-    if(m_FlatMode && m_TotalDuration > 0.0 && secs >= 0.0)
+    if(m_FlatMode && m_TotalDuration > 0.0)
     {
       double percentage = (secs / m_TotalDuration) * 100.0;
-      percentStr = QString::number(percentage, 'f', 1) + lit("% ");
+      percentStr = QString::number(percentage, 'f', 1) + lit("%");
     }
 
+    // Apply unit conversion
     if(m_TimeUnit == TimeUnit::Milliseconds)
       secs *= 1000.0;
     else if(m_TimeUnit == TimeUnit::Microseconds)
@@ -1228,7 +1229,22 @@ private:
     else if(m_TimeUnit == TimeUnit::Nanoseconds)
       secs *= 1000000000.0;
 
-    return percentStr + QString::number(secs, 'f', 3);
+    QString timeStr = QString::number(secs, 'f', 3);
+
+    // Format with percentage and spacing (only in flat mode)
+    if(!percentStr.isEmpty())
+    {
+      // Format: "XX.X%" + spaces + right-aligned time value
+      int totalWidth = 25;  // Total width for the column
+      int spacesNeeded = qMax(1, totalWidth - percentStr.length() - timeStr.length());
+      QString spaces;
+      spaces.fill(QLatin1Char(' '), spacesNeeded);
+      return percentStr + spaces + timeStr;
+    }
+
+    return timeStr;
+
+
 
   }
 
