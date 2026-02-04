@@ -187,10 +187,12 @@ private slots:
   void on_refresh_clicked();
   void on_unrefresh_clicked();
   void on_resetEdits_clicked();
+  void on_forceHighPrecision_clicked();
   void on_intView_clicked();
   void on_floatView_clicked();
   void on_debugToggle_clicked();
   void on_toggleLog_clicked();
+
 
   void on_resources_sortByStep_clicked();
   void on_resources_sortByResource_clicked();
