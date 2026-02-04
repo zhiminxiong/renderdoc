@@ -350,6 +350,26 @@
      </widget>
     </item>
     <item>
+     <widget class="QToolButton" name="forceHighPrecision">
+      <property name="toolTip">
+       <string>Replace all lowp/mediump with highp for debugging precision issues</string>
+      </property>
+      <property name="text">
+       <string>Force High Precision</string>
+      </property>
+      <property name="icon">
+       <iconset resource="../Resources/resources.qrc">
+        <normaloff>:/wrench.png</normaloff>:/wrench.png</iconset>
+      </property>
+      <property name="toolButtonStyle">
+       <enum>Qt::ToolButtonTextBesideIcon</enum>
+      </property>
+      <property name="autoRaise">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QToolButton" name="resetEdits">
       <property name="toolTip">
        <string>Remove all source edits and restore original shader</string>
@@ -369,6 +389,7 @@
       </property>
      </widget>
     </item>
+
     <item>
      <widget class="QToolButton" name="refresh">
       <property name="toolTip">

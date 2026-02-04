@@ -32,9 +32,13 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPen>
+#include <QRegularExpression>
 #include <QSet>
 #include <QShortcut>
+#include <QTimer>
 #include <QToolTip>
+
+
 #include "Code/Resources.h"
 #include "Code/ScintillaSyntax.h"
 #include "Widgets/Extended/RDLabel.h"
@@ -6444,7 +6448,57 @@ void ShaderViewer::on_resetEdits_clicked()
   updateEditState();
 }
 
+void ShaderViewer::on_forceHighPrecision_clicked()
+{
+  // Replace precision qualifiers in all editor windows
+  for(ScintillaEdit *s : m_Scintillas)
+  {
+    QString currentText = QString::fromUtf8(s->getText(s->textLength() + 1));
+    QString modifiedText = currentText;
+    
+    // Replace lowp with highp
+    modifiedText.replace(QRegularExpression(lit("\\blowp\\s+")), lit("highp "));
+    modifiedText.replace(QRegularExpression(lit("\\blowp\\t+")), lit("highp\t"));
+    modifiedText.replace(QRegularExpression(lit("\\blowp\\n")), lit("highp\n"));
+    modifiedText.replace(QRegularExpression(lit("\\blowp\\r")), lit("highp\r"));
+    modifiedText.replace(QRegularExpression(lit("\\blowp;")), lit("highp;"));
+    modifiedText.replace(QRegularExpression(lit("\\blowp\\)")), lit("highp)"));
+    
+    // Replace mediump with highp
+    modifiedText.replace(QRegularExpression(lit("\\bmediump\\s+")), lit("highp "));
+    modifiedText.replace(QRegularExpression(lit("\\bmediump\\t+")), lit("highp\t"));
+    modifiedText.replace(QRegularExpression(lit("\\bmediump\\n")), lit("highp\n"));
+    modifiedText.replace(QRegularExpression(lit("\\bmediump\\r")), lit("highp\r"));
+    modifiedText.replace(QRegularExpression(lit("\\bmediump;")), lit("highp;"));
+    modifiedText.replace(QRegularExpression(lit("\\bmediump\\)")), lit("highp)"));
+    
+    if(currentText != modifiedText)
+    {
+      s->selectAll();
+      s->replaceSel(modifiedText.toUtf8().data());
+    }
+  }
+  
+  // Mark as modified
+  m_Modified = true;
+  updateEditState();
+  
+  // Trigger the Apply button click after a short delay to ensure UI state is updated
+  QTimer::singleShot(100, this, [this]() {
+    if(ui->refresh && ui->refresh->isEnabled())
+    {
+      ui->refresh->click();
+    }
+  });
+}
+
+
+
+
+
+
 void ShaderViewer::on_unrefresh_clicked()
+
 {
   m_RevertCallback(&m_Ctx, this, m_EditingShader);
 
