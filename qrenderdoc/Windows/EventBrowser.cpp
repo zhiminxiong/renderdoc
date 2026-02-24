@@ -228,7 +228,6 @@ struct EventItemModel : public QAbstractItemModel
   void ResetModel()
   {
     emit beginResetModel();
-    emit endResetModel();
 
     m_Nodes.clear();
     m_RowInParentCache.clear();
@@ -250,8 +249,18 @@ struct EventItemModel : public QAbstractItemModel
     m_FindString.clear();
     m_FindEIDSearch = false;
 
+    // Rebuild flat drawcall list if in flat mode
+    if(m_FlatMode)
+    {
+      BuildFlatDrawcallList();
+    }
+
     RefreshCache();
+
+    emit endResetModel();
   }
+
+
 
   void RefreshCache()
   {
