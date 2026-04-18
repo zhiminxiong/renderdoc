@@ -947,7 +947,11 @@ struct EventItemModel : public QAbstractItemModel
       if(role == Qt::DisplayRole && index.column() == COL_NAME)
       {
         uint32_t frameNumber = m_Ctx.FrameInfo().frameNumber;
-        return frameNumber == ~0U ? tr("User-defined Capture") : tr("Frame #%1").arg(frameNumber);
+        QString frameName =
+            frameNumber == ~0U ? tr("User-defined Capture") : tr("Frame #%1").arg(frameNumber);
+        if(!m_Nodes.empty() && m_Nodes[0].totalFaces > 0)
+          frameName += tr(" [%1 faces]").arg(m_Nodes[0].totalFaces);
+        return frameName;
       }
 
       if(role == ROLE_SELECTED_EID)
@@ -1146,6 +1150,9 @@ private:
     // this is the number of child events, meaning all the action and all of their events, but *not*
     // the events in any of their children.
     uint32_t rowCount;
+
+    // total face (triangle) count of all drawcall children under this node
+    uint64_t totalFaces = 0;
 
     // this is a cache of row index to action. Rather than being present for every row, this is
     // spaced out such that there are roughly Row2EIDFactor entries at most. This means that the
@@ -1349,8 +1356,16 @@ private:
 
       row += a.events.count();
 
+      // accumulate faces for direct drawcall children (no sub-children)
       if(a.children.empty())
+      {
+        if(a.flags & ActionFlags::Drawcall)
+        {
+          uint32_t instances = a.numInstances > 0 ? a.numInstances : 1;
+          ret.totalFaces += (uint64_t)(a.numIndices / 3) * instances;
+        }
         continue;
+      }
 
       ActionTreeNode node = CreateActionNode(&a);
 
@@ -1358,6 +1373,9 @@ private:
 
       if(a.eventId == ret.effectiveEID)
         ret.effectiveEID = node.effectiveEID;
+
+      // accumulate child node's total faces into parent
+      ret.totalFaces += node.totalFaces;
 
       m_Nodes[a.eventId] = node;
     }
@@ -1542,6 +1560,15 @@ private:
       int count = m_MessageCounts[eid];
       if(count > 0)
         name += lit(" __rd_msgs::%1:%2").arg(eid).arg(count);
+    }
+
+    // append total face count for parent nodes (nodes that have children)
+    {
+      auto nodeIt = m_Nodes.find(eid);
+      if(nodeIt != m_Nodes.end() && nodeIt->totalFaces > 0)
+      {
+        name += tr(" [%1 faces]").arg(nodeIt->totalFaces);
+      }
     }
 
     // force html even for events that don't reference resources etc, to get the italics for
