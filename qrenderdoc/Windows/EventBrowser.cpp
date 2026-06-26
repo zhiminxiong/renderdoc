@@ -6137,16 +6137,6 @@ void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
   if(idx.isValid())
   {
     EventBookmark mark(GetSelectedEID(idx));
-    mark.color = color; // 1=Red, 2=Green, 3=Blue（你项目的color含义）
-    m_Ctx.SetBookmark(mark);
-  }
-}
-
-void EventBrowser::addBookmarkWithColor(const QModelIndex &idx, uint32_t color)
-{
-  if(idx.isValid())
-  {
-    EventBookmark mark(GetSelectedEID(idx));
     mark.color = color; // 1=Red, 2=Green, 3=Blue
     m_Ctx.SetBookmark(mark);
   }
