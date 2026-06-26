@@ -2789,19 +2789,14 @@ void WrappedVulkan::StartFrameCapture(DeviceOwnedWindow devWnd)
   // way of knowing how it's used
   for(auto it = forced.begin(); it != forced.end(); ++it)
   {
-    // reference the resource
+    // reference the buffer/image
     GetResourceManager()->MarkResourceFrameReferenced((*it)->GetResourceID(), eFrameRef_Read);
-    // and backing memory for buffers
-    if((*it)->resType == eResBuffer)
-    {
-      ResourceId mem = (*it)->baseResourceMem;
-      if(mem != ResourceId())
-        GetResourceManager()->MarkMemoryFrameReferenced(mem, (*it)->memOffset, (*it)->memSize,
-                                                        eFrameRef_ReadBeforeWrite);
-      // and sparse memory (yuck yuck yuck)
-      if((*it)->resInfo)
-        GetResourceManager()->MarkSparseMapReferenced((*it)->resInfo);
-    }
+    // and its backing memory
+    GetResourceManager()->MarkMemoryFrameReferenced((*it)->baseResourceMem, (*it)->memOffset,
+                                                    (*it)->memSize, eFrameRef_ReadBeforeWrite);
+    // and sparse memory (yuck yuck yuck)
+    if(((*it)->resType == eResBuffer || (*it)->resType == eResImage) && (*it)->resInfo)
+      GetResourceManager()->MarkSparseMapReferenced((*it)->resInfo);
   }
 }
 
@@ -3799,10 +3794,6 @@ RDResult WrappedVulkan::ReadLogInitialisation(RDCFile *rdc, bool storeStructured
                             GPUBuffer::eGPUBufferGPULocal | GPUBuffer::eGPUBufferIndirectBuffer);
     m_IndirectBuffer.Name("m_IndirectBuffer");
 
-    m_IndirectBufferCB.Create(this, GetDev(), m_IndirectBufferSize * 2, 1,
-                              GPUBuffer::eGPUBufferGPULocal | GPUBuffer::eGPUBufferIndirectBuffer);
-    m_IndirectBufferCB.Name("m_IndirectBufferActionCB");
-
     m_IndirectCommandBuffer = GetNextCmd();
 
     // steal the command buffer out of the pending commands - we'll manage its lifetime ourselves
@@ -4088,7 +4079,7 @@ RDResult WrappedVulkan::ContextReplayLog(CaptureState readType, uint32_t startEv
     // boundaries, the event IDs would no longer match up).
     if(m_LastCmdBufferID == ResourceId() || startEventID > 1)
     {
-      if(chunktype != VulkanChunk::SetQueueAnnotation)
+      if(chunktype != VulkanChunk::SetCommandAnnotation)
         m_RootEventID++;
 
       if(startEventID > 1)

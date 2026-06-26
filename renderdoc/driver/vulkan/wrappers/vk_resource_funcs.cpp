@@ -1965,7 +1965,7 @@ VkResult WrappedVulkan::vkBindImageMemory(VkDevice device, VkImage image, VkDevi
       // AddForcedReference will also call MarkResourceFrameReferenced() on the image in case
       // we're currently capturing, do the same with the memory with the correct semantics.
       GetResourceManager()->MarkMemoryFrameReferenced(
-          GetResID(mem), memOffset, record->resInfo->memreqs.size, eFrameRef_Read);
+          GetResID(mem), memOffset, record->resInfo->memreqs.size, eFrameRef_ReadBeforeWrite);
     }
 
     // images are a base resource but we want to track where their memory comes from.
@@ -3808,11 +3808,11 @@ VkResult WrappedVulkan::vkBindImageMemory2(VkDevice device, uint32_t bindInfoCou
       // if the image was force-referenced, do the same with the memory
       if(IsForcedReference(imgrecord))
       {
-        // AddForcedReference will also call MarkResourceFrameReferenced() on the image in case
+        // AddForcedReference will also call MarkResourceFrameReferenced() on the buffer in case
         // we're currently capturing, do the same with the memory with the correct semantics.
         GetResourceManager()->MarkMemoryFrameReferenced(
             GetResID(pBindInfos[i].memory), pBindInfos[i].memoryOffset,
-            imgrecord->resInfo->memreqs.size, eFrameRef_Read);
+            imgrecord->resInfo->memreqs.size, eFrameRef_ReadBeforeWrite);
       }
 
       const VkBindImageMemorySwapchainInfoKHR *swapBind =

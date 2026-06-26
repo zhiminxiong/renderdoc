@@ -2490,7 +2490,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
               };
               RDCASSERT(list);
 
-              rdcstr resName = Debugger::GetResourceBaseName(&m_Program, resRef->resourceBase);
+              rdcstr resName = Debugger::GetResourceBaseName(&m_Program, resRef);
 
               const rdcarray<ShaderVariable> &resources = *list;
               result.name.clear();
@@ -2595,7 +2595,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
                   auto it = m_GlobalState.constantBlocksDatas.find(constantBlockRef);
                   if(it != m_GlobalState.constantBlocksDatas.end())
                   {
-                    const bytebuf &cbufferData = it->second.bufferData;
+                    const bytebuf &cbufferData = it->second;
                     if(cbufferData.size() != 0)
                     {
                       size_t offset = 0;
@@ -2681,9 +2681,9 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
                 auto it = m_GlobalState.constantBlocksDatas.find(constantBlockRef);
                 if(it != m_GlobalState.constantBlocksDatas.end())
                 {
-                  const bytebuf &cbufferData = it->second.bufferData;
-                  const uint32_t dataSize = (uint32_t)(it->second.byteSize);
-                  const uint32_t maxIndex = AlignUp16(dataSize) / 16;
+                  const bytebuf &cbufferData = it->second;
+                  const uint32_t bufferSize = (uint32_t)cbufferData.size();
+                  const uint32_t maxIndex = AlignUp16(bufferSize) / 16;
                   RDCASSERTMSG("Out of bounds cbuffer load", regIndex < maxIndex, regIndex, maxIndex);
                   if(regIndex < maxIndex)
                   {
@@ -2691,7 +2691,7 @@ bool ThreadState::ExecuteInstruction(const rdcarray<ThreadState> &workgroup)
                     const uint32_t byteWidth = 4;
                     const byte *base = cbufferData.data() + dataOffset;
                     const uint32_t *data = (const uint32_t *)base;
-                    const uint32_t numComps = RDCMIN(4U, (dataSize - dataOffset) / byteWidth);
+                    const uint32_t numComps = RDCMIN(4U, (bufferSize - dataOffset) / byteWidth);
                     for(uint32_t c = 0; c < numComps; c++)
                       result.value.u32v[c] = data[c];
                   }
@@ -7830,11 +7830,11 @@ Debugger::DebugInfo::~DebugInfo()
 
 // static helper function
 rdcstr Debugger::GetResourceBaseName(const DXIL::Program *program,
-                                     const DXIL::EntryPointInterface::ResourceBase &resourceBase)
+                                     const DXIL::ResourceReference *resRef)
 {
-  rdcstr resName = resourceBase.name;
+  rdcstr resName = resRef->resourceBase.name;
   // Special case for cbuffer arrays
-  if((resourceBase.resClass == ResourceClass::CBuffer) && (resourceBase.regCount > 1))
+  if((resRef->resourceBase.resClass == ResourceClass::CBuffer) && (resRef->resourceBase.regCount > 1))
   {
     // Remove any array suffix that might have been appended to the resource name
     int offs = resName.find('[');
@@ -7851,34 +7851,17 @@ rdcstr Debugger::GetResourceReferenceName(const DXIL::Program *program,
   RDCASSERT(program);
   for(const ResourceReference &resRef : program->m_ResourceReferences)
   {
-    const EntryPointInterface::ResourceBase &resBase = resRef.resourceBase;
-    if(resBase.resClass != resClass)
+    if(resRef.resourceBase.resClass != resClass)
+      continue;
+    if(resRef.resourceBase.space != slot.registerSpace)
+      continue;
+    if(resRef.resourceBase.regBase > slot.shaderRegister)
+      continue;
+    if(resRef.resourceBase.regBase + resRef.resourceBase.regCount <= slot.shaderRegister)
       continue;
 
-    if(resBase.MatchesBinding(slot.shaderRegister, slot.shaderRegister, slot.registerSpace))
-      return GetResourceBaseName(program, resBase);
+    return GetResourceBaseName(program, &resRef);
   }
-
-  const EntryPointInterface *entryPointIf = program->GetEntryPointInterface();
-  const rdcarray<EntryPointInterface::ResourceBase> *resList = NULL;
-  if(resClass == ResourceClass::CBuffer)
-    resList = &entryPointIf->cbuffers;
-  else if(resClass == ResourceClass::SRV)
-    resList = &entryPointIf->srvs;
-  else if(resClass == ResourceClass::UAV)
-    resList = &entryPointIf->uavs;
-  else if(resClass == ResourceClass::Sampler)
-    resList = &entryPointIf->samplers;
-
-  if(resList)
-  {
-    for(const EntryPointInterface::ResourceBase &resBase : *resList)
-    {
-      if(resBase.MatchesBinding(slot.shaderRegister, slot.shaderRegister, slot.registerSpace))
-        return GetResourceBaseName(program, resBase);
-    }
-  }
-
   RDCERR("Failed to find DXIL %s Resource Space %d Register %d", ToStr(resClass).c_str(),
          slot.registerSpace, slot.shaderRegister);
   return "UNKNOWN_RESOURCE_HANDLE";

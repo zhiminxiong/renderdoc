@@ -153,6 +153,7 @@ struct CachedHookData
   std::map<rdcstr, DllHookset> DllHooks;
   HMODULE ownmodule = NULL;
   Threading::CriticalSection lock;
+  char lowername[512] = {};
 
   std::set<rdcstr> ignores;
 
@@ -163,8 +164,6 @@ struct CachedHookData
 
   void ApplyHooks(const char *modName, HMODULE module)
   {
-    char lowername[512] = {};
-
     {
       size_t i = 0;
       while(modName[i])

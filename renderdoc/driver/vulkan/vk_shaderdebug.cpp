@@ -6745,16 +6745,16 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
         uint32_t quadZ = compData->threadid[2];
         quadId = quadX + (quadY * countQuadX) + (quadZ * countQuadY * countQuadX);
         quadLaneIndex = (compData->threadid[0] % quadW) + (compData->threadid[1] % quadH) * 2;
+
+        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadLane] = quadLaneIndex;
+        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadId] =
+            quadId + quadIdOffset;
       }
 
       if(hasWorkgroupScope)
       {
         if(hasQuadScope)
         {
-          // There won't be any data them for inactive lanes
-          if(subgroupData->isActive == 0)
-            continue;
-
           // quad scope, derive the lane from the quad layout
           lane = quadId * 4 + quadLaneIndex;
         }
@@ -6764,13 +6764,6 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
           lane = compData->threadid[2] * threadDim[0] * threadDim[1] +
                  compData->threadid[1] * threadDim[0] + compData->threadid[0];
         }
-      }
-
-      if(hasQuadScope)
-      {
-        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadLane] = quadLaneIndex;
-        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadId] =
-            quadId + quadIdOffset;
       }
 
       if(rdcfixedarray<uint32_t, 3>(compData->threadid) == threadid && subgroupData->isActive)

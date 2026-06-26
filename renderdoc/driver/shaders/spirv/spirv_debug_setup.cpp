@@ -962,33 +962,6 @@ void Reflector::CheckDebuggable(bool &debuggable, rdcstr &debugStatus) const
     debugStatus += StringFormat::Fmt("Unsupported extended instruction set: '%s'\n", setname.c_str());
   }
 
-  // we don't currently support debugging unbounded arrays of cbuffers
-  for(const Variable &v : globals)
-  {
-    if(v.storage == StorageClass::Uniform)
-    {
-      const DataType &type = dataTypes[v.type];
-
-      // global variables should all be pointers into opaque storage
-      RDCASSERT(type.type == DataType::PointerType);
-
-      const DataType *innertype = &dataTypes[type.InnerType()];
-
-      if(innertype->type == DataType::ArrayType)
-      {
-        if(innertype->length == Id())
-        {
-          debuggable = false;
-          rdcstr name = strings[v.id];
-          if(name.empty())
-            name = GetRawName(v.id);
-          debugStatus +=
-              StringFormat::Fmt("Unsupported unbounded uniform buffer array: '%s'\n", name.c_str());
-        }
-      }
-    }
-  }
-
   debugStatus.trim();
 }
 
@@ -1285,9 +1258,7 @@ ShaderDebugTrace *Debugger::BeginDebug(DebugAPIWrapper *api, const ShaderStage s
           if(curDecorations.flags & Decorations::HasBuiltIn)
             builtin = MakeShaderBuiltin(stage, curDecorations.builtIn);
 
-          // Only set inputs for active lanes
-          if(apiWrapper->GetThreadProperty(laneIndex, ThreadProperty::Active) != 0)
-            this->apiWrapper->FillInputValue(var, builtin, laneIndex, (uint32_t)location, component);
+          this->apiWrapper->FillInputValue(var, builtin, laneIndex, (uint32_t)location, component);
         }
         else
         {

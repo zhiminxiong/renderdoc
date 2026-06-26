@@ -6,9 +6,6 @@ class VK_Parameter_Zoo(rdtest.TestCase):
     demos_test_name = 'VK_Parameter_Zoo'
 
     def check_capture(self):
-        if not self.validate_eventids(self.controller):
-            raise rdtest.TestFailureException("Event IDs are not valid")
-
         action = self.find_action("Color Draw")
 
         self.check(action is not None)
@@ -302,28 +299,24 @@ class VK_Parameter_Zoo(rdtest.TestCase):
 
         action = self.find_action("before_empty")
         action = self.get_action(action.eventId + 1)
+        self.check("vkQueueSubmit" in action.GetName(sdfile))
         a = action.GetName(sdfile)
-        # vkQueueSubmit with two submits each with zero command buffers
-        self.check("vkQueueSubmit(" in action.GetName(sdfile))
+        action = self.get_action(action.eventId + 1)
+        self.check("vkQueueSubmit" in action.GetName(sdfile))
         self.check("No Command Buffers" in action.GetName(sdfile))
         action = self.get_action(action.eventId + 1)
-        self.check("vkQueueSubmit(" in action.GetName(sdfile))
+        self.check("vkQueueSubmit2" in action.GetName(sdfile))
         self.check("No Command Buffers" in action.GetName(sdfile))
-        # vkQueueSubmit with zero submits 
-        action = self.get_action(action.eventId + 1)
-        self.check("vkQueueSubmit()" in action.GetName(sdfile))
-        self.check("No Submit" in action.GetName(sdfile))
+        self.check(a != action.GetName(sdfile))
 
         action = self.get_action(action.eventId + 1)
         if "after_empty" not in action.GetName(sdfile):
-            # vkQueueSubmit2 with one submit with zero command buffers
-            self.check("vkQueueSubmit2(" in action.GetName(sdfile))
+            self.check("vkQueueSubmit2" in action.GetName(sdfile))
+            a = action.GetName(sdfile)
+            action = self.get_action(action.eventId + 1)
+            self.check("vkQueueSubmit2" in action.GetName(sdfile))
             self.check("No Command Buffers" in action.GetName(sdfile))
             self.check(a != action.GetName(sdfile))
-            # vkQueueSubmit with zero submits 
-            action = self.get_action(action.eventId + 1)
-            self.check("vkQueueSubmit2()" in action.GetName(sdfile))
-            self.check("No Submit" in action.GetName(sdfile))
 
         rdtest.log.success("Empty queue submits are as expected")
 

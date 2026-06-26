@@ -40,10 +40,8 @@ os.environ["PATH"] += os.pathsep + os.path.abspath(binpath + 'Development/')
 os.environ["PATH"] += os.pathsep + os.path.abspath(binpath + 'Release/')
 
 if sys.platform == 'win32' and sys.version_info[1] >= 8:
-    for sub in ['Release', 'Development']:
-        path = os.path.abspath(binpath + sub)
-        if os.path.exists(path):
-            os.add_dll_directory(path)
+    os.add_dll_directory(binpath + 'Release/')
+    os.add_dll_directory(binpath + 'Development/')
 
 # path to module libraries for linux
 sys.path.insert(0, os.path.abspath('../build/lib'))
@@ -58,7 +56,7 @@ sys.path.insert(0, os.path.abspath('sphinx_exts'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx_paramlinks', 'sphinxcontrib_jquery']
+extensions = ['sphinx.ext.autodoc', 'sphinx_paramlinks']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -133,7 +131,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'sphinx_exts', 'include'
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'default'
+pygments_style = 'sphinx'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []

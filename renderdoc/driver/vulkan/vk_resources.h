@@ -2406,8 +2406,8 @@ public:
   ResourceId baseResource;
   ResourceId baseResourceMem;    // for image views, we need to point to both the image and mem
 
-  VkDeviceSize memOffset = 0ULL;
-  VkDeviceSize memSize = 0ULL;
+  VkDeviceSize memOffset;
+  VkDeviceSize memSize;
   VkResourceType resType;
   bool storable = false;
   bool dedicated = false;

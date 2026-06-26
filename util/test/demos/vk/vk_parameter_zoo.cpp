@@ -2061,15 +2061,11 @@ void main()
         std::vector<VkCommandBuffer> cmds = {};
         VkSubmitInfo submit[2] = {vkh::SubmitInfo(cmds), vkh::SubmitInfo(cmds)};
         CHECK_VKR(vkQueueSubmit(queue, 2, submit, VK_NULL_HANDLE));
-
-        CHECK_VKR(vkQueueSubmit(queue, 0, (const VkSubmitInfo *)0x1234, VK_NULL_HANDLE));
       }
       if(hasExt(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME))
       {
         VkSubmitInfo2KHR submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO_2_KHR};
         CHECK_VKR(vkQueueSubmit2KHR(queue, 1, &submit, VK_NULL_HANDLE));
-
-        CHECK_VKR(vkQueueSubmit2KHR(queue, 0, (const VkSubmitInfo2 *)0x4567, VK_NULL_HANDLE));
       }
       setMarker(queue, "after_empty");
 

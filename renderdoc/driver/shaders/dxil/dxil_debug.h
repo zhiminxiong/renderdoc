@@ -263,12 +263,6 @@ struct SRVInfo
   ResourceInfo resInfo;
 };
 
-struct ConstantBlockData
-{
-  bytebuf bufferData;
-  size_t byteSize;
-};
-
 enum class ThreadProperty : uint32_t
 {
   Helper,
@@ -352,7 +346,7 @@ public:
   virtual const ShaderVariable &GetInputPlaceholder() const = 0;
   virtual const rdcarray<DXILDebug::ThreadProperties> &GetWorkgroupProperties() const = 0;
   virtual const rdcarray<ShaderVariable> &GetConstantBlocks() const = 0;
-  virtual const std::map<ConstantBlockReference, ConstantBlockData> &GetConstantBlocksDatas() const = 0;
+  virtual const std::map<ConstantBlockReference, bytebuf> &GetConstantBlocksDatas() const = 0;
   virtual const BuiltinInputs &GetBuiltins() const = 0;
   virtual uint32_t GetSubgroupSize() const = 0;
   virtual const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &GetThreadsBuiltins() const = 0;
@@ -801,7 +795,7 @@ struct GlobalState
 
   // allocated storage for opaque uniform blocks, does not change over the course of debugging
   rdcarray<ShaderVariable> constantBlocks;
-  std::map<ConstantBlockReference, ConstantBlockData> constantBlocksDatas;
+  std::map<ConstantBlockReference, bytebuf> constantBlocksDatas;
 
   rdcarray<Id> groupSharedMemoryIds;
   // resources may be read-write but the variable itself doesn't change
@@ -931,7 +925,7 @@ public:
   DebugAPIWrapper *GetAPIWrapper() const { return m_ApiWrapper; }
 
   static rdcstr GetResourceBaseName(const DXIL::Program *program,
-                                    const DXIL::EntryPointInterface::ResourceBase &resBase);
+                                    const DXIL::ResourceReference *resRef);
 
   static rdcstr GetResourceReferenceName(const DXIL::Program *program, DXIL::ResourceClass resClass,
                                          const BindingSlot &slot);

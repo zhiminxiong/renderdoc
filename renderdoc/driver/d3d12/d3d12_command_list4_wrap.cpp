@@ -1006,18 +1006,17 @@ bool WrappedID3D12GraphicsCommandList::Serialise_BuildRaytracingAccelerationStru
     m_Cmd->m_LastCmdListID = GetResID(pCommandList);
     BakedCmdListInfo &bakedCmdInfo = m_Cmd->m_BakedCmdListInfo[m_Cmd->m_LastCmdListID];
     BakedCmdListInfo::PatchRaytracing &patchInfo =
-        bakedCmdInfo.m_patchRaytracingInfo[m_Cmd->m_CurChunkOffset & 0xffffffff];
+        bakedCmdInfo.m_patchRaytracingInfo[bakedCmdInfo.curEventID];
 
     D3D12AccelerationStructure *accStructAtDstOffset = NULL;
 
     if(D3D12_Debug_RT_Auditing())
     {
-      RDCLOG("Recording %s dynamic build to %llx on %s at EID %u offset %u",
+      RDCLOG("Recording %s dynamic build to %llx on %s",
              AccStructDesc.Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL
                  ? "tlas"
                  : "blas",
-             AccStructDesc.DestAccelerationStructureData, ToStr(m_Cmd->m_LastCmdListID).c_str(),
-             bakedCmdInfo.curEventID, m_Cmd->m_CurChunkOffset & 0xffffffff);
+             AccStructDesc.DestAccelerationStructureData, ToStr(m_Cmd->m_LastCmdListID).c_str());
 
       ResourceId destASBId;
       D3D12BufferOffset destASBOffset;

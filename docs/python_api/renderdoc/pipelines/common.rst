@@ -101,15 +101,9 @@ Rasterizer
 .. autoclass:: renderdoc.ShadingRateCombiner
   :members:
 
-.. autoclass:: renderdoc.RasterState
-  :members:
 
-
-Depth and Stencil
------------------
-
-.. autoclass:: renderdoc.DepthTestState
-  :members:
+Stencil
+-------
 
 .. autoclass:: renderdoc.StencilFace
   :members:

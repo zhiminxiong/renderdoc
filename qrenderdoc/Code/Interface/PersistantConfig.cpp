@@ -515,7 +515,7 @@ bool PersistantConfig::Load(const rdcstr &filename)
   for(const ShaderProcessingTool &dis : ShaderProcessors)
   {
     // if it's declared
-    if(dis.tool != KnownShaderTool::Unknown && dis.tool < KnownShaderTool::Count)
+    if(dis.tool != KnownShaderTool::Unknown)
       tools[(size_t)dis.tool] = true;
   }
 

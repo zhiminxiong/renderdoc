@@ -394,8 +394,7 @@ rdcarray<BufferDescription> D3D12Replay::GetBuffers()
   rdcarray<BufferDescription> ret;
 
   for(auto it = m_pDevice->GetResourceList().begin(); it != m_pDevice->GetResourceList().end(); it++)
-    if(it->second->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
-       !ResourceIDGen::IsReplayOnlyID(it->first))
+    if(it->second->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
       ret.push_back(GetBuffer(it->first));
 
   return ret;
@@ -4753,7 +4752,7 @@ RDResult D3D12_CreateReplayDevice(RDCFile *rdc, const ReplayOptions &opts, IRepl
       config->devfactory->EnableExperimentalFeatures(1, &D3D12GPUUploadHeapsOnUnsupportedOS, NULL,
                                                      NULL);
     }
-    else if(enableExperimentalPtr)
+    else
     {
       enableExperimentalPtr(1, &D3D12GPUUploadHeapsOnUnsupportedOS, NULL, NULL);
     }

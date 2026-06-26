@@ -1524,8 +1524,6 @@ void ToolWindowManager::tabCloseRequested(int index)
   if(!allowClose(toolWindow))
     return;
 
-  tabWidget->tabClosing(index);
-
   if(toolWindowProperties(toolWindow) & ToolWindowManager::HideOnClose)
     hideToolWindow(toolWindow);
   else
