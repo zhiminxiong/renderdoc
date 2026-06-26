@@ -4145,7 +4145,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->bookmarkStrip->hide();
 
   m_BookmarkStripLayout = new FlowLayout(ui->bookmarkStrip, 0, 3, 3);
-  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);    // µ×ÏÂ 8px ¼ä¸ô
+  m_BookmarkStripLayout->setContentsMargins(0, 0, 0, 8);    // åº•ä¸‹ 8px é—´éš”
   m_BookmarkSpacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
   ui->bookmarkStrip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -6392,49 +6392,64 @@ void EventBrowser::updateBookmarkButtonColor(QRClickToolButton *button, uint32_t
 {
     QColor bgColor = getBookmarkQColor(color);
 
-    if(bgColor.isValid() && color != 0)
-    {
-        QColor darkerColor = bgColor.darker(120);
-        QColor hoverColor = bgColor.lighter(110);
+    // For the default bookmark (no explicit color) use an orange/amber color to
+    // stay consistent with the orange asterisk icon used for default bookmarks,
+    // and so the button stands out from the bookmark strip background.
+    if(!bgColor.isValid() || color == 0)
+        bgColor = QColor(245, 166, 35);
 
-        QString style = lit("QToolButton { "
-                               "background-color: %1 !important; "
-                               "border: 1px solid %2; "
-                               "padding: 1px 1px; "
-                               "margin: 0px; "
-                               "min-width: 16px; "
-                               "min-height: 16px; "
-                               "} "
-                               "QToolButton:hover { "
-                               "background-color: %3 !important; "
-                               "border: 1px solid %2; "
-                               "} "
-                               "QToolButton:pressed { "
-                               "background-color: %1 !important; "
-                               "border: 1px solid %2; "
-                               "} "
-                               "QToolButton:checked { "
-                               "background-color: %1 !important; "
-                               "border: 1px solid %2; "
-                               "} "
-                               "QToolButton:checked:hover { "
-                               "background-color: %3 !important; "
-                               "border: 1px solid %2; "
-                               "} "
-                               "QToolButton:checked:pressed { "
-                               "background-color: %1 !important; "
-                               "border: 1px solid %2; "
-                               "}").arg(bgColor.name())
-                                .arg(darkerColor.name())
-                                .arg(hoverColor.name());
+    QColor darkerColor = bgColor.darker(120);
+    QColor hoverColor = bgColor.lighter(110);
 
-        button->setStyleSheet(style);
-    }
-    else
-    {
-        button->setStyleSheet(tr(""));
-    }
-    
+    // High-contrast accent border used to mark the currently-selected bookmark
+    // so it's easy to tell which one is active among all bookmarks. White is used
+    // as a universal highlight that contrasts well with every bookmark color.
+    QColor selectedBorder = QColor(255, 255, 255);
+
+    // Pick a text color that contrasts with the background. Blue is dark enough
+    // that it needs white text; the other colors read better with black text.
+    QColor textColor = (color == 3) ? QColor(255, 255, 255) : QColor(0, 0, 0);
+
+    QString style = lit("QToolButton { "
+                           "background-color: %1 !important; "
+                           "color: %5; "
+                           "border: 1px solid %2; "
+                           "border-radius: 3px; "
+                           "padding: 1px 2px; "
+                           "margin: 0px; "
+                           "min-width: 16px; "
+                           "min-height: 16px; "
+                           "} "
+                           "QToolButton:hover { "
+                           "background-color: %3 !important; "
+                           "border: 1px solid %2; "
+                           "} "
+                           "QToolButton:pressed { "
+                           "background-color: %1 !important; "
+                           "border: 1px solid %2; "
+                           "} "
+                           "QToolButton:checked { "
+                           "background-color: %1 !important; "
+                           "border: 2px solid %4; "
+                           "padding: 0px 1px; "
+                           "} "
+                           "QToolButton:checked:hover { "
+                           "background-color: %3 !important; "
+                           "border: 2px solid %4; "
+                           "padding: 0px 1px; "
+                           "} "
+                           "QToolButton:checked:pressed { "
+                           "background-color: %1 !important; "
+                           "border: 2px solid %4; "
+                           "padding: 0px 1px; "
+                           "}").arg(bgColor.name())
+                            .arg(darkerColor.name())
+                            .arg(hoverColor.name())
+                            .arg(selectedBorder.name())
+                            .arg(textColor.name());
+
+    button->setStyleSheet(style);
+
     button->setMinimumWidth(button->sizeHint().width());
     button->adjustSize();
 }
