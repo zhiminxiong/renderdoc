@@ -937,6 +937,7 @@ void D3D11PipelineStateViewer::addSamplerRow(const SamplerDescriptor &descriptor
 }
 
 void D3D11PipelineStateViewer::addCBufferRow(const Descriptor &descriptor, uint32_t reg,
+                                             ResourceId shader, int cbufferIndex,
                                              const ConstantBlock *shaderBind, bool usedSlot,
                                              RDTreeWidget *cbuffers)
 {
@@ -957,7 +958,12 @@ void D3D11PipelineStateViewer::addCBufferRow(const Descriptor &descriptor, uint3
     QString slotname = QString::number(reg);
 
     if(shaderBind && !shaderBind->name.empty())
-      slotname += lit(": ") + shaderBind->name;
+    {
+      rdcstr cbName = shaderBind->name;
+      if(cbufferIndex >= 0)
+        cbName = m_Ctx.GetCBufferName(shader, (uint32_t)cbufferIndex, shaderBind->name);
+      slotname += lit(": ") + cbName;
+    }
 
     QString sizestr;
     if(bytesize == (uint32_t)length)
@@ -1685,6 +1691,7 @@ void D3D11PipelineStateViewer::setState()
       if(m_Locations[i].category == DescriptorCategory::ConstantBlock)
       {
         const ConstantBlock *shaderBind = NULL;
+        int cbIndex = -1;
 
         if(shaderRefls[(uint32_t)stage])
         {
@@ -1695,6 +1702,7 @@ void D3D11PipelineStateViewer::setState()
             if(res.fixedBindNumber == reg)
             {
               shaderBind = &res;
+              cbIndex = b;
               usedSlot = HasAccess(stage, m_Locations[i].category, b);
               break;
             }
@@ -1703,7 +1711,10 @@ void D3D11PipelineStateViewer::setState()
 
         Descriptor b = m_Descriptors[i];
 
-        addCBufferRow(b, reg, shaderBind, usedSlot, cbuffers[(uint32_t)stage]);
+        ResourceId shaderId = shaderRefls[(uint32_t)stage] ? shaderRefls[(uint32_t)stage]->resourceId
+                                                           : ResourceId();
+
+        addCBufferRow(b, reg, shaderId, cbIndex, shaderBind, usedSlot, cbuffers[(uint32_t)stage]);
       }
       else if(m_Locations[i].category == DescriptorCategory::Sampler)
       {

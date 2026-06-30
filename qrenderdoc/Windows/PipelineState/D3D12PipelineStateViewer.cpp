@@ -1719,7 +1719,8 @@ void D3D12PipelineStateViewer::setState()
                             .arg(shaderBind->fixedBindNumber);
 
             if(!shaderBind->name.empty())
-              regname += lit(": ") + shaderBind->name;
+              regname += lit(": ") + m_Ctx.GetCBufferName(refl ? refl->resourceId : ResourceId(),
+                                                          used.access.index, shaderBind->name);
 
             if(shaderBind->bindArraySize > 1)
               regname += QFormatStr("[%1]").arg(used.access.arrayElement);

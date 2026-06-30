@@ -172,8 +172,17 @@ private slots:
   void meshDebugSelector_beginDebug(const rdcfixedarray<uint32_t, 3> &group,
                                     const rdcfixedarray<uint32_t, 3> &thread);
   void fixedVars_contextMenu(const QPoint &pos);
+  void fixedVars_itemEdited(RDTreeWidgetItem *item, int column);
 
 private:
+  // rename the currently viewed constant buffer (used for F2 / context menu)
+  void renameCBuffer();
+  // reset a field's custom name back to the reflection default
+  void resetFixedVarName(RDTreeWidgetItem *item);
+  // true while we're programmatically (re)building the fixedVars tree, so we ignore the
+  // itemChanged signal that would otherwise be misinterpreted as a user edit
+  bool m_FixedVarBuilding = false;
+
   bool eventFilter(QObject *watched, QEvent *event) override;
   Ui::BufferViewer *ui;
   ICaptureContext &m_Ctx;

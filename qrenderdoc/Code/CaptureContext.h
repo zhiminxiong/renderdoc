@@ -176,6 +176,13 @@ public:
   bool HasResourceCustomName(ResourceId id) override;
   void SetResourceCustomName(ResourceId id, const rdcstr &name) override;
   int32_t ResourceNameCacheID() const override { return m_CustomNameCachedID; }
+  rdcstr GetCBufferName(ResourceId shader, uint32_t cbufferIndex,
+                        const rdcstr &defaultName) const override;
+  void SetCBufferCustomName(ResourceId shader, uint32_t cbufferIndex, const rdcstr &name) override;
+  rdcstr GetCBufferFieldName(ResourceId shader, uint32_t cbufferIndex, uint32_t byteOffset,
+                             const rdcstr &defaultName) const override;
+  void SetCBufferFieldCustomName(ResourceId shader, uint32_t cbufferIndex, uint32_t byteOffset,
+                                 const rdcstr &name) override;
   TextureDescription *GetTexture(ResourceId id) override { return m_Textures[id]; }
   const rdcarray<TextureDescription> &GetTextures() override { return m_TextureList; }
   BufferDescription *GetBuffer(ResourceId id) override { return m_Buffers[id]; }
@@ -403,6 +410,11 @@ private:
 
   QMap<ResourceId, QString> m_CustomNames;
   int m_CustomNameCachedID = 1;
+
+  // custom names for constant buffers and their fields, keyed by a string combining the owning
+  // shader id, the constant buffer index and (for fields) the field's byte offset. See
+  // CBufferNameKey/CBufferFieldNameKey in the .cpp. Persisted alongside resource renames.
+  QMap<QString, QString> m_CustomCBufferNames;
 
   // map orig replaced -> edited replacement ID
   QMap<ResourceId, ResourceId> m_OrigToReplacedResources;

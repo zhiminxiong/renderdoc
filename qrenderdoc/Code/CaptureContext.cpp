@@ -1446,6 +1446,7 @@ void CaptureContext::CloseCapture()
   m_ReplacedToOrigResources.clear();
 
   m_CustomNames.clear();
+  m_CustomCBufferNames.clear();
   m_Bookmarks.clear();
   m_Notes.clear();
 
@@ -1857,8 +1858,15 @@ bool CaptureContext::SaveRenames()
     resources[ToQStr(id)] = m_CustomNames[id];
   }
 
+  QVariantMap cbufferNames;
+  for(const QString &key : m_CustomCBufferNames.keys())
+  {
+    cbufferNames[key] = m_CustomCBufferNames[key];
+  }
+
   QVariantMap root;
   root[lit("CustomResourceNames")] = resources;
+  root[lit("CustomCBufferNames")] = cbufferNames;
 
   QString json = VariantToJSON(root);
 
@@ -1893,6 +1901,17 @@ void CaptureContext::LoadRenames(const QString &data)
 
       if(id != ResourceId())
         m_CustomNames[id] = resources[str].toString();
+    }
+  }
+
+  if(root.contains(lit("CustomCBufferNames")))
+  {
+    QVariantMap cbufferNames = root[lit("CustomCBufferNames")].toMap();
+
+    for(const QString &key : cbufferNames.keys())
+    {
+      if(!key.isEmpty())
+        m_CustomCBufferNames[key] = cbufferNames[key].toString();
     }
   }
 }
@@ -2183,6 +2202,66 @@ void CaptureContext::SetResourceCustomName(ResourceId id, const rdcstr &name)
   SetModification(CaptureModifications::Renames);
 
   CacheResources();
+
+  RefreshUIStatus({}, true, true);
+}
+
+static QString CBufferNameKey(ResourceId shader, uint32_t cbufferIndex)
+{
+  return QFormatStr("%1|%2").arg(ToQStr(shader)).arg(cbufferIndex);
+}
+
+static QString CBufferFieldNameKey(ResourceId shader, uint32_t cbufferIndex, uint32_t byteOffset)
+{
+  return QFormatStr("%1|%2|%3").arg(ToQStr(shader)).arg(cbufferIndex).arg(byteOffset);
+}
+
+rdcstr CaptureContext::GetCBufferName(ResourceId shader, uint32_t cbufferIndex,
+                                      const rdcstr &defaultName) const
+{
+  QString key = CBufferNameKey(shader, cbufferIndex);
+  auto it = m_CustomCBufferNames.find(key);
+  if(it != m_CustomCBufferNames.end())
+    return it.value();
+  return defaultName;
+}
+
+void CaptureContext::SetCBufferCustomName(ResourceId shader, uint32_t cbufferIndex,
+                                          const rdcstr &name)
+{
+  QString key = CBufferNameKey(shader, cbufferIndex);
+
+  if(name.isEmpty())
+    m_CustomCBufferNames.remove(key);
+  else
+    m_CustomCBufferNames[key] = name;
+
+  SetModification(CaptureModifications::Renames);
+
+  RefreshUIStatus({}, true, true);
+}
+
+rdcstr CaptureContext::GetCBufferFieldName(ResourceId shader, uint32_t cbufferIndex,
+                                           uint32_t byteOffset, const rdcstr &defaultName) const
+{
+  QString key = CBufferFieldNameKey(shader, cbufferIndex, byteOffset);
+  auto it = m_CustomCBufferNames.find(key);
+  if(it != m_CustomCBufferNames.end())
+    return it.value();
+  return defaultName;
+}
+
+void CaptureContext::SetCBufferFieldCustomName(ResourceId shader, uint32_t cbufferIndex,
+                                               uint32_t byteOffset, const rdcstr &name)
+{
+  QString key = CBufferFieldNameKey(shader, cbufferIndex, byteOffset);
+
+  if(name.isEmpty())
+    m_CustomCBufferNames.remove(key);
+  else
+    m_CustomCBufferNames[key] = name;
+
+  SetModification(CaptureModifications::Renames);
 
   RefreshUIStatus({}, true, true);
 }

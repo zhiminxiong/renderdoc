@@ -1595,6 +1595,9 @@ void VulkanPipelineStateViewer::addConstantBlockRow(const ConstantBlock *cblock,
 {
   const Descriptor &descriptor = used.descriptor;
 
+  const ShaderReflection *cbRefl = m_Ctx.CurPipelineState().GetShaderReflection(used.access.stage);
+  ResourceId cbShaderId = cbRefl ? cbRefl->resourceId : ResourceId();
+
   VulkanCBufferTag tag(used.access.index, used.access.arrayElement, dynamicOffset);
 
   bool filledSlot = (descriptor.resource != ResourceId());
@@ -1620,7 +1623,7 @@ void VulkanPipelineStateViewer::addConstantBlockRow(const ConstantBlock *cblock,
           QFormatStr("Set %1, %2").arg(cblock->fixedBindSetOrSpace).arg(cblock->fixedBindNumber);
 
       if(!cblock->name.empty())
-        slotname += lit(": ") + cblock->name;
+        slotname += lit(": ") + m_Ctx.GetCBufferName(cbShaderId, used.access.index, cblock->name);
 
       if(cblock->bindArraySize > 1)
         slotname += QFormatStr("[%1]").arg(used.access.arrayElement);
@@ -1649,7 +1652,7 @@ void VulkanPipelineStateViewer::addConstantBlockRow(const ConstantBlock *cblock,
     // push constants or specialization constants
     if(cblock && !cblock->bufferBacked)
     {
-      slotname = cblock->name;
+      slotname = m_Ctx.GetCBufferName(cbShaderId, used.access.index, cblock->name);
       if(cblock->compileConstants)
       {
         name = tr("Specialization constants");

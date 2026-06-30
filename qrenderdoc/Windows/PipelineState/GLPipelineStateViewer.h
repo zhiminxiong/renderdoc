@@ -101,7 +101,7 @@ private:
   void setShaderState(const GLPipe::Shader &stage, RDLabel *pipeline, RDLabel *program,
                       RDLabel *shader, RDTreeWidget *sub);
 
-  void addUBORow(const Descriptor &descriptor, uint32_t reg, uint32_t index,
+  void addUBORow(const Descriptor &descriptor, uint32_t reg, uint32_t index, ResourceId shader,
                  const ConstantBlock *shaderBind, bool usedSlot, RDTreeWidget *ubos);
   void addImageSamplerRow(const Descriptor &descriptor, const SamplerDescriptor &samplerDescriptor,
                           uint32_t reg, const ShaderResource *shaderTex,

@@ -26,12 +26,15 @@
 #include <float.h>
 #include <QDoubleSpinBox>
 #include <QFontDatabase>
+#include <QInputDialog>
 #include <QItemSelection>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QMutexLocker>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QSplitter>
 #include <QTimer>
 #include <QToolTip>
@@ -2582,6 +2585,19 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   QObject::connect(ui->fixedVars, &RDTreeWidget::customContextMenuRequested, this,
                    &BufferViewer::fixedVars_contextMenu);
 
+  // only allow inline editing of constant buffer field names via double-click. We deliberately
+  // exclude EditKeyPressed (F2) so that F2 can be used to rename the whole constant buffer instead.
+  ui->fixedVars->setEditTriggers(QAbstractItemView::DoubleClicked);
+
+  QObject::connect(ui->fixedVars, &RDTreeWidget::itemChanged, this,
+                   &BufferViewer::fixedVars_itemEdited);
+
+  // F2 renames the constant buffer being viewed
+  QShortcut *renameCBufferShortcut = new QShortcut(QKeySequence(Qt::Key_F2), ui->fixedVars);
+  renameCBufferShortcut->setContext(Qt::WidgetShortcut);
+  QObject::connect(renameCBufferShortcut, &QShortcut::activated, this,
+                   &BufferViewer::renameCBuffer);
+
   QObject::connect(ui->inTable, &RDTableView::customContextMenuRequested,
                    [this, menu](const QPoint &pos) { stageRowMenu(MeshDataStage::VSIn, menu, pos); });
 
@@ -3021,6 +3037,9 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
   QAction removeFilter(tr("&Remove Filter"), this);
   QAction filterTask(tr("&Filter to this Task"), this);
   QAction gotoMesh(tr("&Go to meshes"), this);
+  QAction renameField(tr("Rename Fie&ld"), this);
+  QAction resetFieldName(tr("Reset Field &Name"), this);
+  QAction renameCB(tr("Rename &Constant Buffer\tF2"), this);
 
   expandAll.setIcon(Icons::arrow_out());
   collapseAll.setIcon(Icons::arrow_in());
@@ -3070,6 +3089,30 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
   else
   {
     contextMenu.addAction(&showPadding);
+
+    if(IsCBufferView())
+    {
+      FixedVarTag tag = item ? item->tag().value<FixedVarTag>() : FixedVarTag();
+      bool isField = item && tag.valid && !tag.padding && item->editable(0);
+
+      renameField.setIcon(Icons::page_white_edit());
+      resetFieldName.setIcon(Icons::arrow_undo());
+      renameCB.setIcon(Icons::page_white_edit());
+
+      renameField.setEnabled(isField);
+      resetFieldName.setEnabled(isField);
+
+      contextMenu.addSeparator();
+      contextMenu.addAction(&renameField);
+      contextMenu.addAction(&resetFieldName);
+      contextMenu.addAction(&renameCB);
+
+      QObject::connect(&renameField, &QAction::triggered,
+                       [this, item]() { ui->fixedVars->editItem(item); });
+      QObject::connect(&resetFieldName, &QAction::triggered,
+                       [this, item]() { resetFixedVarName(item); });
+      QObject::connect(&renameCB, &QAction::triggered, this, &BufferViewer::renameCBuffer);
+    }
   }
 
   contextMenu.addSeparator();
@@ -3113,6 +3156,93 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
                    [this]() { ui->showPadding->setChecked(!ui->showPadding->isChecked()); });
 
   RDDialog::show(&contextMenu, ui->fixedVars->viewport()->mapToGlobal(pos));
+}
+
+void BufferViewer::fixedVars_itemEdited(RDTreeWidgetItem *item, int column)
+{
+  // ignore changes we cause ourselves while (re)building the tree, and anything that isn't a
+  // user edit of the name column on a constant buffer field
+  if(m_FixedVarBuilding || column != 0 || item == NULL || !IsCBufferView())
+    return;
+
+  FixedVarTag tag = item->tag().value<FixedVarTag>();
+
+  if(!tag.valid || tag.padding)
+    return;
+
+  const ShaderReflection *reflection =
+      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+
+  if(!reflection)
+    return;
+
+  rdcstr defaultName = tag.name;
+  rdcstr newName = item->text(0);
+
+  // if the user cleared the name or set it back to the reflection default, remove the override
+  if(newName == defaultName)
+    newName = rdcstr();
+
+  m_Ctx.SetCBufferFieldCustomName(reflection->resourceId, m_CBufferSlot.slot, tag.byteOffset,
+                                  newName);
+}
+
+void BufferViewer::resetFixedVarName(RDTreeWidgetItem *item)
+{
+  if(item == NULL || !IsCBufferView())
+    return;
+
+  FixedVarTag tag = item->tag().value<FixedVarTag>();
+
+  if(!tag.valid || tag.padding)
+    return;
+
+  const ShaderReflection *reflection =
+      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+
+  if(!reflection)
+    return;
+
+  m_Ctx.SetCBufferFieldCustomName(reflection->resourceId, m_CBufferSlot.slot, tag.byteOffset,
+                                  rdcstr());
+
+  // reflect the change immediately in the displayed name
+  m_FixedVarBuilding = true;
+  item->setText(0, tag.name);
+  m_FixedVarBuilding = false;
+}
+
+void BufferViewer::renameCBuffer()
+{
+  if(!IsCBufferView())
+    return;
+
+  const ShaderReflection *reflection =
+      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+
+  if(!reflection || m_CBufferSlot.slot >= reflection->constantBlocks.size())
+    return;
+
+  rdcstr defaultName = reflection->constantBlocks[m_CBufferSlot.slot].name;
+  rdcstr current = m_Ctx.GetCBufferName(reflection->resourceId, m_CBufferSlot.slot, defaultName);
+
+  bool ok = false;
+  QString newName = QInputDialog::getText(this, tr("Rename Constant Buffer"),
+                                          tr("Constant buffer name:"), QLineEdit::Normal,
+                                          current, &ok);
+
+  if(!ok)
+    return;
+
+  rdcstr name = newName;
+
+  // if the user set it back to the reflection default, remove the override
+  if(name == defaultName)
+    name = rdcstr();
+
+  m_Ctx.SetCBufferCustomName(reflection->resourceId, m_CBufferSlot.slot, name);
+
+  updateLabelsAndLayout();
 }
 
 void BufferViewer::stageRowMenu(MeshDataStage stage, QMenu *menu, const QPoint &pos)
@@ -3950,6 +4080,8 @@ void BufferViewer::OnEventChanged(uint32_t eventId)
           RDTreeViewExpansionState state;
           ui->fixedVars->saveExpansion(state, 0);
 
+          m_FixedVarBuilding = true;
+
           ui->fixedVars->beginUpdate();
 
           ui->fixedVars->clear();
@@ -3964,6 +4096,8 @@ void BufferViewer::OnEventChanged(uint32_t eventId)
           }
 
           ui->fixedVars->endUpdate();
+
+          m_FixedVarBuilding = false;
 
           if(wasEmpty)
           {
@@ -4325,8 +4459,18 @@ void BufferViewer::UI_AddFixedVariables(RDTreeWidgetItem *root, uint32_t baseOff
     if(m_CurCBuffer.compileConstants)
       offsetStr = lit("-");
 
+    rdcstr fieldName = v.name;
+    if(IsCBufferView())
+    {
+      const ShaderReflection *refl =
+          m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+      if(refl)
+        fieldName = m_Ctx.GetCBufferFieldName(refl->resourceId, m_CBufferSlot.slot,
+                                              baseOffset + c.byteOffset, v.name);
+    }
+
     RDTreeWidgetItem *n =
-        new RDTreeWidgetItem({v.name, VarString(v, c), offsetStr, TypeString(v, c)});
+        new RDTreeWidgetItem({fieldName, VarString(v, c), offsetStr, TypeString(v, c)});
 
     // display colour swatch for floats with RGB display
     if((v.flags & ShaderVariableFlags::RGBDisplay) && VarTypeCompType(v.type) == CompType::Float &&
@@ -4350,6 +4494,10 @@ void BufferViewer::UI_AddFixedVariables(RDTreeWidgetItem *root, uint32_t baseOff
     }
 
     n->setTag(QVariant::fromValue(FixedVarTag(v.name, baseOffset + c.byteOffset)));
+
+    // allow inline editing of named constant buffer fields
+    if(IsCBufferView())
+      n->setEditable(0, true);
 
     root->addChild(n);
 
@@ -5555,7 +5703,9 @@ void BufferViewer::updateLabelsAndLayout()
         if(m_CBufferSlot.slot < reflection->constantBlocks.size() &&
            !reflection->constantBlocks[m_CBufferSlot.slot].name.isEmpty())
         {
-          bufName = QFormatStr("<%1>").arg(reflection->constantBlocks[m_CBufferSlot.slot].name);
+          rdcstr cbName = m_Ctx.GetCBufferName(reflection->resourceId, m_CBufferSlot.slot,
+                                               reflection->constantBlocks[m_CBufferSlot.slot].name);
+          bufName = QFormatStr("<%1>").arg(cbName);
           arraySize = reflection->constantBlocks[m_CBufferSlot.slot].bindArraySize;
         }
       }

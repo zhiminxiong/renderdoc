@@ -898,8 +898,8 @@ void GLPipelineStateViewer::addImageSamplerRow(const Descriptor &descriptor,
 }
 
 void GLPipelineStateViewer::addUBORow(const Descriptor &descriptor, uint32_t reg, uint32_t index,
-                                      const ConstantBlock *shaderBind, bool usedSlot,
-                                      RDTreeWidget *ubos)
+                                      ResourceId shader, const ConstantBlock *shaderBind,
+                                      bool usedSlot, RDTreeWidget *ubos)
 {
   bool filledSlot =
       ((shaderBind && !shaderBind->bufferBacked) || descriptor.resource != ResourceId());
@@ -924,7 +924,7 @@ void GLPipelineStateViewer::addUBORow(const Descriptor &descriptor, uint32_t reg
     QString slotname = QString::number(reg);
 
     if(shaderBind && !shaderBind->name.empty())
-      slotname += lit(": ") + shaderBind->name;
+      slotname += lit(": ") + m_Ctx.GetCBufferName(shader, index, shaderBind->name);
 
     offset = descriptor.byteOffset;
     length = descriptor.byteSize;
@@ -1745,7 +1745,8 @@ void GLPipelineStateViewer::setState()
           if(refl && access.type != DescriptorType::Unknown)
             shaderBind = &refl->constantBlocks[access.index];
 
-          addUBORow(m_Descriptors[i], reg, access.index, shaderBind, usedSlot, ubos[(uint32_t)stage]);
+          addUBORow(m_Descriptors[i], reg, access.index, refl ? refl->resourceId : ResourceId(),
+                    shaderBind, usedSlot, ubos[(uint32_t)stage]);
         }
       }
       else if(m_Locations[i].category == DescriptorCategory::ReadOnlyResource)

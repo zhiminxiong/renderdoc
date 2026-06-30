@@ -2290,6 +2290,60 @@ considered out of date
 )");
   virtual int32_t ResourceNameCacheID() const = 0;
 
+  DOCUMENT(R"(Retrieve the human-readable name for a constant buffer to display.
+
+This will first check to see if a custom name has been set for the constant buffer via
+:meth:`SetCBufferCustomName`, and if so use that. Otherwise the provided default name (typically the
+name from the shader reflection) is returned.
+
+:param renderdoc.ResourceId shader: The ID of the shader the constant buffer belongs to.
+:param int cbufferIndex: The index of the constant buffer in the shader's constant block list.
+:param str defaultName: The default name to use if no custom name has been set.
+:return: The current name of the constant buffer.
+:rtype: str
+)");
+  virtual rdcstr GetCBufferName(ResourceId shader, uint32_t cbufferIndex,
+                                const rdcstr &defaultName) const = 0;
+
+  DOCUMENT(R"(Set a custom name for a constant buffer.
+
+To remove a custom name that has been set previously, specify the empty string as the name.
+
+:param renderdoc.ResourceId shader: The ID of the shader the constant buffer belongs to.
+:param int cbufferIndex: The index of the constant buffer in the shader's constant block list.
+:param str name: The name to provide, or an empty string to remove any previous custom name.
+)");
+  virtual void SetCBufferCustomName(ResourceId shader, uint32_t cbufferIndex,
+                                    const rdcstr &name) = 0;
+
+  DOCUMENT(R"(Retrieve the human-readable name for a constant buffer member/field to display.
+
+This will first check to see if a custom name has been set for the field via
+:meth:`SetCBufferFieldCustomName`, and if so use that. Otherwise the provided default name
+(typically the name from the shader reflection) is returned.
+
+:param renderdoc.ResourceId shader: The ID of the shader the constant buffer belongs to.
+:param int cbufferIndex: The index of the constant buffer in the shader's constant block list.
+:param int byteOffset: The byte offset of the field within the constant buffer, used as a stable key.
+:param str defaultName: The default name to use if no custom name has been set.
+:return: The current name of the field.
+:rtype: str
+)");
+  virtual rdcstr GetCBufferFieldName(ResourceId shader, uint32_t cbufferIndex, uint32_t byteOffset,
+                                     const rdcstr &defaultName) const = 0;
+
+  DOCUMENT(R"(Set a custom name for a constant buffer member/field.
+
+To remove a custom name that has been set previously, specify the empty string as the name.
+
+:param renderdoc.ResourceId shader: The ID of the shader the constant buffer belongs to.
+:param int cbufferIndex: The index of the constant buffer in the shader's constant block list.
+:param int byteOffset: The byte offset of the field within the constant buffer, used as a stable key.
+:param str name: The name to provide, or an empty string to remove any previous custom name.
+)");
+  virtual void SetCBufferFieldCustomName(ResourceId shader, uint32_t cbufferIndex,
+                                         uint32_t byteOffset, const rdcstr &name) = 0;
+
   DOCUMENT(R"(Retrieve the information about a particular texture.
 
 :param renderdoc.ResourceId id: The ID of the texture to query about.

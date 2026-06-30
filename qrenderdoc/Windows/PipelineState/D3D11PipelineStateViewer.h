@@ -97,8 +97,8 @@ private:
                       RDTreeWidget *resources);
   void addSamplerRow(const SamplerDescriptor &s, uint32_t reg, const ShaderSampler *shaderBind,
                      bool usedSlot, RDTreeWidget *samplers);
-  void addCBufferRow(const Descriptor &b, uint32_t reg, const ConstantBlock *shaderBind,
-                     bool usedSlot, RDTreeWidget *cbuffers);
+  void addCBufferRow(const Descriptor &b, uint32_t reg, ResourceId shader, int cbufferIndex,
+                     const ConstantBlock *shaderBind, bool usedSlot, RDTreeWidget *cbuffers);
 
   void clearShaderState(RDLabel *shader, RDLabel *shaderDebug, RDTreeWidget *tex,
                         RDTreeWidget *samp, RDTreeWidget *cbuffer, RDTreeWidget *classes);

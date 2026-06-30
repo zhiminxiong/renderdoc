@@ -516,6 +516,16 @@ struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
     return m_Obj.HasResourceCustomName(id);
   }
   virtual int32_t ResourceNameCacheID() const override { return m_Obj.ResourceNameCacheID(); }
+  virtual rdcstr GetCBufferName(ResourceId shader, uint32_t cbufferIndex,
+                                const rdcstr &defaultName) const override
+  {
+    return m_Obj.GetCBufferName(shader, cbufferIndex, defaultName);
+  }
+  virtual rdcstr GetCBufferFieldName(ResourceId shader, uint32_t cbufferIndex, uint32_t byteOffset,
+                                     const rdcstr &defaultName) const override
+  {
+    return m_Obj.GetCBufferFieldName(shader, cbufferIndex, byteOffset, defaultName);
+  }
   virtual TextureDescription *GetTexture(ResourceId id) override { return m_Obj.GetTexture(id); }
   virtual const rdcarray<TextureDescription> &GetTextures() override { return m_Obj.GetTextures(); }
   virtual BufferDescription *GetBuffer(ResourceId id) override { return m_Obj.GetBuffer(id); }
@@ -633,6 +643,17 @@ struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
   virtual void SetResourceCustomName(ResourceId id, const rdcstr &name) override
   {
     InvokeVoidFunction(&ICaptureContext::SetResourceCustomName, id, name);
+  }
+  virtual void SetCBufferCustomName(ResourceId shader, uint32_t cbufferIndex,
+                                    const rdcstr &name) override
+  {
+    InvokeVoidFunction(&ICaptureContext::SetCBufferCustomName, shader, cbufferIndex, name);
+  }
+  virtual void SetCBufferFieldCustomName(ResourceId shader, uint32_t cbufferIndex,
+                                         uint32_t byteOffset, const rdcstr &name) override
+  {
+    InvokeVoidFunction(&ICaptureContext::SetCBufferFieldCustomName, shader, cbufferIndex, byteOffset,
+                       name);
   }
   virtual void SetNotes(const rdcstr &key, const rdcstr &contents) override
   {
