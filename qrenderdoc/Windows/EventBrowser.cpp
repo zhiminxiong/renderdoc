@@ -6378,12 +6378,14 @@ QString EventBrowser::getBookmarkColorName(uint32_t color)
 
 QColor EventBrowser::getBookmarkQColor(uint32_t color)
 {
+    // Dimmed, less saturated resting colors so the bookmark strip isn't too bright/harsh.
+    // The brighter originals are still used for the hover state in updateBookmarkButtonColor.
     switch(color)
     {
         case 0: return QColor();
-        case 1: return QColor(255, 100, 100);
-        case 2: return QColor(100, 255, 100);
-        case 3: return QColor(100, 100, 255);
+        case 1: return QColor(198, 88, 88);     // dimmed red
+        case 2: return QColor(74, 138, 80);     // dimmed green
+        case 3: return QColor(92, 108, 196);    // dimmed blue
         default: return QColor();
     }
 }
@@ -6392,23 +6394,39 @@ void EventBrowser::updateBookmarkButtonColor(QRClickToolButton *button, uint32_t
 {
     QColor bgColor = getBookmarkQColor(color);
 
-    // For the default bookmark (no explicit color) use an orange/amber color to
+    // For the default bookmark (no explicit color) use a dimmed orange/amber color to
     // stay consistent with the orange asterisk icon used for default bookmarks,
     // and so the button stands out from the bookmark strip background.
     if(!bgColor.isValid() || color == 0)
-        bgColor = QColor(245, 166, 35);
+        bgColor = QColor(214, 146, 48);
+
+    // The resting colors above are intentionally dimmed. The hover state keeps the original
+    // brighter colors so the hover (and other interactive) feedback stays unchanged - only the
+    // default appearance is toned down.
+    auto brightBookmarkColor = [](uint32_t c) -> QColor {
+        switch(c)
+        {
+            case 1: return QColor(255, 100, 100);
+            // green is toned down even for hover - the eye is most sensitive to green so the
+            // original bright green was too harsh on hover
+            case 2: return QColor(105, 175, 112);
+            case 3: return QColor(100, 100, 255);
+            default: return QColor(245, 166, 35);
+        }
+    };
 
     QColor darkerColor = bgColor.darker(120);
-    QColor hoverColor = bgColor.lighter(110);
+    QColor hoverColor = brightBookmarkColor(color).lighter(110);
 
     // High-contrast accent border used to mark the currently-selected bookmark
     // so it's easy to tell which one is active among all bookmarks. White is used
     // as a universal highlight that contrasts well with every bookmark color.
     QColor selectedBorder = QColor(255, 255, 255);
 
-    // Pick a text color that contrasts with the background. Blue is dark enough
-    // that it needs white text; the other colors read better with black text.
-    QColor textColor = (color == 3) ? QColor(255, 255, 255) : QColor(0, 0, 0);
+    // Pick a text color that contrasts with the dimmed background based on its luminance,
+    // so the label stays readable on every (now darker) bookmark color.
+    double bgLuminance = 0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue();
+    QColor textColor = (bgLuminance < 150) ? QColor(255, 255, 255) : QColor(0, 0, 0);
 
     QString style = lit("QToolButton { "
                            "background-color: %1 !important; "
