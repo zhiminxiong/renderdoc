@@ -7,6 +7,9 @@
   <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.INTERNET" />
+  <!-- keep the remote server process alive while it is in the background (target app is foreground) -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
   <!-- Use GL ES 3.2 version -->
   <uses-feature android:glEsVersion="0x00030000" android:required="true" />
@@ -15,6 +18,10 @@
     <activity android:name=".Loader" android:label="RenderDoc" android:exported="true" android:screenOrientation="landscape" android:configChanges="orientation|keyboardHidden" android:theme="@android:style/Theme.NoTitleBar">
       <meta-data android:name="android.app.lib_name" android:value="renderdoccmd"/>
     </activity>
+
+    <!-- foreground service that keeps the process (and therefore the remote server) alive when
+         the RenderDocCmd activity is pushed to the background by the app being captured -->
+    <service android:name=".KeepAliveService" android:exported="false"/>
 
   </application>
 </manifest>
