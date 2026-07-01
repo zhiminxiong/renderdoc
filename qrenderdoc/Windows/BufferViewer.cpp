@@ -61,6 +61,11 @@ struct FixedVarTag
   bool padding = false;
   bool matrix = false;
   bool rowmajor = false;
+  // whether the value of this row can be edited (a leaf scalar/vector backed by buffer bytes)
+  bool editableValue = false;
+  // type info used to pack an edited value back into bytes
+  VarType varType = VarType::Unknown;
+  uint8_t varColumns = 0;
   rdcstr name;
   union
   {
@@ -70,6 +75,128 @@ struct FixedVarTag
 };
 
 Q_DECLARE_METATYPE(FixedVarTag);
+
+// whether we can pack an edited value of this type back into raw bytes (half floats are excluded as
+// they'd need explicit float->half conversion and are rare in constant buffers)
+static bool CanPackVarType(VarType type)
+{
+  switch(type)
+  {
+    case VarType::Float:
+    case VarType::Double:
+    case VarType::SInt:
+    case VarType::UInt:
+    case VarType::SShort:
+    case VarType::UShort:
+    case VarType::SByte:
+    case VarType::UByte:
+    case VarType::SLong:
+    case VarType::ULong:
+    case VarType::Bool: return true;
+    default: return false;
+  }
+}
+
+// parse a comma-separated value string (as produced by VarString) back into raw bytes for the given
+// scalar/vector type. Returns false if parsing fails.
+static bool PackFixedValue(const QString &text, VarType type, uint8_t columns, bytebuf &out)
+{
+  QStringList parts = text.split(QLatin1Char(','));
+
+  if((uint8_t)parts.count() < columns || columns == 0)
+    return false;
+
+  uint32_t compSize = VarTypeByteSize(type);
+  if(compSize == 0)
+    return false;
+
+  out.resize(compSize * columns);
+
+  for(uint8_t i = 0; i < columns; i++)
+  {
+    QString s = parts[i].trimmed();
+    bool ok = false;
+    byte *dst = out.data() + i * compSize;
+
+    switch(type)
+    {
+      case VarType::Float:
+      {
+        float v = s.toFloat(&ok);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::Double:
+      {
+        double v = s.toDouble(&ok);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::Bool:
+      {
+        QString l = s.toLower();
+        uint32_t v = (l == lit("true") || s.toInt() != 0) ? 1u : 0u;
+        ok = true;
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::SInt:
+      {
+        int32_t v = s.toInt(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::UInt:
+      {
+        uint32_t v = s.toUInt(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::SShort:
+      {
+        int16_t v = (int16_t)s.toShort(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::UShort:
+      {
+        uint16_t v = (uint16_t)s.toUShort(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::SByte:
+      {
+        int8_t v = (int8_t)s.toShort(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::UByte:
+      {
+        uint8_t v = (uint8_t)s.toUShort(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::SLong:
+      {
+        int64_t v = s.toLongLong(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      case VarType::ULong:
+      {
+        uint64_t v = s.toULongLong(&ok, 0);
+        memcpy(dst, &v, sizeof(v));
+        break;
+      }
+      default: return false;
+    }
+
+    if(!ok)
+      return false;
+  }
+
+  return true;
+}
 
 static const uint32_t MaxVisibleRows = 10000;
 
@@ -3160,9 +3287,9 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
 
 void BufferViewer::fixedVars_itemEdited(RDTreeWidgetItem *item, int column)
 {
-  // ignore changes we cause ourselves while (re)building the tree, and anything that isn't a
-  // user edit of the name column on a constant buffer field
-  if(m_FixedVarBuilding || column != 0 || item == NULL || !IsCBufferView())
+  // ignore changes we cause ourselves while (re)building the tree, and anything that isn't on a
+  // constant buffer view
+  if(m_FixedVarBuilding || item == NULL || !IsCBufferView())
     return;
 
   FixedVarTag tag = item->tag().value<FixedVarTag>();
@@ -3170,21 +3297,40 @@ void BufferViewer::fixedVars_itemEdited(RDTreeWidgetItem *item, int column)
   if(!tag.valid || tag.padding)
     return;
 
-  const ShaderReflection *reflection =
-      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+  // column 0 is the field name, column 1 is the value
+  if(column == 0)
+  {
+    const ShaderReflection *reflection =
+        m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
 
-  if(!reflection)
-    return;
+    if(!reflection)
+      return;
 
-  rdcstr defaultName = tag.name;
-  rdcstr newName = item->text(0);
+    rdcstr defaultName = tag.name;
+    rdcstr newName = item->text(0);
 
-  // if the user cleared the name or set it back to the reflection default, remove the override
-  if(newName == defaultName)
-    newName = rdcstr();
+    // if the user cleared the name or set it back to the reflection default, remove the override
+    if(newName == defaultName)
+      newName = rdcstr();
 
-  m_Ctx.SetCBufferFieldCustomName(reflection->resourceId, m_CBufferSlot.slot, tag.byteOffset,
-                                  newName);
+    m_Ctx.SetCBufferFieldCustomName(reflection->resourceId, m_CBufferSlot.slot, tag.byteOffset,
+                                    newName);
+  }
+  else if(column == 1)
+  {
+    if(!tag.editableValue || !m_CurCBuffer.bytesBacked || m_BufferID == ResourceId())
+      return;
+
+    bytebuf bytes;
+    if(!PackFixedValue(item->text(1), tag.varType, tag.varColumns, bytes))
+      return;
+
+    // tag.byteOffset is relative to the constant buffer; add the cbuffer's offset within its
+    // backing buffer to get the absolute offset to override
+    uint64_t absOffset = m_ByteOffset + tag.byteOffset;
+
+    m_Ctx.SetCustomBufferData(m_BufferID, absOffset, bytes);
+  }
 }
 
 void BufferViewer::resetFixedVarName(RDTreeWidgetItem *item)
@@ -4493,11 +4639,26 @@ void BufferViewer::UI_AddFixedVariables(RDTreeWidgetItem *root, uint32_t baseOff
       n->setIcon(1, MakeSwatchIcon(ui->fixedVars, swatchColor));
     }
 
-    n->setTag(QVariant::fromValue(FixedVarTag(v.name, baseOffset + c.byteOffset)));
+    FixedVarTag fieldTag(v.name, baseOffset + c.byteOffset);
+
+    // leaf scalar/vector values backed by real buffer bytes can be edited to affect the rendering
+    if(IsCBufferView() && m_CurCBuffer.bytesBacked && v.members.empty() && v.rows == 1 &&
+       v.columns >= 1 && CanPackVarType(v.type))
+    {
+      fieldTag.editableValue = true;
+      fieldTag.varType = v.type;
+      fieldTag.varColumns = (uint8_t)v.columns;
+    }
+
+    n->setTag(QVariant::fromValue(fieldTag));
 
     // allow inline editing of named constant buffer fields
     if(IsCBufferView())
       n->setEditable(0, true);
+
+    // allow inline editing of the value for editable leaf rows
+    if(fieldTag.editableValue)
+      n->setEditable(1, true);
 
     root->addChild(n);
 

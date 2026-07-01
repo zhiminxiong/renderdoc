@@ -80,6 +80,10 @@ void ReplayController::SetFrameEvent(uint32_t eventId, bool force)
     m_pDevice->ReplayLog(eventId, eReplay_WithoutDraw);
     FatalErrorCheck();
 
+    // re-apply any user buffer overrides after the state up to (but excluding) the draw has been
+    // replayed, so that the draw itself uses the modified buffer contents
+    ApplyBufferOverrides();
+
     for(size_t i = 0; i < m_Outputs.size(); i++)
       m_Outputs[i]->SetFrameEvent(eventId);
 
@@ -2151,6 +2155,56 @@ void ReplayController::RemoveReplacement(ResourceId id)
   m_pDevice->RemoveReplacement(id);
   FatalErrorCheck();
 
+  SetFrameEvent(m_EventID, true);
+
+  for(size_t i = 0; i < m_Outputs.size(); i++)
+    if(m_Outputs[i]->GetType() != ReplayOutputType::Headless)
+      m_Outputs[i]->Display();
+}
+
+void ReplayController::ApplyBufferOverrides()
+{
+  CHECK_REPLAY_THREAD();
+
+  for(auto bufit = m_BufferOverrides.begin(); bufit != m_BufferOverrides.end(); ++bufit)
+  {
+    for(auto offit = bufit->second.begin(); offit != bufit->second.end(); ++offit)
+    {
+      m_pDevice->SetBufferData(bufit->first, offit->first, offit->second);
+      FatalErrorCheck();
+    }
+  }
+}
+
+void ReplayController::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  CHECK_REPLAY_THREAD();
+
+  if(buff == ResourceId() || data.empty())
+    return;
+
+  // remember the override so it can be re-applied on every subsequent replay
+  m_BufferOverrides[buff][offset] = data;
+
+  // force a replay so the override takes effect immediately and the outputs update
+  SetFrameEvent(m_EventID, true);
+
+  for(size_t i = 0; i < m_Outputs.size(); i++)
+    if(m_Outputs[i]->GetType() != ReplayOutputType::Headless)
+      m_Outputs[i]->Display();
+}
+
+void ReplayController::RemoveBufferOverride(ResourceId buff)
+{
+  CHECK_REPLAY_THREAD();
+
+  auto it = m_BufferOverrides.find(buff);
+  if(it == m_BufferOverrides.end())
+    return;
+
+  m_BufferOverrides.erase(it);
+
+  // force a full replay so the original captured contents are restored
   SetFrameEvent(m_EventID, true);
 
   for(size_t i = 0; i < m_Outputs.size(); i++)

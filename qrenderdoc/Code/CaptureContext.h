@@ -183,6 +183,8 @@ public:
                              const rdcstr &defaultName) const override;
   void SetCBufferFieldCustomName(ResourceId shader, uint32_t cbufferIndex, uint32_t byteOffset,
                                  const rdcstr &name) override;
+  void SetCustomBufferData(ResourceId buff, uint64_t offset, const bytebuf &data) override;
+  void RemoveCustomBufferData(ResourceId buff) override;
   TextureDescription *GetTexture(ResourceId id) override { return m_Textures[id]; }
   const rdcarray<TextureDescription> &GetTextures() override { return m_TextureList; }
   BufferDescription *GetBuffer(ResourceId id) override { return m_Buffers[id]; }
@@ -338,6 +340,11 @@ private:
   bool SaveRenames();
   void LoadRenames(const QString &data);
 
+  bool SaveBufferEdits();
+  void LoadBufferEdits(const QString &data);
+  void ApplyBufferEdit(ResourceId buff, uint64_t offset, const bytebuf &data);
+  void ReapplyBufferEdits();
+
   bool SaveBookmarks();
   void LoadBookmarks(const QString &data);
 
@@ -415,6 +422,10 @@ private:
   // shader id, the constant buffer index and (for fields) the field's byte offset. See
   // CBufferNameKey/CBufferFieldNameKey in the .cpp. Persisted alongside resource renames.
   QMap<QString, QString> m_CustomCBufferNames;
+
+  // user-edited buffer contents, keyed by buffer id, then by byte offset -> overriding bytes. These
+  // are applied to the replay (affecting rendering) and persisted into the capture.
+  QMap<ResourceId, QMap<uint64_t, bytebuf>> m_EditedBuffers;
 
   // map orig replaced -> edited replacement ID
   QMap<ResourceId, ResourceId> m_OrigToReplacedResources;

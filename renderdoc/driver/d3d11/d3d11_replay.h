@@ -237,6 +237,7 @@ public:
                               MeshDataStage stage);
 
   void GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, bytebuf &retData);
+  void SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data);
   void GetTextureData(ResourceId tex, const Subresource &sub, const GetTextureDataParams &params,
                       bytebuf &data);
 

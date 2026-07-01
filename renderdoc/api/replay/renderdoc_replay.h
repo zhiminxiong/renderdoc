@@ -739,6 +739,26 @@ See :meth:`ReplaceResource`.
 )");
   virtual void RemoveReplacement(ResourceId id) = 0;
 
+  DOCUMENT(R"(Override the contents of a buffer for replay, so that subsequent replays use the
+modified data and the rendering is affected accordingly.
+
+The override is remembered and re-applied on every replay (e.g. when changing the selected event),
+so it persists across events until removed with :meth:`RemoveBufferOverride`. This is commonly used
+to edit the values inside a constant buffer and see how the rendering changes.
+
+:param ResourceId buff: The id of the buffer whose contents should be overridden.
+:param int offset: The byte offset into the buffer at which to write the data.
+:param bytes data: The bytes to write at the given offset.
+)");
+  virtual void SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data) = 0;
+
+  DOCUMENT(R"(Remove any buffer content overrides previously set with :meth:`SetBufferData` for the
+given buffer, reverting it back to its captured contents.
+
+:param ResourceId buff: The id of the buffer whose overrides should be removed.
+)");
+  virtual void RemoveBufferOverride(ResourceId buff) = 0;
+
   DOCUMENT(R"(Free a previously created target shader.
 
 See :meth:`BuildTargetShader`.

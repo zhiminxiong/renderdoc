@@ -1150,6 +1150,15 @@ void CaptureContext::LoadCaptureThreaded(const QString &captureFile, const Repla
       });
     }
 
+    idx = access->FindSectionByType(SectionType::BufferEdits);
+    if(idx >= 0)
+    {
+      bytebuf buf = access->GetSectionContents(idx);
+      LoadBufferEdits(QString::fromUtf8((const char *)buf.data(), buf.count()));
+      // re-apply the stored buffer overrides so the loaded capture renders with the edited values
+      ReapplyBufferEdits();
+    }
+
     QString driver = access->DriverName();
     if(driver == lit("Image"))
     {
@@ -1447,6 +1456,7 @@ void CaptureContext::CloseCapture()
 
   m_CustomNames.clear();
   m_CustomCBufferNames.clear();
+  m_EditedBuffers.clear();
   m_Bookmarks.clear();
   m_Notes.clear();
 
@@ -1838,6 +1848,9 @@ void CaptureContext::SaveChanges()
 
     if(m_CaptureMods & CaptureModifications::EditedShaders)
       success &= SaveEdits();
+
+    if(m_CaptureMods & CaptureModifications::EditedBuffers)
+      success &= SaveBufferEdits();
   }
 
   if(!success)
@@ -1913,6 +1926,80 @@ void CaptureContext::LoadRenames(const QString &data)
       if(!key.isEmpty())
         m_CustomCBufferNames[key] = cbufferNames[key].toString();
     }
+  }
+}
+
+bool CaptureContext::SaveBufferEdits()
+{
+  QVariantList edits;
+
+  for(ResourceId id : m_EditedBuffers.keys())
+  {
+    const QMap<uint64_t, bytebuf> &offsets = m_EditedBuffers[id];
+
+    for(uint64_t off : offsets.keys())
+    {
+      const bytebuf &b = offsets[off];
+
+      QVariantMap edit;
+      edit[lit("buffer")] = ToQStr(id);
+      edit[lit("offset")] = (qulonglong)off;
+      QByteArray bytes((const char *)b.data(), (int)b.size());
+      edit[lit("data")] = QString::fromLatin1(bytes.toBase64());
+
+      edits.push_back(edit);
+    }
+  }
+
+  QVariantMap root;
+  root[lit("BufferEdits")] = edits;
+
+  QString json = VariantToJSON(root);
+
+  SectionProperties props;
+  props.type = SectionType::BufferEdits;
+  props.version = 1;
+
+  return Replay().GetCaptureFile()->WriteSection(props, json.toUtf8()).OK();
+}
+
+void CaptureContext::LoadBufferEdits(const QString &data)
+{
+  QVariantMap root = JSONToVariant(data);
+
+  if(!root.contains(lit("BufferEdits")))
+    return;
+
+  QVariantList edits = root[lit("BufferEdits")].toList();
+
+  for(QVariant v : edits)
+  {
+    QVariantMap edit = v.toMap();
+
+    QString str = edit[lit("buffer")].toString();
+
+    ResourceId id;
+
+    if(str.startsWith(lit("ResourceId::")))
+    {
+      qulonglong num = str.mid(sizeof("ResourceId::") - 1).toULongLong();
+      memcpy(&id, &num, sizeof(num));
+    }
+    else
+    {
+      qCritical() << "Unrecognised resourceid encoding" << str;
+      continue;
+    }
+
+    uint64_t off = edit[lit("offset")].toULongLong();
+
+    QByteArray bytes = QByteArray::fromBase64(edit[lit("data")].toString().toLatin1());
+
+    bytebuf b;
+    b.assign((const byte *)bytes.constData(), (size_t)bytes.size());
+
+    if(id != ResourceId() && !b.empty())
+      m_EditedBuffers[id][off] = b;
   }
 }
 
@@ -2262,6 +2349,62 @@ void CaptureContext::SetCBufferFieldCustomName(ResourceId shader, uint32_t cbuff
     m_CustomCBufferNames[key] = name;
 
   SetModification(CaptureModifications::Renames);
+
+  RefreshUIStatus({}, true, true);
+}
+
+void CaptureContext::ApplyBufferEdit(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  if(!IsCaptureLoaded())
+    return;
+
+  Replay().AsyncInvoke([buff, offset, data](IReplayController *r) {
+    r->SetBufferData(buff, offset, data);
+  });
+}
+
+void CaptureContext::ReapplyBufferEdits()
+{
+  if(!IsCaptureLoaded() || m_EditedBuffers.isEmpty())
+    return;
+
+  QMap<ResourceId, QMap<uint64_t, bytebuf>> edits = m_EditedBuffers;
+
+  Replay().AsyncInvoke([edits](IReplayController *r) {
+    for(ResourceId id : edits.keys())
+    {
+      const QMap<uint64_t, bytebuf> &offsets = edits[id];
+      for(uint64_t off : offsets.keys())
+        r->SetBufferData(id, off, offsets[off]);
+    }
+  });
+}
+
+void CaptureContext::SetCustomBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  if(buff == ResourceId() || data.empty())
+    return;
+
+  m_EditedBuffers[buff][offset] = data;
+
+  SetModification(CaptureModifications::EditedBuffers);
+
+  ApplyBufferEdit(buff, offset, data);
+
+  RefreshUIStatus({}, true, true);
+}
+
+void CaptureContext::RemoveCustomBufferData(ResourceId buff)
+{
+  if(!m_EditedBuffers.contains(buff))
+    return;
+
+  m_EditedBuffers.remove(buff);
+
+  SetModification(CaptureModifications::EditedBuffers);
+
+  if(IsCaptureLoaded())
+    Replay().AsyncInvoke([buff](IReplayController *r) { r->RemoveBufferOverride(buff); });
 
   RefreshUIStatus({}, true, true);
 }

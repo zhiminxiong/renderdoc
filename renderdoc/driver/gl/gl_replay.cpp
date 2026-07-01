@@ -420,6 +420,38 @@ void GLReplay::GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, byt
   drv.glBindBuffer(eGL_COPY_READ_BUFFER, oldbuf);
 }
 
+void GLReplay::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  if(data.empty())
+    return;
+
+  if(m_pDriver->m_Buffers.find(buff) == m_pDriver->m_Buffers.end())
+  {
+    RDCWARN("Setting data for non-existant buffer %s", ToStr(buff).c_str());
+    return;
+  }
+
+  WrappedOpenGL::BufferData &buf = m_pDriver->m_Buffers[buff];
+
+  uint64_t bufsize = buf.size;
+
+  if(offset >= bufsize)
+    return;
+
+  uint64_t len = RDCMIN((uint64_t)data.size(), bufsize - offset);
+
+  WrappedOpenGL &drv = *m_pDriver;
+
+  GLuint oldbuf = 0;
+  drv.glGetIntegerv(eGL_COPY_WRITE_BUFFER_BINDING, (GLint *)&oldbuf);
+
+  drv.glBindBuffer(eGL_COPY_WRITE_BUFFER, buf.resource.name);
+
+  drv.glBufferSubData(eGL_COPY_WRITE_BUFFER, (GLintptr)offset, (GLsizeiptr)len, data.data());
+
+  drv.glBindBuffer(eGL_COPY_WRITE_BUFFER, oldbuf);
+}
+
 void GLReplay::CacheTexture(ResourceId id)
 {
   if(m_CachedTextures.find(id) != m_CachedTextures.end())

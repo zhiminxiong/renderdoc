@@ -2142,6 +2142,70 @@ void D3D11Replay::GetBufferData(ResourceId buff, uint64_t offset, uint64_t lengt
   GetDebugManager()->GetBufferData(buffer, offset, length, retData);
 }
 
+void D3D11Replay::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  if(data.empty())
+    return;
+
+  auto it = WrappedID3D11Buffer::m_BufferList.find(buff);
+
+  if(it == WrappedID3D11Buffer::m_BufferList.end())
+  {
+    RDCERR("Setting buffer data for unknown buffer %s!", ToStr(buff).c_str());
+    return;
+  }
+
+  WrappedID3D11Buffer *buf = (WrappedID3D11Buffer *)it->second.m_Buffer;
+
+  if(buf == NULL)
+    return;
+
+  D3D11_BUFFER_DESC desc;
+  buf->GetDesc(&desc);
+
+  if(offset >= desc.ByteWidth)
+    return;
+
+  uint32_t len = (uint32_t)RDCMIN((uint64_t)data.size(), (uint64_t)desc.ByteWidth - offset);
+
+  // read the full current contents, patch in the override, then re-upload the whole buffer. This
+  // avoids the various restrictions on partial constant-buffer updates across feature levels.
+  bytebuf whole;
+  GetDebugManager()->GetBufferData(buf, 0, desc.ByteWidth, whole);
+
+  if((uint32_t)whole.size() < desc.ByteWidth)
+    whole.resize(desc.ByteWidth);
+
+  memcpy(whole.data() + offset, data.data(), len);
+
+  // use the real (unwrapped) immediate context so the update isn't tracked/serialised
+  ID3D11DeviceContext *ctx = m_pDevice->GetImmediateContext()->GetReal();
+
+  if(desc.Usage == D3D11_USAGE_DYNAMIC)
+  {
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT hr = ctx->Map(buf->GetReal(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if(SUCCEEDED(hr))
+    {
+      memcpy(mapped.pData, whole.data(), desc.ByteWidth);
+      ctx->Unmap(buf->GetReal(), 0);
+    }
+    else
+    {
+      RDCERR("Failed to map dynamic buffer %s for override: HRESULT: %s", ToStr(buff).c_str(),
+             ToStr(hr).c_str());
+    }
+  }
+  else if(desc.Usage == D3D11_USAGE_DEFAULT)
+  {
+    ctx->UpdateSubresource(buf->GetReal(), 0, NULL, whole.data(), 0, 0);
+  }
+  else
+  {
+    RDCWARN("Can't override data for buffer %s with usage %d", ToStr(buff).c_str(), desc.Usage);
+  }
+}
+
 void D3D11Replay::GetTextureData(ResourceId tex, const Subresource &sub,
                                  const GetTextureDataParams &params, bytebuf &data)
 {

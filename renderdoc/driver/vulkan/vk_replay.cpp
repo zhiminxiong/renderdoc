@@ -1102,6 +1102,11 @@ void VulkanReplay::GetBufferData(ResourceId buff, uint64_t offset, uint64_t len,
   GetDebugManager()->GetBufferData(buff, offset, len, ret);
 }
 
+void VulkanReplay::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  GetDebugManager()->SetBufferData(buff, offset, data);
+}
+
 void VulkanReplay::FileChanged()
 {
 }

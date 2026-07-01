@@ -62,6 +62,7 @@ enum ReplayProxyPacket
   eReplayProxy_GetDebugMessages,
 
   eReplayProxy_GetBufferData,
+  eReplayProxy_SetBufferData,
   eReplayProxy_GetTextureData,
 
   eReplayProxy_SavePipelineState,
@@ -510,6 +511,8 @@ public:
 
   IMPLEMENT_FUNCTION_PROXIED(void, GetBufferData, ResourceId buff, uint64_t offset, uint64_t len,
                              bytebuf &retData);
+  IMPLEMENT_FUNCTION_PROXIED(void, SetBufferData, ResourceId buff, uint64_t offset,
+                             const bytebuf &data);
   IMPLEMENT_FUNCTION_PROXIED(void, GetTextureData, ResourceId tex, const Subresource &sub,
                              const GetTextureDataParams &params, bytebuf &data);
 

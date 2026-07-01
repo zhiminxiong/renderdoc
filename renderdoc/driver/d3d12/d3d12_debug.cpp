@@ -2295,6 +2295,131 @@ void D3D12DebugManager::GetBufferData(ID3D12Resource *buffer, uint64_t offset, u
   m_DebugAlloc->Reset();
 }
 
+void D3D12DebugManager::SetBufferData(ID3D12Resource *buffer, uint64_t offset, const bytebuf &data)
+{
+  if(buffer == NULL || data.empty())
+    return;
+
+  m_pDevice->ReplayWorkWaitForIdle();
+
+  D3D12_RESOURCE_DESC desc = buffer->GetDesc();
+  D3D12_HEAP_PROPERTIES heapProps = {};
+  // can't call GetHeapProperties on sparse resources
+  if(!m_pDevice->IsSparseResource(GetResID(buffer)))
+    buffer->GetHeapProperties(&heapProps, NULL);
+
+  if(offset >= desc.Width)
+    return;
+
+  uint64_t length = RDCMIN((uint64_t)data.size(), desc.Width - offset);
+
+  WrappedID3D12Resource *wrapped = (WrappedID3D12Resource *)buffer;
+  if(wrapped->IsAccelerationStructureResource())
+    return;
+
+  // directly CPU mappable, so just map and memcpy the override in place
+  if(heapProps.Type == D3D12_HEAP_TYPE_UPLOAD || heapProps.Type == D3D12_HEAP_TYPE_READBACK)
+  {
+    D3D12_RANGE range = {(size_t)offset, size_t(offset + length)};
+
+    byte *ptr = NULL;
+    HRESULT hr = buffer->Map(0, &range, (void **)&ptr);
+    CHECK_HR(m_pDevice, hr);
+
+    if(FAILED(hr))
+    {
+      RDCERR("Failed to map buffer directly for override HRESULT: %s", ToStr(hr).c_str());
+      return;
+    }
+
+    memcpy(ptr + offset, data.data(), (size_t)length);
+
+    buffer->Unmap(0, &range);
+
+    return;
+  }
+
+  // otherwise upload via a staging buffer and copy into the target buffer
+
+  D3D12_HEAP_PROPERTIES uploadProps;
+  uploadProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+  uploadProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  uploadProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+  uploadProps.CreationNodeMask = 1;
+  uploadProps.VisibleNodeMask = 1;
+
+  D3D12_RESOURCE_DESC uploadDesc;
+  uploadDesc.Alignment = 0;
+  uploadDesc.DepthOrArraySize = 1;
+  uploadDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  uploadDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+  uploadDesc.Format = DXGI_FORMAT_UNKNOWN;
+  uploadDesc.Height = 1;
+  uploadDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  uploadDesc.MipLevels = 1;
+  uploadDesc.SampleDesc.Count = 1;
+  uploadDesc.SampleDesc.Quality = 0;
+  uploadDesc.Width = length;
+
+  ID3D12Resource *uploadBuf = NULL;
+  HRESULT hr = m_pDevice->CreateCommittedResource(&uploadProps, D3D12_HEAP_FLAG_NONE, &uploadDesc,
+                                                  D3D12_RESOURCE_STATE_GENERIC_READ, NULL,
+                                                  __uuidof(ID3D12Resource), (void **)&uploadBuf);
+
+  if(FAILED(hr) || uploadBuf == NULL)
+  {
+    RDCERR("Failed to create upload buffer for override HRESULT: %s", ToStr(hr).c_str());
+    return;
+  }
+
+  {
+    D3D12_RANGE range = {0, (size_t)length};
+    byte *ptr = NULL;
+    hr = uploadBuf->Map(0, &range, (void **)&ptr);
+    if(SUCCEEDED(hr))
+    {
+      memcpy(ptr, data.data(), (size_t)length);
+      uploadBuf->Unmap(0, &range);
+    }
+    else
+    {
+      RDCERR("Failed to map upload buffer for override HRESULT: %s", ToStr(hr).c_str());
+      SAFE_RELEASE(uploadBuf);
+      return;
+    }
+  }
+
+  m_DebugList->Reset(m_DebugAlloc, NULL);
+
+  D3D12_RESOURCE_BARRIER barrier = {};
+
+  D3D12ResourceLayout layout = m_pDevice->GetSubresourceStates(GetResID(buffer))[0];
+
+  barrier.Transition.pResource = buffer;
+  barrier.Transition.StateBefore = layout.ToStates();
+  barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+  if(layout.IsStates() && (barrier.Transition.StateBefore & D3D12_RESOURCE_STATE_COPY_DEST) == 0)
+    m_DebugList->ResourceBarrier(1, &barrier);
+
+  m_DebugList->CopyBufferRegion(buffer, offset, uploadBuf, 0, length);
+
+  if(layout.IsStates() && (barrier.Transition.StateBefore & D3D12_RESOURCE_STATE_COPY_DEST) == 0)
+  {
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    m_DebugList->ResourceBarrier(1, &barrier);
+  }
+
+  m_DebugList->Close();
+
+  ID3D12CommandList *l = m_DebugList;
+  m_pDevice->GetQueue()->ExecuteCommandLists(1, &l);
+  m_pDevice->InternalQueueWaitForIdle();
+  m_DebugAlloc->Reset();
+
+  SAFE_RELEASE(uploadBuf);
+}
+
 void D3D12Replay::GeneralMisc::Init(WrappedID3D12Device *device, D3D12DebugManager *debug)
 {
   HRESULT hr = S_OK;

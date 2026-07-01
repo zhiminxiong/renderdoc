@@ -169,6 +169,7 @@ public:
   ~D3D12DebugManager();
 
   void GetBufferData(ID3D12Resource *buff, uint64_t offset, uint64_t length, bytebuf &retData);
+  void SetBufferData(ID3D12Resource *buff, uint64_t offset, const bytebuf &data);
 
   ID3D12Resource *MakeCBuffer(UINT64 size);
   void FillBuffer(ID3D12Resource *buf, size_t offset, const void *data, size_t size);

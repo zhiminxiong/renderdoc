@@ -177,6 +177,8 @@ public:
                                                 ShaderStage type);
   void ReplaceResource(ResourceId from, ResourceId to);
   void RemoveReplacement(ResourceId id);
+  void SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data);
+  void RemoveBufferOverride(ResourceId buff);
   void FreeTargetResource(ResourceId id);
   void ClearReplayCache();
   void ReloadShaderDebugInformation();
@@ -277,6 +279,12 @@ private:
   uint32_t m_EventID;
 
   std::map<uint32_t, uint32_t> m_EventRemap;
+
+  // user-specified overrides of buffer contents, applied on every replay (between the
+  // without-draw and only-draw replay passes) so the edited values affect the rendering. Keyed by
+  // buffer id, then by byte offset -> overriding bytes.
+  std::map<ResourceId, std::map<uint64_t, bytebuf>> m_BufferOverrides;
+  void ApplyBufferOverrides();
 
   D3D11Pipe::State m_D3D11PipelineState;
   D3D12Pipe::State m_D3D12PipelineState;

@@ -116,6 +116,13 @@ version of RenderDoc that addes a new section type. They should be considered eq
   This section contains externally referenced files that have been embedded into the capture.
 
   The name for this section will be "renderdoc/internal/embeddedexternalfiles".
+
+.. data:: BufferEdits
+
+  This section contains a JSON document with user-edited buffer contents (e.g. constant buffer
+  values modified in the UI) to be re-applied on replay.
+
+  The name for this section will be "renderdoc/ui/bufferedits".
 )");
 enum class SectionType : uint32_t
 {
@@ -133,6 +140,7 @@ enum class SectionType : uint32_t
   D3D12Core,
   D3D12SDKLayers,
   EmbeddedExternalFiles,
+  BufferEdits,
   Count,
 };
 

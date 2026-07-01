@@ -3426,6 +3426,36 @@ void D3D12Replay::GetBufferData(ResourceId buff, uint64_t offset, uint64_t lengt
   GetDebugManager()->GetBufferData(buffer, offset, length, ret);
 }
 
+void D3D12Replay::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  if(data.empty())
+    return;
+
+  ID3D12DeviceChild *res = m_pDevice->GetResourceManager()->GetResource(buff);
+
+  // overriding root/push constants is not supported
+  if(WrappedID3D12PipelineState::IsAlloc(res))
+    return;
+
+  auto it = m_pDevice->GetResourceList().find(buff);
+
+  if(it == m_pDevice->GetResourceList().end() || it->second == NULL)
+  {
+    RDCERR("Setting buffer data for unknown buffer %s!", ToStr(buff).c_str());
+    return;
+  }
+
+  WrappedID3D12Resource *buffer = it->second;
+
+  if(buffer->GetDesc().Dimension != D3D12_RESOURCE_DIMENSION_BUFFER)
+  {
+    RDCERR("Setting buffer data for non-buffer %s!", ToStr(buff).c_str());
+    return;
+  }
+
+  GetDebugManager()->SetBufferData(buffer, offset, data);
+}
+
 void D3D12Replay::FillCBufferVariables(ResourceId pipeline, ResourceId shader, ShaderStage stage,
                                        rdcstr entryPoint, uint32_t cbufSlot,
                                        rdcarray<ShaderVariable> &outvars, const bytebuf &data)

@@ -655,6 +655,14 @@ struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
     InvokeVoidFunction(&ICaptureContext::SetCBufferFieldCustomName, shader, cbufferIndex, byteOffset,
                        name);
   }
+  virtual void SetCustomBufferData(ResourceId buff, uint64_t offset, const bytebuf &data) override
+  {
+    InvokeVoidFunction(&ICaptureContext::SetCustomBufferData, buff, offset, data);
+  }
+  virtual void RemoveCustomBufferData(ResourceId buff) override
+  {
+    InvokeVoidFunction(&ICaptureContext::RemoveCustomBufferData, buff);
+  }
   virtual void SetNotes(const rdcstr &key, const rdcstr &contents) override
   {
     InvokeVoidFunction(&ICaptureContext::SetNotes, key, contents);

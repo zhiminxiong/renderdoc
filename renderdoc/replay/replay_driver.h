@@ -201,6 +201,7 @@ public:
   }
 
   virtual void GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, bytebuf &retData) = 0;
+  virtual void SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data) = 0;
   virtual void GetTextureData(ResourceId tex, const Subresource &sub,
                               const GetTextureDataParams &params, bytebuf &data) = 0;
 

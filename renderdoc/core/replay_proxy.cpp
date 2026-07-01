@@ -57,6 +57,7 @@ rdcstr DoStringise(const ReplayProxyPacket &el)
     STRINGISE_ENUM_NAMED(eReplayProxy_GetDebugMessages, "GetDebugMessages");
 
     STRINGISE_ENUM_NAMED(eReplayProxy_GetBufferData, "GetBufferData");
+    STRINGISE_ENUM_NAMED(eReplayProxy_SetBufferData, "SetBufferData");
     STRINGISE_ENUM_NAMED(eReplayProxy_GetTextureData, "GetTextureData");
 
     STRINGISE_ENUM_NAMED(eReplayProxy_SavePipelineState, "SavePipelineState");
@@ -945,6 +946,38 @@ void ReplayProxy::Proxied_GetBufferData(ParamSerialiser &paramser, ReturnSeriali
 void ReplayProxy::GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, bytebuf &retData)
 {
   PROXY_FUNCTION(GetBufferData, buff, offset, len, retData);
+}
+
+template <typename ParamSerialiser, typename ReturnSerialiser>
+void ReplayProxy::Proxied_SetBufferData(ParamSerialiser &paramser, ReturnSerialiser &retser,
+                                        ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  const ReplayProxyPacket expectedPacket = eReplayProxy_SetBufferData;
+  ReplayProxyPacket packet = eReplayProxy_SetBufferData;
+
+  // the const-ness is shed for serialising, but on the remote side this is freshly deserialised
+  bytebuf &dataRef = (bytebuf &)data;
+
+  {
+    BEGIN_PARAMS();
+    SERIALISE_ELEMENT(buff);
+    SERIALISE_ELEMENT(offset);
+    SERIALISE_ELEMENT(dataRef);
+    END_PARAMS();
+  }
+
+  {
+    REMOTE_EXECUTION();
+    if(paramser.IsReading() && !paramser.IsErrored() && !m_IsErrored)
+      m_Remote->SetBufferData(buff, offset, dataRef);
+  }
+
+  SERIALISE_RETURN_VOID();
+}
+
+void ReplayProxy::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  PROXY_FUNCTION(SetBufferData, buff, offset, data);
 }
 
 template <typename ParamSerialiser, typename ReturnSerialiser>
@@ -3112,6 +3145,12 @@ bool ReplayProxy::Tick(int type)
     {
       bytebuf dummy;
       GetBufferData(ResourceId(), 0, 0, dummy);
+      break;
+    }
+    case eReplayProxy_SetBufferData:
+    {
+      bytebuf dummy;
+      SetBufferData(ResourceId(), 0, dummy);
       break;
     }
     case eReplayProxy_GetTextureData:

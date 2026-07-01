@@ -227,6 +227,10 @@ void DummyDriver::GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, 
   retData.clear();
 }
 
+void DummyDriver::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+}
+
 void DummyDriver::GetTextureData(ResourceId tex, const Subresource &sub,
                                  const GetTextureDataParams &params, bytebuf &data)
 {

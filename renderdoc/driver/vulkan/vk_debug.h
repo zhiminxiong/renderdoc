@@ -64,6 +64,7 @@ public:
   void GetBufferData(ResourceId buff, uint64_t offset, uint64_t len, bytebuf &ret);
   void GetBufferData(VkBuffer unwrappedBuf, uint64_t bufsize, uint64_t readOffset, uint64_t readLen,
                      bytebuf &ret);
+  void SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data);
   void GetBufferData(GPUBuffer &buf, uint64_t readOffset, uint64_t readLen, bytebuf &ret)
   {
     GetBufferData(buf.UnwrappedBuffer(), buf.TotalSize(), readOffset, readLen, ret);

@@ -1834,6 +1834,7 @@ enum class CaptureModifications : uint32_t
   Bookmarks = 0x0002,
   Notes = 0x0004,
   EditedShaders = 0x0008,
+  EditedBuffers = 0x0010,
   All = 0xffffffff,
 };
 
@@ -2343,6 +2344,24 @@ To remove a custom name that has been set previously, specify the empty string a
 )");
   virtual void SetCBufferFieldCustomName(ResourceId shader, uint32_t cbufferIndex,
                                          uint32_t byteOffset, const rdcstr &name) = 0;
+
+  DOCUMENT(R"(Override the contents of a buffer (e.g. a constant buffer) with edited data.
+
+The override is applied immediately to the current replay so the rendering updates, is re-applied on
+every subsequent replay, and is saved into the capture so it persists across sessions.
+
+:param renderdoc.ResourceId buff: The id of the buffer to override.
+:param int offset: The byte offset into the buffer at which to write the data.
+:param bytes data: The bytes to write at the given offset.
+)");
+  virtual void SetCustomBufferData(ResourceId buff, uint64_t offset, const bytebuf &data) = 0;
+
+  DOCUMENT(R"(Remove all custom buffer data overrides previously set with
+:meth:`SetCustomBufferData` for the given buffer, reverting it to its captured contents.
+
+:param renderdoc.ResourceId buff: The id of the buffer whose overrides should be removed.
+)");
+  virtual void RemoveCustomBufferData(ResourceId buff) = 0;
 
   DOCUMENT(R"(Retrieve the information about a particular texture.
 

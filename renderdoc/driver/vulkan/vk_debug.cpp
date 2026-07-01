@@ -2168,6 +2168,115 @@ void VulkanDebugManager::GetBufferData(VkBuffer unwrappedBuf, uint64_t bufsize, 
   vt->DeviceWaitIdle(Unwrap(dev));
 }
 
+void VulkanDebugManager::SetBufferData(ResourceId buff, uint64_t offset, const bytebuf &data)
+{
+  if(data.empty())
+    return;
+
+  if(!m_pDriver->GetResourceManager()->HasResource(buff))
+  {
+    RDCERR("Setting buffer data for unknown buffer/memory %s!", ToStr(buff).c_str());
+    return;
+  }
+
+  WrappedVkRes *res = m_pDriver->GetResourceManager()->GetResource(buff);
+
+  if(res == VK_NULL_HANDLE)
+  {
+    RDCERR("Setting buffer data for unknown buffer/memory %s!", ToStr(buff).c_str());
+    return;
+  }
+
+  VkBuffer unwrappedDstBuf = VK_NULL_HANDLE;
+  uint64_t bufsize = 0;
+
+  if(WrappedVkDeviceMemory::IsAlloc(res))
+  {
+    unwrappedDstBuf = Unwrap(m_pDriver->m_CreationInfo.m_Memory[buff].wholeMemBuf);
+    bufsize = m_pDriver->m_CreationInfo.m_Memory[buff].wholeMemBufSize;
+  }
+  else if(WrappedVkBuffer::IsAlloc(res))
+  {
+    unwrappedDstBuf = Unwrap(m_pDriver->GetResourceManager()->GetHandle<VkBuffer>(buff));
+    bufsize = m_pDriver->m_CreationInfo.m_Buffer[buff].size;
+  }
+  else
+  {
+    RDCERR("Setting buffer data for object that isn't buffer or memory %s!", ToStr(buff).c_str());
+    return;
+  }
+
+  if(unwrappedDstBuf == VK_NULL_HANDLE || offset >= bufsize)
+    return;
+
+  uint64_t len = RDCMIN((uint64_t)data.size(), bufsize - offset);
+
+  VkDevice dev = m_pDriver->GetDev();
+  const VkDevDispatchTable *vt = ObjDisp(dev);
+
+  // host-visible staging buffer we fill with the override data and copy into the target
+  GPUBuffer stage;
+  stage.Create(m_pDriver, dev, len, 1, 0);
+
+  {
+    byte *ptr = (byte *)stage.Map();
+    if(ptr == NULL)
+    {
+      stage.Destroy();
+      return;
+    }
+    memcpy(ptr, data.data(), (size_t)len);
+    stage.Unmap();
+  }
+
+  VkCommandBuffer cmd = m_pDriver->GetNextCmd();
+
+  if(cmd == VK_NULL_HANDLE)
+  {
+    stage.Destroy();
+    return;
+  }
+
+  VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, NULL,
+                                        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+
+  VkResult vkr = vt->BeginCommandBuffer(Unwrap(cmd), &beginInfo);
+  CHECK_VKR(m_pDriver, vkr);
+
+  VkBufferMemoryBarrier bufBarrier = {
+      VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+      NULL,
+      VK_ACCESS_ALL_READ_BITS | VK_ACCESS_ALL_WRITE_BITS,
+      VK_ACCESS_TRANSFER_WRITE_BIT,
+      VK_QUEUE_FAMILY_IGNORED,
+      VK_QUEUE_FAMILY_IGNORED,
+      unwrappedDstBuf,
+      (VkDeviceSize)offset,
+      (VkDeviceSize)len,
+  };
+
+  // wait for any previous accesses before we overwrite the contents
+  DoPipelineBarrier(cmd, 1, &bufBarrier);
+
+  VkBufferCopy region = {0, (VkDeviceSize)offset, (VkDeviceSize)len};
+  vt->CmdCopyBuffer(Unwrap(cmd), stage.UnwrappedBuffer(), unwrappedDstBuf, 1, &region);
+
+  // make the new contents visible to subsequent accesses (e.g. the draw)
+  bufBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  bufBarrier.dstAccessMask = VK_ACCESS_ALL_READ_BITS | VK_ACCESS_ALL_WRITE_BITS;
+  DoPipelineBarrier(cmd, 1, &bufBarrier);
+
+  vkr = vt->EndCommandBuffer(Unwrap(cmd));
+  CHECK_VKR(m_pDriver, vkr);
+
+  m_pDriver->SubmitCmds();
+  m_pDriver->FlushQ();
+
+  vt->DeviceWaitIdle(Unwrap(dev));
+
+  stage.Destroy();
+}
+
 void VulkanDebugManager::FillWithDiscardPattern(VkCommandBuffer cmd, DiscardType type,
                                                 VkImage image, VkImageLayout curLayout,
                                                 VkImageSubresourceRange discardRange,
