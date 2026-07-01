@@ -24,10 +24,17 @@
 
 #include "BufferViewer.h"
 #include <float.h>
+#include <QApplication>
+#include <QDir>
 #include <QDoubleSpinBox>
+#include <QFile>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QInputDialog>
 #include <QItemSelection>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMouseEvent>
@@ -3167,6 +3174,7 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
   QAction renameField(tr("Rename Fie&ld"), this);
   QAction resetFieldName(tr("Reset Field &Name"), this);
   QAction renameCB(tr("Rename &Constant Buffer\tF2"), this);
+  QAction loadNamesJSON(tr("Load Names from &JSON..."), this);
 
   expandAll.setIcon(Icons::arrow_out());
   collapseAll.setIcon(Icons::arrow_in());
@@ -3225,6 +3233,7 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
       renameField.setIcon(Icons::page_white_edit());
       resetFieldName.setIcon(Icons::arrow_undo());
       renameCB.setIcon(Icons::page_white_edit());
+      loadNamesJSON.setIcon(Icons::page_white_edit());
 
       renameField.setEnabled(isField);
       resetFieldName.setEnabled(isField);
@@ -3233,12 +3242,15 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
       contextMenu.addAction(&renameField);
       contextMenu.addAction(&resetFieldName);
       contextMenu.addAction(&renameCB);
+      contextMenu.addAction(&loadNamesJSON);
 
       QObject::connect(&renameField, &QAction::triggered,
                        [this, item]() { ui->fixedVars->editItem(item); });
       QObject::connect(&resetFieldName, &QAction::triggered,
                        [this, item]() { resetFixedVarName(item); });
       QObject::connect(&renameCB, &QAction::triggered, this, &BufferViewer::renameCBuffer);
+      QObject::connect(&loadNamesJSON, &QAction::triggered, this,
+                       &BufferViewer::loadCBufferNamesFromJSON);
     }
   }
 
@@ -3389,6 +3401,182 @@ void BufferViewer::renameCBuffer()
   m_Ctx.SetCBufferCustomName(reflection->resourceId, m_CBufferSlot.slot, name);
 
   updateLabelsAndLayout();
+}
+
+void BufferViewer::loadCBufferNamesFromJSON()
+{
+  if(!IsCBufferView())
+    return;
+
+  const ShaderReflection *reflection =
+      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+
+  if(!reflection || m_CBufferSlot.slot >= reflection->constantBlocks.size())
+    return;
+
+  const ConstantBlock &cb = reflection->constantBlocks[m_CBufferSlot.slot];
+
+  // default the browse location to a "debugInfo" folder next to the executable if it exists, since
+  // that's the conventional place these name dumps are kept.
+  QString initialDir;
+  {
+    QDir debugInfoDir(QApplication::applicationDirPath() + lit("/debugInfo"));
+    if(debugInfoDir.exists())
+      initialDir = debugInfoDir.absolutePath();
+  }
+
+  QString filename = RDDialog::getOpenFileName(this, tr("Load Constant Buffer Names"), initialDir,
+                                               tr("JSON files (*.json);;All files (*.*)"));
+  if(filename.isEmpty())
+    return;
+
+  QFile fileHandle(filename);
+  if(!fileHandle.open(QIODevice::ReadOnly))
+  {
+    RDDialog::critical(this, tr("Error loading names"),
+                       tr("Couldn't open file:\n%1").arg(filename));
+    return;
+  }
+
+  QByteArray jsonData = fileHandle.readAll();
+  fileHandle.close();
+
+  QJsonParseError parseError;
+  QJsonDocument doc = QJsonDocument::fromJson(jsonData, &parseError);
+  if(doc.isNull() || !doc.isObject())
+  {
+    RDDialog::critical(this, tr("Error loading names"),
+                       tr("Not a valid JSON object:\n%1").arg(parseError.errorString()));
+    return;
+  }
+
+  // The JSON layout (produced by the external extractor) is:
+  //   { "shaders": [ { "cbuffers": [
+  //        { "name":.., "slot":.., "byteSize":.., "variables":[ { "name":.., "offset":.. } ] } ] } ] }
+  // Gather every cbuffer entry across all shaders so the user can apply any of them to the
+  // currently-viewed constant buffer.
+  QVector<QJsonObject> allCBuffers;
+  for(QJsonValue sv : doc.object().value(lit("shaders")).toArray())
+  {
+    for(QJsonValue cv : sv.toObject().value(lit("cbuffers")).toArray())
+      allCBuffers.push_back(cv.toObject());
+  }
+
+  if(allCBuffers.isEmpty())
+  {
+    RDDialog::critical(this, tr("Error loading names"),
+                       tr("The JSON file doesn't contain any constant buffers."));
+    return;
+  }
+
+  const int currentByteSize = (int)cb.byteSize;
+  const int currentSlot = (int)cb.fixedBindNumber;
+
+  // Pick the cbuffer to apply. Prefer an unambiguous match by byteSize (the extractor guarantees
+  // byteSize identifies a specific layout); otherwise fall through to a manual picker.
+  QJsonObject chosen;
+  bool haveChoice = false;
+
+  QVector<QJsonObject> sizeMatches;
+  for(const QJsonObject &c : allCBuffers)
+  {
+    if(c.value(lit("byteSize")).toInt(-1) == currentByteSize)
+      sizeMatches.push_back(c);
+  }
+
+  if(sizeMatches.size() == 1)
+  {
+    chosen = sizeMatches[0];
+    haveChoice = true;
+  }
+  else if(sizeMatches.size() > 1)
+  {
+    // multiple same-size layouts: try to disambiguate by slot
+    for(const QJsonObject &c : sizeMatches)
+    {
+      if(c.value(lit("slot")).toInt(-1) == currentSlot)
+      {
+        chosen = c;
+        haveChoice = true;
+        break;
+      }
+    }
+  }
+
+  // No automatic single match: let the user pick from the list.
+  if(!haveChoice)
+  {
+    const QVector<QJsonObject> &pool = sizeMatches.isEmpty() ? allCBuffers : sizeMatches;
+
+    QStringList items;
+    for(const QJsonObject &c : pool)
+    {
+      items << tr("%1  (slot %2, %3 bytes, %4 fields)")
+                   .arg(c.value(lit("name")).toString(lit("<unnamed>")))
+                   .arg(c.value(lit("slot")).toInt(-1))
+                   .arg(c.value(lit("byteSize")).toInt(-1))
+                   .arg(c.value(lit("variables")).toArray().size());
+    }
+
+    bool ok = false;
+    QString picked = QInputDialog::getItem(
+        this, tr("Choose constant buffer"),
+        tr("This constant buffer is %1 bytes. Choose which entry from the JSON to apply:")
+            .arg(currentByteSize),
+        items, 0, false, &ok);
+
+    if(!ok)
+      return;
+
+    int idx = items.indexOf(picked);
+    if(idx < 0 || idx >= pool.size())
+      return;
+
+    chosen = pool[idx];
+    haveChoice = true;
+  }
+
+  if(!haveChoice)
+    return;
+
+  // Apply the block name.
+  QString cbName = chosen.value(lit("name")).toString();
+  if(!cbName.isEmpty())
+    m_Ctx.SetCBufferCustomName(reflection->resourceId, m_CBufferSlot.slot, rdcstr(cbName));
+
+  // Build an offset -> name map from the JSON, then apply names to the real reflection fields
+  // matched by byte offset. We only touch offsets that correspond to actual fields so we don't
+  // leave stale overrides behind.
+  QHash<uint32_t, QString> offsetNames;
+  for(QJsonValue vv : chosen.value(lit("variables")).toArray())
+  {
+    QJsonObject vObj = vv.toObject();
+    QString varName = vObj.value(lit("name")).toString();
+    if(!varName.isEmpty())
+      offsetNames.insert((uint32_t)vObj.value(lit("offset")).toInt(), varName);
+  }
+
+  int applied = 0;
+  for(const ShaderConstant &v : cb.variables)
+  {
+    auto it = offsetNames.find(v.byteOffset);
+    if(it != offsetNames.end())
+    {
+      m_Ctx.SetCBufferFieldCustomName(reflection->resourceId, m_CBufferSlot.slot, v.byteOffset,
+                                      rdcstr(it.value()));
+      applied++;
+    }
+  }
+
+  updateLabelsAndLayout();
+
+  RDDialog::information(
+      this, tr("Names loaded"),
+      tr("Applied constant buffer name '%1' and %2 of %3 field name(s) from:\n%4")
+          .arg(cbName.isEmpty() ? QString(cb.name) : cbName)
+          .arg(applied)
+          .arg((int)cb.variables.count())
+          .arg(QFileInfo(filename).fileName()));
 }
 
 void BufferViewer::stageRowMenu(MeshDataStage stage, QMenu *menu, const QPoint &pos)

@@ -177,6 +177,10 @@ private slots:
 private:
   // rename the currently viewed constant buffer (used for F2 / context menu)
   void renameCBuffer();
+  // import custom constant-buffer / field names for the currently viewed cbuffer from a JSON file
+  // (e.g. produced by an external tool) - used when the shader was stripped of debug info so the
+  // reflection only has placeholder names like cbN / _vM.
+  void loadCBufferNamesFromJSON();
   // reset a field's custom name back to the reflection default
   void resetFixedVarName(RDTreeWidgetItem *item);
   // true while we're programmatically (re)building the fixedVars tree, so we ignore the
