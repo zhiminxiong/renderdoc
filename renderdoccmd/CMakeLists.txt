@@ -189,6 +189,21 @@ if(ANDROID)
     set(RT_JAR "$ENV{JAVA_HOME}/jre/lib/rt.jar")
     set(JAVA_BIN "$ENV{JAVA_HOME}/bin")
 
+    # JDK 9+ removed the standalone rt.jar, so the classic -source/-target/-bootclasspath combo
+    # can no longer point at it. When rt.jar is missing, fall back to javac --release which bundles
+    # the correct historical platform API. Older JDKs that still ship rt.jar keep the old behaviour.
+    if(EXISTS "${RT_JAR}")
+        set(JAVAC_COMPAT_FLAGS -source ${JAVA_TARGET} -target ${JAVA_TARGET} -bootclasspath ${RT_JAR})
+    else()
+        set(JAVAC_RELEASE "${JAVA_TARGET}")
+        if(JAVAC_RELEASE STREQUAL "1.7")
+            set(JAVAC_RELEASE "7")
+        elseif(JAVAC_RELEASE STREQUAL "1.8")
+            set(JAVAC_RELEASE "8")
+        endif()
+        set(JAVAC_COMPAT_FLAGS --release ${JAVAC_RELEASE})
+    endif()
+
     string(REPLACE "\\" "/" ANDROID_JAR "${ANDROID_SDK_ROOT_PATH}/platforms/${APK_TARGET_ID}/android.jar")
     if(CMAKE_HOST_WIN32)
         set(CLASS_PATH "${ANDROID_JAR}\;obj")
@@ -300,15 +315,19 @@ if(ANDROID)
 
     set(D8_SCRIPT "${BUILD_TOOLS}/d8${TOOL_SCRIPT_EXTENSION}")
     if(NOT EXISTS ${D8_SCRIPT})
-        set(DEX_COMMAND ${BUILD_TOOLS}/dx${TOOL_SCRIPT_EXTENSION} --dex --output=bin/classes.dex ./obj)
+        # dx accepts a directory directly, so no shell glob is required
+        set(DEX_COMMANDS COMMAND ${BUILD_TOOLS}/dx${TOOL_SCRIPT_EXTENSION} --dex --output=bin/classes.dex ./obj)
     else()
-        set(DEX_COMMAND ${D8_SCRIPT} --output ./bin/ ./obj/org/renderdoc/renderdoccmd/${ABI_EXTENSION_NAME}/*.class)
+        # d8 doesn't accept a directory as input and shell globs (*.class) don't expand on all hosts
+        # (e.g. Windows cmd/Ninja). Jar up the compiled classes first and feed the jar to d8.
+        set(DEX_COMMANDS COMMAND ${JAVA_BIN}/jar cf renderdoccmd_classes.jar -C obj .
+                         COMMAND ${D8_SCRIPT} --output ./bin/ renderdoccmd_classes.jar)
     endif()
 
     add_custom_command(OUTPUT ${APK_FILE} APPEND
                        COMMAND ${BUILD_TOOLS}/aapt package -f -m -S res -J src -M AndroidManifest.xml -I ${ANDROID_JAR}
-                       COMMAND ${JAVA_BIN}/javac -d ./obj -source ${JAVA_TARGET} -target ${JAVA_TARGET} -bootclasspath ${RT_JAR} -classpath "${CLASS_PATH}" -sourcepath src src/org/renderdoc/renderdoccmd/*.java
-                       COMMAND ${DEX_COMMAND}
+                       COMMAND ${JAVA_BIN}/javac -d ./obj ${JAVAC_COMPAT_FLAGS} -classpath "${CLASS_PATH}" -sourcepath src src/org/renderdoc/renderdoccmd/Loader.java
+                       ${DEX_COMMANDS}
                        COMMAND ${BUILD_TOOLS}/aapt package -f -M AndroidManifest.xml --version-code ${APK_VERSION_CODE} --version-name ${APK_VERSION_NAME} -S res -I ${ANDROID_JAR} -F RenderDocCmd-unaligned.apk bin libs
                        COMMAND ${BUILD_TOOLS}/zipalign -f 4 RenderDocCmd-unaligned.apk RenderDocCmd.apk
                        COMMAND ${BUILD_TOOLS}/apksigner${TOOL_SCRIPT_EXTENSION} sign --ks ${KEYSTORE} --ks-pass pass:android --key-pass pass:android --ks-key-alias rdocandroidkey RenderDocCmd.apk
