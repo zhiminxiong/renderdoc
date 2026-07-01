@@ -49,10 +49,25 @@ void adbForwardPorts(uint16_t portbase, const rdcstr &deviceID, uint16_t jdwpPor
 {
   const char *forwardCommand = "forward tcp:%i localabstract:renderdoc_%i";
 
-  adbExecCommand(deviceID,
-                 StringFormat::Fmt(forwardCommand, portbase + RenderDoc_ForwardRemoteServerOffset,
-                                   RenderDoc_RemoteServerPort),
-                 ".", silent);
+  // Only set up the remote-server forward for explicit (non-silent) connection attempts, i.e. when
+  // the user actually connects to / starts the remote server. We deliberately DON'T (re)create it
+  // during the periodic silent enumeration (remoteProbe -> GetDevices).
+  //
+  // Rationale: on ROMs that freeze a backgrounded renderdoccmd, the frozen remote server stops
+  // reading its socket. With a live forward in place, the periodic PingRemote write blocks inside
+  // adb, and per adb bug 139078301 a single blocked write makes adb drop writes on ALL forwarded
+  // connections - including the target-control forward that live capture relies on - so capturing
+  // silently stops working. Keeping the remote-server forward on-demand only (and removing it when
+  // the connection is lost, see AndroidRemoteServer::ShutdownConnection) means a dead/frozen remote
+  // server can never stall the target-control path.
+  if(!silent)
+    adbExecCommand(deviceID,
+                   StringFormat::Fmt(forwardCommand, portbase + RenderDoc_ForwardRemoteServerOffset,
+                                     RenderDoc_RemoteServerPort),
+                   ".", silent);
+
+  // The target-control forward is always maintained: it talks directly to the target application
+  // and is what live capture uses, independent of renderdoccmd.
   adbExecCommand(deviceID,
                  StringFormat::Fmt(forwardCommand, portbase + RenderDoc_ForwardTargetControlOffset,
                                    RenderDoc_FirstTargetControlPort),
@@ -1333,7 +1348,24 @@ struct AndroidController : public IDeviceProtocolHandler
 void AndroidRemoteServer::ShutdownConnection()
 {
   rdcstr deviceID = m_deviceID;
-  AndroidController::m_Inst.AsyncInvoke([deviceID]() { Android::ResetCaptureSettings(deviceID); });
+  uint16_t portbase = m_portbase;
+  AndroidController::m_Inst.AsyncInvoke([deviceID, portbase]() {
+    Android::ResetCaptureSettings(deviceID);
+
+    // Tear down ONLY the remote-server port forward when this connection is lost, leaving the
+    // target-control forward (used by live capture) untouched.
+    //
+    // Why: on ROMs that aggressively freeze the backgrounded renderdoccmd, the frozen remote server
+    // stops reading its socket. Any subsequent write to it (e.g. the periodic PingRemote) blocks
+    // inside adb, and per adb bug 139078301 a single blocked write causes adb to drop writes across
+    // ALL forwarded connections - including the target-control connection used for live capture -
+    // so triggering a capture appears to "do nothing" until renderdoccmd is killed. By removing the
+    // remote-server forward here, any later access to the dead remote server fails locally instead
+    // of stalling inside adb, so live capture over target control keeps working.
+    Android::adbExecCommand(
+        deviceID, StringFormat::Fmt("forward --remove tcp:%i",
+                                    portbase + RenderDoc_ForwardRemoteServerOffset));
+  });
   RemoteServer::ShutdownConnection();
 }
 
