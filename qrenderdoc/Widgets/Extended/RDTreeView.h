@@ -199,6 +199,10 @@ protected:
 
   QModelIndex moveCursor(CursorAction cursorAction, Qt::KeyboardModifiers modifiers) override;
 
+  // force a full viewport repaint when scrolling, otherwise our custom row/grid-line painting can
+  // leave residual artifacts behind (the optimised partial scroll doesn't cover everything we draw)
+  void scrollContentsBy(int dx, int dy) override;
+
   QModelIndex m_currentHoverIndex;
 
 private slots:

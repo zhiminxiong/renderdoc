@@ -673,6 +673,16 @@ void RDTreeView::applyExpansionToRow(const RDTreeViewExpansionState &state, QMod
   }
 }
 
+void RDTreeView::scrollContentsBy(int dx, int dy)
+{
+  QTreeView::scrollContentsBy(dx, dy);
+
+  // the base implementation optimises scrolling by only repainting the newly-exposed strip, but our
+  // custom grid-line and branch painting draws outside the strict item rects. That leaves stale
+  // pixels (visible as smeared vertical lines) after a scroll, so force a full viewport repaint.
+  viewport()->update();
+}
+
 void RDTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &options,
                          const QModelIndex &index) const
 {
