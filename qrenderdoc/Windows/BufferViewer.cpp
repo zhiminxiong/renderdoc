@@ -2632,9 +2632,12 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   m_ExportCSV->setIcon(Icons::save());
   m_ExportBytes = new QAction(this);
   m_ExportBytes->setIcon(Icons::save());
+  m_ExportJSON = new QAction(this);
+  m_ExportJSON->setIcon(Icons::save());
 
   m_ExportMenu->addAction(m_ExportCSV);
   m_ExportMenu->addAction(m_ExportBytes);
+  m_ExportMenu->addAction(m_ExportJSON);
 
   m_DebugVert = new QAction(tr("&Debug this Vertex"), this);
   m_DebugVert->setIcon(Icons::wrench());
@@ -2659,6 +2662,10 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
                    [this] { exportData(BufferExport(BufferExport::CSV)); });
   QObject::connect(m_ExportBytes, &QAction::triggered,
                    [this] { exportData(BufferExport(BufferExport::RawBytes)); });
+  QObject::connect(m_ExportJSON, &QAction::triggered,
+                   [this] { exportData(BufferExport(BufferExport::JSON)); });
+  QObject::connect(ui->importNames, &QToolButton::clicked, this,
+                   &BufferViewer::loadCBufferNamesFromJSON);
   QObject::connect(m_DebugVert, &QAction::triggered, this, &BufferViewer::debugVertex);
   QObject::connect(m_DebugMeshThread, &QAction::triggered, this, &BufferViewer::debugMeshThread);
   QObject::connect(m_RemoveFilter, &QAction::triggered,
@@ -2992,6 +2999,7 @@ void BufferViewer::SetupMeshView()
 
   ui->fixedVars->setVisible(false);
   ui->showPadding->setVisible(false);
+  ui->importNames->setVisible(false);
 
   ui->fixedVars->setColumns({tr("Name"), tr("Value"), tr("Type")});
   {
@@ -3173,8 +3181,9 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
   QAction gotoMesh(tr("&Go to meshes"), this);
   QAction renameField(tr("Rename Fie&ld"), this);
   QAction resetFieldName(tr("Reset Field &Name"), this);
+  QAction resetAllFieldNames(tr("Reset &All Field Names"), this);
   QAction renameCB(tr("Rename &Constant Buffer\tF2"), this);
-  QAction loadNamesJSON(tr("Load Names from &JSON..."), this);
+
 
   expandAll.setIcon(Icons::arrow_out());
   collapseAll.setIcon(Icons::arrow_in());
@@ -3232,8 +3241,8 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
 
       renameField.setIcon(Icons::page_white_edit());
       resetFieldName.setIcon(Icons::arrow_undo());
+      resetAllFieldNames.setIcon(Icons::arrow_undo());
       renameCB.setIcon(Icons::page_white_edit());
-      loadNamesJSON.setIcon(Icons::page_white_edit());
 
       renameField.setEnabled(isField);
       resetFieldName.setEnabled(isField);
@@ -3241,16 +3250,16 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
       contextMenu.addSeparator();
       contextMenu.addAction(&renameField);
       contextMenu.addAction(&resetFieldName);
+      contextMenu.addAction(&resetAllFieldNames);
       contextMenu.addAction(&renameCB);
-      contextMenu.addAction(&loadNamesJSON);
 
       QObject::connect(&renameField, &QAction::triggered,
                        [this, item]() { ui->fixedVars->editItem(item); });
       QObject::connect(&resetFieldName, &QAction::triggered,
                        [this, item]() { resetFixedVarName(item); });
+      QObject::connect(&resetAllFieldNames, &QAction::triggered, this,
+                       &BufferViewer::resetAllFixedVarNames);
       QObject::connect(&renameCB, &QAction::triggered, this, &BufferViewer::renameCBuffer);
-      QObject::connect(&loadNamesJSON, &QAction::triggered, this,
-                       &BufferViewer::loadCBufferNamesFromJSON);
     }
   }
 
@@ -3258,6 +3267,8 @@ void BufferViewer::fixedVars_contextMenu(const QPoint &pos)
 
   contextMenu.addAction(m_ExportCSV);
   contextMenu.addAction(m_ExportBytes);
+  if(IsCBufferView())
+    contextMenu.addAction(m_ExportJSON);
 
   QObject::connect(&removeFilter, &QAction::triggered, [this]() { SetMeshFilter(MeshFilter::None); });
   QObject::connect(&filterTask, &QAction::triggered, [this, idx]() {
@@ -3370,6 +3381,45 @@ void BufferViewer::resetFixedVarName(RDTreeWidgetItem *item)
   m_FixedVarBuilding = false;
 }
 
+void BufferViewer::resetAllFixedVarNames()
+{
+  if(!IsCBufferView())
+    return;
+
+  const ShaderReflection *reflection =
+      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+
+  if(!reflection)
+    return;
+
+  m_FixedVarBuilding = true;
+
+  // walk the whole fixed-vars tree, clearing any custom name override on every field and restoring
+  // its reflection default in the display
+  QVector<RDTreeWidgetItem *> stack;
+  for(int i = 0; i < ui->fixedVars->topLevelItemCount(); i++)
+    stack.push_back(ui->fixedVars->topLevelItem(i));
+
+  while(!stack.isEmpty())
+  {
+    RDTreeWidgetItem *item = stack.takeLast();
+
+    for(int i = 0; i < item->childCount(); i++)
+      stack.push_back(item->child(i));
+
+    FixedVarTag tag = item->tag().value<FixedVarTag>();
+
+    if(!tag.valid || tag.padding)
+      continue;
+
+    m_Ctx.SetCBufferFieldCustomName(reflection->resourceId, m_CBufferSlot.slot, tag.byteOffset,
+                                    rdcstr());
+    item->setText(0, tag.name);
+  }
+
+  m_FixedVarBuilding = false;
+}
+
 void BufferViewer::renameCBuffer()
 {
   if(!IsCBufferView())
@@ -3416,9 +3466,11 @@ void BufferViewer::loadCBufferNamesFromJSON()
 
   const ConstantBlock &cb = reflection->constantBlocks[m_CBufferSlot.slot];
 
-  // default the browse location to a "debugInfo" folder next to the executable if it exists, since
-  // that's the conventional place these name dumps are kept.
-  QString initialDir;
+  // prefer the folder used for the last import, which is persisted across sessions so the process
+  // will reopen there on startup. Otherwise default the browse location to a "debugInfo" folder next
+  // to the executable if it exists, since that's the conventional place these name dumps are kept.
+  QString initialDir = m_Ctx.Config().LastCBufferNameImportPath;
+  if(initialDir.isEmpty())
   {
     QDir debugInfoDir(QApplication::applicationDirPath() + lit("/debugInfo"));
     if(debugInfoDir.exists())
@@ -3429,6 +3481,10 @@ void BufferViewer::loadCBufferNamesFromJSON()
                                                tr("JSON files (*.json);;All files (*.*)"));
   if(filename.isEmpty())
     return;
+
+  // remember the folder for next time, including across sessions
+  m_Ctx.Config().LastCBufferNameImportPath = QFileInfo(filename).absolutePath();
+  m_Ctx.Config().Save();
 
   QFile fileHandle(filename);
   if(!fileHandle.open(QIODevice::ReadOnly))
@@ -3575,6 +3631,237 @@ void BufferViewer::loadCBufferNamesFromJSON()
       tr("Applied constant buffer name '%1' and %2 of %3 field name(s) from:\n%4")
           .arg(cbName.isEmpty() ? QString(cb.name) : cbName)
           .arg(applied)
+          .arg((int)cb.variables.count())
+          .arg(QFileInfo(filename).fileName()));
+}
+
+// build an HLSL-style type string (e.g. "float4", "float3", "float4x4") for a constant's type, to
+// match the format produced by the external Unity name extractor.
+static QString CBufferHLSLTypeString(const ShaderConstantType &t)
+{
+  QString base = ToQStr(t.baseType);
+
+  if(t.rows > 1)
+    return QFormatStr("%1%2x%3").arg(base).arg(t.rows).arg(t.columns);
+  if(t.columns > 1)
+    return QFormatStr("%1%2").arg(base).arg(t.columns);
+  return base;
+}
+
+// build a Unity-style type string (e.g. "Vector4", "Vector3", "Matrix4x4", "Vector4[6]") for a
+// constant's type, to match the format produced by the external Unity name extractor.
+static QString CBufferUnityTypeString(const ShaderConstantType &t)
+{
+  QString ret;
+
+  if(t.rows > 1)
+    ret = QFormatStr("Matrix%1x%2").arg(t.rows).arg(t.columns);
+  else if(t.columns > 1)
+    ret = QFormatStr("Vector%1").arg(t.columns);
+  else
+    ret = lit("Float");
+
+  if(t.elements > 1)
+    ret += QFormatStr("[%1]").arg(t.elements);
+
+  return ret;
+}
+
+// escape a string for embedding in a JSON string literal
+static QString EscapeJSONString(const QString &s)
+{
+  QString ret;
+  ret.reserve(s.size() + 2);
+  for(QChar c : s)
+  {
+    switch(c.unicode())
+    {
+      case '\"': ret += lit("\\\""); break;
+      case '\\': ret += lit("\\\\"); break;
+      case '\b': ret += lit("\\b"); break;
+      case '\f': ret += lit("\\f"); break;
+      case '\n': ret += lit("\\n"); break;
+      case '\r': ret += lit("\\r"); break;
+      case '\t': ret += lit("\\t"); break;
+      default: ret += c; break;
+    }
+  }
+  return ret;
+}
+
+// serialise a single primitive JSON value, printing whole numbers without a fractional part
+static QString JSONPrimitiveToString(const QJsonValue &val)
+{
+  if(val.isString())
+    return QFormatStr("\"%1\"").arg(EscapeJSONString(val.toString()));
+  if(val.isBool())
+    return val.toBool() ? lit("true") : lit("false");
+  if(val.isNull())
+    return lit("null");
+  if(val.isDouble())
+  {
+    double d = val.toDouble();
+    qint64 asInt = (qint64)d;
+    if((double)asInt == d)
+      return QString::number(asInt);
+    return QString::number(d);
+  }
+  return lit("null");
+}
+
+// a "leaf" object contains only primitive values (no nested objects/arrays) and is printed inline
+static bool IsLeafJSONObject(const QJsonObject &obj)
+{
+  for(const QJsonValue &v : obj)
+    if(v.isObject() || v.isArray())
+      return false;
+  return true;
+}
+
+// custom pretty-printer that keeps leaf objects (like each variable entry) on a single line while
+// expanding containers, matching the format produced by the external Unity name extractor.
+static QString JSONToUnityStyle(const QJsonValue &val, int indent)
+{
+  const QString pad = QString(indent * 2, QLatin1Char(' '));
+  const QString childPad = QString((indent + 1) * 2, QLatin1Char(' '));
+
+  if(val.isObject())
+  {
+    QJsonObject obj = val.toObject();
+    if(obj.isEmpty())
+      return lit("{}");
+
+    if(IsLeafJSONObject(obj))
+    {
+      QStringList parts;
+      for(auto it = obj.begin(); it != obj.end(); ++it)
+        parts << QFormatStr("\"%1\": %2").arg(it.key()).arg(JSONPrimitiveToString(it.value()));
+      return QFormatStr("{ %1 }").arg(parts.join(lit(", ")));
+    }
+
+    QStringList parts;
+    for(auto it = obj.begin(); it != obj.end(); ++it)
+      parts << QFormatStr("%1\"%2\": %3")
+                   .arg(childPad)
+                   .arg(it.key())
+                   .arg(JSONToUnityStyle(it.value(), indent + 1));
+    return QFormatStr("{\n%1\n%2}").arg(parts.join(lit(",\n"))).arg(pad);
+  }
+  else if(val.isArray())
+  {
+    QJsonArray arr = val.toArray();
+    if(arr.isEmpty())
+      return lit("[]");
+
+    QStringList parts;
+    for(const QJsonValue &v : arr)
+      parts << QFormatStr("%1%2").arg(childPad).arg(JSONToUnityStyle(v, indent + 1));
+    return QFormatStr("[\n%1\n%2]").arg(parts.join(lit(",\n"))).arg(pad);
+  }
+
+  return JSONPrimitiveToString(val);
+}
+
+void BufferViewer::exportCBufferNamesToJSON()
+{
+  if(!IsCBufferView())
+    return;
+
+  const ShaderReflection *reflection =
+      m_Ctx.CurPipelineState().GetShaderReflection(m_CBufferSlot.stage);
+
+  if(!reflection || m_CBufferSlot.slot >= reflection->constantBlocks.size())
+    return;
+
+  const ConstantBlock &cb = reflection->constantBlocks[m_CBufferSlot.slot];
+
+  QString filename = RDDialog::getSaveFileName(
+      this, tr("Export Constant Buffer Names"), QString(),
+      tr("JSON files (*.json);;All files (*.*)"), NULL,
+      // we append to any existing file rather than overwriting it, so don't prompt about overwrite
+      QFileDialog::DontConfirmOverwrite);
+
+  if(filename.isEmpty())
+    return;
+
+  // build the cbuffer object for the currently-viewed constant buffer, using the currently-applied
+  // (possibly custom) names so that any manual renaming round-trips.
+  QJsonObject cbObj;
+  cbObj[lit("name")] =
+      QString(m_Ctx.GetCBufferName(reflection->resourceId, m_CBufferSlot.slot, cb.name));
+  cbObj[lit("slot")] = (int)cb.fixedBindNumber;
+  cbObj[lit("byteSize")] = (int)cb.byteSize;
+
+  QJsonArray variables;
+  for(const ShaderConstant &v : cb.variables)
+  {
+    QJsonObject vObj;
+    vObj[lit("name")] = QString(
+        m_Ctx.GetCBufferFieldName(reflection->resourceId, m_CBufferSlot.slot, v.byteOffset, v.name));
+    vObj[lit("offset")] = (int)v.byteOffset;
+    vObj[lit("type")] = CBufferHLSLTypeString(v.type);
+    vObj[lit("unityType")] = CBufferUnityTypeString(v.type);
+    // only emit an explicit element count for arrays, matching the extractor's output
+    if(v.type.elements > 1)
+      vObj[lit("elements")] = (int)v.type.elements;
+    variables.push_back(vObj);
+  }
+  cbObj[lit("variables")] = variables;
+
+  // if the file already exists and contains a valid JSON object with the expected layout, append to
+  // it. Otherwise start a fresh document.
+  QJsonObject root;
+  QJsonArray shaders;
+
+  QFile fileHandle(filename);
+  if(fileHandle.exists() && fileHandle.open(QIODevice::ReadOnly))
+  {
+    QByteArray existing = fileHandle.readAll();
+    fileHandle.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(existing);
+    if(doc.isObject())
+    {
+      root = doc.object();
+      shaders = root.value(lit("shaders")).toArray();
+    }
+  }
+
+  // append the new cbuffer to the first shader entry, creating one if the file was empty/new
+  QJsonObject shader;
+  QJsonArray cbuffers;
+
+  if(!shaders.isEmpty())
+  {
+    shader = shaders.first().toObject();
+    cbuffers = shader.value(lit("cbuffers")).toArray();
+  }
+
+  cbuffers.push_back(cbObj);
+  shader[lit("cbuffers")] = cbuffers;
+
+  if(shaders.isEmpty())
+    shaders.push_back(shader);
+  else
+    shaders.replace(0, shader);
+
+  root[lit("shaders")] = shaders;
+
+  QFile outFile(filename);
+  if(!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+  {
+    RDDialog::critical(this, tr("Error exporting names"),
+                       tr("Couldn't open file '%1' for writing").arg(filename));
+    return;
+  }
+
+  outFile.write((JSONToUnityStyle(root, 0) + lit("\n")).toUtf8());
+  outFile.close();
+
+  RDDialog::information(
+      this, tr("Names exported"),
+      tr("Exported constant buffer '%1' with %2 field name(s) to:\n%3")
+          .arg(QString(m_Ctx.GetCBufferName(reflection->resourceId, m_CBufferSlot.slot, cb.name)))
           .arg((int)cb.variables.count())
           .arg(QFileInfo(filename).fileName()));
 }
@@ -6660,6 +6947,9 @@ void BufferViewer::processFormat(const QString &format)
 
   Reset();
 
+  // the import-names toolbar button only makes sense for constant buffer views
+  ui->importNames->setVisible(IsCBufferView());
+
   BufferConfiguration bufconfig;
 
   ParsedFormat parsed;
@@ -6867,6 +7157,10 @@ void BufferViewer::updateExportActionNames()
   QString csv = tr("Export%1 to &CSV");
   QString bytes = tr("Export%1 to &Bytes");
 
+  // exporting names to JSON only makes sense for constant buffer views
+  m_ExportJSON->setText(tr("Export Names to &JSON..."));
+  m_ExportJSON->setVisible(IsCBufferView());
+
   bool valid = m_Ctx.IsCaptureLoaded() && m_Ctx.CurAction();
 
   if(m_MeshView)
@@ -6884,11 +7178,13 @@ void BufferViewer::updateExportActionNames()
     m_ExportBytes->setText(bytes.arg(QString()));
     m_ExportCSV->setEnabled(false);
     m_ExportBytes->setEnabled(false);
+    m_ExportJSON->setEnabled(false);
     return;
   }
 
   m_ExportCSV->setEnabled(true);
   m_ExportBytes->setEnabled(m_BufferID != ResourceId());
+  m_ExportJSON->setEnabled(IsCBufferView());
 
   if(m_MeshView)
   {
@@ -6946,6 +7242,14 @@ void BufferViewer::exportData(const BufferExport &params)
 
   if(!m_CurView && !m_CurFixed)
     return;
+
+  // exporting names to JSON is handled separately since it works from the reflection/custom names
+  // and appends to any existing file rather than dumping buffer data
+  if(params.format == BufferExport::JSON)
+  {
+    exportCBufferNamesToJSON();
+    return;
+  }
 
   QString filter;
   QString title;

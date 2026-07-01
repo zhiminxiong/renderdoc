@@ -59,6 +59,7 @@ struct BufferExport
   {
     CSV,
     RawBytes,
+    JSON,
   };
 
   ExportFormat format;
@@ -181,8 +182,13 @@ private:
   // (e.g. produced by an external tool) - used when the shader was stripped of debug info so the
   // reflection only has placeholder names like cbN / _vM.
   void loadCBufferNamesFromJSON();
+  // export the current constant buffer's names (block + field names by byte offset) to a JSON file,
+  // appending to any existing JSON file so multiple buffers can be collected into one file.
+  void exportCBufferNamesToJSON();
   // reset a field's custom name back to the reflection default
   void resetFixedVarName(RDTreeWidgetItem *item);
+  // reset every field's custom name in the current constant buffer back to the reflection defaults
+  void resetAllFixedVarNames();
   // true while we're programmatically (re)building the fixedVars tree, so we ignore the
   // itemChanged signal that would otherwise be misinterpreted as a user edit
   bool m_FixedVarBuilding = false;
@@ -346,6 +352,7 @@ private:
 
   QAction *m_ExportCSV = NULL;
   QAction *m_ExportBytes = NULL;
+  QAction *m_ExportJSON = NULL;
   QAction *m_DebugVert = NULL;
   QAction *m_DebugMeshThread = NULL;
   QAction *m_FilterMesh = NULL;

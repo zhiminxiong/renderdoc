@@ -250,6 +250,13 @@ DECLARE_REFLECTION_STRUCT(BugReport);
   CONFIG_SETTING_VAL(public, QString, rdcstr, LastFileBrowsePath, "")                              \
                                                                                                    \
   DOCUMENT(                                                                                        \
+      "The path to the folder last used to import constant buffer names from JSON. Used as the "   \
+      "default location the next time names are imported, including across sessions."              \
+      ""                                                                                           \
+      ":type: str");                                                                               \
+  CONFIG_SETTING_VAL(public, QString, rdcstr, LastCBufferNameImportPath, "")                       \
+                                                                                                   \
+  DOCUMENT(                                                                                        \
       "The recently opened capture files.\n"                                                       \
       "\n:"                                                                                        \
       "type: List[str]");                                                                          \
