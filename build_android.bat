@@ -26,8 +26,13 @@ if not defined CMAKE            set "CMAKE=C:\Program Files\CMake\bin\cmake.exe"
 if not defined NINJA            set "NINJA=D:\OpenHarmonySDK\12\native\build-tools\cmake\bin\ninja.exe"
 
 if not defined GENERATOR        set "GENERATOR=Ninja"
-REM leave BUILD_TYPE empty to match the previous configuration; set to Release/Debug to override
-if not defined BUILD_TYPE       set "BUILD_TYPE="
+REM Release by default so the native .so files are optimised AND stripped, giving a small APK
+REM (a few MB) instead of the ~60MB+ unstripped/unoptimised build. Override with e.g.
+REM   set BUILD_TYPE=Debug     (large, keeps symbols - only for debugging the native layer)
+if not defined BUILD_TYPE       set "BUILD_TYPE=Release"
+REM strip the android .so libraries (only takes effect together with a Release BUILD_TYPE).
+REM Set STRIP_ANDROID=Off to keep symbols.
+if not defined STRIP_ANDROID    set "STRIP_ANDROID=On"
 REM ---------------------------------------------------------------------------
 
 set "ROOT=%~dp0"
@@ -71,6 +76,7 @@ echo  cmake            = %CMAKE%
 echo  ninja            = %NINJA%
 echo  Generator        = %GENERATOR%
 if defined BUILD_TYPE echo  Build type       = %BUILD_TYPE%
+if defined STRIP_ANDROID echo  Strip .so libs   = %STRIP_ANDROID%
 echo ============================================================
 echo(
 
@@ -128,12 +134,16 @@ if not exist "%BDIR%" mkdir "%BDIR%"
 set "BUILDTYPE_ARG="
 if defined BUILD_TYPE set "BUILDTYPE_ARG=-DCMAKE_BUILD_TYPE=%BUILD_TYPE%"
 
+set "STRIP_ARG="
+if defined STRIP_ANDROID set "STRIP_ARG=-DSTRIP_ANDROID_LIBRARY=%STRIP_ANDROID%"
+
 echo   configuring...
 "%CMAKE%" -S "%ROOT%" -B "%BDIR%" -G "%GENERATOR%" ^
     "-DCMAKE_MAKE_PROGRAM=%NINJA%" ^
     -DBUILD_ANDROID=On ^
     -DANDROID_ABI=%ABI% ^
-    %BUILDTYPE_ARG%
+    %BUILDTYPE_ARG% ^
+    %STRIP_ARG%
 if errorlevel 1 (
   echo [ERROR] CMake configure failed for %ABI%
   exit /b 1
