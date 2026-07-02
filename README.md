@@ -107,7 +107,7 @@ Patch 版本说明
 
 ### 4. 修复 Android 切后台无法抓帧的问题
 
-![修复 Android 切后台无法抓帧](.docs/image-20260702113300005.png)
+![修复 Android 切后台无法抓帧](./docs/image-20260702113300005.png)
 
 **问题背景：** 部分 Android 机型在 renderdoccmd 拉起游戏后，cmd 切入后台会被系统 freeze（冻结）。此时：
 
