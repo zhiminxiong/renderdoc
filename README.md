@@ -72,3 +72,49 @@ Contributing & Development
 
 I've added some notes on how to contribute, as well as where to get started looking through the code in [Developing-Change.md](docs/CONTRIBUTING/Developing-Change.md). All contribution information is available under [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
+
+
+Patch 版本说明
+--------------
+
+本 Patch 在官方 RenderDoc 基础上新增了以下增强功能与问题修复。
+
+### 1. Bookmark 增强与 GPU 耗时统计
+
+![Bookmark 与 GPU 耗时统计](./docs/image-20260702111740454.png)
+
+- 添加更多 Bookmark 支持；
+- 可对各类 Bookmark 进行 **GPU 耗时统计**。
+
+### 2. 新增 Flat 模式
+
+![新增 Flat 模式](./docs/image-20260702111904177.png)
+
+![Flat 模式下的 GPU 耗时排序](./docs/image-20260702112029410.png)
+
+- 仅在 Flat 模式下才能进行 **GPU 耗时对比**：
+  - 点击 **Duration** 列：在升序 / 降序之间依次切换；
+  - 点击 **EID** 列：恢复按 EID 排序。
+
+### 3. CBuffer 名称 / 值编辑与 Unity 结构导入导出
+
+![CBuffer 名称与值编辑](./docs/image-20260702112408755.png)
+
+- CBuffer 的 **Name** 与 **Value** 均支持双击修改；`Value` 修改后会**直接提交到 CBuffer**；
+- CBuffer 还支持通过**右键菜单**修改名称；
+- 以上修改都会**序列化保存到 `.rdc` 文件**；
+- 新增支持从 **Unity 的 Shader 编译产物**导入 CBuffer 结构，同时也支持导出。
+
+### 4. 修复 Android 切后台无法抓帧的问题
+
+![修复 Android 切后台无法抓帧](.docs/image-20260702113300005.png)
+
+**问题背景：** 部分 Android 机型在 renderdoccmd 拉起游戏后，cmd 切入后台会被系统 freeze（冻结）。此时：
+
+- RenderDoc 过一段时间会检测到连接断开；
+- 但 renderdoccmd 的端口依然存在，这会命中 adb 的一个已知 bug —— RenderDoc 持续向该端口写入，而已被冻结的 cmd 不再响应，最终导致与游戏进程的通信始终无法处理。
+
+**解决方式：**
+
+- RenderDoc 在检测到与 cmd 的连接断开后，会主动断开相关端口，从而可以继续处理与游戏进程的通信、正常抓帧；
+- 也可以在 Android 端手动杀掉 cmd 进程，RenderDoc 同样会自动恢复与游戏进程的通信。
